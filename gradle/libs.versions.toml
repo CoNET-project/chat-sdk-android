@@ -1,9 +1,15 @@
 [versions]
 agp = "9.2.1"
 coreKtx = "1.17.0"
+securityCrypto = "1.1.0-alpha06"
+junit = "4.13.2"
+orgJson = "20240303"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }

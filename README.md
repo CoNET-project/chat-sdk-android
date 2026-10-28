@@ -1,35 +1,74 @@
 # CoNET Chat SDK for Android
 
-Standalone Android library that implements the CoNET DePIN Chat **mailbox listen** path compatible with TypeScript [`@conet.project/chat-sdk`](https://github.com/CoNET-project).
+Native CoNET Chat module for Android apps. Implements the same `WorkerCommand` / `WorkerOutbound` surface as [`@conet.project/chat-sdk`](https://github.com/CoNET-project/chat-sdk) (TypeScript) and the iOS package [`chat-sdk-ios`](https://github.com/CoNET-project/chat-sdk-ios), without spawning a Web Worker inside the shell.
 
-Hosts inject OpenPGP + EIP-191 crypto (and optional persistence). The library never embeds a WebView or OpenPGP.js runtime.
+**Repository:** https://github.com/CoNET-project/chat-sdk-android
 
 | Item | Value |
 |---|---|
-| **Maven coordinates** | `network.conet:chat:0.1.0` |
+| **Maven coordinates** | `network.conet:chat:0.2.0` |
 | **Namespace** | `network.conet.chat` |
 | **minSdk** | 24 |
-| **Version** | `0.1.0` |
-| **Public API** | `ConetChat` |
+| **Entry point** | `BeamioConetChatModule.handleCommand(context, body, emit)` |
+
+## What this library owns
+
+| Capability | Native (`network.conet:chat`) | Host / PWA |
+|---|---|---|
+| OpenPGP encrypt / decrypt / verify | Yes (hidden `WebView` + bundled `openpgp.min.js` / `ethers.umd.min.js`) | — |
+| Mailbox listen SSE (`mailbox_listen`, `listenKind: chat`) | Yes (B route PGP; HTTP via entry **C ≠ B**) | — |
+| Send / group send / dual delivery receipts | Yes | — |
+| Presence / native-wake queries | Yes | — |
+| Encrypted IPFS history + `ChatIndexRegistry` | Yes | — |
+| User PGP key + SI roster store | Yes (`EncryptedSharedPreferences`) | — |
+| **EOA EIP-191 / EIP-712 signing** | Callback only | PWA `chatModuleSignRequest` → `chatModuleSignResponse` |
+| Voice media SSE | Delegated | Host voice signaling |
+
+### Hybrid signing (model 1B)
+
+The SDK never holds the EOA private key. Whenever a signature is needed it emits
+
+```json
+{ "action": "chatModuleSignRequest", "reqId": "…", "kind": "eip191" | "eip712", "message": "…" | "typedData": { … } }
+```
+
+The host PWA signs with its own wallet and replies through `BeamioConetChatSignBroker.fulfill(json)` (`{ "reqId", "ok", "signature" | "error" }`). Signing requests time out after 60 s.
 
 ## Protocol (A / B / C)
 
-Matches TypeScript `mailbox_listen`:
+1. **Send**: the inner envelope `{ timestamp, text, from, signMessage }` is `base64(UTF8(JSON))`, encrypted to the recipient **user PGP** key and POSTed through any healthy entry **A ≠ B**.
+2. **Listen**: a signed `mailbox_listen` command is encrypted to the own mailbox **B route PGP** key and sent through a healthy entry **C ≠ B**. SSE frames are raw JSON `{ "data": "<OpenPGP armor>" }`.
+3. HTTP JSON bodies are always exactly `{ "data": "<armor>" }`. Mailbox instructions (e.g. `NoPush`) travel inside a mailbox-work package encrypted to B.
+4. **Inbound identity** is the EIP-191 recovered signer of the envelope. Messages whose signer does not match the claimed `from` are dropped.
+5. **Receipts**: after an inbound message is accepted the module sends a mailbox `gossip_delivery_ack` (encrypted to B) and a `beamio_chat_delivery_receipt_v1` to the sender (`NoPush`).
+6. **History**: AES-GCM fragments on IPFS plus an EIP-712 `SetPointer` on `ChatIndexRegistry` (`0x1511Caa71081C84d8a591490D1b83879088EED72`, chain `224422`). Keys derive from an EIP-191 signature of `beamio.chat.history.v1|224422|<eoaLower>`; recovery reads the pointer over RPC and decrypts the chain.
 
-1. Encrypt the listen command to mailbox **B** route PGP.
-2. POST / SSE through a healthy entry **C ≠ B** (never connect to B by default).
-3. HTTP JSON body is only `{ "data": "<OpenPGP armor>" }`.
-4. Events emit `{ "action": "conetChat", "kind": "status"|"message", … }`.
-
-### Entry selection
-
-Entry **C** is picked with `ConetChatNetwork.getRandomNode`: a score-weighted random choice over the roster (unscored nodes start at 80), skipping the mailbox **B** IP. Each pick is probed with a plain `http://{ip}/` request first; unreachable IPs are scored to 0 and never returned. After every listen attempt the engine re-scores the entry (`scoreEntry`) from the measured latency or failure, and tries up to four different entries before reporting an error.
-
-Inbound frames are raw JSON `{"data":"<OpenPGP armor>"}` (not SSE `data:` lines). The armor is read through a JSON parser so escaped `\n` sequences become real newlines before OpenPGP decryption.
-
-EOA private-key hex stays **in memory only** for EIP-191. Persistence adapters must never store it.
+Entry selection uses a score-weighted random choice over the SI roster with a reachability probe (`BeamioSiCipherPost.getRandomNode`); unreachable IPs are quarantined for 120 s and up to four entries are tried per operation.
 
 ## Install
+
+### Gradle (Maven repository on GitHub)
+
+```kotlin
+// settings.gradle.kts
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://raw.githubusercontent.com/CoNET-project/chat-sdk-android/main/maven")
+            content { includeGroup("network.conet") }
+        }
+    }
+}
+
+// app/build.gradle.kts
+dependencies {
+    implementation("network.conet:chat:0.2.0")
+}
+```
+
+The host app must declare `android.permission.INTERNET`. Plain `http://` to SI entries on port 80 is part of the protocol, so the host needs `android:usesCleartextTraffic="true"` (or an equivalent network security config for CoNET entry hosts).
 
 ### Local module
 
@@ -41,106 +80,63 @@ include(":chat")
 implementation(project(":chat"))
 ```
 
-### AAR
-
-```bash
-./gradlew :chat:assembleRelease
-# → chat/build/outputs/aar/chat-release.aar
-```
+## Host integration
 
 ```kotlin
-implementation(files("libs/chat-release.aar"))
-```
+// 1) Optional: refresh the SI roster when the PWA upserts the user key.
+BeamioChatPgpStore.onRosterUpsertFromWeb = { ctx -> /* host roster refresh */ }
 
-### Maven (after you publish)
+// 2) Expose three bridge methods to the PWA WebView.
+@JavascriptInterface fun chatModuleAvailable(): Boolean = BeamioConetChatModule.isAvailable()
 
-```kotlin
-implementation("network.conet:chat:0.1.0")
-```
-
-The host app must allow `INTERNET` (declared in this library’s manifest merge).
-
-## Quick start
-
-```kotlin
-import network.conet.chat.ConetChat
-import network.conet.chat.ConetChatCrypto
-import network.conet.chat.ConetChatPersistence
-
-// 1) Install host crypto (required) + optional persistence
-ConetChat.install(crypto = myCrypto, persistence = myPersistence)
-
-// 2) Receive events (WebView bridge, Broadcast, or app bus)
-ConetChat.bindEmitter { detail ->
-    // detail.optString("action") == ConetChat.EVENT_ACTION ("conetChat")
+@JavascriptInterface fun chatModuleCommand(json: String) {
+    val body = JSONObject(json)
+    BeamioConetChatModule.handleCommand(applicationContext, body) { payload ->
+        runOnUiThread { dispatchToWeb(payload) }   // CustomEvent detail for the PWA
+    }
 }
 
-// 3) Start mailbox listen
-ConetChat.start(context, initJson)
-
-ConetChat.stop()
-ConetChat.destroy()
+@JavascriptInterface fun chatModuleSignResponse(json: String) {
+    BeamioConetChatModule.fulfillSign(JSONObject(json))
+}
 ```
 
-### `initJson` fields
+`emit` receives two payload kinds:
 
-Aligned with TypeScript `BeamioChatConfig.identity`:
+- `{ "action": "chatModuleEvent", "event": { "type": "ready" | "ack" | "event:message" | "event:status" | "event:presence" | "event:historyBuffer" | "event:log", … } }`
+- `{ "action": "chatModuleSignRequest", … }`
 
-| Field | Required | Notes |
-|---|---|---|
-| `privateKeyHex` | yes | EOA key for EIP-191; memory only |
-| `pgpPrivateKeyArmored` | yes | User PGP private armor |
-| `ownRouteArmoredPublicKey` | yes | Mailbox **B** route public key |
-| `nodes` | yes | Entry roster: `ip_addr` / `ip`, `armoredPublicKey`, optional `domain` / `region` |
-| `mailboxIp` | no | Prefer excluding this IP when picking entry C |
-| `eoa` | no | Display / persistence identity |
-| `pgpPublicKeyArmored` | no | For persistence upsert |
-| `pgpPassphrase` | no | Default empty |
+### Supported command types
 
-### Host SPI
+`init`, `setRoutes`, `setNodes`, `send`, `sendGroup`, `issueGroupRoster`, `issueGroupTombstone`, `queryPresence`, `queryNativeWake`, `historyLoad`, `historyRead`, `historyAppend`, `mailboxCommand`, `ownMailboxCommand`, `voiceFrame`, `voiceListen`, `voiceUnlisten`, `pause`, `resume`, `destroy`.
 
-| Interface | Role |
+Commands that expect a response carry a `reqId` and are answered with `{ "type": "ack", "reqId", "ok", "result" | "error" }` (`init` answers `{ "type": "ready", … }`).
+
+## iOS parity
+
+| iOS (`ConetChatSDK`) | Android (`network.conet:chat`) |
 |---|---|
-| `ConetChatCrypto` | EIP-191 sign + encrypt to B; wrap armor to entry C; decrypt inbound user-PGP |
-| `ConetChatPersistence` (optional) | Roster + mailbox IP; **never** persist EOA private-key hex |
+| `BeamioConetChatModule.handleCommand` | `BeamioConetChatModule.handleCommand` |
+| `BeamioConetChatSignBroker` | `BeamioConetChatSignBroker` |
+| `BeamioOpenPgpHost` (WKWebView) | `BeamioOpenPgpHost` (WebView) |
+| `BeamioSiCipherPost` | `BeamioSiCipherPost` |
+| `BeamioChatPgpKeychain` | `BeamioChatPgpStore` (`EncryptedSharedPreferences`) |
+| `ListenSession`, `HistoryStore` | `BeamioConetChatListenSession`, `BeamioConetChatHistoryStore` |
 
-## Module layout
-
-```text
-chat/
-  src/main/java/network/conet/chat/
-    ConetChat.kt              # Public facade
-    ConetChatCrypto.kt        # Host crypto SPI
-    ConetChatPersistence.kt   # Optional persistence SPI
-    ConetChatEngine.kt        # Listen session / SSE
-    ConetChatNetwork.kt       # HTTP helpers, scored entry selection
-  src/main/AndroidManifest.xml
-  consumer-rules.pro
-```
-
-## Scope (v0.1.0)
-
-| Capability | Status |
-|---|---|
-| Mailbox LISTEN → host emitter | ✅ |
-| Status (`connecting` / `listening` / `error` / …) | ✅ |
-| Outbound `sendMessage` / presence / delivery ACK | Host / TypeScript SDK |
-| Voice / encrypted history / group | Out of scope for this release |
-
-## Build
-
-Requires JDK 17+ and Android SDK.
+## Build, test and publish
 
 ```bash
-./gradlew :chat:assembleRelease
+./gradlew :chat:testDebugUnitTest      # keccak / HKDF / AES-GCM / armor parsing vectors
+./gradlew :chat:assembleRelease        # chat/build/outputs/aar/chat-release.aar
+./scripts/publish-maven.sh             # writes ./maven/network/conet/chat/<version>/…
 ```
 
-## Security
+Commit the generated `maven/` directory, tag `v<version>` and push; consumers then resolve from `raw.githubusercontent.com`.
 
-- Do not log private keys, mnemonics, full PGP armor, or plaintext chat payloads.
-- Do not default to connecting HTTP/SSE directly to mailbox B.
-- Persistence must not write `privateKeyHex`.
+## Acceptance
+
+The module is accepted through the Beamio Consumer Android shell (`src/CaehTrees`, shell `1.0.131`, PWA `0.52.891`): a PWA temp account exchanges text, image and video with the shell in both directions; sender bubbles reach `Delivered`; the on-chain `ChatIndexRegistry` pointer advances with each message; and `historyRead` returns the decrypted chain.
 
 ## License
 
-See repository license when published. Protocol docs: [gitbook.conet.network](https://gitbook.conet.network/).
+MIT — see `LICENSE`.
