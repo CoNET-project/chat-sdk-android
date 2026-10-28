@@ -10,9 +10,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Encrypted chat history: AES-GCM fragments on IPFS + a head pointer on the CoNET
@@ -68,7 +73,9 @@ class BeamioConetChatHistoryStore(
     private val ipfsWrite = (ipfsWriteBaseUrl?.takeIf { it.isNotBlank() } ?: ipfsBaseUrl).trimEnd('/')
     private val apiBase = apiBaseUrl.trimEnd('/')
 
+    @Volatile
     private var master: ByteArray? = null
+    @Volatile
     private var indexKey: ByteArray? = null
     private var genesisCid = ""
     private var selfSign = ""
@@ -77,21 +84,54 @@ class BeamioConetChatHistoryStore(
     private var records: MutableList<IndexRecord> = ArrayList()
     private var syncedIndexHash = ""
 
+    /**
+     * Immutable copy of [records], republished after every mutation on [queue].
+     * [read] works from this snapshot so it never waits behind a slow append / head sync
+     * (each of those can take several seconds of IPFS + RPC + pointer relay).
+     */
+    @Volatile
+    private var snapshot: List<IndexRecord> = emptyList()
+
+    /** True once the chain head has been adopted at least once in this process. */
+    @Volatile
+    private var everSynced = false
+
     /** Plaintext of entries decrypted or appended in this session (also used to re-append after a fork). */
-    private val plain = HashMap<String, Entry>()
+    private val plain = ConcurrentHashMap<String, Entry>()
     private val emittedCids = HashSet<String>()
 
+    private val loadLock = ReentrantLock()
+    private val loadIdle = loadLock.newCondition()
+    private var loadsInFlight = 0
+
+    /** Serial lane for everything that mutates the chain (prepare / load / append / head sync). */
     private val queue = Executors.newSingleThreadExecutor { r ->
         Thread(r, "conet-chat-history").apply { isDaemon = true }
+    }
+
+    /** Read lane: global corpus reads, independent of [queue]. */
+    private val readQueue = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "conet-chat-history-read").apply { isDaemon = true }
+    }
+
+    /** Bounded parallel IPFS fetch + decrypt for restore / read (TS worker decrypts the tail concurrently). */
+    private val fetchPool: ExecutorService = Executors.newFixedThreadPool(FETCH_PARALLELISM) { r ->
+        Thread(r, "conet-chat-history-fetch").apply { isDaemon = true }
     }
 
     fun isReady(): Boolean = ready
 
     fun destroy() {
         queue.shutdownNow()
+        readQueue.shutdownNow()
+        fetchPool.shutdownNow()
         master = null
         indexKey = null
         ready = false
+    }
+
+    private fun publishSnapshot() {
+        snapshot = records.toList()
     }
 
     // ---- lifecycle ---------------------------------------------------------------
@@ -126,12 +166,10 @@ class BeamioConetChatHistoryStore(
         emitBuffer: (peer: String, entries: List<Entry>, isTail: Boolean) -> Unit,
         done: () -> Unit,
     ) {
+        loadLock.withLock { loadsInFlight++ }
         queue.execute {
             try {
-                if (!ready) {
-                    done()
-                    return@execute
-                }
+                if (!ready) return@execute
                 val tailCount = options?.optInt("tailCount", 60)?.takeIf { it > 0 } ?: 60
                 val localOnly = options?.optBoolean("localOnly", false) ?: false
                 val emitAll = options?.optString("emit", "fresh") == "all"
@@ -142,7 +180,6 @@ class BeamioConetChatHistoryStore(
                 val peerKey = peerFilter ?: "all"
                 if (recs.isEmpty()) {
                     emitBuffer(peerKey, emptyList(), true)
-                    done()
                     return@execute
                 }
                 val ordered = recs.sortedBy { it.seq }
@@ -151,10 +188,11 @@ class BeamioConetChatHistoryStore(
                 log("info", "[history] load peer=$peerKey records=${ordered.size} tail=${tail.size} older=${older.size}")
 
                 fun publish(batch: List<IndexRecord>, isTail: Boolean) {
+                    val materialized = materializeAll(batch)
                     val entries = ArrayList<Entry>()
-                    for (rec in batch) {
+                    for ((idx, rec) in batch.withIndex()) {
                         val fresh = emittedCids.add(rec.cid)
-                        val entry = materialize(rec) ?: continue
+                        val entry = materialized[idx] ?: continue
                         if (emitAll || fresh) entries.add(entry)
                     }
                     if (entries.isNotEmpty()) emitBuffer(peerKey, entries, isTail)
@@ -168,27 +206,63 @@ class BeamioConetChatHistoryStore(
             } catch (e: Exception) {
                 log("warn", "[history] load failed: ${e.message}")
             } finally {
+                loadLock.withLock {
+                    loadsInFlight--
+                    loadIdle.signalAll()
+                }
                 done()
             }
         }
     }
 
-    /** Global read of the decrypted corpus (does not refresh the on-chain pointer). */
+    /** A read issued while a restore is running waits (bounded) for that restore's head sync. */
+    private fun awaitRestoreIdle(timeoutMs: Long) {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        loadLock.withLock {
+            var left = deadline - System.nanoTime()
+            while (loadsInFlight > 0 && left > 0) {
+                left = loadIdle.awaitNanos(left)
+            }
+        }
+    }
+
+    /**
+     * Global read of the decrypted corpus (does not refresh the on-chain pointer).
+     * Runs on its own lane from the last published [snapshot], so it answers immediately
+     * even while an append / head sync is still talking to IPFS and the relay.
+     */
     fun read(options: JSONObject?, completion: (List<Entry>) -> Unit) {
-        queue.execute {
+        readQueue.execute {
             try {
                 if (!ready) {
                     completion(emptyList())
                     return@execute
                 }
+                awaitRestoreIdle(READ_RESTORE_WAIT_MS)
+                if (!everSynced && snapshot.isEmpty()) {
+                    // Nothing restored yet (cold start, read raced ahead of historyLoad): an empty
+                    // answer would look like "no history", so pull the chain head first.
+                    val synced = CountDownLatch(1)
+                    queue.execute {
+                        try {
+                            syncFromHead()
+                        } catch (e: Exception) {
+                            log("warn", "[history] read-triggered sync failed: ${e.message}")
+                        } finally {
+                            synced.countDown()
+                        }
+                    }
+                    synced.await(READ_RESTORE_WAIT_MS, TimeUnit.MILLISECONDS)
+                }
                 val peer = options?.optString("peer", "")?.lowercase()?.takeIf { it.isNotEmpty() }
                 val query = options?.optString("query", "")?.trim().orEmpty()
                 val limit = options?.optInt("limit", 0) ?: 0
                 val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val candidates = snapshot.filter { peer == null || it.peer.lowercase() == peer }
+                val materialized = materializeAll(candidates)
                 val entries = ArrayList<Entry>()
-                for (rec in records.toList()) {
-                    if (peer != null && rec.peer.lowercase() != peer) continue
-                    val entry = materialize(rec) ?: continue
+                for (entry in materialized) {
+                    if (entry == null) continue
                     if (terms.isNotEmpty()) {
                         val text = entry.body.lowercase()
                         if (!terms.all { text.contains(it) }) continue
@@ -242,6 +316,7 @@ class BeamioConetChatHistoryStore(
         records.add(IndexRecord(seq, cid, prevCid, ts, peer, dir, sendId, body.take(80)))
         plain[cid] = Entry(seq, ts, peer, dir, sendId, body)
         emittedCids.add(cid)
+        publishSnapshot()
         return persistManifest(key)
     }
 
@@ -265,7 +340,9 @@ class BeamioConetChatHistoryStore(
             it.cid !in remoteCids && (it.sendId.isEmpty() || it.sendId !in remoteSendIds)
         }
         records = remoteRecords.toMutableList()
+        publishSnapshot()
         syncedIndexHash = pointer.indexHash
+        everSynced = true
         log("info", "[history] synced records=${records.size} localOnly=${localOnly.size}")
         for (rec in localOnly) {
             val entry = plain[rec.cid] ?: continue
@@ -289,8 +366,35 @@ class BeamioConetChatHistoryStore(
         val cipher = ConetChatCryptoUtil.aesGcmEncrypt(key, manifest.toString().toByteArray(Charsets.UTF_8))
         val indexHash = uploadFragment(cipher) ?: return false
         val ok = updateOnchainPointer(indexHash, records.size)
-        if (ok) syncedIndexHash = indexHash
+        if (ok) {
+            syncedIndexHash = indexHash
+            log("info", "[history] pointer updated records=${records.size} index=${shortCid(indexHash)}")
+        }
         return ok
+    }
+
+    /**
+     * Decrypts [batch] with bounded parallelism (IPFS fetch dominates); result order matches
+     * [batch], `null` for fragments that could not be fetched or decrypted. Safe to call from
+     * any lane — only [plain] (concurrent) is shared.
+     */
+    private fun materializeAll(batch: List<IndexRecord>): List<Entry?> {
+        if (batch.isEmpty()) return emptyList()
+        val missing = batch.count { !plain.containsKey(it.cid) }
+        if (missing <= 1) return batch.map { materialize(it) }
+        val futures = batch.map { rec ->
+            if (plain.containsKey(rec.cid)) null
+            else fetchPool.submit(Callable { materialize(rec) })
+        }
+        return batch.mapIndexed { idx, rec ->
+            plain[rec.cid] ?: futures[idx]?.let {
+                try {
+                    it.get(MATERIALIZE_TIMEOUT_SEC, TimeUnit.SECONDS)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
     }
 
     private fun materialize(rec: IndexRecord): Entry? {
@@ -533,6 +637,13 @@ class BeamioConetChatHistoryStore(
         private const val TAG = "BeamioConetHistory"
         private const val FRAGMENT_GENESIS_INFO = "frag-genesis"
         private const val BACKFILL_BATCH = 20
+
+        /** Concurrent IPFS fetch+decrypt workers for restore / global read. */
+        private const val FETCH_PARALLELISM = 6
+        private const val MATERIALIZE_TIMEOUT_SEC = 45L
+
+        /** Longest a read waits for an in-flight restore before answering from the current snapshot. */
+        private const val READ_RESTORE_WAIT_MS = 20_000L
 
         /** `bytes4(keccak256("getPointer(address)"))`. */
         internal const val SEL_GET_POINTER = "0x6bd15a9f"

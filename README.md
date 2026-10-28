@@ -6,7 +6,7 @@ Native CoNET Chat module for Android apps. Implements the same `WorkerCommand` /
 
 | Item | Value |
 |---|---|
-| **Maven coordinates** | `network.conet:chat:0.2.0` |
+| **Maven coordinates** | `network.conet:chat:0.2.1` |
 | **Namespace** | `network.conet.chat` |
 | **minSdk** | 24 |
 | **Entry point** | `BeamioConetChatModule.handleCommand(context, body, emit)` |
@@ -43,6 +43,8 @@ The host PWA signs with its own wallet and replies through `BeamioConetChatSignB
 5. **Receipts**: after an inbound message is accepted the module sends a mailbox `gossip_delivery_ack` (encrypted to B) and a `beamio_chat_delivery_receipt_v1` to the sender (`NoPush`).
 6. **History**: AES-GCM fragments on IPFS plus an EIP-712 `SetPointer` on `ChatIndexRegistry` (`0x1511Caa71081C84d8a591490D1b83879088EED72`, chain `224422`). Keys derive from an EIP-191 signature of `beamio.chat.history.v1|224422|<eoaLower>`; recovery reads the pointer over RPC and decrypts the chain.
 
+The history store keeps no on-disk manifest: every process start rebuilds the index from the `ChatIndexRegistry` pointer (restore from chain), then decrypts fragments with bounded parallel IPFS fetches. Chain-mutating work (`historyLoad`, `historyAppend`, head sync) runs on one serial lane; `historyRead` is served from an in-memory snapshot on its own lane, so it never waits behind a slow append (a read issued during a restore waits up to 20 s for that restore's head sync).
+
 Entry selection uses a score-weighted random choice over the SI roster with a reachability probe (`BeamioSiCipherPost.getRandomNode`); unreachable IPs are quarantined for 120 s and up to four entries are tried per operation.
 
 ## Install
@@ -64,7 +66,7 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("network.conet:chat:0.2.0")
+    implementation("network.conet:chat:0.2.1")
 }
 ```
 
@@ -135,7 +137,12 @@ Commit the generated `maven/` directory, tag `v<version>` and push; consumers th
 
 ## Acceptance
 
-The module is accepted through the Beamio Consumer Android shell (`src/CaehTrees`, shell `1.0.131`, PWA `0.52.891`): a PWA temp account exchanges text, image and video with the shell in both directions; sender bubbles reach `Delivered`; the on-chain `ChatIndexRegistry` pointer advances with each message; and `historyRead` returns the decrypted chain.
+The module is accepted through the Beamio Consumer Android shell (`src/CaehTrees`, shell `1.0.132`):
+
+- A PWA temp account exchanges text, image and video with the shell in both directions; sender bubbles reach `Delivered`.
+- The on-chain `ChatIndexRegistry` pointer advances with each message and matches the decrypted index.
+- **Restore from chain**: after `am force-stop` + relaunch (empty process state) `historyRead` returns the whole corpus — 111 of 111 records, seq `0…110` contiguous, every fragment decrypted — matching the on-chain pointer.
+- `historyRead` stays responsive while an append is in flight (≈0.5 s instead of waiting ~15 s behind the append lane).
 
 ## License
 
