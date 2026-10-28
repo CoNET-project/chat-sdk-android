@@ -21,6 +21,12 @@ Matches TypeScript `mailbox_listen`:
 3. HTTP JSON body is only `{ "data": "<OpenPGP armor>" }`.
 4. Events emit `{ "action": "conetChat", "kind": "status"|"message", … }`.
 
+### Entry selection
+
+Entry **C** is picked with `ConetChatNetwork.getRandomNode`: a score-weighted random choice over the roster (unscored nodes start at 80), skipping the mailbox **B** IP. Each pick is probed with a plain `http://{ip}/` request first; unreachable IPs are scored to 0 and never returned. After every listen attempt the engine re-scores the entry (`scoreEntry`) from the measured latency or failure, and tries up to four different entries before reporting an error.
+
+Inbound frames are raw JSON `{"data":"<OpenPGP armor>"}` (not SSE `data:` lines). The armor is read through a JSON parser so escaped `\n` sequences become real newlines before OpenPGP decryption.
+
 EOA private-key hex stays **in memory only** for EIP-191. Persistence adapters must never store it.
 
 ## Install
@@ -107,7 +113,7 @@ chat/
     ConetChatCrypto.kt        # Host crypto SPI
     ConetChatPersistence.kt   # Optional persistence SPI
     ConetChatEngine.kt        # Listen session / SSE
-    ConetChatNetwork.kt       # HTTP helpers
+    ConetChatNetwork.kt       # HTTP helpers, scored entry selection
   src/main/AndroidManifest.xml
   consumer-rules.pro
 ```

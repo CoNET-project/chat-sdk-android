@@ -219,24 +219,35 @@ internal class ConetChatEngine {
             ?: throw IllegalStateException("encrypt_route_command_failed")
         if (!running.get() || listenGeneration != gen) return
 
-        val entryCandidates = session.nodes.filter { n ->
+        val withPgp = session.nodes.filter { n ->
             val ip = ConetChatNetwork.normalizeIp(n.ip) ?: return@filter false
             ip !in mailboxIps && n.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")
-        }.shuffled()
+        }
         val fallback = session.nodes.filter { n ->
             val ip = ConetChatNetwork.normalizeIp(n.ip) ?: return@filter false
             ip !in mailboxIps
-        }.shuffled()
-        val entries = if (entryCandidates.isNotEmpty()) entryCandidates else fallback
-        if (entries.isEmpty()) {
+        }
+        val roster = if (withPgp.isNotEmpty()) withPgp else fallback
+        if (roster.isEmpty()) {
             emitStatus("reconnecting", "no_entry_c")
             throw IllegalStateException("no_entry_c")
         }
 
+        val candidates = roster.map {
+            ConetChatNetwork.EntryCandidate(
+                ip = it.ip,
+                domain = it.domain,
+                armoredPublicKey = it.armoredPublicKey,
+            )
+        }
         var lastError: String? = null
-        for (entry in entries) {
+        val skip = mailboxIps.toMutableSet()
+        for (_attempt in 0 until 4) {
             if (!running.get() || listenGeneration != gen) return
+            val entry = ConetChatNetwork.getRandomNode(candidates, excludeIps = skip)
+                ?: break
             val entryIp = ConetChatNetwork.normalizeIp(entry.ip) ?: continue
+            skip.add(entryIp)
             val url = ConetChatNetwork.postUrl(entryIp) ?: continue
             val armored = if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
                 awaitWrapArmor(innerArmor, entry.armoredPublicKey) ?: innerArmor
@@ -244,8 +255,23 @@ internal class ConetChatEngine {
                 innerArmor
             }
             Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain}")
-            val err = openSse(url, armored, session, gen, entry.domain)
-            if (err == null) return
+            val started = System.currentTimeMillis()
+            val err = openSse(url, armored, session, gen, entry.domain) ?: "sse_error"
+            val latency = (System.currentTimeMillis() - started).toInt()
+            // getRandomNode already probed reachable; demote on connect/HTTP failure.
+            when {
+                err.startsWith("HTTP 0") ||
+                    err.contains("ConnectException", ignoreCase = true) ||
+                    err.contains("SocketTimeout", ignoreCase = true) ||
+                    err.contains("UnknownHost", ignoreCase = true) ||
+                    err.contains("Failed to connect", ignoreCase = true) ||
+                    err.contains("Network is unreachable", ignoreCase = true) ->
+                    ConetChatNetwork.scoreEntry(entryIp, reachable = false, latencyMs = latency)
+                err.startsWith("HTTP ") ->
+                    ConetChatNetwork.scoreEntry(entryIp, reachable = true, latencyMs = 500)
+                err == "root_stop" || err == "server_closed" ->
+                    ConetChatNetwork.scoreEntry(entryIp, reachable = true, latencyMs = minOf(latency, 400))
+            }
             lastError = err
             if (err == "root_stop" || !running.get() || listenGeneration != gen) return
         }
@@ -342,9 +368,22 @@ internal class ConetChatEngine {
         } catch (_: Exception) {
         }
 
-        val armored = findInboundArmor(payload) ?: return
-        if (!armored.contains("BEGIN PGP MESSAGE")) return
-        val crypto = cryptoProvider() ?: return
+        val prefix = payload.take(96).replace('\n', ' ')
+        Log.i(TAG, "inbound frame len=${payload.length} prefix=$prefix")
+        val armored = findInboundArmor(payload)
+        if (armored == null) {
+            Log.w(TAG, "inbound armor miss len=${payload.length}")
+            return
+        }
+        if (!armored.contains("BEGIN PGP MESSAGE")) {
+            Log.w(TAG, "inbound armor missing BEGIN")
+            return
+        }
+        val crypto = cryptoProvider()
+        if (crypto == null) {
+            Log.e(TAG, "inbound cryptoProvider null")
+            return
+        }
         crypto.decryptInboundArmor(
             session.pgpPrivateKeyArmored,
             session.pgpPassphrase,
@@ -359,6 +398,7 @@ internal class ConetChatEngine {
                     line = env.toString()
                 } catch (_: Exception) {
                 }
+                Log.i(TAG, "inbound decrypt ok len=${line.length}")
                 emitMessage(line, dec.armorHash, viaDomain)
             }
             result.onFailure { err ->
@@ -372,21 +412,34 @@ internal class ConetChatEngine {
         }
     }
 
+    /**
+     * SI business frames are raw JSON `{"data":"<OpenPGP armor>"}` (not SSE `data:` lines).
+     * Prefer JSONObject so JSON `\n` escapes become real newlines; slicing BEGIN..END out of
+     * the raw JSON text leaves literal `\\n` and OpenPGP decrypt fails.
+     */
     private fun findInboundArmor(payload: String): String? {
         val trimmed = payload.trim()
+        if (trimmed.startsWith("{")) {
+            try {
+                walkArmor(JSONObject(trimmed), 0)?.let { return it }
+            } catch (_: Exception) {
+            }
+        }
         if (trimmed.contains("BEGIN PGP MESSAGE")) {
             val start = trimmed.indexOf("-----BEGIN PGP MESSAGE-----")
             val end = trimmed.indexOf("-----END PGP MESSAGE-----")
             if (start >= 0 && end > start) {
-                return trimmed.substring(start, end + "-----END PGP MESSAGE-----".length)
+                val slice = trimmed.substring(start, end + "-----END PGP MESSAGE-----".length)
+                // Raw JSON source may still contain escaped newlines if parse above failed.
+                return if (slice.contains("\\n")) {
+                    slice.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\r")
+                } else {
+                    slice
+                }
             }
             return trimmed
         }
-        return try {
-            walkArmor(JSONObject(trimmed), 0)
-        } catch (_: Exception) {
-            null
-        }
+        return null
     }
 
     private fun walkArmor(obj: JSONObject, depth: Int): String? {
@@ -426,14 +479,26 @@ internal class ConetChatEngine {
         commandJson: String,
         routeArmor: String,
     ): String? {
-        val crypto = cryptoProvider() ?: return null
+        val crypto = cryptoProvider() ?: run {
+            Log.e(TAG, "encrypt_route_command: cryptoProvider null")
+            return null
+        }
         val latch = CountDownLatch(1)
         var out: String? = null
+        var err: String? = null
         crypto.encryptRouteCommand(privateKeyHex, commandJson, routeArmor) { result ->
             out = result.getOrNull()
+            err = result.exceptionOrNull()?.message
             latch.countDown()
         }
-        latch.await(20, TimeUnit.SECONDS)
+        val finished = latch.await(20, TimeUnit.SECONDS)
+        if (!finished) {
+            Log.e(TAG, "encrypt_route_command: timeout 20s")
+            return null
+        }
+        if (out.isNullOrBlank()) {
+            Log.e(TAG, "encrypt_route_command_failed: ${err ?: "empty"}")
+        }
         return out
     }
 
