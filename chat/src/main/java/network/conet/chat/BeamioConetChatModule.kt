@@ -51,7 +51,16 @@ object BeamioConetChatModule {
         @Volatile var chainId: Int = 224422
         @Volatile var history: BeamioConetChatHistoryStore? = null
         @Volatile var destroyed: Boolean = false
+        /**
+         * The app confirms each inbound message with `ackInbound` after it has
+         * stored it. Until then the mailbox keeps its offline copy, so a message
+         * is not lost when the page is starting, suspended or killed.
+         */
+        @Volatile var deferAck: Boolean = false
+        val pendingAcks = java.util.concurrent.ConcurrentHashMap<String, PendingAck>()
     }
+
+    class PendingAck(val plaintext: String, val from: String, val viaDomain: String, val at: Long)
 
     private val lock = Any()
     private var session: Session? = null
@@ -105,6 +114,7 @@ object BeamioConetChatModule {
                 listen.pause()
                 emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("idle", "paused")))
             }
+            "ackInbound" -> handleAckInbound(body)
             "resume" -> resumeListen()
             "destroy" -> destroy()
             else -> Log.w(TAG, "unknown command $type")
@@ -129,6 +139,12 @@ object BeamioConetChatModule {
             listen.stop()
             session?.history?.destroy()
             session = s
+        }
+        s.deferAck = payload.optBoolean("deferAck", false)
+        if (s.deferAck) {
+            // A new page has seen nothing: let the mailbox's redelivery of
+            // messages the previous page never confirmed reach it again.
+            synchronized(seenArmor) { seenArmor.clear() }
         }
 
         payload.optJSONObject("identity")?.let { id ->
@@ -551,7 +567,13 @@ object BeamioConetChatModule {
         val s = currentSession() ?: return
         // The sender fans one message out to several entries; the mailbox then forwards each
         // copy. Identical armor (same keccak) is one message: no second event, no second receipt.
-        if (armorHash.isNotEmpty() && !markSeen(armorHash)) return
+        if (armorHash.isNotEmpty() && !markSeen(armorHash)) {
+            // Redelivered before the app confirmed it (page reloaded or was
+            // suspended): hand it over again. The app deduplicates by sendId.
+            val pending = s.pendingAcks[armorHash] ?: return
+            emitInboundMessage(pending.plaintext, pending.from, armorHash, pending.viaDomain)
+            return
+        }
         verifyEnvelope(ctx, plaintext) { from ->
             if (from.isNullOrEmpty()) {
                 emitEvent(
@@ -560,18 +582,57 @@ object BeamioConetChatModule {
                 )
                 return@verifyEnvelope
             }
-            emitEvent(
-                JSONObject().put("type", "event:message").put(
-                    "payload",
-                    JSONObject()
-                        .put("line", plaintext)
-                        .put("from", from)
-                        .put("armorHash", armorHash)
-                        .put("viaDomain", viaDomain)
-                        .put("plain", false),
-                ),
-            )
-            emitDualReceipts(ctx, s, plaintext, armorHash, from)
+            if (s.deferAck && armorHash.isNotEmpty()) {
+                prunePendingAcks(s)
+                s.pendingAcks[armorHash] = PendingAck(plaintext, from, viaDomain, System.currentTimeMillis())
+                emitInboundMessage(plaintext, from, armorHash, viaDomain)
+            } else {
+                emitInboundMessage(plaintext, from, armorHash, viaDomain)
+                emitDualReceipts(ctx, s, plaintext, armorHash, from)
+            }
+        }
+    }
+
+    private fun emitInboundMessage(plaintext: String, from: String, armorHash: String, viaDomain: String) {
+        emitEvent(
+            JSONObject().put("type", "event:message").put(
+                "payload",
+                JSONObject()
+                    .put("line", plaintext)
+                    .put("from", from)
+                    .put("armorHash", armorHash)
+                    .put("viaDomain", viaDomain)
+                    .put("plain", false),
+            ),
+        )
+    }
+
+    /**
+     * The app stored these messages: now send the mailbox ACK (deletes the
+     * offline copy) and the sender's delivery receipt.
+     */
+    private fun handleAckInbound(body: JSONObject) {
+        val ctx = appContext ?: return
+        val s = currentSession() ?: return
+        val hashes = ArrayList<String>()
+        body.optJSONArray("armorHashes")?.let { arr ->
+            for (i in 0 until arr.length()) arr.optString(i, "").takeIf { it.isNotBlank() }?.let { hashes.add(it) }
+        }
+        body.optString("armorHash", "").takeIf { it.isNotBlank() }?.let { hashes.add(it) }
+        for (hash in hashes) {
+            val pending = s.pendingAcks.remove(hash) ?: continue
+            emitDualReceipts(ctx, s, pending.plaintext, hash, pending.from)
+        }
+    }
+
+    /** Unconfirmed for 10 minutes: forget it without ACK; the mailbox redelivers it later. */
+    private fun prunePendingAcks(s: Session) {
+        val cutoff = System.currentTimeMillis() - PENDING_ACK_TTL_MS
+        val expired = s.pendingAcks.entries.filter { it.value.at < cutoff }.map { it.key }
+        for (hash in expired) {
+            s.pendingAcks.remove(hash)
+            // Let the mailbox's redelivery through the dedupe again.
+            synchronized(seenArmor) { seenArmor.remove(hash) }
         }
     }
 
@@ -743,6 +804,8 @@ object BeamioConetChatModule {
     }
 
     /** `true` the first time [armorHash] is seen (bounded, last 512). */
+    private const val PENDING_ACK_TTL_MS = 10 * 60 * 1000L
+
     private fun markSeen(armorHash: String): Boolean = synchronized(seenArmor) {
         if (seenArmor.containsKey(armorHash)) false else {
             seenArmor[armorHash] = true
