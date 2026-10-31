@@ -576,7 +576,7 @@ object BeamioConetChatModule {
     }
 
     /**
-     * Recover the EIP-191 signer. A claimed `from` that differs from the signer is rejected:
+     * Recover the EIP-191 signer. A claimed `from` that differs from the signer is passed on for the app to flag:
      * the recovered address is the only trusted sender identity.
      */
     private fun verifyEnvelope(ctx: Context, plaintext: String, completion: (String?) -> Unit) {
@@ -599,14 +599,11 @@ object BeamioConetChatModule {
             completion(null)
             return
         }
-        val claimed = obj.optString("from", "").lowercase().takeIf { it.isNotEmpty() }
+        // The recovered signer is the sender. A claimed `from` that differs is
+        // not dropped here: the app keeps the message under the signer and shows
+        // a warning for the false claim.
         BeamioOpenPgpHost.shared(ctx).verifyMessage(text, sig) { result ->
-            val recovered = result.getOrNull()
-            when {
-                recovered == null -> completion(null)
-                claimed != null && claimed != recovered.lowercase() -> completion(null)
-                else -> completion(recovered)
-            }
+            completion(result.getOrNull())
         }
     }
 
