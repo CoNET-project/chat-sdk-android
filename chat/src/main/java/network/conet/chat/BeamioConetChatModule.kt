@@ -494,6 +494,13 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "bad_mailbox_command")
             return
         }
+        // Voice commands never carry a wallet or wallet signature.
+        if (command.optString("command", "").startsWith("voice_")) {
+            postOpaqueVoiceCommand(s, routeKey, command) { ok ->
+                ack(reqId, true, result = JSONObject().put("ok", ok))
+            }
+            return
+        }
         postSignedMailboxCommand(s, routeKey, command) { ok, _ ->
             ack(reqId, true, result = JSONObject().put("ok", ok))
         }
@@ -526,8 +533,76 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "bad_voice_frame")
             return
         }
-        postSignedMailboxCommand(s, routeKey, frame) { ok, _ ->
+        val command = opaqueVoiceUplinkCommand(frame)
+        if (command == null) {
+            ack(reqId, false, error = "bad_voice_frame")
+            return
+        }
+        postOpaqueVoiceCommand(s, routeKey, command) { ok ->
             ack(reqId, true, result = JSONObject().put("sent", ok))
+        }
+    }
+
+    /**
+     * Rebuild a PWA voice frame as the route command the peer's mailbox reads.
+     *
+     * Allow-list only: the PWA frame carries `to` (the peer wallet), and the relay
+     * routes by session id alone (CoNET Chat protocol rules 18–21). Same shape as
+     * the native shells and the PWA worker SDK send.
+     */
+    internal fun opaqueVoiceUplinkCommand(frame: JSONObject): JSONObject? {
+        val callId = frame.optString("callId", "").trim()
+        val sessionId = frame.optString("sessionId", "").trim()
+        val targetSessionId = frame.optString("targetSessionId", "").trim()
+        val payload = frame.optString("payload", "")
+        val seq = frame.optLong("seq", -1L)
+        if (callId.isEmpty() || sessionId.isEmpty() || targetSessionId.isEmpty() || payload.isEmpty() || seq < 0) {
+            return null
+        }
+        val nowSec = System.currentTimeMillis() / 1000L
+        val command = JSONObject()
+            .put("command", "voice_uplink")
+            .put("type", "voice_frame_v1")
+            .put("callId", callId)
+            .put("sessionId", sessionId)
+            .put("targetSessionId", targetSessionId)
+            .put("direction", frame.optString("direction", "").ifBlank { "uplink" })
+            .put("seq", seq)
+            .put("frameTimestamp", frame.opt("frameTimestamp") ?: frame.opt("timestamp") ?: nowSec)
+            .put("payload", payload)
+            .put("timestamp", nowSec)
+        for (key in listOf("mediaKind", "frameId", "chunkIndex", "chunkCount")) {
+            if (frame.has(key)) command.put(key, frame.get(key))
+        }
+        return command
+    }
+
+    /**
+     * Voice route command: unsigned, no wallet. A wallet signature would let the
+     * mailbox recover the sender's wallet, and the node does not ask for one
+     * (sessionId is the capability). JSON → base64 → route PGP → entry ≠ B.
+     */
+    private fun postOpaqueVoiceCommand(
+        s: Session,
+        routerArmoredPublicKey: String,
+        command: JSONObject,
+        completion: (ok: Boolean) -> Unit,
+    ) {
+        val ctx = appContext
+        if (ctx == null) {
+            completion(false)
+            return
+        }
+        val cmd = JSONObject(command.toString())
+        for (key in listOf("walletAddress", "billingWallet", "from", "to")) cmd.remove(key)
+        if (!cmd.has("timestamp")) cmd.put("timestamp", System.currentTimeMillis() / 1000)
+        BeamioOpenPgpHost.shared(ctx).encryptUtf8JsonBase64(cmd.toString(), routerArmoredPublicKey) { enc ->
+            val armor = enc.getOrNull()
+            if (armor == null || !armor.contains("BEGIN PGP MESSAGE")) {
+                completion(false)
+                return@encryptUtf8JsonBase64
+            }
+            io.execute { completion(postToEntries(ctx, armor, routerArmoredPublicKey, s)) }
         }
     }
 
