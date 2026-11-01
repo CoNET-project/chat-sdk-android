@@ -661,6 +661,64 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         }
     }
 
+    // ---- Local wallet signer (key from BeamioChatWalletKeyStore; never logged) ----
+
+    /** EIP-191 `personal_sign` of [message] with [privateKeyHex]. */
+    fun signEip191(
+        privateKeyHex: String,
+        message: String,
+        callback: (Result<String>) -> Unit,
+    ) {
+        runJsPost(
+            """
+            const w = new ethers.Wallet('0x' + ${jsString(privateKeyHex)});
+            const sig = await w.signMessage(${jsString(message)});
+            return post(JSON.stringify({ ok: true, value: String(sig || '') }));
+            """.trimIndent(),
+        ) { parsed -> callback(signatureOrError(parsed)) }
+    }
+
+    /** EIP-712 signature of `{ domain, types, primaryType, message|value }`. */
+    fun signEip712(
+        privateKeyHex: String,
+        typedData: JSONObject,
+        callback: (Result<String>) -> Unit,
+    ) {
+        runJsPost(
+            """
+            const td = JSON.parse(${jsString(typedData.toString())});
+            const types = Object.assign({}, td.types || {});
+            delete types.EIP712Domain;
+            const value = td.value || td.message;
+            if (!td.domain || !value) return post(JSON.stringify({ ok: false, error: 'bad_typed_data' }));
+            const w = new ethers.Wallet('0x' + ${jsString(privateKeyHex)});
+            const sig = await w.signTypedData(td.domain, types, value);
+            return post(JSON.stringify({ ok: true, value: String(sig || '') }));
+            """.trimIndent(),
+        ) { parsed -> callback(signatureOrError(parsed)) }
+    }
+
+    /** Lower-case address of [privateKeyHex]. */
+    fun walletAddress(privateKeyHex: String, callback: (Result<String>) -> Unit) {
+        runJsPost(
+            """
+            const w = new ethers.Wallet('0x' + ${jsString(privateKeyHex)});
+            return post(JSON.stringify({ ok: true, value: String(w.address || '').toLowerCase() }));
+            """.trimIndent(),
+        ) { parsed ->
+            if (parsed.ok && parsed.value.startsWith("0x")) callback(Result.success(parsed.value))
+            else callback(Result.failure(IllegalStateException("bad_wallet_key")))
+        }
+    }
+
+    private fun signatureOrError(parsed: JsJsonResult): Result<String> =
+        if (parsed.ok && parsed.value.startsWith("0x")) {
+            Result.success(parsed.value)
+        } else {
+            // Never echo the JS error text: it could quote its input.
+            Result.failure(IllegalStateException("local_sign_failed"))
+        }
+
     data class DecryptInbound(
         val text: String,
         val armorHash: String,

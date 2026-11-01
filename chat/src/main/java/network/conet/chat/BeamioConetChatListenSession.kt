@@ -9,7 +9,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 private typealias StatusHandler = (status: String, detail: String?) -> Unit
-private typealias InboundHandler = (plaintext: String, armorHash: String, viaDomain: String) -> Unit
+/** `armor` is the inbound OpenPGP armor (still encrypted to the user key), kept for the inbox store. */
+internal typealias InboundHandler = (plaintext: String, armorHash: String, viaDomain: String, armor: String) -> Unit
 
 /**
  * Mailbox SSE listen: encrypt `mailbox_listen` to the **B route PGP**, HTTP/SSE via an
@@ -23,6 +24,9 @@ internal class BeamioConetChatListenSession {
     private var sseHandle: BeamioSiCipherPost.SseHandle? = null
 
     fun isRunning(): Boolean = synchronized(lock) { running && !paused }
+
+    /** Started and not stopped (it may be paused). */
+    fun isActive(): Boolean = synchronized(lock) { running }
 
     fun pause() {
         synchronized(lock) { paused = true }
@@ -253,31 +257,7 @@ internal class BeamioConetChatListenSession {
         val armored = findInboundArmor(trimmed)
         if (armored == null || !armored.contains("BEGIN PGP MESSAGE")) return
 
-        BeamioOpenPgpHost.shared(app).decryptInboundArmor(
-            session.pgpPrivateKeyArmored,
-            session.pgpPassphrase,
-            armored,
-        ) { result ->
-            result.onSuccess { dec ->
-                var line = normalizeInboundPlaintext(dec.text)
-                if (line.isBlank()) return@onSuccess
-                try {
-                    val env = JSONObject(line)
-                    env.put("_beamioPgpArmorHash", dec.armorHash)
-                    line = env.toString()
-                } catch (_: Exception) {
-                }
-                onInbound(line, dec.armorHash, viaDomain)
-            }
-            result.onFailure { err ->
-                val msg = err.message.orEmpty()
-                if (msg.contains("No decryption key", ignoreCase = true)) {
-                    Log.w(TAG, "inbound PGP not for this listen key")
-                } else {
-                    Log.w(TAG, "inbound decrypt: $msg")
-                }
-            }
-        }
+        decryptArmor(app, session, armored) { line, hash -> onInbound(line, hash, viaDomain, armored) }
     }
 
     private fun <T> await(seconds: Long, request: ((Result<T>) -> Unit) -> Unit): T {
@@ -293,6 +273,44 @@ internal class BeamioConetChatListenSession {
 
     companion object {
         private const val TAG = "BeamioConetChat"
+
+        /**
+         * Decrypt one inbound armor with the session PGP key into the chat line
+         * the app expects (with `_beamioPgpArmorHash`). Also used to replay the
+         * inbox store. Never logs plaintext.
+         */
+        internal fun decryptArmor(
+            app: Context,
+            session: BeamioConetChatModule.Session,
+            armored: String,
+            onLine: (line: String, armorHash: String) -> Unit,
+        ) {
+            BeamioOpenPgpHost.shared(app).decryptInboundArmor(
+                session.pgpPrivateKeyArmored,
+                session.pgpPassphrase,
+                armored,
+            ) { result ->
+                result.onSuccess { dec ->
+                    var line = normalizeInboundPlaintext(dec.text)
+                    if (line.isBlank()) return@onSuccess
+                    try {
+                        val env = JSONObject(line)
+                        env.put("_beamioPgpArmorHash", dec.armorHash)
+                        line = env.toString()
+                    } catch (_: Exception) {
+                    }
+                    onLine(line, dec.armorHash)
+                }
+                result.onFailure { err ->
+                    val msg = err.message.orEmpty()
+                    if (msg.contains("No decryption key", ignoreCase = true)) {
+                        Log.w(TAG, "inbound PGP not for this listen key")
+                    } else {
+                        Log.w(TAG, "inbound decrypt failed")
+                    }
+                }
+            }
+        }
         private const val RETRY_MS = 6_000L
         private const val MAX_ENTRY_ATTEMPTS = 4
 

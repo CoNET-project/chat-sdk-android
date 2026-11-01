@@ -16,6 +16,8 @@ import org.json.JSONObject
  */
 object BeamioChatPgpStore {
     private const val PREFS = "beamio_chat_pgp_v1"
+    /** Fallback file when EncryptedSharedPreferences fails: never holds a private key. */
+    private const val PREFS_PLAIN = "beamio_chat_pgp_plain_v1"
     private const val KEY_PRIVATE = "userPgpPrivateArmor"
     private const val KEY_PUBLIC = "userPgpPublicArmor"
     private const val KEY_KEY_ID = "userPgpKeyId"
@@ -56,6 +58,10 @@ object BeamioChatPgpStore {
             get() = routePublicKeyArmor.contains("BEGIN PGP PUBLIC KEY")
     }
 
+    /** True when [prefs] is the encrypted store (the PGP private key goes only there). */
+    @Volatile
+    private var lastPrefsSecure = true
+
     private fun prefs(context: Context) = try {
         val masterKey = MasterKey.Builder(context.applicationContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -66,10 +72,20 @@ object BeamioChatPgpStore {
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+        ).also { lastPrefsSecure = true }
     } catch (error: Exception) {
-        Log.w(TAG, "EncryptedSharedPreferences fallback: ${error.message}")
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Roster and public keys only: the private key is never written here.
+        Log.w(TAG, "EncryptedSharedPreferences unavailable: ${error.javaClass.simpleName}")
+        lastPrefsSecure = false
+        context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
+    }
+
+    /** Logout / wallet switch: forget the PGP key, route key and wallet binding. */
+    fun clear(context: Context) {
+        runCatching { prefs(context).edit().clear().commit() }
+        runCatching {
+            context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE).edit().clear().commit()
+        }
     }
 
     fun load(context: Context): Secrets? {
@@ -99,7 +115,12 @@ object BeamioChatPgpStore {
 
     fun save(context: Context, secrets: Secrets): Boolean {
         if (!secrets.hasUserPrivate) return false
-        val editor = prefs(context).edit()
+        val store = prefs(context)
+        if (!lastPrefsSecure) {
+            Log.w(TAG, "secure store unavailable; PGP key not saved")
+            return false
+        }
+        val editor = store.edit()
             .putString(KEY_PRIVATE, secrets.privateKeyArmor)
         if (secrets.publicKeyArmor.isNotBlank()) {
             editor.putString(KEY_PUBLIC, secrets.publicKeyArmor)

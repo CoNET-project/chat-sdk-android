@@ -78,6 +78,35 @@ object BeamioConetChatModule {
         Thread(r, "conet-chat-module").apply { isDaemon = true }
     }
 
+    /**
+     * Shell hook: sees every module event (messages included) even when no page
+     * is attached, so the shell can act on a caller's cancel natively. Main thread.
+     */
+    @Volatile
+    @JvmField
+    var nativeObserver: ((JSONObject) -> Unit)? = null
+
+    /**
+     * Shell hook: `true` while a call rings or is up. The page's background
+     * `pause` is then deferred: the mailbox listen stays connected until the call ends.
+     */
+    @Volatile
+    @JvmField
+    var keepListenWhile: (() -> Boolean)? = null
+
+    /**
+     * Shell call layer: a verified peer call-control message arrived over Chat
+     * (type, callId, sessionId, recovered signer). Main thread.
+     */
+    @Volatile
+    @JvmField
+    var callControlObserver: ((type: String, callId: String, sessionId: String, from: String) -> Unit)? = null
+
+    /** A pause is owed once [keepListenWhile] turns false. Main thread. */
+    private var pauseOwed = false
+    private var idleCheckPosted = false
+    private const val IDLE_CHECK_MS = 10_000L
+
     fun isAvailable(): Boolean = true
 
     fun isRunning(): Boolean = synchronized(lock) { session != null } && listen.isRunning()
@@ -110,13 +139,15 @@ object BeamioConetChatModule {
             "voiceFrame" -> handleVoiceFrame(body)
             "voiceListen" -> handleVoiceListen(body)
             "voiceUnlisten" -> handleVoiceUnlisten(body)
-            "pause" -> {
-                listen.pause()
-                emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("idle", "paused")))
-            }
+            "pause" -> main.post { requestPause() }
             "ackInbound" -> handleAckInbound(body)
-            "resume" -> resumeListen()
+            "resume" -> {
+                main.post { pauseOwed = false }
+                resumeListen()
+            }
             "destroy" -> destroy()
+            "clearIdentity" -> clearIdentity(body.optInt("reqId", -1))
+            "provisionIdentity" -> provisionIdentity(body)
             else -> Log.w(TAG, "unknown command $type")
         }
     }
@@ -134,14 +165,28 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "missing_payload")
             return
         }
-        val s = Session()
-        synchronized(lock) {
-            listen.stop()
-            session?.history?.destroy()
-            session = s
+        val idEoa = payload.optJSONObject("identity")?.let { id ->
+            normalizeAddress(id.optString("eoaAddress", "").ifBlank { id.optString("eoa", "") })
+        }.orEmpty()
+        val walletKey = BeamioChatWalletKeyStore.normalizeKey(
+            payload.optJSONObject("identity")?.optString("privateKeyHex", ""),
+        )
+        // A listen started without the page (call push) for this wallet: the page
+        // takes it over as it is. No reconnect, and the messages it holds unconfirmed
+        // are handed to the page below.
+        val running = currentSession()
+        val attach = running != null && idEoa.isNotEmpty() && running.eoa == idEoa && listen.isActive()
+        val s = if (attach) running!! else Session()
+        if (!attach) {
+            synchronized(lock) {
+                listen.stop()
+                session?.history?.destroy()
+                session = s
+            }
         }
-        s.deferAck = payload.optBoolean("deferAck", false)
-        if (s.deferAck) {
+        main.post { pauseOwed = false }
+        s.deferAck = payload.optBoolean("deferAck", false) || (attach && s.deferAck)
+        if (s.deferAck && !attach) {
             // A new page has seen nothing: let the mailbox's redelivery of
             // messages the previous page never confirmed reach it again.
             synchronized(seenArmor) { seenArmor.clear() }
@@ -204,11 +249,55 @@ object BeamioConetChatModule {
             Log.w(TAG, "persist identity: ${e.message}")
         }
 
-        BeamioOpenPgpHost.shared(ctx).ensureReady { ok ->
+        val host = BeamioOpenPgpHost.shared(ctx)
+        host.ensureReady { ok ->
             if (!ok) {
                 ack(reqId, false, error = "openpgp_not_ready")
                 return@ensureReady
             }
+            adoptWalletKey(ctx, host, s.eoa, walletKey) { finishInit(ctx, reqId, s, attach) }
+        }
+    }
+
+    /**
+     * Sign locally from now on. A key from the page is checked against the
+     * session wallet and stored; without one, a stored key for the same wallet
+     * is used; otherwise signing falls back to the page.
+     */
+    private fun adoptWalletKey(
+        ctx: Context,
+        host: BeamioOpenPgpHost,
+        eoa: String,
+        walletKey: String,
+        done: () -> Unit,
+    ) {
+        if (walletKey.isEmpty()) {
+            val stored = BeamioChatWalletKeyStore.load(ctx)
+            if (stored != null && stored.eoa == eoa) {
+                BeamioConetChatSignBroker.setLocalSigner(host, stored.privateKeyHex)
+            } else {
+                // Another wallet's key must not stay behind after a switch.
+                if (stored != null) BeamioChatWalletKeyStore.clear(ctx)
+                BeamioConetChatSignBroker.clearLocalSigner()
+            }
+            done()
+            return
+        }
+        host.walletAddress(walletKey) { addr ->
+            if (addr.getOrNull() == eoa) {
+                val saved = BeamioChatWalletKeyStore.save(ctx, eoa, walletKey)
+                BeamioConetChatSignBroker.setLocalSigner(host, walletKey)
+                Log.i(TAG, "wallet signer local stored=$saved")
+            } else {
+                Log.w(TAG, "wallet key does not match the session wallet; page signs")
+                BeamioConetChatSignBroker.clearLocalSigner()
+            }
+            done()
+        }
+    }
+
+    private fun finishInit(ctx: Context, reqId: Int, s: Session, attach: Boolean) {
+        run {
             val history = BeamioConetChatHistoryStore(
                 eoa = s.eoa,
                 chainId = s.chainId,
@@ -223,11 +312,218 @@ object BeamioConetChatModule {
                     emitEvent(JSONObject().put("type", "event:log").put("level", level).put("message", msg))
                 },
             )
+            s.history?.destroy()
             s.history = history
             // Listen first: it must not wait on the (sign-dependent) history key derivation.
             emitEvent(JSONObject().put("type", "ready").put("reqId", reqId))
-            startListen(ctx, s)
+            if (attach) {
+                Log.i(TAG, "page attached to the running listen pending=${s.pendingAcks.size}")
+                if (listen.isRunning()) emitStatus("listening", "attached") else resumeListen()
+                for ((hash, p) in s.pendingAcks.entries.toList()) {
+                    emitInboundMessage(p.plaintext, p.from, hash, p.viaDomain)
+                }
+            } else {
+                startListen(ctx, s)
+            }
+            if (s.deferAck) replayInbox(ctx, s)
             history.prepare { }
+        }
+    }
+
+    // ---- no-page start (call push) -----------------------------------------------------
+
+    /**
+     * Open the mailbox listen from the stored identity, without the page: a call
+     * push woke the app. Messages are handed to [nativeObserver] and kept
+     * unconfirmed (no mailbox ACK) until the page starts and stores them. When a
+     * session already exists it is only resumed. Returns false when no stored
+     * identity can listen (no wallet key, PGP key, route key or roster).
+     */
+    fun startFromStore(context: Context, reason: String): Boolean {
+        val ctx = context.applicationContext
+        appContext = ctx
+        currentSession()?.let { existing ->
+            if (listen.isRunning() && !listenConnected) {
+                // Reconnecting (e.g. the network was blocked in the background):
+                // retry now instead of waiting out the backoff.
+                Log.i(TAG, "listen not connected; retrying now for $reason")
+                startListen(ctx, existing)
+            } else if (!listen.isRunning()) {
+                Log.i(TAG, "listen resumed for $reason")
+                // Paused by the page in the background: pause again after the call.
+                main.post {
+                    pauseOwed = true
+                    postIdleCheck()
+                }
+                listen.resume(ctx, existing, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
+            }
+            return true
+        }
+        val pgp = BeamioChatPgpStore.load(ctx)
+        val wallet = BeamioChatWalletKeyStore.load(ctx)
+        if (pgp == null || !pgp.hasUserPrivate || !pgp.hasRoutePublic || wallet == null) {
+            Log.w(TAG, "no stored identity for a no-page listen ($reason)")
+            return false
+        }
+        if (pgp.eoa.isNotBlank() && normalizeAddress(pgp.eoa) != wallet.eoa) {
+            Log.w(TAG, "stored PGP and wallet belong to different wallets; no-page listen skipped")
+            return false
+        }
+        val nodes = BeamioChatPgpStore.loadSiNodes(ctx)
+        if (nodes.isEmpty()) {
+            Log.w(TAG, "no stored roster for a no-page listen ($reason)")
+            return false
+        }
+        val s = Session().apply {
+            eoa = wallet.eoa
+            pgpPrivateKeyArmored = pgp.privateKeyArmor
+            pgpPublicKeyArmored = pgp.publicKeyArmor
+            ownRouteArmoredPublicKey = pgp.routePublicKeyArmor
+            mailboxIp = pgp.mailboxIp
+            this.nodes = nodes.map { Node(it.ip, it.domain, it.region, "") }
+            deferAck = true
+        }
+        synchronized(lock) {
+            if (session != null) return true
+            session = s
+        }
+        Log.i(TAG, "no-page listen starting for $reason")
+        val host = BeamioOpenPgpHost.shared(ctx)
+        host.ensureReady { ok ->
+            if (!ok || currentSession() !== s) return@ensureReady
+            BeamioConetChatSignBroker.setLocalSigner(host, wallet.privateKeyHex)
+            startListen(ctx, s)
+        }
+        main.post {
+            pauseOwed = true
+            postIdleCheck()
+        }
+        return true
+    }
+
+    // ---- background pause vs. calls ------------------------------------------------------
+
+    /** Main thread. */
+    private fun requestPause() {
+        if (keepListenWhile?.invoke() == true) {
+            Log.i(TAG, "pause deferred: call in progress")
+            pauseOwed = true
+            postIdleCheck()
+            return
+        }
+        pauseOwed = false
+        listen.pause()
+        emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("idle", "paused")))
+    }
+
+    /** Main thread. */
+    private fun postIdleCheck() {
+        if (idleCheckPosted) return
+        idleCheckPosted = true
+        main.postDelayed({
+            idleCheckPosted = false
+            if (!pauseOwed) return@postDelayed
+            if (keepListenWhile?.invoke() == true) {
+                postIdleCheck()
+            } else {
+                Log.i(TAG, "call over; owed pause applied")
+                requestPause()
+            }
+        }, IDLE_CHECK_MS)
+    }
+
+    /** Logout / wallet removed or switched: stop and forget the stored keys. */
+    private fun clearIdentity(reqId: Int) {
+        val ctx = appContext
+        destroy()
+        BeamioConetChatSignBroker.clearLocalSigner()
+        if (ctx != null) {
+            BeamioChatWalletKeyStore.clear(ctx)
+            BeamioChatPgpStore.clear(ctx)
+            BeamioConetChatInboxStore.clear(ctx)
+        }
+        Log.i(TAG, "identity cleared")
+        ack(reqId, true, result = JSONObject().put("ok", true))
+    }
+
+    /**
+     * Hand the page what the inbox store holds and the page has not been given
+     * in this session (received while it was not running, or never confirmed).
+     */
+    private fun replayInbox(ctx: Context, s: Session) {
+        val stored = BeamioConetChatInboxStore.list(ctx).filter { !s.pendingAcks.containsKey(it.armorHash) }
+        if (stored.isEmpty()) return
+        Log.i(TAG, "inbox replay count=${stored.size}")
+        for (e in stored) {
+            synchronized(seenArmor) { seenArmor.remove(e.armorHash) }
+            BeamioConetChatListenSession.decryptArmor(ctx, s, e.armor) { line, hash ->
+                handleInbound(line, hash, e.viaDomain, e.armor)
+            }
+        }
+    }
+
+    /**
+     * `provisionIdentity`: the page hands over the wallet key and PGP key. The
+     * wallet key must match `eoa`; both go to secure storage (refused, not
+     * stored, when that fails). Later listens sign locally.
+     */
+    private fun provisionIdentity(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        val ctx = appContext ?: return
+        val p = body.optJSONObject("payload") ?: body
+        val eoa = normalizeAddress(p.optString("eoa", "").ifBlank { p.optString("eoaAddress", "") })
+        val walletKey = BeamioChatWalletKeyStore.normalizeKey(
+            p.optString("walletPrivateKey", "").ifBlank { p.optString("privateKeyHex", "") },
+        )
+        val pgpPrivate = p.optString("pgpPrivateKeyArmored", "")
+        if (eoa.isEmpty() || walletKey.isEmpty() || !pgpPrivate.contains("BEGIN PGP PRIVATE KEY")) {
+            ack(reqId, false, error = "bad_identity")
+            return
+        }
+        val pgpOk = BeamioChatPgpStore.upsertFromWeb(
+            ctx,
+            JSONObject()
+                .put("privateKeyArmor", pgpPrivate)
+                .put("publicKeyArmor", p.optString("pgpPublicKeyArmored", ""))
+                .put("routePublicKeyArmor", p.optString("ownRoute", "").ifBlank { p.optString("ownRouteArmoredPublicKey", "") })
+                .put("eoa", eoa),
+        )
+        val host = BeamioOpenPgpHost.shared(ctx)
+        host.ensureReady { ok ->
+            if (!ok) {
+                ack(reqId, false, error = "openpgp_not_ready")
+                return@ensureReady
+            }
+            host.walletAddress(walletKey) { addr ->
+                if (addr.getOrNull() != eoa) {
+                    ack(reqId, false, error = "wallet_mismatch")
+                    return@walletAddress
+                }
+                val saved = BeamioChatWalletKeyStore.save(ctx, eoa, walletKey)
+                if (saved && pgpOk) BeamioConetChatSignBroker.setLocalSigner(host, walletKey)
+                Log.i(TAG, "identity provisioned stored=${saved && pgpOk}")
+                if (saved && pgpOk) ack(reqId, true, result = JSONObject().put("ok", true))
+                else ack(reqId, false, error = "secure_store_failed")
+            }
+        }
+    }
+
+    // ---- call layer entry (no page involved) ----------------------------------------------
+
+    /**
+     * Native call layer: a call push arrived, a call rings or is up, or the app
+     * came to the foreground. Opens / resumes the mailbox listen from the stored
+     * identity. Same as [startFromStore].
+     */
+    fun wake(context: Context, reason: String): Boolean = startFromStore(context, reason)
+
+    /** Native call layer: the call is over. Applies an owed background pause now. */
+    fun release(reason: String) {
+        main.post {
+            if (pauseOwed && keepListenWhile?.invoke() != true) {
+                Log.i(TAG, "released ($reason); owed pause applied")
+                requestPause()
+            }
         }
     }
 
@@ -609,13 +905,15 @@ object BeamioConetChatModule {
     // ---- listen lifecycle -------------------------------------------------------------
 
     private fun startListen(ctx: Context, s: Session) {
-        listen.start(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v -> handleInbound(p, h, v) })
+        listen.start(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
     private fun resumeListen() {
         val ctx = appContext ?: return
         val s = currentSession() ?: return
-        listen.resume(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v -> handleInbound(p, h, v) })
+        // Already connected (or reconnecting by itself): do not restart it.
+        if (listen.isRunning()) return
+        listen.resume(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
     private fun destroy() {
@@ -631,13 +929,18 @@ object BeamioConetChatModule {
         emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("destroyed", null)))
     }
 
+    /** Last listen status was `listening` (connected). */
+    @Volatile
+    private var listenConnected = false
+
     private fun emitStatus(status: String, detail: String?) {
+        listenConnected = status == "listening"
         emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload(status, detail)))
     }
 
     // ---- inbound + dual receipts -------------------------------------------------------
 
-    private fun handleInbound(plaintext: String, armorHash: String, viaDomain: String) {
+    private fun handleInbound(plaintext: String, armorHash: String, viaDomain: String, armor: String) {
         val ctx = appContext ?: return
         val s = currentSession() ?: return
         // The sender fans one message out to several entries; the mailbox then forwards each
@@ -657,9 +960,20 @@ object BeamioConetChatModule {
                 )
                 return@verifyEnvelope
             }
+            BeamioConetChatCallControl.parse(plaintext)?.let { sig ->
+                main.post {
+                    try {
+                        callControlObserver?.invoke(sig.type, sig.callId, sig.sessionId, from)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "call control observer failed: ${e.message}")
+                    }
+                }
+            }
             if (s.deferAck && armorHash.isNotEmpty()) {
                 prunePendingAcks(s)
                 s.pendingAcks[armorHash] = PendingAck(plaintext, from, viaDomain, System.currentTimeMillis())
+                // On disk until the app confirms it: survives the page not running.
+                if (armor.isNotEmpty()) BeamioConetChatInboxStore.put(ctx, armorHash, armor, viaDomain)
                 emitInboundMessage(plaintext, from, armorHash, viaDomain)
             } else {
                 emitInboundMessage(plaintext, from, armorHash, viaDomain)
@@ -694,6 +1008,7 @@ object BeamioConetChatModule {
             for (i in 0 until arr.length()) arr.optString(i, "").takeIf { it.isNotBlank() }?.let { hashes.add(it) }
         }
         body.optString("armorHash", "").takeIf { it.isNotBlank() }?.let { hashes.add(it) }
+        BeamioConetChatInboxStore.remove(ctx, hashes)
         for (hash in hashes) {
             val pending = s.pendingAcks.remove(hash) ?: continue
             emitDualReceipts(ctx, s, pending.plaintext, hash, pending.from)
@@ -895,6 +1210,11 @@ object BeamioConetChatModule {
     private fun emitEvent(payload: JSONObject) {
         val out = JSONObject().put("action", "chatModuleEvent").put("event", payload)
         main.post {
+            try {
+                nativeObserver?.invoke(out)
+            } catch (e: Exception) {
+                Log.w(TAG, "observer failed: ${e.message}")
+            }
             try {
                 emitFn?.invoke(out)
             } catch (e: Exception) {

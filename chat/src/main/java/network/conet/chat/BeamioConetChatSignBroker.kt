@@ -7,9 +7,11 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Hybrid signing (model 1B): the module never holds the EOA private key. It asks the
- * host PWA main thread to EIP-191 / EIP-712 sign and receives the signature through
- * [fulfill]. Requests are emitted as `{ action: "chatModuleSignRequest", reqId, kind, … }`.
+ * Signing for the module. With a wallet key from the page (kept in
+ * [BeamioChatWalletKeyStore]) the module signs locally, so a call push can open
+ * the mailbox listen without the page. Without one it falls back to model 1B: it
+ * asks the host PWA to EIP-191 / EIP-712 sign and receives the signature through
+ * [fulfill] (`{ action: "chatModuleSignRequest", reqId, kind, … }`).
  */
 object BeamioConetChatSignBroker {
     private const val DEFAULT_TIMEOUT_MS = 30_000L
@@ -22,6 +24,24 @@ object BeamioConetChatSignBroker {
     @Volatile
     private var emit: ((JSONObject) -> Unit)? = null
 
+    /** Local signer: hex key (memory only) and the host that runs ethers. */
+    @Volatile
+    private var localKey: String = ""
+    @Volatile
+    private var localHost: BeamioOpenPgpHost? = null
+
+    fun setLocalSigner(host: BeamioOpenPgpHost?, privateKeyHex: String) {
+        localHost = host
+        localKey = BeamioChatWalletKeyStore.normalizeKey(privateKeyHex)
+    }
+
+    fun clearLocalSigner() {
+        localKey = ""
+        localHost = null
+    }
+
+    fun hasLocalSigner(): Boolean = localKey.isNotEmpty() && localHost != null
+
     fun setEmit(emit: ((JSONObject) -> Unit)?) {
         this.emit = emit
     }
@@ -32,6 +52,12 @@ object BeamioConetChatSignBroker {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         completion: (Result<String>) -> Unit,
     ) {
+        val key = localKey
+        val host = localHost
+        if (key.isNotEmpty() && host != null) {
+            host.signEip191(key, message, completion)
+            return
+        }
         request("eip191", message, null, timeoutMs, completion)
     }
 
@@ -41,6 +67,12 @@ object BeamioConetChatSignBroker {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         completion: (Result<String>) -> Unit,
     ) {
+        val key = localKey
+        val host = localHost
+        if (key.isNotEmpty() && host != null) {
+            host.signEip712(key, typedData, completion)
+            return
+        }
         request("eip712", null, typedData, timeoutMs, completion)
     }
 
