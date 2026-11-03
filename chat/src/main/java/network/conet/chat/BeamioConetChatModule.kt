@@ -1134,6 +1134,25 @@ object BeamioConetChatModule {
         listen.resume(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
+    /**
+     * Open a new mailbox listen now (new instance, new stream key) in place of a
+     * connected one. The mailbox sends every message not yet ACKed on each new
+     * listen, so a message that missed this listen (stored while it was being set
+     * up, or written to a dead earlier listen of this device) arrives now instead
+     * of at the next reconnect. Messages already handled are deduplicated.
+     * The app calls it while a call rings, so the caller's cancel is not held back.
+     * Returns false when no listen is connected (one that is connecting gets the
+     * stored messages anyway).
+     */
+    fun refreshListen(reason: String): Boolean {
+        val ctx = appContext ?: return false
+        val s = currentSession() ?: return false
+        if (!listen.isRunning() || !listenConnected) return false
+        Log.i(TAG, "listen refreshed for $reason")
+        startListen(ctx, s)
+        return true
+    }
+
     private fun destroy() {
         listen.stop()
         BeamioConetChatSignBroker.cancelAll("destroyed")
