@@ -120,6 +120,8 @@ object BeamioConetChatModule {
         emitFn = emit
         BeamioConetChatSignBroker.setEmit(emit)
         when (val type = body.optString("type", "")) {
+            // Protocol v1: version + capabilities (see BeamioConetChatProtocol).
+            "hello" -> ack(body.optInt("reqId", 0), true, result = BeamioConetChatProtocol.helloResult())
             "init" -> handleInit(body)
             "setRoutes" -> currentSession()?.let { s -> body.optJSONArray("routes")?.let { s.routes = objects(it) } }
             "setNodes" -> currentSession()?.let { s -> body.optJSONArray("nodes")?.let { s.nodes = parseNodes(it) } }
@@ -148,7 +150,12 @@ object BeamioConetChatModule {
             "destroy" -> destroy()
             "clearIdentity" -> clearIdentity(body.optInt("reqId", -1))
             "provisionIdentity" -> provisionIdentity(body)
-            else -> Log.w(TAG, "unknown command $type")
+            else -> {
+                Log.w(TAG, "unknown command $type")
+                // Protocol v1: a command that expects an answer gets one.
+                val reqId = body.optInt("reqId", 0)
+                if (reqId > 0) ack(reqId, false, error = "unknown_command")
+            }
         }
     }
 

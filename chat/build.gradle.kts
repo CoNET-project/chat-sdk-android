@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.5"
+version = "0.2.6"
 
 android {
     namespace = "network.conet.chat"
@@ -17,6 +17,15 @@ android {
     defaultConfig {
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // ChatDaemon protocol v1 shared vectors (copy of the spec's file, see
+    // scripts/sync-protocol-vectors.sh): JVM tests read them as a resource,
+    // instrumented tests as an asset.
+    sourceSets {
+        getByName("test").resources.srcDir(rootProject.file("spec"))
+        getByName("androidTest").assets.srcDir(rootProject.file("spec"))
     }
 
     compileOptions {
@@ -43,6 +52,10 @@ dependencies {
     testImplementation(libs.junit)
     // android.jar stubs org.json; unit tests need the real implementation.
     testImplementation(libs.org.json)
+
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 // Local Maven layout used by `scripts/publish-maven.sh` (consumed over raw.githubusercontent.com).

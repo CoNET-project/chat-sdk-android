@@ -1,0 +1,578 @@
+{
+	"$comment": "ChatDaemon protocol v1 shared conformance vectors. Source: @conet.project/chat-sdk spec/. Keys are throwaway test keys. Copy, do not edit, in chat-sdk-ios / chat-sdk-android.",
+	"vectorsVersion": 1,
+	"protocolVersion": 1,
+	"keys": {
+		"wallet": {
+			"privateKey": "0x0123456789012345678901234567890123456789012345678901234567890123",
+			"address": "0x14791697260E4c9A71f18484C9f997B308e59325"
+		},
+		"userPgp": {
+			"privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaud5OhYJKwYBBAHaRw8BAQdAeirU5qYy1fXGpILKQvzHvW8anN799MaT\nOeKfULZYM98AAQCwjH2Y2Yb4OYdNy0xtEg1lwejm/TV2/61TTzWlE97dNhEh\nzSlWZWN0b3IgVXNlciA8dmVjdG9yLXVzZXJAdmVjdG9ycy5pbnZhbGlkPsLA\nEwQTFgoAhQWCaud5OgMLCQcJEFkBhURGEkYhRRQAAAAAABwAIHNhbHRAbm90\nYXRpb25zLm9wZW5wZ3Bqcy5vcmeF/0Kj5n2hLm74yDjzAaSpvwFE3r0RlIrD\nC1LX4rRVCAUVCggODAQWAAIBAhkBApsDAh4BFiEEGGFfNy68VQqssHUAWQGF\nREYSRiEAACiOAP4sN+LntlVdGfn+c192O8lfYoyd/6RBQwA1hlYl9PttXwD/\nVni+piW2cJugxeJkkilS2qepFqaMe3sQMxHdtW142gvHXQRq53k6EgorBgEE\nAZdVAQUBAQdA4azxEe9K3r+a3DCbjcn2AKlxxZU6Ix5jKyDKsiAuMBkDAQgH\nAAD/ScL93nGOv1faFApXOVO883i9l0GjbuNYqyiSVD0M4FgRF8K+BBgWCgBw\nBYJq53k6CRBZAYVERhJGIUUUAAAAAAAcACBzYWx0QG5vdGF0aW9ucy5vcGVu\ncGdwanMub3JnKhFI9DXKf480TTANxGfJWpbas9T/7Zdt4H1cv4enqt0CmwwW\nIQQYYV83LrxVCqywdQBZAYVERhJGIQAADskBAIV8b9nynLY45ZyWcEsHK96f\nb4JQHBf2FjxYMpR0k9ihAP9DsU4RTUjgFes8e04UGpf7UqMNq0/5SCD2EOJd\niELyBQ==\n=DbB7\n-----END PGP PRIVATE KEY BLOCK-----\n",
+			"publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaud5OhYJKwYBBAHaRw8BAQdAeirU5qYy1fXGpILKQvzHvW8anN799MaT\nOeKfULZYM9/NKVZlY3RvciBVc2VyIDx2ZWN0b3ItdXNlckB2ZWN0b3JzLmlu\ndmFsaWQ+wsATBBMWCgCFBYJq53k6AwsJBwkQWQGFREYSRiFFFAAAAAAAHAAg\nc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ4X/QqPmfaEubvjIOPMBpKm/\nAUTevRGUisMLUtfitFUIBRUKCA4MBBYAAgECGQECmwMCHgEWIQQYYV83LrxV\nCqywdQBZAYVERhJGIQAAKI4A/iw34ue2VV0Z+f5zX3Y7yV9ijJ3/pEFDADWG\nViX0+21fAP9WeL6mJbZwm6DF4mSSKVLap6kWpox7exAzEd21bXjaC844BGrn\neToSCisGAQQBl1UBBQEBB0DhrPER70rev5rcMJuNyfYAqXHFlTojHmMrIMqy\nIC4wGQMBCAfCvgQYFgoAcAWCaud5OgkQWQGFREYSRiFFFAAAAAAAHAAgc2Fs\ndEBub3RhdGlvbnMub3BlbnBncGpzLm9yZyoRSPQ1yn+PNE0wDcRnyVqW2rPU\n/+2XbeB9XL+Hp6rdApsMFiEEGGFfNy68VQqssHUAWQGFREYSRiEAAA7JAQCF\nfG/Z8py2OOWclnBLByven2+CUBwX9hY8WDKUdJPYoQD/Q7FOEU1I4BXrPHtO\nFBqX+1KjDatP+Ugg9hDiXYhC8gU=\n=V3iE\n-----END PGP PUBLIC KEY BLOCK-----\n"
+		},
+		"routePgp": {
+			"privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaud5OhYJKwYBBAHaRw8BAQdADasR9pM0EsDt66f/YrnFtukhzmSWg1gV\nK1uQ8Fa40sMAAP9ypo/sxq7d+bOEJUued6pmHIivOgUZ1hEztbE3e+/ROhF/\nzStWZWN0b3IgUm91dGUgPHZlY3Rvci1yb3V0ZUB2ZWN0b3JzLmludmFsaWQ+\nwsATBBMWCgCFBYJq53k6AwsJBwkQakkBUklnFvhFFAAAAAAAHAAgc2FsdEBu\nb3RhdGlvbnMub3BlbnBncGpzLm9yZ3fqPIacbsPF3pXQ9XDfE7ajQRRaWMn8\nwtM5w61OqOe/BRUKCA4MBBYAAgECGQECmwMCHgEWIQQ41grI6zj/ee1cwslq\nSQFSSWcW+AAAyY0BAIGQsqXy30JuFWv17bv1D6SU0Q7CAnaD1cYUHW+wZaMK\nAQDclQcAuirXLw7QCSuNlf8aWBpkcPEXUyPFn6WoZ8xFB8ddBGrneToSCisG\nAQQBl1UBBQEBB0BlAI0eXa1ZO2nKppyJ0G/uZAe49odUTg8W81DJJL8eGQMB\nCAcAAP9MIJ/d+U1ecJ7gQhAEBb8Apal580wpa/jFt3ZrApq7MBAJwr4EGBYK\nAHAFgmrneToJEGpJAVJJZxb4RRQAAAAAABwAIHNhbHRAbm90YXRpb25zLm9w\nZW5wZ3Bqcy5vcmc6+Z33EalpjnwKJtToL5nFGqPUCq85i049LdUVROTxdgKb\nDBYhBDjWCsjrOP957VzCyWpJAVJJZxb4AAADRAD+JcRclXAZs8r+rzQ7RISU\nOd2gkm2eH5HhA7cA2FBfes0BAIe6qY7dQ5AdbMOEGbFQG4uQ0XRBwPmBPwdq\ngVIrqB0K\n=jHMF\n-----END PGP PRIVATE KEY BLOCK-----\n",
+			"publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaud5OhYJKwYBBAHaRw8BAQdADasR9pM0EsDt66f/YrnFtukhzmSWg1gV\nK1uQ8Fa40sPNK1ZlY3RvciBSb3V0ZSA8dmVjdG9yLXJvdXRlQHZlY3RvcnMu\naW52YWxpZD7CwBMEExYKAIUFgmrneToDCwkHCRBqSQFSSWcW+EUUAAAAAAAc\nACBzYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3Jnd+o8hpxuw8XeldD1cN8T\ntqNBFFpYyfzC0znDrU6o578FFQoIDgwEFgACAQIZAQKbAwIeARYhBDjWCsjr\nOP957VzCyWpJAVJJZxb4AADJjQEAgZCypfLfQm4Va/Xtu/UPpJTRDsICdoPV\nxhQdb7BlowoBANyVBwC6KtcvDtAJK42V/xpYGmRw8RdTI8WfpahnzEUHzjgE\naud5OhIKKwYBBAGXVQEFAQEHQGUAjR5drVk7acqmnInQb+5kB7j2h1RODxbz\nUMkkvx4ZAwEIB8K+BBgWCgBwBYJq53k6CRBqSQFSSWcW+EUUAAAAAAAcACBz\nYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3JnOvmd9xGpaY58CibU6C+ZxRqj\n1AqvOYtOPS3VFUTk8XYCmwwWIQQ41grI6zj/ee1cwslqSQFSSWcW+AAAA0QA\n/iXEXJVwGbPK/q80O0SElDndoJJtnh+R4QO3ANhQX3rNAQCHuqmO3UOQHWzD\nhBmxUBuLkNF0QcD5gT8HaoFSK6gdCg==\n=bmO1\n-----END PGP PUBLIC KEY BLOCK-----\n"
+		}
+	},
+	"eip191": [
+		{
+			"message": "hello",
+			"signature": "0x0079d91efaa7ca55074617a2c255a8855bc278a3e0ca1b837f60ce000109ef8540960e193be95e38fb2f5307ca0c20108fcc420ff49e48b9a8cb11d9074deb461b",
+			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+		},
+		{
+			"message": "{\"command\":\"mailbox_listen\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"instanceId\":\"vec-1\",\"timestamp\":1730419200}",
+			"signature": "0xfe86ffded968abf59de7f17cd93d3f65b4d5e2e4eeba61b4bf1ec90494ad89490ab0a7cfb9f567bae0d559ede2c1ef86fed781acfb1c18acb6854a0546e9f6341c",
+			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+		},
+		{
+			"message": "héllo 世界 🎉",
+			"signature": "0x33e7ef308273541d7d4171814baa54743c0fbfc353487b125f0c1a9beb7a30ca4d6b7b5b96837a2c8c2790b13ce1d590aa01464f52a9110cbd04ef3b5d1b7f531b",
+			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+		}
+	],
+	"envelopes": [
+		{
+			"name": "business",
+			"description": "User-PGP layer of a chat message: base64(UTF-8 JSON { timestamp, text, from, signMessage }); signMessage = EIP-191(text).",
+			"decryptWith": "userPgp",
+			"literal": "base64-json",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D/0JiqMfMIFMSAQdAGNH1Q5IP3JHsHIop+OuGyOgCu27sIqnUdTwWAHwG\nGUUwyU4+L6cEmEObDle5GdyL5BoZ627K2Splk7Zbh7Njw29M2ZbpRXdsqGbJ\nPB+M7sOo0sDcAT+nRSlIxgszhiXfHAb5uVoaDYEdJBs1GYRpWx7/sXksSGqU\nqtQYzlNWHldXcEfTCUhY8p9SLIMSsS1iX8KBURO4CjPgn8/OGHcZv9iZ+GNb\nScCAnhWNO+ePRyuRvO9XyTZzVluN2WRgeZX3VB9wFHabIdyPb41UaRUx3CFX\nbWBeyWHsfkNYihQufFQ1ttB2E51wEPBSlGiW9GJhXQb6wdFCgbpc3nwUo5VJ\nVHrjpo2se48pzWSrW4DvG3b5C9IwTx13nt/B2nv3D/KeoMefaLrd1/nzV/lY\nsNl7jiJ1/eOZdfodyNmXPehIVAa/kyfDPvKR/YWctPYZwz7exet5UM9xz0Wi\nO73f1NwYu71G/WyLSoCB7LU3J/yJ8OqAvU1/1M+9s45YoxkecfzV5GAy99SQ\nzjZIlpwa4JMUm9LdPPJYCDpjbk3j6hQ60kn0+9Nq+5i6068mAxkHNvr5yaEz\nHAh5j14jT5k+6nfKIW4O0dUuUfSH8zmUTEQsxlEiEEFT5RlKV1P2/PIqZ6zo\nROD7h5deDrqgZtn5IlgUUA==\n=lwU6\n-----END PGP MESSAGE-----\n",
+			"armorHash": "0x07a8c66ee90e3566d617e8893a4c253704aed24637c996248bf117c4457e2375",
+			"expect": {
+				"timestamp": 1730419200123,
+				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+			},
+			"signed": {
+				"textField": "text",
+				"signatureField": "signMessage",
+				"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+			}
+		},
+		{
+			"name": "routeCommand",
+			"description": "Signed mailbox command: base64(UTF-8 JSON { message, signMessage }) to a route key; message = JSON(command).",
+			"decryptWith": "routePgp",
+			"literal": "base64-json",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D9T0aF6XVHcQSAQdAjMcg/f/ziFD3uU76Bo6Yx1rtLHsYOiOlgQYlpTkB\nwXow84CXJeGiE7q4ny2lXsCOjwLyYWO10SF8Q3kx1YJt/yZz+GuPMdx601GX\naNq8VVH00sD3AXMEzRoLqg/WZyI3EQAmEbuDB3E11od9jp1mqww267D4KZv+\nhsyJJfntZ9Plcm54HZ9E8sdwaQiPMG57/F2eaEWh88hbmAa5bEhAUCkThWR7\nRt7JeIQdYI3DzYqjyj0Zab1Qs/qKmInqdUI3MWoeGBixkqhKd/bPfl9+FeL6\nz05MTbKaA2n5pZa0P+00r2R3LAgEmIawJ302RtuQFi5cz/Oa0LwJ25Jc9URy\nZCZ48+TOJ5CHk3TvLvNEVObQ3NKVkOcbjPm9cLvOR7/SJZf5cFpc7C34Kax1\nS8BKpz0mkhBQxVOuy8aJKXAwrtc5427UTgJGtHa86bSbeIcsvnAz+fQIEL3S\nTR3F1p8JdfuocdgFmCiKwzVl2US0wIuWMfYub+oW0AEnNOf86iVaLTTVCZ+5\nM31RiTKc2Oa8y5pu0oCAHvPhfP0YWjtEMMdlvdoN3BpYNrR2LhL9u2qu/eqJ\n+TJcpkSWh23oIlgpfvP0GXy4zeGgAheGbZ9Qjddbj5TfStfb4HN8gpVi672x\n+Z42lCRqaqz+T10IIvBlTjCfemxye2YtzRw1R4D3b8TkkIchagFHedtXyg==\n=g+qz\n-----END PGP MESSAGE-----\n",
+			"armorHash": "0x3faaa5075d7d0e6cd074ae72ab331ec90df26c0bcbe2a31585f2e38783353a5e",
+			"expect": {
+				"message": "{\"command\":\"gossip_delivery_ack\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"armorHash\":\"0x07a8c66ee90e3566d617e8893a4c253704aed24637c996248bf117c4457e2375\",\"timestamp\":1730419200}",
+				"signMessage": "0xf066163ec14fd047307a7773788d14596bda7a538e1625c36e82b3b6eaca5db72d7b2c48f5c74ef388413cc2b714b394b7b38e20932bd89ce66edec66adc32a71c"
+			},
+			"messageJson": {
+				"command": "gossip_delivery_ack",
+				"walletAddress": "0x14791697260E4c9A71f18484C9f997B308e59325",
+				"armorHash": "0x07a8c66ee90e3566d617e8893a4c253704aed24637c996248bf117c4457e2375",
+				"timestamp": 1730419200
+			},
+			"signed": {
+				"textField": "message",
+				"signatureField": "signMessage",
+				"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+			}
+		},
+		{
+			"name": "mailboxWork",
+			"description": "Mailbox work to the recipient mailbox route key: UTF-8 JSON { data: <user-PGP armor>, NoPush: true } (not base64).",
+			"decryptWith": "routePgp",
+			"literal": "json",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D9T0aF6XVHcQSAQdAVGsNZ0m0b+ja5z1b8aFFcKs/bEBosOuMWWg0iptO\n3EIwh4/adTO043nG5xzt6xtFKj/GwAtBjNnTHcKs1lJDOV+v6IyOmCJQ0c4e\nVlEnn1vX0sH7AdqWaGYSBMjGfTQvUKNoE9bn/JQZTEIEYddYMLJqYN44fijp\nHH/of+HmPCiJSx2eOb24nL1uv5Zf4fjPpyJYk7vbGploK2//0gUCFB3vQXVF\nGF+gS1QefhY6fR0GRTp+Q4UYQSXmPp0cOQK5me9VPsySQpOx0B6oyhpI5rJo\nBHLKQnEc7cE3YAUn+N7S1Z9JGgqNYcDiA2xqlscqoF7cZvZIlsbNE70aEIim\n7wjKFUtWQHaot3zCHjboxS6tgaDqDgCQlnbGAQ7XpnwVPeqcpEWZqeDPI3tn\n4I73GNoWcKMXAso57MO3VaNkp2VumVze4d2UzXsgdEdMqWUzBi+WkcEb0p7i\nnmgGZE3kumY1c0oqASXJq63OmjbFRiVlOtWMfSINKXJ7YPAMp85p1bV+2r8P\nPXI/to8eWvOKCK+R72NfEKdXExobNFH2uZBpFg5RK9CXLNSjpYEUnptZUJbd\n5Yvk/pjhURRFVI+naBOw6YopxI9qQqlS4Mf45MhyMvuQh2SqxR5UybIlpM9T\nMlGCsDmM4pDZktU1huK8fXBdZbFemdl/n+DnwLMdLxkhH1Zh/f5eIJNMIbLP\nfGtGMFKLVjIiq4a1+MdNbWwjxBBsP+Pw1gyFSCk6P8irsS0JnJqihm6+oCam\n+kufHc9gJ+ja8jETMuwTFN1pFLLvDuXiY1kHyfprJZlyKZQbrW68RWwfOK7M\ntcVgRWbGDWRMzn5vG7nvR7PwvMV+SOwGELl08hbW5029bXPzzpW72cZjWgiz\nT5KzPCl0u23qNcpTyDFzFU00rXHRdsFA0737RFrEXFuwq4tPlFTeDVuGoBLG\nE1P548Zm/M1nysQa7SeRCWP4ixhHMc23DJxTLMDAr6nhEJSdWNdSLm/TNmMf\nL4QgOoE4hOVbqBWAr9lgf7Qo5ueUJ1okbJFnwH0ZTAqE\n=xAzY\n-----END PGP MESSAGE-----\n",
+			"armorHash": "0x5e58c58960b8d5d15244e089af0485a04ed30c68c6f1aba12bc1de86acabae7c",
+			"expect": {
+				"data": "-----BEGIN PGP MESSAGE-----\n\nwV4D/0JiqMfMIFMSAQdAGNH1Q5IP3JHsHIop+OuGyOgCu27sIqnUdTwWAHwG\nGUUwyU4+L6cEmEObDle5GdyL5BoZ627K2Splk7Zbh7Njw29M2ZbpRXdsqGbJ\nPB+M7sOo0sDcAT+nRSlIxgszhiXfHAb5uVoaDYEdJBs1GYRpWx7/sXksSGqU\nqtQYzlNWHldXcEfTCUhY8p9SLIMSsS1iX8KBURO4CjPgn8/OGHcZv9iZ+GNb\nScCAnhWNO+ePRyuRvO9XyTZzVluN2WRgeZX3VB9wFHabIdyPb41UaRUx3CFX\nbWBeyWHsfkNYihQufFQ1ttB2E51wEPBSlGiW9GJhXQb6wdFCgbpc3nwUo5VJ\nVHrjpo2se48pzWSrW4DvG3b5C9IwTx13nt/B2nv3D/KeoMefaLrd1/nzV/lY\nsNl7jiJ1/eOZdfodyNmXPehIVAa/kyfDPvKR/YWctPYZwz7exet5UM9xz0Wi\nO73f1NwYu71G/WyLSoCB7LU3J/yJ8OqAvU1/1M+9s45YoxkecfzV5GAy99SQ\nzjZIlpwa4JMUm9LdPPJYCDpjbk3j6hQ60kn0+9Nq+5i6068mAxkHNvr5yaEz\nHAh5j14jT5k+6nfKIW4O0dUuUfSH8zmUTEQsxlEiEEFT5RlKV1P2/PIqZ6zo\nROD7h5deDrqgZtn5IlgUUA==\n=lwU6\n-----END PGP MESSAGE-----\n",
+				"NoPush": true
+			}
+		}
+	],
+	"ackHash": [
+		{
+			"name": "business armor",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D/0JiqMfMIFMSAQdAGNH1Q5IP3JHsHIop+OuGyOgCu27sIqnUdTwWAHwG\nGUUwyU4+L6cEmEObDle5GdyL5BoZ627K2Splk7Zbh7Njw29M2ZbpRXdsqGbJ\nPB+M7sOo0sDcAT+nRSlIxgszhiXfHAb5uVoaDYEdJBs1GYRpWx7/sXksSGqU\nqtQYzlNWHldXcEfTCUhY8p9SLIMSsS1iX8KBURO4CjPgn8/OGHcZv9iZ+GNb\nScCAnhWNO+ePRyuRvO9XyTZzVluN2WRgeZX3VB9wFHabIdyPb41UaRUx3CFX\nbWBeyWHsfkNYihQufFQ1ttB2E51wEPBSlGiW9GJhXQb6wdFCgbpc3nwUo5VJ\nVHrjpo2se48pzWSrW4DvG3b5C9IwTx13nt/B2nv3D/KeoMefaLrd1/nzV/lY\nsNl7jiJ1/eOZdfodyNmXPehIVAa/kyfDPvKR/YWctPYZwz7exet5UM9xz0Wi\nO73f1NwYu71G/WyLSoCB7LU3J/yJ8OqAvU1/1M+9s45YoxkecfzV5GAy99SQ\nzjZIlpwa4JMUm9LdPPJYCDpjbk3j6hQ60kn0+9Nq+5i6068mAxkHNvr5yaEz\nHAh5j14jT5k+6nfKIW4O0dUuUfSH8zmUTEQsxlEiEEFT5RlKV1P2/PIqZ6zo\nROD7h5deDrqgZtn5IlgUUA==\n=lwU6\n-----END PGP MESSAGE-----\n",
+			"armorHash": "0x07a8c66ee90e3566d617e8893a4c253704aed24637c996248bf117c4457e2375"
+		},
+		{
+			"name": "short armor",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+			"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16"
+		},
+		{
+			"name": "unicode armor",
+			"armor": "-----BEGIN PGP MESSAGE-----\n\nComment: 世界\n-----END PGP MESSAGE-----",
+			"armorHash": "0x5f9c06a82974d245f42f66e91028bc2a88eefbb71417c839747d955d3e2ce9f6"
+		}
+	],
+	"builders": [
+		{
+			"name": "deliveryAckCommand",
+			"input": {
+				"eoa": "0x14791697260e4c9a71f18484c9f997b308e59325",
+				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+				"timestamp": 1730419200
+			},
+			"expect": {
+				"command": "gossip_delivery_ack",
+				"walletAddress": "0x14791697260e4c9a71f18484c9f997b308e59325",
+				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+				"timestamp": 1730419200
+			}
+		},
+		{
+			"name": "deliveryReceipt",
+			"input": {
+				"sendId": "vec-send-1",
+				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+				"deliveredAt": 1730419200999,
+				"eoa": "0x14791697260e4c9a71f18484c9f997b308e59325"
+			},
+			"expect": {
+				"type": "beamio_chat_delivery_receipt_v1",
+				"sendId": "vec-send-1",
+				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+				"deliveredAt": 1730419200999,
+				"from": "0x14791697260e4c9a71f18484c9f997b308e59325"
+			}
+		},
+		{
+			"name": "pendingRow",
+			"input": {
+				"sendId": "vec-row-1",
+				"text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
+				"createdAt": 1730419201000
+			},
+			"expect": {
+				"sendId": "vec-row-1",
+				"from": "me",
+				"text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
+				"createdAt": 1730419201000
+			}
+		},
+		{
+			"name": "chatEnvelope",
+			"input": {
+				"timestamp": 1730419200123,
+				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+			},
+			"expect": {
+				"timestamp": 1730419200123,
+				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+			}
+		},
+		{
+			"name": "mailboxWork",
+			"input": {
+				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+				"noPush": true
+			},
+			"expect": {
+				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+				"NoPush": true
+			}
+		},
+		{
+			"name": "mailboxWorkPush",
+			"input": {
+				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+				"noPush": false
+			},
+			"expect": {
+				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----"
+			}
+		}
+	],
+	"callSignal": [
+		{
+			"name": "plain end object",
+			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-end",
+				"sessionId": "s-end"
+			}
+		},
+		{
+			"name": "end in pending row in envelope",
+			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_end_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-end\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-end\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"ended\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-end",
+				"sessionId": "s-end"
+			}
+		},
+		{
+			"name": "base64 envelope",
+			"line": "eyJ0aW1lc3RhbXAiOjEsInRleHQiOiJ7XCJzZW5kSWRcIjpcInBcIixcImZyb21cIjpcIm1lXCIsXCJ0ZXh0XCI6XCJ7XFxcInR5cGVcXFwiOlxcXCJ2b2ljZV9lbmRfdjFcXFwiLFxcXCJjYWxsSWRcXFwiOlxcXCJjLWVuZFxcXCIsXFxcInNlc3Npb25JZFxcXCI6XFxcInMtZW5kXFxcIixcXFwicmVhc29uXFxcIjpcXFwiZW5kZWRcXFwifVwiLFwiY3JlYXRlZEF0XCI6MX0iLCJmcm9tIjoiMHhjbGFpbWVkIiwic2lnbk1lc3NhZ2UiOiIweHNpZyJ9",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-end",
+				"sessionId": "s-end"
+			}
+		},
+		{
+			"name": "base64 text field",
+			"line": "{\"timestamp\":1,\"text\":\"eyJzZW5kSWQiOiJwIiwiZnJvbSI6Im1lIiwidGV4dCI6IntcInR5cGVcIjpcInZvaWNlX2NhbGxfdGltZW91dF92MVwiLFwiY2FsbElkXCI6XCJjLXRpbWVvdXRcIixcInNlc3Npb25JZFwiOlwiXCIsXCJyZWFzb25cIjpcInRpbWVvdXRcIn0iLCJjcmVhdGVkQXQiOjF9\",\"signMessage\":\"0x\"}",
+			"expect": {
+				"kind": "timeout",
+				"type": "voice_call_timeout_v1",
+				"callId": "c-timeout",
+				"sessionId": ""
+			}
+		},
+		{
+			"name": "offer",
+			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_offer_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-offer\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-offer\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xclaimed\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xpeer\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+			"expect": {
+				"kind": "offer",
+				"type": "voice_call_offer_v1",
+				"callId": "c-offer",
+				"sessionId": "s-offer"
+			}
+		},
+		{
+			"name": "accept",
+			"line": "{\"type\":\"voice_call_accept_v1\",\"callId\":\"c-a\",\"sessionId\":\"s-a\"}",
+			"expect": {
+				"kind": "accept",
+				"type": "voice_call_accept_v1",
+				"callId": "c-a",
+				"sessionId": "s-a"
+			}
+		},
+		{
+			"name": "reject",
+			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-r\",\"sessionId\":\"\"}",
+			"expect": {
+				"kind": "reject",
+				"type": "voice_call_reject_v1",
+				"callId": "c-r",
+				"sessionId": "",
+				"rejectReason": "declined"
+			}
+		},
+		{
+			"name": "reject busy (callee in another call)",
+			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-busy\",\"sessionId\":\"s-busy\",\"reason\":\"busy\"}",
+			"expect": {
+				"kind": "reject",
+				"type": "voice_call_reject_v1",
+				"callId": "c-busy",
+				"sessionId": "s-busy",
+				"rejectReason": "busy"
+			}
+		},
+		{
+			"name": "reject busy in envelope",
+			"line": "{\"timestamp\":1,\"text\":\"{\\\"type\\\":\\\"voice_call_reject_v1\\\",\\\"callId\\\":\\\"c-busy\\\",\\\"sessionId\\\":\\\"s-busy\\\",\\\"reason\\\":\\\"busy\\\"}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+			"expect": {
+				"kind": "reject",
+				"type": "voice_call_reject_v1",
+				"callId": "c-busy",
+				"sessionId": "s-busy",
+				"rejectReason": "busy"
+			}
+		},
+		{
+			"name": "reject with another reason is declined",
+			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-d\",\"sessionId\":\"s-d\",\"reason\":\"BUSY \"}",
+			"expect": {
+				"kind": "reject",
+				"type": "voice_call_reject_v1",
+				"callId": "c-d",
+				"sessionId": "s-d",
+				"rejectReason": "declined"
+			}
+		},
+		{
+			"name": "ringing in envelope",
+			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_ringing_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-ring\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-ring\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xcallee\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xcaller\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+			"expect": {
+				"kind": "ringing",
+				"type": "voice_call_ringing_v1",
+				"callId": "c-ring",
+				"sessionId": "s-ring"
+			}
+		},
+		{
+			"name": "ids are trimmed",
+			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"  c-trim  \",\"sessionId\":\"\\ts-trim\\n\"}",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-trim",
+				"sessionId": "s-trim"
+			}
+		},
+		{
+			"name": "nested object key",
+			"line": "{\"meta\":{\"signal\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-end",
+				"sessionId": "s-end"
+			}
+		},
+		{
+			"name": "array element",
+			"line": "[{\"type\":\"chat\"},{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}]",
+			"expect": {
+				"kind": "end",
+				"type": "voice_end_v1",
+				"callId": "c-end",
+				"sessionId": "s-end"
+			}
+		},
+		{
+			"name": "no ids",
+			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"\",\"sessionId\":\"\"}",
+			"expect": null
+		},
+		{
+			"name": "numeric ids do not count",
+			"line": "{\"type\":\"voice_end_v1\",\"callId\":42,\"sessionId\":7}",
+			"expect": null
+		},
+		{
+			"name": "other type",
+			"line": "{\"type\":\"voice_frame_v1\",\"callId\":\"c\",\"sessionId\":\"s\"}",
+			"expect": null
+		},
+		{
+			"name": "plain chat text",
+			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"text\\\\\\\",\\\\\\\"body\\\\\\\":\\\\\\\"voice_end_v1 is just words here\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+			"expect": null
+		},
+		{
+			"name": "not json, not base64",
+			"line": "hello there",
+			"expect": null
+		},
+		{
+			"name": "broken json",
+			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"c\"",
+			"expect": null
+		},
+		{
+			"name": "too deep",
+			"line": "{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}}}}}}}}}}}",
+			"expect": null
+		},
+		{
+			"name": "empty",
+			"line": "",
+			"expect": null
+		}
+	],
+	"hello": {
+		"capabilities": [
+			"identity.provision",
+			"signing.local",
+			"lifecycle.daemon",
+			"inbound.deferAck",
+			"history.v2",
+			"call.control",
+			"voice.channelV2",
+			"voice.delegated",
+			"group.v1",
+			"presence.query",
+			"mailbox.command"
+		],
+		"implementations": {
+			"ts-worker": {
+				"protocolVersion": 1,
+				"minProtocolVersion": 1,
+				"capabilities": [
+					"history.v2",
+					"voice.channelV2",
+					"group.v1",
+					"presence.query",
+					"mailbox.command"
+				]
+			},
+			"ios": {
+				"protocolVersion": 1,
+				"minProtocolVersion": 1,
+				"capabilities": [
+					"identity.provision",
+					"signing.local",
+					"lifecycle.daemon",
+					"inbound.deferAck",
+					"history.v2",
+					"call.control",
+					"voice.delegated",
+					"presence.query",
+					"mailbox.command"
+				]
+			},
+			"android": {
+				"protocolVersion": 1,
+				"minProtocolVersion": 1,
+				"capabilities": [
+					"identity.provision",
+					"signing.local",
+					"lifecycle.daemon",
+					"inbound.deferAck",
+					"history.v2",
+					"call.control",
+					"voice.delegated",
+					"presence.query",
+					"mailbox.command"
+				]
+			}
+		},
+		"negotiation": [
+			{
+				"name": "no answer (shell older than v1)",
+				"reply": null,
+				"expect": {
+					"status": "legacy",
+					"protocolVersion": 0,
+					"capabilities": []
+				}
+			},
+			{
+				"name": "native v1",
+				"reply": {
+					"protocolVersion": 1,
+					"minProtocolVersion": 1,
+					"sdkVersion": "0.1.8",
+					"implementation": "ios",
+					"capabilities": [
+						"identity.provision",
+						"signing.local",
+						"lifecycle.daemon",
+						"inbound.deferAck",
+						"history.v2",
+						"call.control",
+						"voice.delegated",
+						"presence.query",
+						"mailbox.command"
+					]
+				},
+				"expect": {
+					"status": "negotiated",
+					"protocolVersion": 1,
+					"capabilities": [
+						"identity.provision",
+						"signing.local",
+						"lifecycle.daemon",
+						"inbound.deferAck",
+						"history.v2",
+						"call.control",
+						"voice.delegated",
+						"presence.query",
+						"mailbox.command"
+					]
+				}
+			},
+			{
+				"name": "unknown capabilities are dropped, order follows the spec",
+				"reply": {
+					"protocolVersion": 1,
+					"sdkVersion": "0.2.6",
+					"implementation": "android",
+					"capabilities": [
+						"future.thing",
+						"mailbox.command",
+						"history.v2",
+						"history.v2"
+					]
+				},
+				"expect": {
+					"status": "negotiated",
+					"protocolVersion": 1,
+					"capabilities": [
+						"history.v2",
+						"mailbox.command"
+					]
+				}
+			},
+			{
+				"name": "newer daemon that still speaks v1",
+				"reply": {
+					"protocolVersion": 3,
+					"minProtocolVersion": 1,
+					"sdkVersion": "9.0.0",
+					"implementation": "ios",
+					"capabilities": [
+						"history.v2",
+						"group.v2"
+					]
+				},
+				"expect": {
+					"status": "negotiated",
+					"protocolVersion": 3,
+					"capabilities": [
+						"history.v2"
+					]
+				}
+			},
+			{
+				"name": "daemon that dropped v1",
+				"reply": {
+					"protocolVersion": 3,
+					"minProtocolVersion": 2,
+					"sdkVersion": "9.0.0",
+					"implementation": "ios",
+					"capabilities": [
+						"history.v2"
+					]
+				},
+				"expect": {
+					"status": "incompatible",
+					"protocolVersion": 3,
+					"capabilities": []
+				}
+			},
+			{
+				"name": "version as a string is malformed",
+				"reply": {
+					"protocolVersion": "1",
+					"sdkVersion": "0.1.8",
+					"implementation": "ios",
+					"capabilities": [
+						"history.v2"
+					]
+				},
+				"expect": {
+					"status": "legacy",
+					"protocolVersion": 0,
+					"capabilities": []
+				}
+			},
+			{
+				"name": "missing capabilities is malformed",
+				"reply": {
+					"protocolVersion": 1,
+					"sdkVersion": "0.1.8",
+					"implementation": "ios"
+				},
+				"expect": {
+					"status": "legacy",
+					"protocolVersion": 0,
+					"capabilities": []
+				}
+			},
+			{
+				"name": "error ack result",
+				"reply": "unknown_command",
+				"expect": {
+					"status": "legacy",
+					"protocolVersion": 0,
+					"capabilities": []
+				}
+			}
+		]
+	}
+}
