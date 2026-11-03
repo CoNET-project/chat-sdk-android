@@ -122,6 +122,12 @@ object BeamioSiCipherPost {
             pool.add(BeamioChatPgpStore.SiNode(ip = ip, domain = node.domain, region = node.region))
         }
 
+        // Warm pool first: an entry checked in the background returns at once (no probe here).
+        if (pool.isNotEmpty()) {
+            val byIp = pool.associateBy { it.ip }
+            BeamioEntryPool.take(byIp.keys, emptySet())?.let { ip -> byIp[ip]?.let { return it } }
+            BeamioEntryPool.warmNow()
+        }
         var probes = 0
         while (pool.isNotEmpty() && probes < 6) {
             val picked = weightedPick(pool, scores) ?: return null

@@ -35,6 +35,12 @@ object BeamioEntryPool {
 
     private data class Entry(val ip: String, val latencyMs: Int, val checkedAt: Long)
 
+    /** Last ready set, saved after each refresh: a push wake uses it before the first probe ends. */
+    private const val CACHE_FILE = "conet-entry-pool.txt"
+    private const val CACHE_MAX_AGE_MS = 30 * 60_000L
+    @Volatile private var cached: List<String> = emptyList()
+    @Volatile private var cachedAt = 0L
+
     private val ready = ConcurrentHashMap<String, Entry>()
     private val recent = ArrayDeque<String>()
     private val holds = mutableSetOf<String>()
@@ -58,6 +64,7 @@ object BeamioEntryPool {
         val application = context.applicationContext as? Application ?: return
         app = application
         if (!attached.compareAndSet(false, true)) return
+        loadCache(application)
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 startedActivities++
@@ -117,13 +124,17 @@ object BeamioEntryPool {
 
     /**
      * A random warm entry inside [allowed], outside [excluding], preferably not one of
-     * the last few used.
+     * the last few used. Before the first refresh of this process (push wake), the
+     * entries saved by the last refresh are used, up to [CACHE_MAX_AGE_MS] old.
      */
-    internal fun take(allowed: Set<String>, excluding: Set<String>): String? {
+    fun take(allowed: Set<String>, excluding: Set<String>): String? {
         val now = System.currentTimeMillis()
-        val usable = ready.values.filter {
+        var usable = ready.values.filter {
             it.ip in allowed && it.ip !in excluding && now - it.checkedAt < ENTRY_MAX_AGE_MS * 2
         }.map { it.ip }
+        if (usable.isEmpty() && now - cachedAt < CACHE_MAX_AGE_MS) {
+            usable = cached.filter { it in allowed && it !in excluding }
+        }
         if (usable.isEmpty()) return null
         val ip = synchronized(lock) {
             val fresh = usable.filter { it !in recent }
@@ -136,8 +147,37 @@ object BeamioEntryPool {
     }
 
     /** A send through [ip] failed: drop it until a later probe brings it back. */
-    internal fun reportFailure(ip: String) {
+    fun reportFailure(ip: String) {
         ready.remove(ip)
+        cached = cached - ip
+    }
+
+    /** IPs that answered a probe lately (e.g. to prefer a live voice relay). */
+    fun warmIps(): Set<String> {
+        val now = System.currentTimeMillis()
+        return ready.values.filter { now - it.checkedAt < ENTRY_MAX_AGE_MS * 2 }.map { it.ip }.toSet()
+    }
+
+    private fun loadCache(ctx: Context) {
+        runCatching {
+            val f = java.io.File(ctx.filesDir, CACHE_FILE)
+            if (!f.exists()) return
+            val lines = f.readLines()
+            val at = lines.firstOrNull()?.toLongOrNull() ?: return
+            cached = lines.drop(1).mapNotNull { BeamioSiCipherPost.normalizeIp(it) }
+            cachedAt = at
+        }
+    }
+
+    private fun saveCache(ctx: Context) {
+        val ips = ready.keys.toList()
+        if (ips.isEmpty()) return
+        runCatching {
+            // IPs only (public node table entries): no wallet, no identity.
+            java.io.File(ctx.filesDir, CACHE_FILE).writeText((listOf(System.currentTimeMillis().toString()) + ips).joinToString("\n"))
+        }
+        cached = ips
+        cachedAt = System.currentTimeMillis()
     }
 
     /** Node table changed: removed IPs leave the pool now; new ones are probed first. */
@@ -203,6 +243,7 @@ object BeamioEntryPool {
                 val keep = ready.values.sortedBy { it.latencyMs }.take(TARGET_READY).map { it.ip }.toSet()
                 ready.keys.filter { it !in keep }.forEach { ready.remove(it) }
             }
+            saveCache(ctx)
         } catch (e: Exception) {
             Log.w(TAG, "refresh failed: ${e.message}")
         } finally {
