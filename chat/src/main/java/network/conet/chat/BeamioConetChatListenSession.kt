@@ -165,6 +165,8 @@ internal class BeamioConetChatListenSession {
     ): Boolean {
         val ownRoute = session.ownRouteArmoredPublicKey
         if (!ownRoute.contains("BEGIN PGP PUBLIC KEY")) throw IllegalStateException("missing_own_route")
+        val routeKeyId = BeamioOwnRouteCheck.routeKeyId(ownRoute)
+        session.listenRouteKeyId = routeKeyId
         val mailboxIps = mailboxIps(session)
 
         // Fresh stream key per listen: B seals every SSE frame with it, so the
@@ -218,7 +220,7 @@ internal class BeamioConetChatListenSession {
             } else {
                 innerArmor
             }
-            Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain}")
+            Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain} route=${routeKeyId.ifEmpty { "?" }}")
             val started = System.currentTimeMillis()
             val err = openSse(app, url, armored, streamKey, session, gen, entry.domain, onStatus, onInbound)
             val latency = (System.currentTimeMillis() - started).toInt()

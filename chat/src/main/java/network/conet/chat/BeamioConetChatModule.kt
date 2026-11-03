@@ -41,6 +41,8 @@ object BeamioConetChatModule {
         @Volatile var pgpPassphrase: String = ""
         @Volatile var ownRouteArmoredPublicKey: String = ""
         @Volatile var mailboxIp: String = ""
+        /** Route key ID the running listen sent its last `mailbox_listen` to (log + handoff check). */
+        @Volatile var listenRouteKeyId: String = ""
         @Volatile var nodes: List<Node> = emptyList()
         @Volatile var routes: List<JSONObject> = emptyList()
         @Volatile var conetRpcUrl: String = "https://rpc1.conet.network"
@@ -332,6 +334,7 @@ object BeamioConetChatModule {
             if (attach) {
                 Log.i(TAG, "page attached to the running listen pending=${s.pendingAcks.size}")
                 if (listen.isRunning()) emitStatus("listening", "attached") else resumeListen()
+                checkOwnRoute(ctx, s, "page attach")
                 for ((hash, p) in s.pendingAcks.entries.toList()) {
                     emitInboundMessage(p.plaintext, p.from, hash, p.viaDomain)
                 }
@@ -522,6 +525,7 @@ object BeamioConetChatModule {
                         Log.i(TAG, "network available; retrying the listen now")
                         listen.retryNow()
                     }
+                    kickOwnRouteCheck()
                 }
             })
         } catch (e: Exception) {
@@ -1019,6 +1023,96 @@ object BeamioConetChatModule {
                 postIdleCheck()
             }
         }
+        checkOwnRoute(ctx, s, "listen start")
+    }
+
+    // ---- own route vs chain (see BeamioOwnRouteCheck) --------------------------------------
+
+    private val routeCheckGen = java.util.concurrent.atomic.AtomicInteger(0)
+    private val routeCheckSignal = Object()
+
+    /** Network back: a check waiting to retry reads the chain now. */
+    private fun kickOwnRouteCheck() {
+        synchronized(routeCheckSignal) { routeCheckSignal.notifyAll() }
+    }
+
+    /**
+     * Check the session's route against the chain record. A failed read retries
+     * with backoff and never changes the route; a different chain route wins and
+     * the listen reopens on it. One check runs at a time; a newer one ends it.
+     */
+    private fun checkOwnRoute(ctx: Context, s: Session, reason: String) {
+        val gen = routeCheckGen.incrementAndGet()
+        kickOwnRouteCheck()
+        Thread({
+            val alive = { routeCheckGen.get() == gen && currentSession() === s && !s.destroyed }
+            // Page handoff: a running listen on another route than the session's reopens now.
+            val inUse = s.listenRouteKeyId
+            val wanted = BeamioOwnRouteCheck.routeKeyId(s.ownRouteArmoredPublicKey)
+            if (inUse.isNotEmpty() && wanted.isNotEmpty() && inUse != wanted) {
+                Log.w(TAG, "own route: listen on $inUse, session route $wanted ($reason); reopening")
+                main.post { if (alive() && listen.isRunning()) reopenListen(ctx, s) }
+            }
+            val verdict = BeamioOwnRouteCheck.reconcile(
+                listenArmor = { s.ownRouteArmoredPublicKey },
+                read = { BeamioOwnRouteCheck.readChainRoute(s.conetRpcUrl, s.eoa) },
+                sleep = { ms ->
+                    synchronized(routeCheckSignal) {
+                        try {
+                            routeCheckSignal.wait(ms)
+                        } catch (_: InterruptedException) {
+                        }
+                    }
+                    alive()
+                },
+                onRetry = { why, ms ->
+                    Log.w(TAG, "own route check: chain read failed ($why); keeping route=$wanted; retry in ${ms / 1000}s")
+                },
+            )
+            if (!alive()) return@Thread
+            when (verdict) {
+                is BeamioOwnRouteCheck.Verdict.Match ->
+                    Log.i(TAG, "own route check: route=$wanted matches chain ($reason)")
+                is BeamioOwnRouteCheck.Verdict.NoRoute ->
+                    Log.w(TAG, "own route check: chain has no route; keeping route=$wanted")
+                is BeamioOwnRouteCheck.Verdict.Switch -> {
+                    Log.w(TAG, "own route mismatch: route=$wanted chain=${verdict.routeKeyId} ($reason); reconnecting on the chain route")
+                    main.post { if (alive()) applyChainRoute(ctx, s, verdict) }
+                }
+                is BeamioOwnRouteCheck.Verdict.Retry -> Unit
+            }
+        }, "conet-chat-route-check").apply { isDaemon = true }.start()
+    }
+
+    /** Main thread. The chain route replaces the session's and the stored one. */
+    private fun applyChainRoute(ctx: Context, s: Session, v: BeamioOwnRouteCheck.Verdict.Switch) {
+        s.ownRouteArmoredPublicKey = v.routeArmor
+        val mailboxIp = s.nodes.firstOrNull { it.domain.equals(v.routeKeyId, ignoreCase = true) }?.ip.orEmpty()
+        s.mailboxIp = mailboxIp
+        try {
+            BeamioChatPgpStore.upsertFromWeb(
+                ctx,
+                JSONObject()
+                    .put("privateKeyArmor", s.pgpPrivateKeyArmored)
+                    .put("routePublicKeyArmor", v.routeArmor),
+            )
+            val roster = BeamioChatPgpStore.loadSiNodes(ctx)
+            if (mailboxIp.isNotEmpty() && roster.isNotEmpty()) {
+                BeamioChatPgpStore.storeChainRoster(ctx, roster, mailboxIp)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "persist chain route: ${e.message}")
+        }
+        emitEvent(
+            JSONObject().put("type", "event:log").put("level", "warn")
+                .put("message", "own route switched to the chain route ${v.routeKeyId}"),
+        )
+        // A paused listen picks the new route up when it resumes.
+        if (listen.isRunning()) reopenListen(ctx, s)
+    }
+
+    private fun reopenListen(ctx: Context, s: Session) {
+        listen.start(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
     /**
