@@ -138,14 +138,22 @@ object BeamioSiCipherPost {
     }
 
     /**
-     * Weighted by [scoreEntry]. Mailbox / caller excludes are dropped.
-     * Each attempt is `http://{ip}/post`. A dead IP is not offered again.
+     * POST until one 2xx. Each attempt is `http://{ip}/post`.
+     *
+     * Entries come from the warm pool ([BeamioEntryPool]): checked recently, random,
+     * different from the last few sends. Only when the pool has nothing usable does
+     * an attempt probe a roster node first ([getRandomNode]). [hedgeAfterMs]: a second
+     * entry starts when the first has not answered in that time; the first 2xx wins
+     * (for call control, where a duplicate is harmless).
      */
     fun post(
         armor: String,
         nodes: List<BeamioChatPgpStore.SiNode>,
         excludeIps: Set<String>,
         maxAttempts: Int = 4,
+        hedgeAfterMs: Long? = null,
+        /** Wait for an answer per attempt; no answer counts as a failure (next entry). */
+        timeoutMs: Long = 12_000L,
     ): Result {
         val trimmed = armor.trim()
         if (!trimmed.contains("BEGIN PGP MESSAGE")) {
@@ -159,47 +167,99 @@ object BeamioSiCipherPost {
             BeamioChatPgpStore.SiNode(ip = ip, domain = node.domain, region = node.region)
         }
         if (roster.isEmpty()) return Result(false, 0, "", "no_si_roster")
+        val rosterIps = roster.map { it.ip }.toSet()
+        // A single named entry (e.g. armor wrapped to that entry's key) is never swapped.
+        val usePool = rosterIps.size > 1
 
-        val skip = excludeIps.toMutableSet()
-        val attempts = maxAttempts.coerceAtLeast(1)
-        val started = System.currentTimeMillis()
+        val lock = Object()
+        val skip = (excludeIps + blocked).toMutableSet()
+        var winner: Result? = null
         var lastStatus = 0
         var lastErr = ""
-        repeat(attempts) {
-            val remaining = TOTAL_BUDGET_MS - (System.currentTimeMillis() - started)
-            if (remaining < 2_500) return Result(false, lastStatus, "", lastErr.ifEmpty { "post_failed" })
-            val node = getRandomNode(roster, skip, probeTimeoutMs = minOf(2_000L, remaining / 3).toInt())
-                ?: return Result(false, lastStatus, "", lastErr.ifEmpty { "post_failed" })
-            skip.add(node.ip)
-            val url = postUrl(node.ip) ?: return@repeat
-            val left = TOTAL_BUDGET_MS - (System.currentTimeMillis() - started)
-            if (left < 1_500) return Result(false, lastStatus, "", lastErr.ifEmpty { "post_failed" })
-            val t0 = System.currentTimeMillis()
-            val (status, text) = httpPost(url, body, minOf(12_000L, left - 500).toInt())
-            lastStatus = status
-            val latency = (System.currentTimeMillis() - t0).toInt()
-            if (status in 200..299) {
-                val capped = if (text.length > 48_000) text.substring(0, 48_000) else text
-                if (!bodyOk(capped)) {
-                    // SI may answer HTTP 200 with `{ "ok": false, "error": … }`. Trust the body.
-                    Log.i(TAG, "http 2xx but body ok=false status=$status")
-                    scoreEntry(node.ip, reachable = true, latencyMs = 500)
-                    return@repeat
+        var lanesRunning = 0
+        val attempts = maxAttempts.coerceAtLeast(1)
+        val started = System.currentTimeMillis()
+
+        fun decided() = synchronized(lock) { winner != null }
+
+        fun lane(id: Int) {
+            try {
+                repeat(attempts) {
+                    if (decided()) return
+                    val remaining = TOTAL_BUDGET_MS - (System.currentTimeMillis() - started)
+                    if (remaining < 2_500) return
+                    val skipNow = synchronized(lock) { skip.toSet() }
+                    var warm = false
+                    val ip = (if (usePool) BeamioEntryPool.take(rosterIps, skipNow)?.also { warm = true } else null)
+                        ?: getRandomNode(roster, skipNow, probeTimeoutMs = minOf(2_000L, remaining / 3).toInt())?.ip
+                        ?: return
+                    synchronized(lock) { skip.add(ip) }
+                    val url = postUrl(ip) ?: return@repeat
+                    val left = TOTAL_BUDGET_MS - (System.currentTimeMillis() - started)
+                    if (left < 1_500) return
+                    val t0 = System.currentTimeMillis()
+                    val (status, text) = httpPost(url, body, minOf(timeoutMs, left - 500).toInt())
+                    val latency = (System.currentTimeMillis() - t0).toInt()
+                    synchronized(lock) { lastStatus = status }
+                    if (status in 200..299) {
+                        val capped = if (text.length > 48_000) text.substring(0, 48_000) else text
+                        if (!bodyOk(capped)) {
+                            // SI may answer HTTP 200 with `{ "ok": false, "error": … }`. Trust the body.
+                            Log.i(TAG, "http 2xx but body ok=false status=$status")
+                            scoreEntry(ip, reachable = true, latencyMs = 500)
+                            return@repeat
+                        }
+                        scoreEntry(ip, reachable = true, latencyMs = latency)
+                        Log.i(TAG, "http ip ok status=$status latencyMs=$latency warm=${if (warm) "yes" else "no"} lane=$id")
+                        synchronized(lock) { if (winner == null) winner = Result(true, status, capped, "") }
+                        return
+                    }
+                    BeamioEntryPool.reportFailure(ip)
+                    if (status == 0) {
+                        synchronized(lock) { lastErr = "connect_failed" }
+                        scoreEntry(ip, reachable = false, latencyMs = latency)
+                    } else {
+                        synchronized(lock) { lastErr = "http_$status" }
+                        scoreEntry(ip, reachable = true, latencyMs = 500)
+                    }
                 }
-                scoreEntry(node.ip, reachable = true, latencyMs = latency)
-                Log.i(TAG, "http ip ok status=$status latencyMs=$latency")
-                return Result(true, status, capped, "")
-            }
-            if (status == 0) {
-                lastErr = "connect_failed"
-                scoreEntry(node.ip, reachable = false, latencyMs = latency)
-            } else {
-                lastErr = "http_$status"
-                scoreEntry(node.ip, reachable = true, latencyMs = 500)
+            } finally {
+                synchronized(lock) {
+                    lanesRunning--
+                    lock.notifyAll()
+                }
             }
         }
-        Log.i(TAG, "http ip failed status=$lastStatus")
-        return Result(false, lastStatus, "", lastErr.ifEmpty { "post_failed" })
+
+        synchronized(lock) { lanesRunning = 1 }
+        if (hedgeAfterMs != null && rosterIps.size > 1) {
+            synchronized(lock) { lanesRunning = 2 }
+            sseExecutor.execute {
+                try {
+                    Thread.sleep(hedgeAfterMs)
+                } catch (_: InterruptedException) {
+                }
+                if (decided()) {
+                    synchronized(lock) {
+                        lanesRunning--
+                        lock.notifyAll()
+                    }
+                } else {
+                    lane(1)
+                }
+            }
+        }
+        lane(0)
+        synchronized(lock) {
+            while (winner == null && lanesRunning > 0) {
+                val left = TOTAL_BUDGET_MS - (System.currentTimeMillis() - started)
+                if (left <= 0) break
+                lock.wait(left)
+            }
+            winner?.let { return it }
+            Log.i(TAG, "http ip failed status=$lastStatus")
+            return Result(false, lastStatus, "", lastErr.ifEmpty { "post_failed" })
+        }
     }
 
     // ---- SSE ---------------------------------------------------------------------
@@ -327,7 +387,7 @@ object BeamioSiCipherPost {
     }
 
     /** Any HTTP status means the IP answered. Timeout and connection errors do not. */
-    private fun probeIp(ip: String, timeoutMs: Int): ProbeResult {
+    internal fun probeIp(ip: String, timeoutMs: Int): ProbeResult {
         val url = if (ip.contains(":")) "http://[$ip]/" else "http://$ip/"
         val started = System.currentTimeMillis()
         var conn: HttpURLConnection? = null
@@ -389,5 +449,5 @@ object BeamioSiCipherPost {
         }
     }
 
-    private data class ProbeResult(val reachable: Boolean, val latencyMs: Int)
+    internal data class ProbeResult(val reachable: Boolean, val latencyMs: Int)
 }
