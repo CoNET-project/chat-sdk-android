@@ -386,7 +386,8 @@
 			"voice.delegated",
 			"group.v1",
 			"presence.query",
-			"mailbox.command"
+			"mailbox.command",
+			"send.mailboxWrap"
 		],
 		"implementations": {
 			"ts-worker": {
@@ -397,7 +398,8 @@
 					"voice.channelV2",
 					"group.v1",
 					"presence.query",
-					"mailbox.command"
+					"mailbox.command",
+					"send.mailboxWrap"
 				]
 			},
 			"ios": {
@@ -412,7 +414,8 @@
 					"call.control",
 					"voice.delegated",
 					"presence.query",
-					"mailbox.command"
+					"mailbox.command",
+					"send.mailboxWrap"
 				]
 			},
 			"android": {
@@ -427,7 +430,8 @@
 					"call.control",
 					"voice.delegated",
 					"presence.query",
-					"mailbox.command"
+					"mailbox.command",
+					"send.mailboxWrap"
 				]
 			}
 		},
@@ -457,7 +461,8 @@
 						"call.control",
 						"voice.delegated",
 						"presence.query",
-						"mailbox.command"
+						"mailbox.command",
+						"send.mailboxWrap"
 					]
 				},
 				"expect": {
@@ -472,7 +477,8 @@
 						"call.control",
 						"voice.delegated",
 						"presence.query",
-						"mailbox.command"
+						"mailbox.command",
+						"send.mailboxWrap"
 					]
 				}
 			},

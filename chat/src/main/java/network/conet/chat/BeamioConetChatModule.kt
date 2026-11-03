@@ -554,8 +554,10 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "missing_recipient_pgp")
             return
         }
-        if (noPush && !mailboxRoute.contains("BEGIN PGP PUBLIC KEY")) {
-            ack(reqId, false, error = "NoPush requires recipient mailbox routerArmoredPublicKey")
+        // Every send is wrapped to the recipient's mailbox route key, so the entry
+        // never sees the recipient key ID. Without that route: not sent.
+        if (!mailboxRoute.contains("BEGIN PGP PUBLIC KEY")) {
+            ack(reqId, false, error = "recipient_mailbox_unknown")
             return
         }
         val host = BeamioOpenPgpHost.shared(ctx)
@@ -580,15 +582,11 @@ object BeamioConetChatModule {
                         ack(reqId, true, result = JSONObject().put("sent", ok).put("sendId", sendId))
                     }
                 }
-                if (noPush) {
-                    host.wrapArmorToMailboxWork(armor, mailboxRoute, true) { wrapped ->
-                        wrapped.fold(
-                            onSuccess = { finish(it) },
-                            onFailure = { ack(reqId, false, error = it.message ?: "wrap_failed") },
-                        )
-                    }
-                } else {
-                    finish(armor)
+                host.wrapArmorToMailboxWork(armor, mailboxRoute, noPush) { wrapped ->
+                    wrapped.fold(
+                        onSuccess = { finish(it) },
+                        onFailure = { ack(reqId, false, error = it.message ?: "wrap_failed") },
+                    )
                 }
             }
         }
@@ -628,19 +626,27 @@ object BeamioConetChatModule {
                     val pgp = member?.optString("userPublicKeyArmored", "")
                         ?.ifBlank { member.optString("pgpPublicKeyArmored", "") }.orEmpty()
                     val route = member?.optString("routerArmoredPublicKey", "").orEmpty()
-                    if (!pgp.contains("BEGIN PGP PUBLIC KEY")) {
+                    // Wrapped to the member's mailbox: no route, no delivery.
+                    if (!pgp.contains("BEGIN PGP PUBLIC KEY") || !route.contains("BEGIN PGP PUBLIC KEY")) {
                         latch.countDown()
                         continue
                     }
                     host.encryptUtf8JsonBase64(envelope.toString(), pgp) { enc ->
-                        io.execute {
-                            try {
-                                val armor = enc.getOrNull()
-                                if (armor != null && postToEntries(ctx, armor, route, s)) {
-                                    synchronized(this) { delivered += 1 }
+                        val userArmor = enc.getOrNull()
+                        if (userArmor == null) {
+                            latch.countDown()
+                            return@encryptUtf8JsonBase64
+                        }
+                        host.wrapArmorToMailboxWork(userArmor, route, false) { wrapped ->
+                            io.execute {
+                                try {
+                                    val armor = wrapped.getOrNull()
+                                    if (armor != null && postToEntries(ctx, armor, route, s)) {
+                                        synchronized(this) { delivered += 1 }
+                                    }
+                                } finally {
+                                    latch.countDown()
                                 }
-                            } finally {
-                                latch.countDown()
                             }
                         }
                     }
@@ -1173,7 +1179,13 @@ object BeamioConetChatModule {
             ip !in exclude
         }.shuffled()
 
+        // One entry at a time; the next only after a clear failure (connection
+        // error or reset, non-2xx, `ok:false`, or no answer in 8 s). A timed-out
+        // POST may have arrived: the mailbox keeps one copy per ciphertext and
+        // the recipient dedupes by sendId. At most 4 entries, about 25 s.
+        val started = System.currentTimeMillis()
         for (entry in candidates.take(4)) {
+            if (System.currentTimeMillis() - started > 25_000L) break
             var postArmor = armor
             if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
                 val latch = CountDownLatch(1)
@@ -1183,19 +1195,19 @@ object BeamioConetChatModule {
                 }
                 latch.await(8, TimeUnit.SECONDS)
             }
-            val result = BeamioSiCipherPost.post(postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1)
+            val result = BeamioSiCipherPost.post(
+                postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1, timeoutMs = 8_000L,
+            )
             if (result.ok) {
                 onBody?.invoke(result.body)
                 return true
             }
         }
-        // Fallback: any roster node excluding the mailbox.
-        val roster = s.nodes.map { it.asStoreNode() }
-        val result = if (roster.isEmpty()) {
-            BeamioSiCipherPost.post(armor, BeamioChatPgpStore.loadSiNodes(ctx), exclude)
-        } else {
-            BeamioSiCipherPost.post(armor, roster, exclude)
-        }
+        if (candidates.isNotEmpty()) return false
+        // No node list in the session yet: the stored roster (same one-at-a-time post).
+        val result = BeamioSiCipherPost.post(
+            armor, BeamioChatPgpStore.loadSiNodes(ctx), exclude, maxAttempts = 4, timeoutMs = 8_000L,
+        )
         if (result.ok) onBody?.invoke(result.body)
         return result.ok
     }

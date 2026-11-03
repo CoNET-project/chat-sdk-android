@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -117,10 +118,14 @@ internal class BeamioConetChatListenSession {
         if (!ownRoute.contains("BEGIN PGP PUBLIC KEY")) throw IllegalStateException("missing_own_route")
         val mailboxIps = mailboxIps(session)
 
+        // Fresh stream key per listen: B seals every SSE frame with it, so the
+        // entry relaying the stream cannot read the recipient key ID. Memory only.
+        val streamKey = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val message = JSONObject()
             .put("command", "mailbox_listen")
             .put("walletAddress", session.eoa)
             .put("instanceId", UUID.randomUUID().toString())
+            .put("streamKey", ConetChatCryptoUtil.base64Encode(streamKey))
             .toString()
 
         val signature = await(30) { cb ->
@@ -166,7 +171,7 @@ internal class BeamioConetChatListenSession {
             }
             Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain}")
             val started = System.currentTimeMillis()
-            val err = openSse(app, url, armored, session, gen, entry.domain, onStatus, onInbound)
+            val err = openSse(app, url, armored, streamKey, session, gen, entry.domain, onStatus, onInbound)
             val latency = (System.currentTimeMillis() - started).toInt()
             if (err == null) return
             when {
@@ -190,6 +195,7 @@ internal class BeamioConetChatListenSession {
         app: Context,
         url: String,
         armored: String,
+        streamKey: ByteArray,
         session: BeamioConetChatModule.Session,
         gen: Int,
         viaDomain: String,
@@ -206,7 +212,11 @@ internal class BeamioConetChatListenSession {
                 onStatus("listening", "handshake")
                 openLatch.countDown()
             },
-            onEvent = { payload -> handleSsePayload(app, payload, session, viaDomain, onStatus, onInbound) },
+            onEvent = { payload ->
+                openStreamFrame(payload, streamKey)?.let { frame ->
+                    handleSsePayload(app, frame, session, viaDomain, onStatus, onInbound)
+                }
+            },
             onClosed = { reason ->
                 closeReason = reason
                 openLatch.countDown()
@@ -273,6 +283,38 @@ internal class BeamioConetChatListenSession {
 
     companion object {
         private const val TAG = "BeamioConetChat"
+
+        private val SEALED_FRAME = Regex("^[A-Za-z0-9+/]+={0,2}$")
+
+        /**
+         * Open one mailbox SSE frame with this listen's stream key:
+         * `base64(iv[12] ‖ AES-256-GCM ciphertext ‖ tag[16])`, plaintext JSON padded
+         * with spaces. Every mailbox seals every frame; anything else (plain JSON,
+         * a frame that does not open) is dropped. Never logs the key or contents.
+         * Pure JVM (unit-testable).
+         */
+        internal fun openStreamFrame(payload: String, key: ByteArray): String? {
+            val trimmed = payload.trim()
+            if (trimmed.isEmpty()) return null
+            if (trimmed.length < 40 || !SEALED_FRAME.matches(trimmed)) {
+                runCatching { Log.w(TAG, "mailbox frame not sealed; dropped len=${trimmed.length}") }
+                return null
+            }
+            return try {
+                val blob = ConetChatCryptoUtil.base64Decode(trimmed)
+                if (blob.size < 12 + 16 + 1) return null
+                val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(
+                    javax.crypto.Cipher.DECRYPT_MODE,
+                    javax.crypto.spec.SecretKeySpec(key, "AES"),
+                    javax.crypto.spec.GCMParameterSpec(128, blob, 0, 12),
+                )
+                String(cipher.doFinal(blob, 12, blob.size - 12), Charsets.UTF_8).trim()
+            } catch (_: Exception) {
+                runCatching { Log.w(TAG, "mailbox frame did not open len=${trimmed.length}") }
+                null
+            }
+        }
 
         /**
          * Decrypt one inbound armor with the session PGP key into the chat line
