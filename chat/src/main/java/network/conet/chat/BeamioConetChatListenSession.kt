@@ -23,6 +23,15 @@ internal class BeamioConetChatListenSession {
     private var running = false
     private var paused = false
     private var sseHandle: BeamioSiCipherPost.SseHandle? = null
+    /** Last frame from the mailbox that opened with this listen's stream key (ms). */
+    @Volatile private var lastSealedFrameAtMs = 0L
+
+    /**
+     * Milliseconds since the mailbox last spoke on this listen (handshake,
+     * keepalive, message). Large after the process was frozen in the background:
+     * the stream may be gone even though nothing reported it.
+     */
+    fun msSinceLastMailboxFrame(): Long = System.currentTimeMillis() - lastSealedFrameAtMs
 
     fun isRunning(): Boolean = synchronized(lock) { running && !paused }
 
@@ -92,28 +101,35 @@ internal class BeamioConetChatListenSession {
         onInbound: InboundHandler,
     ) {
         while (stillAlive(gen)) {
+            var reopenNow = false
             try {
-                runOneListen(app, session, gen, onStatus, onInbound)
+                reopenNow = runOneListen(app, session, gen, onStatus, onInbound)
             } catch (e: Exception) {
                 if (stillAlive(gen)) onStatus("reconnecting", e.message ?: "listen_error")
             }
             if (!stillAlive(gen)) break
-            onStatus("reconnecting", "retry")
+            onStatus("reconnecting", if (reopenNow) "relisten" else "retry")
+            // A listen that worked and then dropped reopens at once with a new command.
             try {
-                Thread.sleep(RETRY_MS)
+                Thread.sleep(if (reopenNow) RELISTEN_MS else RETRY_MS)
             } catch (_: InterruptedException) {
                 break
             }
         }
     }
 
+    /**
+     * One signed `mailbox_listen` (one instanceId) tried on entries until one
+     * works. Returns true when the mailbox answered on a stream that then
+     * dropped: the caller builds a new command instead of reusing this one.
+     */
     private fun runOneListen(
         app: Context,
         session: BeamioConetChatModule.Session,
         gen: Int,
         onStatus: StatusHandler,
         onInbound: InboundHandler,
-    ) {
+    ): Boolean {
         val ownRoute = session.ownRouteArmoredPublicKey
         if (!ownRoute.contains("BEGIN PGP PUBLIC KEY")) throw IllegalStateException("missing_own_route")
         val mailboxIps = mailboxIps(session)
@@ -134,7 +150,7 @@ internal class BeamioConetChatListenSession {
         val innerArmor = await(20) { cb ->
             BeamioOpenPgpHost.shared(app).encryptSignedRouteCommand(message, signature, ownRoute, cb)
         }
-        if (!stillAlive(gen)) return
+        if (!stillAlive(gen)) return false
 
         val withPgp = session.nodes.filter { n ->
             val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
@@ -152,7 +168,7 @@ internal class BeamioConetChatListenSession {
         val skip = mailboxIps.toMutableSet()
         var lastError: String? = null
         for (attempt in 0 until MAX_ENTRY_ATTEMPTS) {
-            if (!stillAlive(gen)) return
+            if (!stillAlive(gen)) return false
             val picked = BeamioSiCipherPost.getRandomNode(siNodes, skip) ?: break
             val entryIp = BeamioSiCipherPost.normalizeIp(picked.ip) ?: continue
             skip.add(entryIp)
@@ -173,7 +189,7 @@ internal class BeamioConetChatListenSession {
             val started = System.currentTimeMillis()
             val err = openSse(app, url, armored, streamKey, session, gen, entry.domain, onStatus, onInbound)
             val latency = (System.currentTimeMillis() - started).toInt()
-            if (err == null) return
+            if (err == null) return false
             when {
                 err.startsWith("HTTP 0") || err.contains("ConnectException", true) ||
                     err.contains("SocketTimeout", true) || err.contains("UnknownHost", true) ||
@@ -185,7 +201,11 @@ internal class BeamioConetChatListenSession {
                     BeamioSiCipherPost.scoreEntry(entryIp, reachable = true, latencyMs = minOf(latency, 400))
             }
             lastError = err
-            if (err == "root_stop" || !stillAlive(gen)) return
+            if (err == "root_stop" || !stillAlive(gen)) return false
+            // The mailbox registered this listen under its instanceId. Reusing this
+            // command on another entry lets the old socket's late close remove the
+            // new session at the mailbox: build a new command instead.
+            if (lastSealedFrameAtMs >= started) return true
         }
         throw IllegalStateException(lastError ?: "all_entries_failed")
     }
@@ -208,12 +228,17 @@ internal class BeamioConetChatListenSession {
         val handle = BeamioSiCipherPost.postSse(
             url = url,
             armor = armored,
+            // The mailbox's sealed keepalive comes every 60–180 s: wait longer than
+            // that before calling the stream dead (120 s cut healthy listens).
+            idleTimeoutMs = 200_000,
             onOpen = {
-                onStatus("listening", "handshake")
+                // HTTP 200 only means the entry took the request. "listening" is
+                // reported when the mailbox's sealed handshake frame arrives.
                 openLatch.countDown()
             },
             onEvent = { payload ->
                 openStreamFrame(payload, streamKey)?.let { frame ->
+                    lastSealedFrameAtMs = System.currentTimeMillis()
                     handleSsePayload(app, frame, session, viaDomain, onStatus, onInbound)
                 }
             },
@@ -253,12 +278,13 @@ internal class BeamioConetChatListenSession {
         try {
             val obj = JSONObject(trimmed)
             val type = obj.optString("type")
-            if (type == "mailbox_keepalive" || obj.has("epoch") || obj.has("status")) {
-                onStatus("listening", "heartbeat")
+            // The mailbox's first frame: `{status:200, kind:'mailbox', instanceId, nodeWallet, …}`.
+            if (obj.optString("kind") == "mailbox" || (obj.optBoolean("ok", false) && obj.has("nodeWallet"))) {
+                onStatus("listening", "handshake")
                 return
             }
-            if (obj.optBoolean("ok", false) && (obj.has("kind") || obj.has("nodeWallet"))) {
-                onStatus("listening", "handshake")
+            if (type == "mailbox_keepalive" || obj.has("epoch") || obj.has("status")) {
+                onStatus("listening", "heartbeat")
                 return
             }
         } catch (_: Exception) {
@@ -267,7 +293,27 @@ internal class BeamioConetChatListenSession {
         val armored = findInboundArmor(trimmed)
         if (armored == null || !armored.contains("BEGIN PGP MESSAGE")) return
 
-        decryptArmor(app, session, armored) { line, hash -> onInbound(line, hash, viaDomain, armored) }
+        decryptArmor(app, session, armored, onFailure = { restartAfterDecryptFailure() }) { line, hash ->
+            onInbound(line, hash, viaDomain, armored)
+        }
+    }
+
+    @Volatile private var lastDecryptRestartMs = 0L
+
+    /**
+     * A message on this stream could not be decrypted (the crypto host failed
+     * even after rebuilding). It was not ACKed, so the mailbox still holds it and
+     * sends it again to a new listen: reopen the stream (at most every 30 s).
+     */
+    private fun restartAfterDecryptFailure() {
+        val handle = synchronized(lock) {
+            val now = System.currentTimeMillis()
+            if (now - lastDecryptRestartMs < 30_000L) return
+            lastDecryptRestartMs = now
+            sseHandle
+        } ?: return
+        Log.w(TAG, "inbound decrypt failed; reopening the mailbox listen")
+        handle.cancel()
     }
 
     private fun <T> await(seconds: Long, request: ((Result<T>) -> Unit) -> Unit): T {
@@ -325,6 +371,7 @@ internal class BeamioConetChatListenSession {
             app: Context,
             session: BeamioConetChatModule.Session,
             armored: String,
+            onFailure: (() -> Unit)? = null,
             onLine: (line: String, armorHash: String) -> Unit,
         ) {
             BeamioOpenPgpHost.shared(app).decryptInboundArmor(
@@ -349,11 +396,13 @@ internal class BeamioConetChatListenSession {
                         Log.w(TAG, "inbound PGP not for this listen key")
                     } else {
                         Log.w(TAG, "inbound decrypt failed")
+                        onFailure?.invoke()
                     }
                 }
             }
         }
         private const val RETRY_MS = 6_000L
+        private const val RELISTEN_MS = 500L
         private const val MAX_ENTRY_ATTEMPTS = 4
 
         internal fun mailboxIps(session: BeamioConetChatModule.Session): Set<String> {

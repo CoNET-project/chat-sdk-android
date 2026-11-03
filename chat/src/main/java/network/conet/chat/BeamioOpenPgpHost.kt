@@ -5,9 +5,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.os.Build
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.annotation.RequiresApi
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -134,6 +137,8 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         main.postDelayed({
             val stale = pendingJsResults.remove(requestId) ?: return@postDelayed
             Log.e(TAG, "js_bridge_timeout id=$requestId")
+            // No answer in 25 s: the page is wedged or gone. Rebuild it for the next call.
+            resetHost("js bridge timeout")
             stale(JsJsonResult(ok = false, error = "js_bridge_timeout"))
         }, 25_000L)
     }
@@ -509,7 +514,48 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
      * [JS_ARMOR_TO_STRING] / `armorToString` is in scope. Results arrive over the
      * `BeamioOpenPgpAndroid.postResult` channel (Promise returns from `evaluateJavascript` are flaky).
      */
+    /** Times the host was rebuilt (diagnostics only). */
+    @Volatile var resetCount = 0
+        private set
+
+    /**
+     * The hidden WebView died (renderer gone) or stopped answering. Without this,
+     * `ready` stayed true and every later sign / encrypt / decrypt failed until
+     * the app restarted, while inbound messages were dropped. The next call boots
+     * a fresh WebView; calls still waiting fail now instead of after 25 s.
+     */
+    private fun resetHost(reason: String) {
+        val run = Runnable {
+            resetCount += 1
+            Log.w(TAG, "host reset #$resetCount: $reason")
+            webView?.let { wv ->
+                try {
+                    wv.removeJavascriptInterface("BeamioOpenPgpAndroid")
+                    wv.destroy()
+                } catch (_: Exception) {
+                }
+            }
+            webView = null
+            ready.set(false)
+            bootstrapped.set(false)
+            val waiting = pendingJsResults.keys.toList()
+            for (id in waiting) deliverJsResult(id, JsJsonResult(ok = false, error = "host_reset"))
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
+    }
+
     private fun runJsPost(body: String, callback: (JsJsonResult) -> Unit) {
+        runJsPostOnce(body) { result ->
+            // The host was rebuilt under this call: run it once more on the new one.
+            if (!result.ok && (result.error == "host_reset" || result.error == "js_bridge_timeout")) {
+                runJsPostOnce(body, callback)
+            } else {
+                callback(result)
+            }
+        }
+    }
+
+    private fun runJsPostOnce(body: String, callback: (JsJsonResult) -> Unit) {
         ensureReady { ok ->
             if (!ok) {
                 callback(JsJsonResult(ok = false, error = "openpgp host not ready"))
@@ -763,7 +809,14 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
                 val wv = WebView(appContext).apply {
                     settings.javaScriptEnabled = true
                     addJavascriptInterface(Bridge(), "BeamioOpenPgpAndroid")
-                    webViewClient = object : WebViewClient() {}
+                    webViewClient = object : WebViewClient() {
+                        // Without this the whole app is killed when the renderer dies.
+                        @RequiresApi(Build.VERSION_CODES.O)
+                        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                            resetHost("render process gone crashed=${detail?.didCrash()}")
+                            return true
+                        }
+                    }
                 }
                 webView = wv
                 val openpgp = loadAsset("ChatCrypto/openpgp.min.js")

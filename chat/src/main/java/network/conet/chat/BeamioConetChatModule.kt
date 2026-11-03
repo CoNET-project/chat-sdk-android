@@ -921,11 +921,22 @@ object BeamioConetChatModule {
         listen.start(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
+    /**
+     * Back in the foreground with no word from the mailbox for this long: reopen
+     * the listen. A stream that died while the process was frozen is not always
+     * reported, and only a new listen makes the mailbox send what it holds.
+     */
+    private const val RESUME_STALE_MS = 45_000L
+
     private fun resumeListen() {
         val ctx = appContext ?: return
         val s = currentSession() ?: return
-        // Already connected (or reconnecting by itself): do not restart it.
-        if (listen.isRunning()) return
+        if (listen.isRunning()) {
+            // Connected (or reconnecting by itself) and recently heard: keep it.
+            val quietMs = listen.msSinceLastMailboxFrame()
+            if (quietMs < RESUME_STALE_MS) return
+            Log.i(TAG, "resume: mailbox quiet ${quietMs / 1000}s; reopening the listen")
+        }
         listen.resume(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
     }
 
