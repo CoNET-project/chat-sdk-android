@@ -143,8 +143,14 @@ object BeamioConetChatModule {
             "voiceUnlisten" -> handleVoiceUnlisten(body)
             "pause" -> main.post { requestPause() }
             "ackInbound" -> handleAckInbound(body)
-            "resume" -> {
-                main.post { pauseOwed = false }
+            "resume" -> main.post {
+                // The shell reported the app in the background: the page (or a
+                // wake event it got) does not reopen the listen there.
+                if (!BeamioListenPolicy.pageResumeApplies(lifecycleKnown, appInForeground, keepListenWhile?.invoke() == true)) {
+                    Log.i(TAG, "page resume ignored: app in the background")
+                    return@post
+                }
+                pauseOwed = false
                 resumeListen()
             }
             "destroy" -> destroy()
@@ -418,6 +424,12 @@ object BeamioConetChatModule {
             postIdleCheck()
             return
         }
+        if (!BeamioListenPolicy.pauseApplies(lifecycleKnown, appInForeground, callInProgress = false)) {
+            // The app is in the foreground: it keeps its listen.
+            Log.i(TAG, "pause skipped: app in the foreground")
+            pauseOwed = false
+            return
+        }
         pauseOwed = false
         listen.pause()
         emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("idle", "paused")))
@@ -437,6 +449,85 @@ object BeamioConetChatModule {
                 requestPause()
             }
         }, IDLE_CHECK_MS)
+    }
+
+    // ---- app foreground / background (shell) --------------------------------------------
+
+    /** The shell reports the app state ([appForeground] / [appBackground]). Main thread. */
+    private var lifecycleKnown = false
+    private var appInForeground = true
+    /** How long the listen stays after the app goes to the background (a call may be starting). */
+    private const val BACKGROUND_GRACE_MS = IDLE_CHECK_MS
+
+    /**
+     * Shell: the app went to the background. The app does not run there: the
+     * listen is paused after a short grace (a call push or dial may be starting),
+     * or when the call that rings / is up ends. Nothing retries while paused.
+     */
+    fun appBackground(reason: String = "background") {
+        main.post {
+            lifecycleKnown = true
+            if (!appInForeground) return@post
+            appInForeground = false
+            if (currentSession() == null) return@post
+            Log.i(TAG, "app in the background ($reason); listen pauses in ${BACKGROUND_GRACE_MS / 1000}s unless a call needs it")
+            pauseOwed = true
+            postIdleCheck()
+        }
+    }
+
+    /**
+     * Shell: the app came to the foreground. Reconnect now: resume a paused
+     * listen, cut a retry wait short, or reopen a listen the mailbox has been
+     * quiet on for 45 s (it may have died while the app was frozen).
+     */
+    fun appForeground(context: Context, reason: String = "foreground") {
+        val ctx = context.applicationContext
+        if (appContext == null) appContext = ctx
+        main.post {
+            lifecycleKnown = true
+            appInForeground = true
+            pauseOwed = false
+            val s = currentSession() ?: return@post
+            ensureNetworkWatch(ctx)
+            when {
+                !listen.isRunning() -> {
+                    Log.i(TAG, "app in the foreground ($reason); listen resumed")
+                    listen.resume(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
+                }
+                !listenConnected -> {
+                    Log.i(TAG, "app in the foreground ($reason); retrying the listen now")
+                    listen.retryNow()
+                }
+                else -> resumeListen()
+            }
+        }
+    }
+
+    @Volatile private var networkWatchOn = false
+
+    /**
+     * Retry at once when a network comes up, instead of waiting out the backoff.
+     * Has an effect only while the listen runs and is not connected (never while
+     * paused in the background).
+     */
+    private fun ensureNetworkWatch(ctx: Context) {
+        if (networkWatchOn) return
+        networkWatchOn = true
+        try {
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+            cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    if (listen.isRunning() && !listenConnected) {
+                        Log.i(TAG, "network available; retrying the listen now")
+                        listen.retryNow()
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            // No ACCESS_NETWORK_STATE: the backoff alone applies.
+            Log.w(TAG, "network watch unavailable: ${e.javaClass.simpleName}")
+        }
     }
 
     /** Logout / wallet removed or switched: stop and forget the stored keys. */
@@ -918,7 +1009,16 @@ object BeamioConetChatModule {
     // ---- listen lifecycle -------------------------------------------------------------
 
     private fun startListen(ctx: Context, s: Session) {
+        ensureNetworkWatch(ctx)
         listen.start(ctx, s, onStatus = { st, d -> emitStatus(st, d) }, onInbound = { p, h, v, a -> handleInbound(p, h, v, a) })
+        main.post {
+            // Started while the app is in the background (page reload, call push):
+            // it pauses again unless a call needs it.
+            if (lifecycleKnown && !appInForeground) {
+                pauseOwed = true
+                postIdleCheck()
+            }
+        }
     }
 
     /**

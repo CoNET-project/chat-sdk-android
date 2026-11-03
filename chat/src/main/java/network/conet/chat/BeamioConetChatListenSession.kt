@@ -41,6 +41,8 @@ internal class BeamioConetChatListenSession {
     fun pause() {
         synchronized(lock) { paused = true }
         stopCurrentSse()
+        // A loop waiting to retry ends now instead of after its backoff.
+        retryNow()
     }
 
     fun resume(
@@ -79,6 +81,7 @@ internal class BeamioConetChatListenSession {
             generation += 1
         }
         stopCurrentSse()
+        retryNow()
     }
 
     private fun stopCurrentSse() {
@@ -100,21 +103,51 @@ internal class BeamioConetChatListenSession {
         onStatus: StatusHandler,
         onInbound: InboundHandler,
     ) {
+        var failures = 0
         while (stillAlive(gen)) {
             var reopenNow = false
+            val tryStarted = System.currentTimeMillis()
             try {
                 reopenNow = runOneListen(app, session, gen, onStatus, onInbound)
             } catch (e: Exception) {
                 if (stillAlive(gen)) onStatus("reconnecting", e.message ?: "listen_error")
             }
             if (!stillAlive(gen)) break
+            // The mailbox answered on this try: the network works, start the backoff over.
+            if (reopenNow || lastSealedFrameAtMs >= tryStarted) failures = 0 else failures += 1
             onStatus("reconnecting", if (reopenNow) "relisten" else "retry")
-            // A listen that worked and then dropped reopens at once with a new command.
+            // A listen that worked and then dropped reopens at once (new command).
+            // Otherwise back off (2 s … 30 s); the network coming back or the app
+            // coming to the foreground cuts the wait short ([retryNow]).
+            val waitMs = if (reopenNow) {
+                BeamioListenPolicy.RELISTEN_MS
+            } else {
+                BeamioListenPolicy.retryDelayMs(failures, Math.random())
+            }
+            if (!reopenNow) Log.i(TAG, "listen retry in ${waitMs / 1000}s (failures=$failures)")
             try {
-                Thread.sleep(if (reopenNow) RELISTEN_MS else RETRY_MS)
+                waitBeforeRetry(waitMs)
             } catch (_: InterruptedException) {
                 break
             }
+        }
+    }
+
+    private val retrySignal = Object()
+    private var retryKicked = false
+
+    /** Cut a retry wait short (network back, app in the foreground, paused). */
+    fun retryNow() {
+        synchronized(retrySignal) {
+            retryKicked = true
+            retrySignal.notifyAll()
+        }
+    }
+
+    private fun waitBeforeRetry(ms: Long) {
+        synchronized(retrySignal) {
+            if (!retryKicked) retrySignal.wait(ms)
+            retryKicked = false
         }
     }
 
@@ -401,8 +434,6 @@ internal class BeamioConetChatListenSession {
                 }
             }
         }
-        private const val RETRY_MS = 6_000L
-        private const val RELISTEN_MS = 500L
         private const val MAX_ENTRY_ATTEMPTS = 4
 
         internal fun mailboxIps(session: BeamioConetChatModule.Session): Set<String> {

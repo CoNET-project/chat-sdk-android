@@ -2,4 +2,6 @@
 <!-- Independent Conet Chat library — host app must declare INTERNET. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Retry the mailbox listen as soon as a network comes back (normal permission). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>
