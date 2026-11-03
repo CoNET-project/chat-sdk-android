@@ -147,3 +147,7 @@ The module is accepted through the Beamio Consumer Android shell (`src/CaehTrees
 ## License
 
 MIT — see `LICENSE`.
+
+## Developer knowledge base
+
+Lessons learned across the TypeScript, iOS and Android SDKs (symptom, root cause, rule, how to verify) are kept in one place, in the TypeScript SDK repository: [CoNET-project/chat-sdk docs/knowledge-base](https://github.com/CoNET-project/chat-sdk/tree/main/docs/knowledge-base). Android specifics: [platform-android.md](https://github.com/CoNET-project/chat-sdk/blob/main/docs/knowledge-base/platform-android.md).
