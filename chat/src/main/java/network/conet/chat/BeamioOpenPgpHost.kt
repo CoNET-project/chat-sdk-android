@@ -3,6 +3,7 @@ package network.conet.chat
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -107,8 +108,26 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
     /** Primary delivery for async IIFE results (evaluateJavascript Promise return is flaky). */
     private val pendingJsResults = ConcurrentHashMap<String, (JsJsonResult) -> Unit>()
     private val jsRequestSeq = AtomicLong(0)
+    /**
+     * decrypt_inbound timing, diagnostics only: [start, main-thread dispatch, JS
+     * result at the bridge] in elapsedRealtime ms. Tells a busy main thread from
+     * slow JS. Durations only; no content or keys.
+     */
+    private val decryptTiming = ConcurrentHashMap<String, LongArray>()
 
     private fun nextJsRequestId(): String = "pgp_${jsRequestSeq.incrementAndGet()}"
+
+    private fun logDecryptTiming(requestId: String) {
+        val t = decryptTiming.remove(requestId) ?: return
+        val now = SystemClock.elapsedRealtime()
+        val dispatched = if (t[1] > 0L) t[1] else now
+        val bridged = if (t[2] > 0L) t[2] else now
+        Log.i(
+            TAG,
+            "decrypt_inbound: timing id=$requestId mainQueueMs=${dispatched - t[0]} jsMs=${bridged - dispatched} " +
+                "deliverMs=${now - bridged} totalMs=${now - t[0]}",
+        )
+    }
 
     private fun registerJsResult(requestId: String, onResult: (JsJsonResult) -> Unit) {
         pendingJsResults[requestId] = onResult
@@ -413,7 +432,9 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
                 TAG,
                 "decrypt_inbound: start id=$requestId armorChars=${armoredMessage.length}",
             )
+            decryptTiming[requestId] = longArrayOf(SystemClock.elapsedRealtime(), 0L, 0L)
             registerJsResult(requestId) { parsed ->
+                logDecryptTiming(requestId)
                 if (!parsed.ok) {
                     Log.e(TAG, "decrypt_inbound: ${parsed.error.ifBlank { "decrypt_fail" }}")
                     callback(
@@ -462,6 +483,7 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             })()
             """.trimIndent()
             main.post {
+                decryptTiming[requestId]?.set(1, SystemClock.elapsedRealtime())
                 wv.evaluateJavascript(js) { raw ->
                     // Secondary path: Bridge.postResult is primary.
                     if (!pendingJsResults.containsKey(requestId)) return@evaluateJavascript
@@ -813,6 +835,8 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         /** Primary async result channel for encrypt IIFEs (avoids flaky Promise→evaluateJavascript). */
         @JavascriptInterface
         fun postResult(requestId: String, json: String) {
+            // Bridge thread, before the hop to main: when the JS finished.
+            decryptTiming[requestId]?.let { if (it[2] == 0L) it[2] = SystemClock.elapsedRealtime() }
             main.post {
                 val parsed = parseJsJsonResult(json)
                     ?: JsJsonResult(ok = false, error = "bad_bridge_json")
