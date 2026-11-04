@@ -452,7 +452,7 @@ class BeamioConetChatHistoryStore(
         val remote: List<IndexRecord> = if (snap.indexHash == null) {
             emptyList()
         } else {
-            val cipher = net.fetchFragment(snap.indexHash) ?: run {
+            val cipher = fetchVerified(snap.indexHash) ?: run {
                 log("warn", "[history] index fetch failed index=${shortCid(snap.indexHash)}")
                 return null
             }
@@ -724,6 +724,20 @@ class BeamioConetChatHistoryStore(
     // ---- materialize --------------------------------------------------------------------
 
     /**
+     * Fetch a fragment and check `keccak256(utf8(content)) == hash`. AES-GCM only proves the owner
+     * encrypted it, not that it is this version: an older index served under the head's hash
+     * would otherwise make the next write drop the entries after it.
+     */
+    private fun fetchVerified(hash: String): String? {
+        val text = net.fetchFragment(hash) ?: return null
+        if (!ConetChatCryptoUtil.keccakUtf8Hex(text).equals(hash, ignoreCase = true)) {
+            log("warn", "[history] fragment content does not match its hash cid=${shortCid(hash)}")
+            return null
+        }
+        return text
+    }
+
+    /**
      * Decrypts [batch] with bounded parallelism (IPFS fetch dominates); result order matches
      * [batch], `null` for fragments that could not be fetched or decrypted. Safe to call from
      * any lane — only [plain] (concurrent) is shared.
@@ -750,7 +764,7 @@ class BeamioConetChatHistoryStore(
     private fun materialize(rec: IndexRecord): Entry? {
         plain[rec.cid]?.let { return it }
         val masterKey = master ?: return null
-        val cipher = net.fetchFragment(rec.cid) ?: return null
+        val cipher = fetchVerified(rec.cid) ?: return null
         return try {
             val k = ConetChatCryptoUtil.hkdf(masterKey, "frag|${rec.seq}|${rec.prevCid}", 32)
             val body = String(ConetChatCryptoUtil.aesGcmDecrypt(k, cipher), Charsets.UTF_8)

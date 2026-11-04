@@ -36,7 +36,12 @@ class HistoryBatchTest {
             if (r > 0) Thread.sleep(0, r * 100_000)
         }
 
-        fun net(offline: Boolean = false, failIndexFetch: Boolean = false, loseAckAfterLanding: Boolean = false) =
+        fun net(
+            offline: Boolean = false,
+            failIndexFetch: Boolean = false,
+            loseAckAfterLanding: Boolean = false,
+            serveInstead: Map<String, String> = emptyMap(),
+        ) =
             object : HistoryNet {
                 override fun readSnapshot(owner: String): HistorySnapshot? {
                     jiggle()
@@ -48,7 +53,7 @@ class HistoryBatchTest {
                     jiggle()
                     if (offline) return null
                     return synchronized(this@FakeWorld) {
-                        if (failIndexFetch && hash == indexHash) null else fragments[hash]
+                        if (failIndexFetch && hash == indexHash) null else fragments[serveInstead[hash] ?: hash]
                     }
                 }
 
@@ -374,6 +379,25 @@ class HistoryBatchTest {
         assertEquals(BeamioConetChatHistoryStore.FlushResult.ERROR, b.flushNowBlocking())
         assertEquals(1, world.heads.size)
         assertEquals(listOf("a1"), headKeys(world))
+        a.destroy()
+        b.destroy()
+    }
+
+    @Test
+    fun olderIndexServedUnderHeadHashIsRejected() {
+        val world = FakeWorld()
+        val a = store(world)
+        append(a, "a1", 1)
+        a.flushNowBlocking()
+        val oldHead = world.indexHash!!
+        append(a, "a2", 2)
+        a.flushNowBlocking()
+        val newHead = world.indexHash!!
+        val b = store(world, net = world.net(serveInstead = mapOf(newHead to oldHead)))
+        append(b, "b1", 3)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.ERROR, b.flushNowBlocking())
+        assertEquals(newHead, world.indexHash)
+        assertEquals(listOf("a1", "a2"), headKeys(world).sorted())
         a.destroy()
         b.destroy()
     }
