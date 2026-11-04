@@ -321,6 +321,7 @@ object BeamioConetChatModule {
                 ipfsWriteBaseUrl = s.ipfsWriteBaseUrl.ifBlank { null },
                 apiBaseUrl = s.apiBaseUrl,
                 registryAddress = s.chatIndexRegistryAddress,
+                storageDir = java.io.File(ctx.filesDir, "conet-chat"),
                 log = { level, msg ->
                     // Shape only (counts / short cid) — never plaintext or key material.
                     Log.i(TAG, msg)
