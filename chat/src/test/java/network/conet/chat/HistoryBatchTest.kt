@@ -30,6 +30,10 @@ class HistoryBatchTest {
         val events = ArrayList<Triple<String, String, String>>()
         val fragments = HashMap<String, String>()
         var uploads = 0
+        /** "v2" (default), "legacy" (403 for an unsigned upload), "rate_limited" (429, Retry-After 90 s). */
+        @Volatile var server = "v2"
+        val uploadBodies = ArrayList<Boolean>()
+        var forbidden = 0
 
         private fun jiggle() {
             val r = synchronized(rng) { rng.nextInt(3) }
@@ -57,14 +61,22 @@ class HistoryBatchTest {
                     }
                 }
 
-                override fun uploadFragment(owner: String, selfSign: String, cipherB64: String): Boolean {
+                override fun uploadFragment(cipherB64: String, legacy: LegacyUploadCredential?): HistoryBatch.UploadResult {
                     jiggle()
-                    if (offline) return false
+                    if (offline) return HistoryBatch.UploadResult.Error
+                    val hash = ConetChatCryptoUtil.keccakUtf8Hex(cipherB64)
                     synchronized(this@FakeWorld) {
-                        fragments[ConetChatCryptoUtil.keccakUtf8Hex(cipherB64)] = cipherB64
+                        uploadBodies.add(legacy != null)
+                        if (server == "rate_limited") return HistoryBatch.classifyUpload(429, "{}", "90", hash, legacy != null)
+                        if (server == "legacy" && legacy == null) {
+                            forbidden++
+                            return HistoryBatch.classifyUpload(403, "Forbidden", null, hash, false)
+                        }
+                        if (legacy != null && legacy.selfSign != "sig191:${legacy.owner}") return HistoryBatch.UploadResult.Error
+                        fragments[hash] = cipherB64
                         uploads++
                     }
-                    return true
+                    return HistoryBatch.classifyUpload(200, JSONObject().put("ok", true).put("hash", hash).toString(), null, hash, legacy != null)
                 }
 
                 override fun submitPointer(
@@ -116,8 +128,13 @@ class HistoryBatchTest {
         override fun sleep(ms: Long) = Unit
     }
 
+    private val eip191Messages = java.util.Collections.synchronizedList(ArrayList<String>())
+
     private val signer = object : HistorySigner {
-        override fun eip191(message: String): String = "sig191:$message"
+        override fun eip191(message: String): String {
+            eip191Messages.add(message)
+            return "sig191:$message"
+        }
         override fun eip712(typedData: JSONObject): String {
             val v = typedData.getJSONObject("value")
             return "sig712:${v.getString("nonce")}:${v.getString("indexHash")}:${v.getString("ts")}:${v.getString("seq")}"
@@ -303,6 +320,68 @@ class HistoryBatchTest {
         assertEquals(listOf("m1", "m2"), headKeys(world).sorted())
         assertEquals(BeamioConetChatHistoryStore.FlushResult.EMPTY, s.flushNowBlocking())
         assertEquals(1, world.heads.size)
+        s.destroy()
+    }
+
+    @Test
+    fun uploadClassificationFollowsV2Spec() {
+        val h = "0x" + "ab".repeat(32)
+        val ok = JSONObject().put("ok", true).put("hash", h).toString()
+        assertEquals(HistoryBatch.UploadResult.Ok, HistoryBatch.classifyUpload(200, ok, null, h, false))
+        assertEquals(HistoryBatch.UploadResult.Error, HistoryBatch.classifyUpload(200, JSONObject().put("ok", true).put("hash", "0x" + "00".repeat(32)).toString(), null, h, false))
+        assertEquals(HistoryBatch.UploadResult.Ok, HistoryBatch.classifyUpload(200, "ok", null, h, true))
+        assertEquals(HistoryBatch.UploadResult.LegacyRequired, HistoryBatch.classifyUpload(403, "", null, h, false))
+        assertEquals(HistoryBatch.UploadResult.Error, HistoryBatch.classifyUpload(403, "", null, h, true))
+        assertEquals(HistoryBatch.UploadResult.RateLimited(12_000), HistoryBatch.classifyUpload(429, "{}", "12", h, false))
+        assertEquals(HistoryBatch.UploadResult.RateLimited(3_000), HistoryBatch.classifyUpload(429, "{\"retryAfterSec\":3}", null, h, false))
+        assertEquals(HistoryBatch.UploadResult.RateLimited(60_000), HistoryBatch.classifyUpload(429, "", null, h, false))
+        for (code in listOf(400, 410, 413, 500)) assertEquals(HistoryBatch.UploadResult.Error, HistoryBatch.classifyUpload(code, "{}", null, h, false))
+    }
+
+    @Test
+    fun v2UploadsCarryNoWalletAndNeedNoUploadSignature() {
+        val world = FakeWorld()
+        eip191Messages.clear()
+        val s = store(world)
+        append(s, "m1", 1)
+        append(s, "m2", 2)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+        assertEquals(listOf(false, false, false), world.uploadBodies)
+        // Only the history master key derivation asks the PWA to sign; no self-address signature.
+        assertEquals(1, eip191Messages.size)
+        assertTrue(eip191Messages[0].startsWith("beamio.chat.history.v1|"))
+        s.destroy()
+    }
+
+    @Test
+    fun preV2ServerGetsOne403ThenTheSignedBody() {
+        val world = FakeWorld()
+        world.server = "legacy"
+        eip191Messages.clear()
+        val s = store(world)
+        append(s, "m1", 1)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+        append(s, "m2", 2)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+        assertEquals(1, world.forbidden)
+        assertEquals(listOf(false, true, true, true, true), world.uploadBodies)
+        assertEquals(2, eip191Messages.size)
+        assertEquals(owner, eip191Messages[1])
+        assertEquals(listOf("m1", "m2"), headKeys(world).sorted())
+        s.destroy()
+    }
+
+    @Test
+    fun rateLimitedBatchWaitsForRetryAfter() {
+        val world = FakeWorld()
+        world.server = "rate_limited"
+        val clock = FakeClock(r = { 0.0 })
+        val s = store(world, clock = clock)
+        append(s, "m1", 1)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.ERROR, s.flushNowBlocking())
+        assertEquals(clock.t + 90_000, s.pendingDueAtBlocking())
+        world.server = "v2"
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
         s.destroy()
     }
 

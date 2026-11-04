@@ -108,7 +108,12 @@ class BeamioConetChatHistoryStore(
     private var indexKey: ByteArray? = null
     private var pendingKey: ByteArray? = null
     private var genesisCid = ""
+    /** Pre-v2 storageFragment credential, requested only after an old server answered 403. */
     private var selfSign = ""
+    /** This run talks to a pre-v2 fragment server. */
+    private var legacyUpload = false
+    /** A 429 asked us not to upload before this local time. */
+    private var uploadNotBefore = 0L
     @Volatile
     private var ready = false
     @Volatile
@@ -192,7 +197,6 @@ class BeamioConetChatHistoryStore(
             try {
                 val domain = "beamio.chat.history.v1|$chainId|$eoa"
                 val domainSig = signer.eip191(domain)
-                selfSign = signer.eip191(eoa)
                 val masterBytes = ConetChatCryptoUtil.keccak256(domainSig.toByteArray(Charsets.UTF_8))
                 master = masterBytes
                 indexKey = ConetChatCryptoUtil.hkdf(masterBytes, "index-enc", 32)
@@ -516,6 +520,7 @@ class BeamioConetChatHistoryStore(
             }
         }
         HistoryBatch.flushFailed(pending, clock.now(), random)
+        pending.dueAt?.let { if (uploadNotBefore > it) pending.dueAt = uploadNotBefore }
         writePendingFile()
         log("warn", "[history] batch write failed pending=${pending.entries.size} failures=${pending.failures}")
         return FlushResult.ERROR
@@ -545,7 +550,7 @@ class BeamioConetChatHistoryStore(
         }
         // 4. Upload fragments, then the index.
         for ((_, cipher) in fresh) {
-            if (!net.uploadFragment(eoa, selfSign, cipher)) return FlushResult.ERROR
+            if (!uploadOne(cipher)) return FlushResult.ERROR
         }
         val next = committed + fresh.map { it.first }
         val manifest = JSONObject()
@@ -555,7 +560,7 @@ class BeamioConetChatHistoryStore(
             .put("records", encodeRecords(next))
         val indexCipher = ConetChatCryptoUtil.aesGcmEncrypt(key, manifest.toString().toByteArray(Charsets.UTF_8))
         val indexHash = ConetChatCryptoUtil.keccakUtf8Hex(indexCipher)
-        if (!net.uploadFragment(eoa, selfSign, indexCipher)) return FlushResult.ERROR
+        if (!uploadOne(indexCipher)) return FlushResult.ERROR
         // 5. Sign with the snapshot nonce; ts / seq stay at their on-chain values (no client clock).
         val signature = try {
             signer.eip712(setPointerTypedData(indexHash, snap.ts, snap.seq, snap.nonce))
@@ -581,6 +586,39 @@ class BeamioConetChatHistoryStore(
         publishSnapshot()
         log("info", "[history] batch written entries=${batch.size} records=${next.size} index=${shortCid(indexHash)}")
         return FlushResult.OK
+    }
+
+    /**
+     * Upload one fragment with the v2 body (no wallet, no signature). A pre-v2 server answers 403:
+     * retry once with the legacy body and stay on it for this run; only then is the PWA asked for
+     * the self-address signature (spec §4; remove after v2 ships).
+     */
+    private fun uploadOne(cipher: String): Boolean {
+        if (!legacyUpload) {
+            when (val r = net.uploadFragment(cipher, null)) {
+                HistoryBatch.UploadResult.Ok -> return true
+                is HistoryBatch.UploadResult.RateLimited -> {
+                    uploadNotBefore = clock.now() + r.retryAfterMs
+                    return false
+                }
+                HistoryBatch.UploadResult.Error -> return false
+                HistoryBatch.UploadResult.LegacyRequired -> {
+                    legacyUpload = true
+                    log("info", "[history] fragment server is pre-v2; using the signed upload for this run")
+                }
+            }
+        }
+        if (selfSign.isEmpty()) {
+            selfSign = try {
+                signer.eip191(eoa)
+            } catch (e: Exception) {
+                log("warn", "[history] storageFragment sign failed: ${e.message}")
+                return false
+            }
+        }
+        val r = net.uploadFragment(cipher, LegacyUploadCredential(eoa, selfSign))
+        if (r is HistoryBatch.UploadResult.RateLimited) uploadNotBefore = clock.now() + r.retryAfterMs
+        return r == HistoryBatch.UploadResult.Ok
     }
 
     private fun setPointerTypedData(indexHash: String, ts: String, seq: String, nonce: String): JSONObject {
@@ -826,15 +864,19 @@ class BeamioConetChatHistoryStore(
             }
         }
 
-        override fun uploadFragment(owner: String, selfSign: String, cipherB64: String): Boolean {
-            val body = JSONObject()
-                .put("wallet", owner)
-                .put("signMessage", selfSign)
-                .put("image", cipherB64)
-                .toString()
-            val (status, _) = httpPostJson("$ipfsWrite/storageFragment", body, 45_000)
-            if (status !in 200..299) log("warn", "[history] storageFragment HTTP $status")
-            return status in 200..299
+        override fun uploadFragment(cipherB64: String, legacy: LegacyUploadCredential?): HistoryBatch.UploadResult {
+            // v2: { image } only; the server recomputes keccak256(utf8(image)) as the name.
+            val body = JSONObject().put("image", cipherB64)
+            if (legacy != null) body.put("wallet", legacy.owner).put("signMessage", legacy.selfSign)
+            var retryAfter: String? = null
+            val (status, text) = httpPostJson("$ipfsWrite/storageFragment", body.toString(), 45_000) { conn ->
+                retryAfter = conn.getHeaderField("Retry-After")
+            }
+            val result = HistoryBatch.classifyUpload(
+                status, text, retryAfter, ConetChatCryptoUtil.keccakUtf8Hex(cipherB64), legacy != null,
+            )
+            if (result != HistoryBatch.UploadResult.Ok) log("warn", "[history] storageFragment HTTP $status → ${result.javaClass.simpleName}")
+            return result
         }
 
         override fun submitPointer(
@@ -879,7 +921,12 @@ class BeamioConetChatHistoryStore(
             rpc("eth_call", JSONArray().put(JSONObject().put("to", to).put("data", data)).put(block))
     }
 
-    private fun httpPostJson(url: String, body: String, timeoutMs: Int): Pair<Int, String> {
+    private fun httpPostJson(
+        url: String,
+        body: String,
+        timeoutMs: Int,
+        onResponse: ((HttpURLConnection) -> Unit)? = null,
+    ): Pair<Int, String> {
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -891,6 +938,7 @@ class BeamioConetChatHistoryStore(
             }
             OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body) }
             val code = conn.responseCode
+            onResponse?.invoke(conn)
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val text = stream?.let {
                 BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }

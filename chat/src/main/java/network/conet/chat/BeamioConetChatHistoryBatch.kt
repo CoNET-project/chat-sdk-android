@@ -204,7 +204,53 @@ object HistoryBatch {
     }
 
     fun casRetryDelay(random: () -> Double): Long = uniform(random, CAS_DELAY_MIN_MS, CAS_DELAY_MAX_MS)
+
+    /**
+     * storageFragment v2 (`storage-fragment-v2-spec.md`): the direct upload sends only `{ image }`.
+     * A server that predates v2 answers 403 to an unsigned upload; the caller then retries once with
+     * the legacy `{ wallet, signMessage, image }` body and keeps it for the rest of the run.
+     * Remove the legacy path once v2 is deployed everywhere.
+     */
+    sealed class UploadResult {
+        object Ok : UploadResult()
+        object LegacyRequired : UploadResult()
+        data class RateLimited(val retryAfterMs: Long) : UploadResult()
+        object Error : UploadResult()
+    }
+
+    /** Default wait for a 429 that carries neither `Retry-After` nor `retryAfterSec`. */
+    const val UPLOAD_RATE_LIMIT_DEFAULT_MS = 60_000L
+
+    fun classifyUpload(status: Int, body: String, retryAfterHeader: String?, expectedHash: String, legacy: Boolean): UploadResult {
+        if (status == 403 && !legacy) return UploadResult.LegacyRequired
+        if (status == 429) {
+            var seconds = retryAfterHeader?.trim()?.toDoubleOrNull()
+            if (seconds == null || seconds <= 0) {
+                seconds = try {
+                    JSONObject(body).optDouble("retryAfterSec", Double.NaN).takeIf { !it.isNaN() }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            val ms = if (seconds != null && seconds > 0) kotlin.math.ceil(seconds * 1000).toLong() else UPLOAD_RATE_LIMIT_DEFAULT_MS
+            return UploadResult.RateLimited(ms)
+        }
+        if (status !in 200..299) return UploadResult.Error
+        // v2 answers `{ ok: true, hash }`; an old server's 200 body differs and is accepted as is.
+        try {
+            val o = JSONObject(body)
+            if (o.has("ok") && !o.optBoolean("ok", true)) return UploadResult.Error
+            val hash = o.optString("hash", "")
+            if (hash.isNotEmpty() && !hash.equals(expectedHash, ignoreCase = true)) return UploadResult.Error
+        } catch (_: Exception) {
+            // non-JSON 200 from an old server
+        }
+        return UploadResult.Ok
+    }
 }
+
+/** Pre-v2 storageFragment credential (wallet + its signature over its own address). */
+data class LegacyUploadCredential(val owner: String, val selfSign: String)
 
 /** Head pointer and nonce read at one block. `indexHash` null = the owner never wrote. */
 data class HistorySnapshot(val indexHash: String?, val ts: String, val seq: String, val nonce: String)
@@ -214,7 +260,8 @@ interface HistoryNet {
     /** null = could not read (never treat as "no pointer"). */
     fun readSnapshot(owner: String): HistorySnapshot?
     fun fetchFragment(hash: String): String?
-    fun uploadFragment(owner: String, selfSign: String, cipherB64: String): Boolean
+    /** `legacy` null sends the v2 `{ image }` body; set, sends the pre-v2 signed body. */
+    fun uploadFragment(cipherB64: String, legacy: LegacyUploadCredential?): HistoryBatch.UploadResult
     fun submitPointer(owner: String, indexHash: String, ts: String, seq: String, nonce: String, signature: String): HistoryBatch.SubmitResult
 }
 
