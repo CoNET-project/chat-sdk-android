@@ -679,7 +679,12 @@ class BeamioConetChatHistoryStore(
                 timers.schedule({
                     try {
                         queue.execute {
-                            flushUnlocked()
+                            // A timer armed with delay 0 behind a stuck queue can fire after an
+                            // earlier task already wrote or failed and planned a later time
+                            // (Samsung qa4, 2026-11-05: 4 failed writes in 13 ms). Write only
+                            // when the planned time has come; otherwise re-arm for it.
+                            val planned = pending.dueAt
+                            if (planned != null && planned <= clock.now()) flushUnlocked()
                             armTimer()
                         }
                     } catch (_: Exception) {

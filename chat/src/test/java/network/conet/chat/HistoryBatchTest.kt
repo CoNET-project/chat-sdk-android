@@ -548,4 +548,67 @@ class HistoryBatchTest {
             devices.forEach { it.destroy() }
         }
     }
+
+    /**
+     * Samsung qa4, 2026-11-05: the queue thread was stuck (process frozen / network cut) while
+     * the planned write time passed. Every append queued behind it re-armed the timer with
+     * delay 0, so 4 flushes ran back to back and the backoff jumped from 30 s to 8 min in 13 ms.
+     * A timer task must only write when the planned time has really come.
+     */
+    @Test
+    fun staleTimerTasksDoNotWriteBeforeThePlannedTime() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.0 })
+        val gate = CountDownLatch(1)
+        val firstRead = java.util.concurrent.atomic.AtomicBoolean(true)
+        val offline = world.net(offline = true)
+        val net = object : HistoryNet by offline {
+            override fun readSnapshot(owner: String): HistorySnapshot? {
+                if (firstRead.getAndSet(false)) gate.await(10, TimeUnit.SECONDS) else Thread.sleep(50)
+                return null
+            }
+        }
+        val failures = java.util.Collections.synchronizedList(ArrayList<String>())
+        val s = BeamioConetChatHistoryStore(
+            eoa = owner,
+            chainId = 224422,
+            conetRpcUrl = "mem://rpc",
+            ipfsBaseUrl = "mem://ipfs",
+            ipfsWriteBaseUrl = null,
+            apiBaseUrl = "mem://api",
+            registryAddress = "0x1511Caa71081C84d8a591490D1b83879088EED72",
+            log = { _, msg -> if (msg.contains("batch write failed")) failures.add(msg) },
+            storageDir = null,
+            net = net,
+            clock = clock,
+            signer = signer,
+            autoFlush = true,
+        )
+        val ready = CountDownLatch(1)
+        s.prepare { ready.countDown() }
+        assertTrue(ready.await(10, TimeUnit.SECONDS))
+        append(s, "m1", 1) // plans the write 2 minutes out (jitter 0)
+        clock.t += 200_000 // the planned time passes while ...
+        val stuck = Thread { s.syncNowBlocking() }.also { it.start() } // ... the queue is stuck on a read
+        Thread.sleep(200)
+        // Behind it: appends with slow network work in between (as on the phone), so a timer
+        // armed with delay 0 fires before the next append re-arms it.
+        val queued = CountDownLatch(4)
+        val readers = ArrayList<Thread>()
+        for (i in 2..5) {
+            s.append(JSONObject().put("peer", "0xPeer").put("dir", "out").put("ts", i).put("body", "b$i").put("sendId", "m$i")) {
+                queued.countDown()
+            }
+            readers.add(Thread { s.syncNowBlocking() }.also { it.start() })
+            Thread.sleep(50)
+        }
+        gate.countDown()
+        assertTrue(queued.await(10, TimeUnit.SECONDS))
+        stuck.join(10_000)
+        readers.forEach { it.join(10_000) }
+        Thread.sleep(1_000) // let every timer that was armed with delay 0 run
+        assertEquals("one write attempt, then backoff: $failures", 1, failures.size)
+        assertEquals(5, s.pendingCount())
+        s.destroy()
+    }
 }
