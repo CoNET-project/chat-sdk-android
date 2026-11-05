@@ -27,6 +27,8 @@ object HistoryBatch {
     const val CAS_ATTEMPTS = 3
     const val CAS_DELAY_MIN_MS = 1_000L
     const val CAS_DELAY_MAX_MS = 5_000L
+    /** Writes the relay called done but the head never showed: after this many in a row, stop writing this run. */
+    const val UNLANDED_PAUSE_AFTER = 3
 
     data class PendingEntry(
         val key: String,
@@ -197,7 +199,24 @@ object HistoryBatch {
      * `bad nonce` / `stale ts` / `stale seq`.
      */
     fun classify(status: Int, body: String): SubmitResult = when {
-        status in 200..299 -> SubmitResult.OK
+        // A Cluster that forwarded a Master failure without its status (2026-11-05) answers 200
+        // with `success: false`: that is not a landed write.
+        status in 200..299 -> {
+            val parsed = try {
+                JSONObject(body)
+            } catch (_: Exception) {
+                null
+            }
+            if (parsed != null && parsed.has("success") && !parsed.optBoolean("success", true)) {
+                if (Regex("nonce|stale|conflict", RegexOption.IGNORE_CASE).containsMatchIn(parsed.optString("error", ""))) {
+                    SubmitResult.CONFLICT
+                } else {
+                    SubmitResult.ERROR
+                }
+            } else {
+                SubmitResult.OK
+            }
+        }
         status == 409 -> SubmitResult.CONFLICT
         status == 400 && Regex("nonce|stale", RegexOption.IGNORE_CASE).containsMatchIn(body) -> SubmitResult.CONFLICT
         else -> SubmitResult.ERROR

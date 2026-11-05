@@ -296,6 +296,12 @@ class HistoryBatchTest {
     @Test
     fun relayConflictClassification() {
         assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, ""))
+        // A Cluster that forwarded a Master failure as 200 (2026-11-05).
+        assertEquals(HistoryBatch.SubmitResult.ERROR, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"setPointerWithSig reverted\"}"))
+        assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"Stale pointer nonce\"}"))
+        assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"Conflicting chat pointer request for the same owner nonce\"}"))
+        assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, "{\"success\":true,\"txHash\":\"0x01\"}"))
+        assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, "not json"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(400, "{\"error\":\"Stale pointer nonce\"}"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(409, ""))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(400, "ChatIndexRegistry: bad nonce"))
@@ -609,6 +615,97 @@ class HistoryBatchTest {
         Thread.sleep(1_000) // let every timer that was armed with delay 0 run
         assertEquals("one write attempt, then backoff: $failures", 1, failures.size)
         assertEquals(5, s.pendingCount())
+        s.destroy()
+    }
+
+    /** The relay answers "done" without writing (2026-11-05); counts submits. */
+    private fun lyingNet(world: FakeWorld, lie: () -> Boolean = { true }, submits: java.util.concurrent.atomic.AtomicInteger? = null): HistoryNet {
+        val real = world.net()
+        return object : HistoryNet by real {
+            override fun submitPointer(owner: String, indexHash: String, ts: String, seq: String, nonce: String, signature: String): HistoryBatch.SubmitResult {
+                submits?.incrementAndGet()
+                return if (lie()) HistoryBatch.SubmitResult.OK else real.submitPointer(owner, indexHash, ts, seq, nonce, signature)
+            }
+        }
+    }
+
+    private fun storeWithLogs(world: FakeWorld, net: HistoryNet, clock: FakeClock, logs: MutableList<String>, autoFlush: Boolean = false): BeamioConetChatHistoryStore {
+        val s = BeamioConetChatHistoryStore(
+            eoa = owner,
+            chainId = 224422,
+            conetRpcUrl = "mem://rpc",
+            ipfsBaseUrl = "mem://ipfs",
+            ipfsWriteBaseUrl = null,
+            apiBaseUrl = "mem://api",
+            registryAddress = "0x1511Caa71081C84d8a591490D1b83879088EED72",
+            log = { _, msg -> logs.add(msg) },
+            storageDir = null,
+            net = net,
+            clock = clock,
+            signer = signer,
+            autoFlush = autoFlush,
+        )
+        val ready = CountDownLatch(1)
+        s.prepare { ready.countDown() }
+        assertTrue(ready.await(10, TimeUnit.SECONDS))
+        return s
+    }
+
+    @Test
+    fun relaySaysDoneButHeadNeverMovesBacksOffThenPauses() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.5 })
+        val logs = java.util.Collections.synchronizedList(ArrayList<String>())
+        val s = storeWithLogs(world, lyingNet(world), clock, logs)
+        append(s, "m1", 1)
+        val waits = ArrayList<Long>()
+        for (round in 1..3) {
+            assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+            s.syncNowBlocking()
+            assertEquals("round $round: entry back in the queue", 1, s.pendingCount())
+            waits.add((s.pendingDueAtBlocking() ?: 0) - clock.t)
+        }
+        assertEquals(0, world.heads.size)
+        assertEquals(listOf(30_000L, 60_000L), waits.take(2))
+        assertTrue(logs.any { it.contains("write did not land; backing off failures=1") })
+        assertTrue(logs.any { it.contains("write did not land 3x; timed writes paused") })
+        s.destroy()
+    }
+
+    @Test
+    fun nextWriteFindingTheLastOneMissingBacksOffInsteadOfWriting() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.5 })
+        val logs = java.util.Collections.synchronizedList(ArrayList<String>())
+        val submits = java.util.concurrent.atomic.AtomicInteger(0)
+        val s = storeWithLogs(world, lyingNet(world, submits = submits), clock, logs)
+        append(s, "m1", 1)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+        append(s, "m2", 2)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.ERROR, s.flushNowBlocking())
+        assertEquals("no second submit", 1, submits.get())
+        assertEquals(2, s.pendingCount())
+        assertEquals(clock.t + 30_000, s.pendingDueAtBlocking())
+        assertFalse("backoff not applied twice", logs.any { it.contains("batch write failed") })
+        s.destroy()
+    }
+
+    @Test
+    fun aWriteThatLandsResetsTheNotLandedCount() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.5 })
+        val logs = java.util.Collections.synchronizedList(ArrayList<String>())
+        var lie = true
+        val s = storeWithLogs(world, lyingNet(world, lie = { lie }), clock, logs)
+        append(s, "m1", 1)
+        s.flushNowBlocking()
+        s.syncNowBlocking()
+        lie = false
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, s.flushNowBlocking())
+        s.syncNowBlocking()
+        assertEquals(0, s.pendingCount())
+        assertEquals(listOf("m1"), headKeys(world))
+        assertEquals(1, logs.count { it.contains("did not land") })
         s.destroy()
     }
 }

@@ -161,6 +161,16 @@ class BeamioConetChatHistoryStore(
         Thread(r, "conet-chat-history-timer").apply { isDaemon = true }
     }
     private var flushTimer: ScheduledFuture<*>? = null
+
+    /** Nonce signed by the last write the relay called done, until a head read confirms it. Queue thread. */
+    private var awaitingLandingNonce: java.math.BigInteger? = null
+    /** Writes in a row the relay called done but the head never showed. Queue thread. */
+    private var unlandedWrites = 0
+    /** After [HistoryBatch.UNLANDED_PAUSE_AFTER] such writes: no timed writes for the rest of this run. */
+    @Volatile
+    private var writesPaused = false
+    /** The last [adoptHead] found our previous write missing (already backed off). Queue thread. */
+    private var unlandedJustNow = false
     private var pollTimer: ScheduledFuture<*>? = null
 
     /** Bounded parallel IPFS fetch + decrypt for restore / read (TS worker decrypts the tail concurrently). */
@@ -450,9 +460,17 @@ class BeamioConetChatHistoryStore(
      * Returns null when the head could not be fetched or decrypted (state untouched).
      */
     private fun adoptHead(snap: HistorySnapshot): Boolean? {
+        unlandedJustNow = false
         val key = indexKey ?: return null
         val previous = records.toList()
-        if (snap.indexHash != null && snap.indexHash == syncedIndexHash && everSynced) return false
+        if (snap.indexHash != null && snap.indexHash == syncedIndexHash && everSynced) {
+            // The head is the index we wrote: it landed.
+            if (awaitingLandingNonce != null) {
+                awaitingLandingNonce = null
+                unlandedWrites = 0
+            }
+            return false
+        }
         val remote: List<IndexRecord> = if (snap.indexHash == null) {
             emptyList()
         } else {
@@ -491,10 +509,37 @@ class BeamioConetChatHistoryStore(
         records = remote.toMutableList()
         syncedIndexHash = snap.indexHash ?: ""
         everSynced = true
+        // Did our last "done" write land? The registry consumes the nonce we signed; if the head
+        // still shows that nonce, the relay answered success without writing (2026-11-05).
+        val landing = awaitingLandingNonce
+        if (landing != null) {
+            awaitingLandingNonce = null
+            val headNonce = snap.nonce.toBigIntegerOrNull()
+            if (headNonce != null && headNonce <= landing) {
+                unlandedWrites += 1
+                unlandedJustNow = true
+                // The relay's "done" reset the failure count: count unlanded writes (30 s, 60 s, ...).
+                pending.failures = unlandedWrites - 1
+                HistoryBatch.flushFailed(pending, clock.now(), random)
+                if (unlandedWrites >= HistoryBatch.UNLANDED_PAUSE_AFTER) writesPaused = true
+            } else {
+                unlandedWrites = 0
+            }
+        }
         writePendingFile()
         publishSnapshot()
         log("info", "[history] head adopted records=${remote.size} previous=${previous.size} requeued=$requeued pending=${pending.entries.size}")
-        if (requeued > 0) armTimer()
+        if (unlandedJustNow) {
+            log(
+                "warn",
+                if (writesPaused) {
+                    "[history] write did not land ${unlandedWrites}x; timed writes paused until restart pending=${pending.entries.size}"
+                } else {
+                    "[history] write did not land; backing off failures=${pending.failures} pending=${pending.entries.size}"
+                },
+            )
+        }
+        if (requeued > 0 || unlandedJustNow) armTimer()
         return changed
     }
 
@@ -509,7 +554,10 @@ class BeamioConetChatHistoryStore(
         if (!ready || destroyed) return FlushResult.NOT_READY
         if (pending.entries.isEmpty()) return FlushResult.EMPTY
         for (attempt in 0 until HistoryBatch.CAS_ATTEMPTS) {
-            when (flushAttempt()) {
+            val outcome = flushAttempt()
+            // The previous write never landed: adoptHead already backed off; do not write now.
+            if (unlandedJustNow) return FlushResult.ERROR
+            when (outcome) {
                 FlushResult.OK -> return FlushResult.OK
                 FlushResult.EMPTY -> return FlushResult.EMPTY
                 FlushResult.CONFLICT -> {
@@ -527,12 +575,14 @@ class BeamioConetChatHistoryStore(
     }
 
     private fun flushAttempt(): FlushResult {
+        unlandedJustNow = false
         val key = indexKey ?: return FlushResult.ERROR
         val masterKey = master ?: return FlushResult.ERROR
         // 1. Snapshot: head + nonce at one block. No snapshot → no write.
         val snap = net.readSnapshot(eoa) ?: return FlushResult.ERROR
-        // 2. Adopt that head. Unreadable head → no write.
+        // 2. Adopt that head. Unreadable head → no write. Our last write missing → no write (backed off).
         adoptHead(snap) ?: return FlushResult.ERROR
+        if (unlandedJustNow) return FlushResult.ERROR
         if (pending.entries.isEmpty()) return FlushResult.EMPTY
         // 3. Chain the waiting entries after the committed tail; committed fragments stay as they are.
         val committed = records.sortedBy { it.seq }
@@ -581,6 +631,7 @@ class BeamioConetChatHistoryStore(
         }
         records = next.toMutableList()
         syncedIndexHash = indexHash
+        awaitingLandingNonce = snap.nonce.toBigIntegerOrNull()
         HistoryBatch.flushSucceeded(pending, batch.mapTo(HashSet()) { it.key }, clock.now(), random)
         writePendingFile()
         publishSnapshot()
@@ -668,7 +719,7 @@ class BeamioConetChatHistoryStore(
 
     /** (Re)arm the write timer for the planned time. Queue thread. */
     private fun armTimer() {
-        if (!autoFlush || destroyed) return
+        if (!autoFlush || destroyed || writesPaused) return
         val due = pending.dueAt
         synchronized(timers) {
             flushTimer?.cancel(false)
