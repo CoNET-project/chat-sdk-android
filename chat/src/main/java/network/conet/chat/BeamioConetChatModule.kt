@@ -328,7 +328,7 @@ object BeamioConetChatModule {
                     // Routine history lines stay in logcat only. Forwarding each one to the page
                     // cost a bridge call plus console output per line (2026-11-11: 892 of 947
                     // page console lines were echoed [history] lines). Problems still reach it.
-                    if (HistoryLogPolicy.reachesPage(level)) {
+                    if (HistoryLogPolicy.reachesPage(level, msg)) {
                         emitEvent(JSONObject().put("type", "event:log").put("level", level).put("message", msg))
                     }
                 },
