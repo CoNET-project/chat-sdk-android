@@ -5,6 +5,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
+import network.conet.chat.localread.LocalChatEvent
+import network.conet.chat.localread.LocalMediaKind
+import network.conet.chat.localread.LocalPage
+import network.conet.chat.localread.LocalSource
+import network.conet.chat.localread.LocalViewport
+import network.conet.chat.localread.PageItem
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -134,6 +140,11 @@ object BeamioConetChatModule {
             "queryNativeWake" -> handleQueryNativeWake(body)
             "historyLoad" -> handleHistoryLoad(body)
             "historyRead" -> handleHistoryRead(body)
+            "historyOpenConversation" -> handleHistoryOpen(body)
+            "historyLoadOlder" -> handleHistoryLoadOlder(body)
+            "historyReportLayout" -> handleHistoryReportLayout(body)
+            "historyClearCache" -> handleHistoryClearCache(body)
+            "historyFullSync" -> handleHistoryFullSync(body)
             "historyAppend" -> handleHistoryAppend(body)
             "mailboxCommand" -> handleMailboxCommand(body)
             "ownMailboxCommand" -> {
@@ -333,6 +344,7 @@ object BeamioConetChatModule {
                     }
                 },
             )
+            history.onLocalEvent = { ev -> emitEvent(localEventJson(ev)) }
             s.history?.destroy()
             s.history = history
             // Listen first: it must not wait on the (sign-dependent) history key derivation.
@@ -899,6 +911,176 @@ object BeamioConetChatModule {
         }
     }
 
+    // ---- local read store (interface spec v0.2 6.2–6.4) -----------------------------
+
+    private fun lockedPage(error: String): LocalPage =
+        LocalPage(emptyList(), null, false, LocalSource.LOCKED, error)
+
+    private fun viewportOf(o: JSONObject?): LocalViewport? {
+        if (o == null) return null
+        return try {
+            val w = o.getDouble("widthPt")
+            val h = o.getDouble("heightPt")
+            LocalViewport(
+                widthPt = w,
+                heightPt = h,
+                orientation = o.optString("orientation", if (h >= w) "portrait" else "landscape"),
+                fontScale = o.optDouble("fontScale", 1.0),
+                layoutVersion = o.optInt("layoutVersion", 1),
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun kindName(kind: LocalMediaKind): String = kind.name.lowercase()
+
+    private fun itemJson(item: PageItem): JSONObject {
+        val o = JSONObject()
+            .put("stableId", item.stableId)
+            .put("sortTs", item.sortTs)
+            .put("dir", item.dir)
+            .put("sendId", item.sendId ?: JSONObject.NULL)
+            .put("kind", kindName(item.kind))
+            .put("revision", item.revision)
+            .put(
+                "layout",
+                JSONObject().put("wPt", item.layoutW).put("hPt", item.layoutH).put("measured", item.measured),
+            )
+        item.body?.let { o.put("body", it) }
+        if (item.mediaState != null) {
+            o.put(
+                "media",
+                JSONObject()
+                    .put("cid", item.mediaCid ?: JSONObject.NULL)
+                    .put("mime", item.mediaMime ?: JSONObject.NULL)
+                    .put("widthPx", item.widthPx ?: JSONObject.NULL)
+                    .put("heightPx", item.heightPx ?: JSONObject.NULL)
+                    .put("state", item.mediaState),
+            )
+        }
+        return o
+    }
+
+    private fun pageJson(page: LocalPage): JSONObject {
+        val items = JSONArray()
+        for (item in page.items) items.put(itemJson(item))
+        return JSONObject()
+            .put("items", items)
+            .put("olderCursor", page.olderCursor ?: JSONObject.NULL)
+            .put("hasOlder", page.hasOlder)
+            .put("syncState", page.syncState)
+            .put(
+                "source",
+                when (page.source) {
+                    LocalSource.LOCAL -> "local"
+                    LocalSource.MIGRATING -> "migrating"
+                    LocalSource.LOCKED -> "locked"
+                },
+            )
+            .put("short", page.short)
+            .put("capped", page.capped)
+            .put("error", page.error ?: JSONObject.NULL)
+    }
+
+    /** Events for the page: `event:historyChange` with `payload.kind` (inserted, updated, deleted, cleared). */
+    private fun localEventJson(ev: LocalChatEvent): JSONObject {
+        val p = JSONObject()
+        when (ev) {
+            is LocalChatEvent.Inserted -> {
+                val items = JSONArray()
+                for (item in ev.items) items.put(itemJson(item))
+                p.put("kind", "inserted").put("convKey", ev.convKey).put("position", ev.position).put("items", items)
+            }
+            is LocalChatEvent.Updated -> p.put("kind", "updated").put("convKey", ev.convKey)
+                .put("stableId", ev.stableId).put("revision", ev.revision)
+            is LocalChatEvent.Deleted -> p.put("kind", "deleted").put("convKey", ev.convKey).put("stableId", ev.stableId)
+            is LocalChatEvent.Cleared -> p.put("kind", "cleared").put("scope", ev.scope)
+                .put("convKey", ev.convKey ?: JSONObject.NULL).put("pendingKept", ev.pendingKept)
+        }
+        return JSONObject().put("type", "event:historyChange").put("payload", p)
+    }
+
+    private fun handleHistoryOpen(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val convKey = body.optString("convKey", "").lowercase()
+        val vp = viewportOf(body.optJSONObject("viewport"))
+        if (convKey.isEmpty() || vp == null) {
+            ack(reqId, false, error = "bad_request")
+            return
+        }
+        val store = currentSession()?.history?.localStore()
+        ack(reqId, true, result = pageJson(store?.openConversation(convKey, vp) ?: lockedPage("not_ready")))
+    }
+
+    private fun handleHistoryLoadOlder(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val convKey = body.optString("convKey", "").lowercase()
+        val cursor = body.optString("cursor", "")
+        val vp = viewportOf(body.optJSONObject("viewport"))
+        if (convKey.isEmpty() || cursor.isEmpty() || vp == null) {
+            ack(reqId, false, error = "bad_request")
+            return
+        }
+        val store = currentSession()?.history?.localStore()
+        ack(reqId, true, result = pageJson(store?.loadOlder(convKey, cursor, vp) ?: lockedPage("not_ready")))
+    }
+
+    private fun handleHistoryReportLayout(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val hist = currentSession()?.history
+        val store = hist?.localStore()
+        val convKey = body.optString("convKey", "").lowercase()
+        val stableId = body.optString("stableId", "")
+        val vp = viewportOf(body.optJSONObject("viewport"))
+        val wPt = body.optDouble("wPt", Double.NaN)
+        val hPt = body.optDouble("hPt", Double.NaN)
+        if (store == null || convKey.isEmpty() || stableId.isEmpty() || vp == null || wPt.isNaN() || hPt.isNaN() || hPt <= 0) {
+            ack(reqId, false, error = "bad_request")
+            return
+        }
+        val written = store.reportLayout(convKey, stableId, vp, wPt, hPt)
+        if (written) hist?.schedulePersist()
+        ack(reqId, true, result = JSONObject().put("written", written))
+    }
+
+    private fun handleHistoryClearCache(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val hist = currentSession()?.history
+        val store = hist?.localStore()
+        if (store == null) {
+            ack(reqId, false, error = "not_ready")
+            return
+        }
+        val pendingKept = when (body.optString("scope", "")) {
+            "conversation" -> {
+                val convKey = body.optString("convKey", "").lowercase()
+                if (convKey.isEmpty()) {
+                    ack(reqId, false, error = "bad_request")
+                    return
+                }
+                store.clearConversation(convKey)
+            }
+            "account" -> store.clearAccount()
+            else -> {
+                ack(reqId, false, error = "bad_request")
+                return
+            }
+        }
+        hist?.persistLocal()
+        ack(reqId, true, result = JSONObject().put("pendingKept", pendingKept))
+    }
+
+    private fun handleHistoryFullSync(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val hist = currentSession()?.history
+        if (hist == null || !hist.isReady()) {
+            ack(reqId, false, error = "not_ready")
+            return
+        }
+        hist.startFullSync { ok -> ack(reqId, ok, result = JSONObject().put("ok", ok), error = if (ok) null else "sync_failed") }
+    }
+
     // ---- mailbox commands / voice ----------------------------------------------------
 
     private fun handleMailboxCommand(body: JSONObject) {
@@ -1179,6 +1361,8 @@ object BeamioConetChatModule {
             session = null
             voiceSessions.clear()
         }
+        // The local store is locked (DEK and master dropped); the page clears its list on this event.
+        emitEvent(JSONObject().put("type", "event:historyChange").put("payload", JSONObject().put("kind", "locked")))
         emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("destroyed", null)))
     }
 

@@ -38,6 +38,13 @@ class LocalChatStore(val accountKey: String) {
     private val byStable = HashMap<String, RowKey>()
     private val layouts = HashMap<LayoutKey, LayoutValue>()
     private val failedMedia = HashSet<String>()
+    /** cid -> row, for records whose stable id is content-derived (spec 9.2 step 2). */
+    private val byCid = HashMap<String, RowKey>()
+    private var migrationState = "none"
+    /** Set by the sync layer: "idle" | "running" | "paused" | "error" (spec 6.1). */
+    @Volatile
+    var syncState: String = "idle"
+        private set
     private val windows = HashMap<String, Window>()
     private val listeners = ArrayList<(LocalChatEvent) -> Unit>()
 
@@ -114,6 +121,7 @@ class LocalChatStore(val accountKey: String) {
             .put("o", k2.orientation).put("f", k2.fontBucket).put("v", k2.layoutVersion)
             .put("wp", v.wPt).put("hp", v.hPt).put("u", v.updatedMs))
         payload.put("layouts", layArr)
+        payload.put("migration", migrationState)
         val blob = seal(k, snapshotAad(m), payload.toString().toByteArray(Charsets.UTF_8))
         val header = JSONObject()
             .put("fmt", FORMAT_TAG)
@@ -163,14 +171,14 @@ class LocalChatStore(val accountKey: String) {
             val body = rec.body ?: return ApplyResult.REJECTED
             existing.bodyEnc = seal(k, bodyAad(convKey, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
             existing.revision = rec.revision
-            existing.cid = rec.cid ?: existing.cid
+            moveCid(existing, rec.cid ?: existing.cid)
             setMedia(existing, rec)
             removeLayouts(convKey, sid)
             emit(LocalChatEvent.Updated(convKey, sid, rec.revision))
             return ApplyResult.UPDATED
         }
         if (rec.revision == existing.revision && rec.cid != null && rec.cid != existing.cid) {
-            existing.cid = rec.cid
+            moveCid(existing, rec.cid)
             return ApplyResult.CID_ONLY
         }
         ApplyResult.SKIPPED
@@ -234,6 +242,57 @@ class LocalChatStore(val accountKey: String) {
 
     fun subscribe(listener: (LocalChatEvent) -> Unit) = synchronized(lock) { listeners.add(listener) }
 
+    // ---- sync-layer helpers (not read API) ---------------------------------------------
+
+    /**
+     * A remote index record is already held with its body (spec 9.2 steps 1–2): no download, no
+     * decrypt. A moved cid (PWA relinearize) is recorded here, never re-fetched. False = unknown.
+     */
+    fun knowsRemote(convKey: String, sendId: String?, cid: String): Boolean {
+        return synchronized(lock) {
+        requireKey()
+        if (!sendId.isNullOrEmpty()) {
+            val row = byStable[indexKey(convKey, sendId)]?.let { rows[it] } ?: return false
+            if (row.deleted || row.bodyEnc == null) return false
+            if (row.cid != cid) moveCid(row, cid)
+            return true
+        }
+        val row = byCid[cid]?.let { rows[it] } ?: return false
+        row.convKey == convKey && !row.deleted && row.bodyEnc != null
+        }
+    }
+
+    /** Decrypted body of a held record, looked up by sendId (when present) or cid. Null when absent. */
+    fun bodyForRemote(convKey: String, sendId: String?, cid: String): String? {
+        return synchronized(lock) {
+        requireKey()
+        val row = (if (!sendId.isNullOrEmpty()) byStable[indexKey(convKey, sendId)] else byCid[cid])
+            ?.let { rows[it] } ?: return null
+        if (row.convKey != convKey || row.deleted || row.bodyEnc == null) null else bodyOf(row)
+        }
+    }
+
+    /** Every held (non-deleted, with body) row, optionally for one conversation, in key order. */
+    fun snapshotEntries(convKey: String?): List<StoredEntry> = synchronized(lock) {
+        requireKey()
+        val out = ArrayList<StoredEntry>()
+        for (row in rows.values) {
+            if (convKey != null && row.convKey != convKey) continue
+            if (row.deleted || row.bodyEnc == null) continue
+            out.add(StoredEntry(row.convKey, row.stableId, row.sortTs, row.dir, row.sendId, bodyOf(row) ?: continue))
+        }
+        out
+    }
+
+    /** Spec 11.2: no legacy local store on Android, so the first complete head sync ends migration. */
+    fun markMigrationComplete() = synchronized(lock) { migrationState = "complete" }
+
+    val migration: String get() = synchronized(lock) { migrationState }
+
+    fun setSyncState(state: String) {
+        syncState = state
+    }
+
     // ---- clearing (spec 10) ----------------------------------------------------------
 
     /** Clear one conversation; pending rows are kept and counted (T-12). */
@@ -267,7 +326,7 @@ class LocalChatStore(val accountKey: String) {
     private fun requireIdKey(): ByteArray = idKey ?: throw IllegalStateException("locked")
 
     private fun resetMemory() {
-        rows.clear(); byStable.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
+        rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
         headIndexHash = null
         tsMismatchCount = 0
         epoch = newEpoch()
@@ -275,7 +334,7 @@ class LocalChatStore(val accountKey: String) {
 
     private fun lockMemory() {
         dek = null; idKey = null; kcv = null
-        rows.clear(); byStable.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
+        rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
     }
 
     private fun insertRow(
@@ -294,6 +353,7 @@ class LocalChatStore(val accountKey: String) {
         val key = RowKey(convKey, rec.sortTs, sid)
         rows[key] = row
         byStable[indexKey(convKey, sid)] = key
+        if (!deleted) rec.cid?.let { byCid[it] = key }
         return row
     }
 
@@ -308,7 +368,14 @@ class LocalChatStore(val accountKey: String) {
         row.mediaEnc = seal(k, mediaAad(row.convKey, row.stableId, row.revision), m.toString().toByteArray(Charsets.UTF_8))
     }
 
+    private fun moveCid(row: StoredRow, newCid: String?) {
+        row.cid?.let { if (byCid[it] == row.key) byCid.remove(it) }
+        row.cid = newCid
+        newCid?.let { byCid[it] = row.key }
+    }
+
     private fun tombstone(row: StoredRow) {
+        row.cid?.let { if (byCid[it] == row.key) byCid.remove(it) }
         row.deleted = true
         row.bodyEnc = null
         row.mediaEnc = null
@@ -325,6 +392,7 @@ class LocalChatStore(val accountKey: String) {
             if (row.pendingPublish) { kept++; continue }
             it.remove()
             byStable.remove(indexKey(row.convKey, row.stableId))
+            row.cid?.let { if (byCid[it] == key) byCid.remove(it) }
             removeLayouts(row.convKey, row.stableId)
         }
         return kept
@@ -368,7 +436,7 @@ class LocalChatStore(val accountKey: String) {
         val olderCursor = lastKey?.takeIf { hasOlder }?.let { encodeCursor(it) }
         items.reverse()
         val short = !hasOlder && sum < vp.heightPt
-        return LocalPage(items, olderCursor, hasOlder, LocalSource.LOCAL, null, short = short, capped = capped)
+        return LocalPage(items, olderCursor, hasOlder, LocalSource.LOCAL, null, short = short, capped = capped, syncState = syncState)
     }
 
     private fun buildItem(row: StoredRow, vp: LocalViewport): PageItem {
@@ -473,6 +541,7 @@ class LocalChatStore(val accountKey: String) {
     private fun loadPayload(o: JSONObject): Boolean {
         return try {
             epoch = o.getString("epoch")
+            migrationState = o.optString("migration", "none")
             headIndexHash = if (o.isNull("headIndexHash")) null else o.getString("headIndexHash")
             val rowArr = o.getJSONArray("rows")
             for (i in 0 until rowArr.length()) {
@@ -480,6 +549,7 @@ class LocalChatStore(val accountKey: String) {
                 val key = RowKey(r.convKey, r.sortTs, r.stableId)
                 rows[key] = r
                 byStable[indexKey(r.convKey, r.stableId)] = key
+                if (!r.deleted) r.cid?.let { byCid[it] = key }
             }
             val layArr = o.getJSONArray("layouts")
             for (i in 0 until layArr.length()) {
@@ -678,6 +748,17 @@ data class LocalPage(
     val short: Boolean = false,
     /** The safety cap fired; should not happen at normal viewport sizes. */
     val capped: Boolean = false,
+    val syncState: String = "idle",
+)
+
+/** A held record for the legacy whole-history read (historyRead). */
+data class StoredEntry(
+    val convKey: String,
+    val stableId: String,
+    val sortTs: Long,
+    val dir: String,
+    val sendId: String?,
+    val body: String,
 )
 
 sealed class LocalChatEvent {

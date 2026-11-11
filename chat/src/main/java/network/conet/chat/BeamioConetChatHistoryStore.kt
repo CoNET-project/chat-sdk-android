@@ -5,6 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -20,6 +21,12 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import network.conet.chat.localread.ApplyResult
+import network.conet.chat.localread.IncomingRecord
+import network.conet.chat.localread.LocalChatEvent
+import network.conet.chat.localread.LocalChatStore
+import network.conet.chat.localread.LocalMediaKind
+import network.conet.chat.localread.UnlockResult
 
 /**
  * Encrypted chat history: AES-GCM fragments on IPFS + a head pointer on the CoNET
@@ -180,9 +187,28 @@ class BeamioConetChatHistoryStore(
         Thread(r, "conet-chat-history-fetch").apply { isDaemon = true }
     }
 
+    /**
+     * Encrypted local read store (spec v1.0/v0.2 sections 6–9). Fed by the head sync; reads never
+     * touch the network. Null until [prepare] has derived the master key.
+     */
+    @Volatile
+    private var local: LocalChatStore? = null
+    private val localIo = Any()
+    private val persistPending = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Receives [LocalChatEvent]s of the local store (set by the host before [prepare]). */
+    @Volatile
+    var onLocalEvent: ((LocalChatEvent) -> Unit)? = null
+
+    /** The local read store, or null when not ready or destroyed. */
+    fun localStore(): LocalChatStore? = if (ready && !destroyed) local else null
+
     fun isReady(): Boolean = ready
 
     fun destroy() {
+        persistLocal()
+        local?.lock()
+        local = null
         destroyed = true
         synchronized(timers) {
             flushTimer?.cancel(false)
@@ -220,6 +246,7 @@ class BeamioConetChatHistoryStore(
                 HistoryBatch.resume(pending, clock.now(), random)
                 writePendingFile()
                 publishSnapshot()
+                openLocal(masterBytes)
                 ready = true
                 log("info", "[history] ready genesis=${shortCid(genesisCid)} pending=${pending.entries.size}")
                 armTimer()
@@ -297,76 +324,6 @@ class BeamioConetChatHistoryStore(
         while (i > 0) {
             publish(older.subList(maxOf(0, i - BACKFILL_BATCH), i), false)
             i -= BACKFILL_BATCH
-        }
-    }
-
-    /** A read issued while a restore is running waits (bounded) for that restore's head sync. */
-    private fun awaitRestoreIdle(timeoutMs: Long) {
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-        loadLock.withLock {
-            var left = deadline - System.nanoTime()
-            while (loadsInFlight > 0 && left > 0) {
-                left = loadIdle.awaitNanos(left)
-            }
-        }
-    }
-
-    /**
-     * Global read of the decrypted corpus plus entries still waiting to be written (does not
-     * refresh the on-chain pointer). Runs on its own lane from the last published snapshots.
-     */
-    fun read(options: JSONObject?, completion: (List<Entry>) -> Unit) {
-        readQueue.execute {
-            try {
-                if (!ready) {
-                    completion(emptyList())
-                    return@execute
-                }
-                awaitRestoreIdle(READ_RESTORE_WAIT_MS)
-                if (!everSynced && snapshot.isEmpty()) {
-                    // Nothing restored yet (cold start, read raced ahead of historyLoad): an empty
-                    // answer would look like "no history", so pull the chain head first.
-                    val synced = CountDownLatch(1)
-                    queue.execute {
-                        try {
-                            syncFromHead()
-                        } catch (e: Exception) {
-                            log("warn", "[history] read-triggered sync failed: ${e.message}")
-                        } finally {
-                            synced.countDown()
-                        }
-                    }
-                    synced.await(READ_RESTORE_WAIT_MS, TimeUnit.MILLISECONDS)
-                }
-                val peer = options?.optString("peer", "")?.lowercase()?.takeIf { it.isNotEmpty() }
-                val query = options?.optString("query", "")?.trim().orEmpty()
-                val limit = options?.optInt("limit", 0) ?: 0
-                val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
-                val committed = snapshot
-                val candidates = committed.filter { peer == null || it.peer.lowercase() == peer }
-                val materialized = materializeAll(candidates)
-                val entries = ArrayList<Entry>()
-                fun matches(body: String): Boolean {
-                    if (terms.isEmpty()) return true
-                    val text = body.lowercase()
-                    return terms.all { text.contains(it) }
-                }
-                for (entry in materialized) {
-                    if (entry == null || !matches(entry.body)) continue
-                    entries.add(entry)
-                }
-                var provisionalSeq = (committed.maxOfOrNull { it.seq } ?: -1) + 1
-                for (w in HistoryBatch.order(pendingSnapshot)) {
-                    if (peer != null && w.peer != peer) continue
-                    if (!matches(w.body)) continue
-                    entries.add(Entry(provisionalSeq++, w.ts, w.peer, w.dir, w.key, w.body))
-                }
-                entries.sortWith(compareBy<Entry>({ it.ts }, { it.seq }))
-                completion(if (limit > 0 && entries.size > limit) entries.takeLast(limit) else entries)
-            } catch (e: Exception) {
-                log("warn", "[history] read failed: ${e.message}")
-                completion(emptyList())
-            }
         }
     }
 
@@ -545,11 +502,214 @@ class BeamioConetChatHistoryStore(
         return changed
     }
 
-    /** Pull the current head into memory (read-only). True when the committed set changed. */
+    /** Pull the current head into memory and ingest it into the local store. True when the set changed. */
     private fun syncFromHead(): Boolean {
         if (indexKey == null) return false
-        val snap = net.readSnapshot(eoa) ?: return false
-        return adoptHead(snap) ?: false
+        local?.setSyncState("running")
+        val snap = net.readSnapshot(eoa)
+        if (snap == null) {
+            local?.setSyncState("error")
+            return false
+        }
+        val changed = adoptHead(snap)
+        if (changed == null) {
+            local?.setSyncState("error")
+            return false
+        }
+        ingestLocal(records.toList())
+        local?.setSyncState("idle")
+        return changed
+    }
+
+    /** Spec 9.2: held records are skipped (no download, no decrypt); the rest are fetched once and stored sealed. */
+    private fun ingestLocal(remote: List<IndexRecord>) {
+        val s = local ?: return
+        if (!s.isUnlocked) return
+        var stored = 0
+        var known = 0
+        var failed = 0
+        for (rec in remote) {
+            val sid = rec.sendId.ifEmpty { null }
+            if (s.knowsRemote(rec.peer, sid, rec.cid)) {
+                known++
+                continue
+            }
+            val entry = materialize(rec)
+            if (entry == null) {
+                failed++
+                continue
+            }
+            val media = mediaFields(entry.body)
+            val r = s.applyRecord(
+                rec.peer,
+                IncomingRecord(
+                    dir = entry.dir,
+                    sortTs = entry.ts,
+                    kind = media.kind,
+                    sendId = sid,
+                    body = entry.body,
+                    cid = rec.cid,
+                    widthPx = media.width,
+                    heightPx = media.height,
+                    mime = media.mime,
+                    mediaCid = media.blob,
+                ),
+            )
+            if (r == ApplyResult.INSERTED || r == ApplyResult.UPDATED) stored++
+        }
+        if (stored > 0) persistLocal()
+        if (s.migration != "complete") s.markMigrationComplete()
+        log("info", "[history] local ingest records=${remote.size} stored=$stored known=$known failed=$failed")
+    }
+
+    private data class MediaFields(
+        val kind: LocalMediaKind,
+        val width: Int?,
+        val height: Int?,
+        val mime: String?,
+        val blob: String?,
+    )
+
+    /** Kind and manifest fields from a body. Media bodies are JSON `{kind, text, manifest}`; anything else is text. */
+    private fun mediaFields(body: String): MediaFields {
+        val text = MediaFields(LocalMediaKind.TEXT, null, null, null, null)
+        if (!body.startsWith("{")) return text
+        return try {
+            val o = JSONObject(body)
+            val kind = when (o.optString("kind")) {
+                "image" -> LocalMediaKind.IMAGE
+                "video" -> LocalMediaKind.VIDEO
+                "file" -> LocalMediaKind.FILE
+                else -> return text
+            }
+            val m = o.optJSONObject("manifest")
+            MediaFields(
+                kind,
+                m?.takeIf { it.has("width") }?.optInt("width"),
+                m?.takeIf { it.has("height") }?.optInt("height"),
+                m?.optString("mime")?.takeIf { it.isNotEmpty() },
+                m?.optString("blob")?.takeIf { it.isNotEmpty() },
+            )
+        } catch (e: Exception) {
+            text
+        }
+    }
+
+    // ---- local store: open, persist ----------------------------------------------------
+
+    private fun localFile(): File? {
+        val dir = storageDir ?: return null
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(localAccountKey().toByteArray(Charsets.UTF_8))
+        return File(dir, "chat-local-v1-" + ConetChatCryptoUtil.toHex(digest).take(16) + ".sealed")
+    }
+
+    /** accountKey = eoa + ":" + workspace; iOS and Android use the workspace `default` (spec D5). */
+    private fun localAccountKey(): String = "$eoa:default"
+
+    /** Unlock the local store with the master key. A failed unlock leaves it locked: reads answer empty. */
+    private fun openLocal(master: ByteArray) {
+        val s = LocalChatStore(localAccountKey())
+        val file = localFile()
+        val snap = file?.takeIf { it.isFile }?.let { f -> try { f.readBytes() } catch (e: Exception) { null } }
+        val r = s.unlock(master, snap)
+        local = s
+        if (r == UnlockResult.OK || r == UnlockResult.REBUILT_KCV_MISMATCH) {
+            s.subscribe { ev -> onLocalEvent?.invoke(ev) }
+        }
+        // Codes only: no record counts, keys or content in the log.
+        log(if (r.opened) "info" else "warn", "[history] local store unlock=$r")
+    }
+
+    /** Writes the sealed snapshot atomically (tmp + rename). Only ciphertext reaches the disk. */
+    fun persistLocal() {
+        val s = local ?: return
+        val file = localFile() ?: return
+        synchronized(localIo) {
+            if (!s.isUnlocked) return
+            try {
+                val bytes = s.snapshot()
+                file.parentFile?.mkdirs()
+                val tmp = File(file.parentFile, file.name + ".tmp")
+                FileOutputStream(tmp).use { out ->
+                    out.write(bytes)
+                    out.fd.sync()
+                }
+                if (file.exists()) file.delete()
+                if (!tmp.renameTo(file)) log("warn", "[history] local snapshot rename failed")
+            } catch (e: Exception) {
+                log("warn", "[history] local snapshot write failed: ${e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /** Coalesced write for frequent changes (layout measurements): at most one write per 2 s. */
+    fun schedulePersist() {
+        if (!persistPending.compareAndSet(false, true)) return
+        try {
+            timers.schedule({
+                persistPending.set(false)
+                persistLocal()
+            }, 2, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            persistPending.set(false)
+        }
+    }
+
+    /** Runs a full head sync on the write queue (spec 9.1: the only writer). [done] gets true once it ran. */
+    fun startFullSync(done: (Boolean) -> Unit) {
+        queue.execute {
+            val ok = try {
+                syncFromHead()
+                true
+            } catch (e: Exception) {
+                log("warn", "[history] full sync failed: ${e.javaClass.simpleName}")
+                false
+            }
+            done(ok)
+        }
+    }
+
+    /**
+     * Global read of the held corpus plus entries still waiting to be written. Answers from the
+     * local store only: it never waits for a sync or the network (spec 9.1, T-15, T-16).
+     */
+    fun read(options: JSONObject?, completion: (List<Entry>) -> Unit) {
+        readQueue.execute {
+            try {
+                if (!ready) {
+                    completion(emptyList())
+                    return@execute
+                }
+                val peer = options?.optString("peer", "")?.lowercase()?.takeIf { it.isNotEmpty() }
+                val query = options?.optString("query", "")?.trim().orEmpty()
+                val limit = options?.optInt("limit", 0) ?: 0
+                val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                fun matches(body: String): Boolean {
+                    if (terms.isEmpty()) return true
+                    val text = body.lowercase()
+                    return terms.all { text.contains(it) }
+                }
+                val s = local
+                val held = if (s != null && s.isUnlocked) s.snapshotEntries(peer) else emptyList()
+                val entries = ArrayList<Entry>()
+                var seq = 0
+                for (h in held) {
+                    if (!matches(h.body)) continue
+                    entries.add(Entry(seq++, h.sortTs, h.convKey, h.dir, h.sendId ?: "", h.body))
+                }
+                var provisionalSeq = seq
+                for (w in HistoryBatch.order(pendingSnapshot)) {
+                    if (peer != null && w.peer != peer) continue
+                    if (!matches(w.body)) continue
+                    entries.add(Entry(provisionalSeq++, w.ts, w.peer, w.dir, w.key, w.body))
+                }
+                entries.sortWith(compareBy<Entry>({ it.ts }, { it.seq }))
+                completion(if (limit > 0 && entries.size > limit) entries.takeLast(limit) else entries)
+            } catch (e: Exception) {
+                log("warn", "[history] read failed: ${e.javaClass.simpleName}")
+                completion(emptyList())
+            }
+        }
     }
 
     private fun flushUnlocked(): FlushResult {
@@ -642,6 +802,8 @@ class BeamioConetChatHistoryStore(
             emittedCids.add(rec.cid)
         }
         records = next.toMutableList()
+        // Our own committed entries are already in the plaintext cache: ingest them without a download.
+        ingestLocal(records.toList())
         syncedIndexHash = indexHash
         awaitingLandingNonce = snap.nonce.toBigIntegerOrNull()
         HistoryBatch.flushSucceeded(pending, batch.mapTo(HashSet()) { it.key }, clock.now(), random)
@@ -889,6 +1051,9 @@ class BeamioConetChatHistoryStore(
 
     private fun materialize(rec: IndexRecord): Entry? {
         plain[rec.cid]?.let { return it }
+        local?.takeIf { it.isUnlocked }?.bodyForRemote(rec.peer, rec.sendId.ifEmpty { null }, rec.cid)?.let { body ->
+            return Entry(rec.seq, rec.ts, rec.peer, rec.dir, rec.sendId, body).also { plain[rec.cid] = it }
+        }
         val masterKey = master ?: return null
         val cipher = fetchVerified(rec.cid) ?: return null
         return try {
@@ -1112,7 +1277,6 @@ class BeamioConetChatHistoryStore(
         private const val MATERIALIZE_TIMEOUT_SEC = 45L
 
         /** Longest a read waits for an in-flight restore before answering from the current snapshot. */
-        private const val READ_RESTORE_WAIT_MS = 20_000L
 
         /** Head poll while the module runs (other devices' entries). */
         private const val POLL_MIN_MS = 60_000L
