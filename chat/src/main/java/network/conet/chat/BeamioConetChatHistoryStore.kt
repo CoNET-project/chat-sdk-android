@@ -717,6 +717,31 @@ class BeamioConetChatHistoryStore(
 
     // ---- timers -----------------------------------------------------------------------
 
+    /**
+     * What the write timer runs (queue thread). A timer armed with delay 0 behind a stuck queue
+     * can fire after an earlier task already wrote or failed and planned a later time (Samsung
+     * qa4, 2026-11-05: 4 failed writes in 13 ms). Write only when the planned time has come.
+     * While writes are paused no timer is armed, so this writes nothing.
+     */
+    private fun onWriteTimer() {
+        if (writesPaused || destroyed) return
+        val planned = pending.dueAt
+        if (planned != null && planned <= clock.now()) flushUnlocked()
+    }
+
+    /** Tests: run one write-timer tick exactly as the armed timer would (respects the pause). */
+    internal fun runTimerTickBlocking(timeoutMs: Long = 120_000) {
+        val latch = CountDownLatch(1)
+        queue.execute {
+            try {
+                onWriteTimer()
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await(timeoutMs, TimeUnit.MILLISECONDS)
+    }
+
     /** (Re)arm the write timer for the planned time. Queue thread. */
     private fun armTimer() {
         if (!autoFlush || destroyed || writesPaused) return
@@ -730,12 +755,7 @@ class BeamioConetChatHistoryStore(
                 timers.schedule({
                     try {
                         queue.execute {
-                            // A timer armed with delay 0 behind a stuck queue can fire after an
-                            // earlier task already wrote or failed and planned a later time
-                            // (Samsung qa4, 2026-11-05: 4 failed writes in 13 ms). Write only
-                            // when the planned time has come; otherwise re-arm for it.
-                            val planned = pending.dueAt
-                            if (planned != null && planned <= clock.now()) flushUnlocked()
+                            onWriteTimer()
                             armTimer()
                         }
                     } catch (_: Exception) {

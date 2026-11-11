@@ -129,6 +129,7 @@ class HistoryBatchTest {
     }
 
     private val eip191Messages = java.util.Collections.synchronizedList(ArrayList<String>())
+    private val eip712Count = java.util.concurrent.atomic.AtomicInteger(0)
 
     private val signer = object : HistorySigner {
         override fun eip191(message: String): String {
@@ -136,6 +137,7 @@ class HistoryBatchTest {
             return "sig191:$message"
         }
         override fun eip712(typedData: JSONObject): String {
+            eip712Count.incrementAndGet()
             val v = typedData.getJSONObject("value")
             return "sig712:${v.getString("nonce")}:${v.getString("indexHash")}:${v.getString("ts")}:${v.getString("seq")}"
         }
@@ -687,6 +689,42 @@ class HistoryBatchTest {
         assertEquals(2, s.pendingCount())
         assertEquals(clock.t + 30_000, s.pendingDueAtBlocking())
         assertFalse("backoff not applied twice", logs.any { it.contains("batch write failed") })
+        s.destroy()
+    }
+
+    /**
+     * 2026-11-11 Android field logs (device 9477615, chat SDK 0.2.6): the relay answered 200
+     * while the pointer never reached the chain; every head sync found "local-only" entries and
+     * re-signed and re-wrote them, 11 pointer writes / minute (peak 36) for as long as the app
+     * ran. Two hours of timer ticks and head polls against a relay that always says done must
+     * stay at a handful of signatures and submits, then stop, and keep every entry queued.
+     */
+    @Test
+    fun lyingRelayForTwoHoursSignsAndSubmitsAtMostThreeTimes() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.5 })
+        val logs = java.util.Collections.synchronizedList(ArrayList<String>())
+        val submits = java.util.concurrent.atomic.AtomicInteger(0)
+        val s = storeWithLogs(world, lyingNet(world, submits = submits), clock, logs)
+        eip712Count.set(0)
+        var sent = 0
+        append(s, "m${++sent}", sent.toLong())
+        val start = clock.t
+        // Every 90 s: the write timer fires (if due) and the head poll runs; the user sends a
+        // message every 10 minutes.
+        while (clock.t - start < 2 * 60 * 60 * 1000L) {
+            clock.t += 90_000
+            if ((clock.t - start) % 600_000L < 90_000L) append(s, "m${++sent}", sent.toLong())
+            s.runTimerTickBlocking()
+            s.syncNowBlocking()
+        }
+        println("lying relay 2h: signatures=${eip712Count.get()} submits=${submits.get()} sent=$sent pending=${s.pendingCount()}")
+        assertTrue("signatures capped: ${eip712Count.get()}", eip712Count.get() <= 3)
+        assertTrue("submits capped: ${submits.get()}", submits.get() <= 3)
+        assertEquals("signature per submit", submits.get(), eip712Count.get())
+        assertEquals("nothing reached the chain", 0, world.heads.size)
+        assertEquals("every entry kept in the queue", sent, s.pendingCount())
+        assertTrue(logs.any { it.contains("timed writes paused") })
         s.destroy()
     }
 
