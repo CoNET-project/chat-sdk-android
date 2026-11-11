@@ -31,6 +31,9 @@ object BeamioConetChatProtocol {
         "presence.query",
         "mailbox.command",
         "send.mailboxWrap",
+        "history.local.v1",
+        "history.page.v1",
+        "layout.cache.v1",
     )
 
     /** `hello` answer (`ack.result`). */
