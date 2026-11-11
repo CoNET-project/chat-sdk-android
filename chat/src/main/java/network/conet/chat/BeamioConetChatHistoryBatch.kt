@@ -191,7 +191,13 @@ object HistoryBatch {
     fun order(entries: List<PendingEntry>): List<PendingEntry> =
         entries.sortedWith(compareBy<PendingEntry>({ it.ts }, { it.key }))
 
-    enum class SubmitResult { OK, CONFLICT, ERROR }
+    /**
+     * OK: the relay confirmed (HTTP 2xx and `success: true`); the head read-back still decides.
+     * CONFLICT: someone moved the head first. REJECTED: the relay answered but did not confirm
+     * (any other answer, including 2xx with `success: false`, no `success`, or no JSON).
+     * ERROR: no HTTP answer at all (offline).
+     */
+    enum class SubmitResult { OK, CONFLICT, REJECTED, ERROR }
 
     /**
      * Relay / chain answers that mean "someone moved the head first" (CAS lost): beamio.app
@@ -201,25 +207,26 @@ object HistoryBatch {
     fun classify(status: Int, body: String): SubmitResult = when {
         // A Cluster that forwarded a Master failure without its status (2026-11-05) answers 200
         // with `success: false`: that is not a landed write.
+        // The relay answers `{ success: true, txHash }` when it sent the transaction; anything
+        // else is not a confirmation (2026-11-11: Master's 400 forwarded as 200 success:false).
         status in 200..299 -> {
             val parsed = try {
                 JSONObject(body)
             } catch (_: Exception) {
                 null
             }
-            if (parsed != null && parsed.has("success") && !parsed.optBoolean("success", true)) {
-                if (Regex("nonce|stale|conflict", RegexOption.IGNORE_CASE).containsMatchIn(parsed.optString("error", ""))) {
+            when {
+                parsed != null && parsed.optBoolean("success", false) -> SubmitResult.OK
+                parsed != null &&
+                    Regex("nonce|stale|conflict", RegexOption.IGNORE_CASE).containsMatchIn(parsed.optString("error", "")) ->
                     SubmitResult.CONFLICT
-                } else {
-                    SubmitResult.ERROR
-                }
-            } else {
-                SubmitResult.OK
+                else -> SubmitResult.REJECTED
             }
         }
         status == 409 -> SubmitResult.CONFLICT
         status == 400 && Regex("nonce|stale", RegexOption.IGNORE_CASE).containsMatchIn(body) -> SubmitResult.CONFLICT
-        else -> SubmitResult.ERROR
+        status <= 0 -> SubmitResult.ERROR
+        else -> SubmitResult.REJECTED
     }
 
     fun casRetryDelay(random: () -> Double): Long = uniform(random, CAS_DELAY_MIN_MS, CAS_DELAY_MAX_MS)

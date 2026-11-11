@@ -297,17 +297,19 @@ class HistoryBatchTest {
 
     @Test
     fun relayConflictClassification() {
-        assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, ""))
+        assertEquals("2xx without success:true is not a confirmation", HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(200, ""))
         // A Cluster that forwarded a Master failure as 200 (2026-11-05).
-        assertEquals(HistoryBatch.SubmitResult.ERROR, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"setPointerWithSig reverted\"}"))
+        assertEquals(HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"setPointerWithSig reverted\"}"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"Stale pointer nonce\"}"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(200, "{\"success\":false,\"error\":\"Conflicting chat pointer request for the same owner nonce\"}"))
         assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, "{\"success\":true,\"txHash\":\"0x01\"}"))
-        assertEquals(HistoryBatch.SubmitResult.OK, HistoryBatch.classify(200, "not json"))
+        assertEquals(HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(200, "not json"))
+        assertEquals(HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(200, "{\"txHash\":\"0x01\"}"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(400, "{\"error\":\"Stale pointer nonce\"}"))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(409, ""))
         assertEquals(HistoryBatch.SubmitResult.CONFLICT, HistoryBatch.classify(400, "ChatIndexRegistry: bad nonce"))
-        assertEquals(HistoryBatch.SubmitResult.ERROR, HistoryBatch.classify(403, "Invalid signature"))
+        assertEquals(HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(403, "Invalid signature"))
+        assertEquals(HistoryBatch.SubmitResult.REJECTED, HistoryBatch.classify(500, ""))
         assertEquals(HistoryBatch.SubmitResult.ERROR, HistoryBatch.classify(0, ""))
     }
 
@@ -725,6 +727,45 @@ class HistoryBatchTest {
         assertEquals("nothing reached the chain", 0, world.heads.size)
         assertEquals("every entry kept in the queue", sent, s.pendingCount())
         assertTrue(logs.any { it.contains("timed writes paused") })
+        s.destroy()
+    }
+
+    /**
+     * 2026-11-11 relay check: the pointer relay wallets have no gas; Master answers 400
+     * success:false and the Cluster forwards it as 200 success:false. That answer is not a write:
+     * no landing is assumed, and after 3 refusals timed writes stop, so two hours of timer ticks
+     * and head polls sign and submit at most three times and keep every entry queued.
+     */
+    @Test
+    fun relayAnswering200SuccessFalseForTwoHoursSignsAtMostThreeTimes() {
+        val world = FakeWorld()
+        val clock = FakeClock(r = { 0.5 })
+        val logs = java.util.Collections.synchronizedList(ArrayList<String>())
+        val submits = java.util.concurrent.atomic.AtomicInteger(0)
+        val real = world.net()
+        val noGasRelay = object : HistoryNet by real {
+            override fun submitPointer(owner: String, indexHash: String, ts: String, seq: String, nonce: String, signature: String): HistoryBatch.SubmitResult {
+                submits.incrementAndGet()
+                return HistoryBatch.classify(200, "{\"success\":false,\"error\":\"insufficient funds for gas * price + value\"}")
+            }
+        }
+        val s = storeWithLogs(world, noGasRelay, clock, logs)
+        eip712Count.set(0)
+        var sent = 0
+        append(s, "m${++sent}", sent.toLong())
+        val start = clock.t
+        while (clock.t - start < 2 * 60 * 60 * 1000L) {
+            clock.t += 90_000
+            if ((clock.t - start) % 600_000L < 90_000L) append(s, "m${++sent}", sent.toLong())
+            s.runTimerTickBlocking()
+            s.syncNowBlocking()
+        }
+        println("200 success:false 2h: signatures=${eip712Count.get()} submits=${submits.get()} sent=$sent pending=${s.pendingCount()}")
+        assertTrue("signatures capped: ${eip712Count.get()}", eip712Count.get() <= 3)
+        assertTrue("submits capped: ${submits.get()}", submits.get() <= 3)
+        assertEquals("nothing reached the chain", 0, world.heads.size)
+        assertEquals("every entry kept in the queue", sent, s.pendingCount())
+        assertTrue(logs.any { it.contains("relay rejected the pointer 3x; timed writes paused") })
         s.destroy()
     }
 

@@ -166,6 +166,8 @@ class BeamioConetChatHistoryStore(
     private var awaitingLandingNonce: java.math.BigInteger? = null
     /** Writes in a row the relay called done but the head never showed. Queue thread. */
     private var unlandedWrites = 0
+    /** Consecutive pointer submits the relay answered without confirming (REJECTED). */
+    private var relayRejects = 0
     /** After [HistoryBatch.UNLANDED_PAUSE_AFTER] such writes: no timed writes for the rest of this run. */
     @Volatile
     private var writesPaused = false
@@ -619,8 +621,18 @@ class BeamioConetChatHistoryStore(
             return FlushResult.ERROR
         }
         when (net.submitPointer(eoa, indexHash, snap.ts, snap.seq, snap.nonce, signature)) {
-            HistoryBatch.SubmitResult.OK -> Unit
+            HistoryBatch.SubmitResult.OK -> relayRejects = 0
             HistoryBatch.SubmitResult.CONFLICT -> return FlushResult.CONFLICT
+            HistoryBatch.SubmitResult.REJECTED -> {
+                // The relay said no (e.g. 200 with success:false while it has no gas). Retrying
+                // only re-signs the same refusal: after 3 in a row stop timed writes for this run.
+                relayRejects += 1
+                if (relayRejects >= HistoryBatch.UNLANDED_PAUSE_AFTER) {
+                    writesPaused = true
+                    log("warn", "[history] relay rejected the pointer ${relayRejects}x; timed writes paused until restart pending=${pending.entries.size}")
+                }
+                return FlushResult.ERROR
+            }
             HistoryBatch.SubmitResult.ERROR -> return FlushResult.ERROR
         }
         // 6. Landed: the new index is the committed head.
