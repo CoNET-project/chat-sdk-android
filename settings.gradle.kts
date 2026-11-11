@@ -21,6 +21,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Authorized (user, 2026-11-11): repo1 only, for these two groups.
+        maven {
+            url = uri("https://repo1.maven.org/maven2/")
+            content {
+                includeGroup("org.bouncycastle")
+                includeGroup("org.xerial")
+            }
+        }
     }
 }
 

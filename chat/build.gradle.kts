@@ -46,10 +46,16 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // BouncyCastle 1.87 (latest formal release; OSV: no known vulnerabilities for 1.85.2+, 1.84 has two):
+    // native secp256k1 signing and OpenPGP sign / decrypt only.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.87")
+    implementation("org.bouncycastle:bcpg-jdk18on:1.87")
     // EncryptedSharedPreferences for the user PGP key + SI roster (never the EOA key).
     implementation(libs.androidx.security.crypto)
 
     testImplementation(libs.junit)
+    // SQLite JVM driver for store tests only (xerial sqlite-jdbc 3.54.1.0, Apache-2.0; OSV: no advisories).
+    testImplementation("org.xerial:sqlite-jdbc:3.54.1.0")
     // android.jar stubs org.json; unit tests need the real implementation.
     testImplementation(libs.org.json)
 
