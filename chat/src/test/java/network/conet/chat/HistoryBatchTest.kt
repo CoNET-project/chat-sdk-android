@@ -695,7 +695,7 @@ class HistoryBatchTest {
     }
 
     /**
-     * 2026-11-11 Android field logs (device 9477615, chat SDK 0.2.6): the relay answered 200
+     * 2026-11-11 Android field logs (test S25, test build at commit 9477615, history code as in 0.2.6): the relay answered 200
      * while the pointer never reached the chain; every head sync found "local-only" entries and
      * re-signed and re-wrote them, 11 pointer writes / minute (peak 36) for as long as the app
      * ran. Two hours of timer ticks and head polls against a relay that always says done must

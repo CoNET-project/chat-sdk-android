@@ -17,7 +17,7 @@ object BeamioConetChatProtocol {
     const val MIN_PROTOCOL_VERSION = 1
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
-    const val SDK_VERSION = "0.2.6"
+    const val SDK_VERSION = "0.2.7"
 
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
