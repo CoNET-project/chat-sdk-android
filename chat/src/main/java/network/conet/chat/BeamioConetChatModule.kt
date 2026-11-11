@@ -864,14 +864,24 @@ object BeamioConetChatModule {
         )
     }
 
+    /** Unbounded historyRead calls since start. Phase one (interface spec v0.2 12.2): counted, never refused. */
+    private val unboundedHistoryReads = java.util.concurrent.atomic.AtomicInteger(0)
+
     private fun handleHistoryRead(body: JSONObject) {
         val reqId = body.optInt("reqId", 0)
+        val options = body.optJSONObject("options")
+        if (options == null || !options.has("limit")) {
+            // Full result is kept as before. Log the caller label only, never content.
+            val n = unboundedHistoryReads.incrementAndGet()
+            val caller = options?.optString("caller").orEmpty().ifEmpty { "unknown" }
+            Log.i(TAG, "historyRead.unbounded caller=$caller count=$n")
+        }
         val hist = currentSession()?.history
         if (hist == null || !hist.isReady()) {
             ack(reqId, true, result = JSONArray())
             return
         }
-        hist.read(body.optJSONObject("options")) { entries ->
+        hist.read(options) { entries ->
             ack(reqId, true, result = JSONArray().also { arr -> entries.forEach { arr.put(it.toJson()) } })
         }
     }
