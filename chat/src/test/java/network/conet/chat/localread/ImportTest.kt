@@ -4,15 +4,21 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /** spec r2 11.1 M2–M3 and 11.2 (`historyImportBatch`, `historyVerifyImport`) on the store. */
 class ImportTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private val master = ByteArray(32) { (it * 5 + 9).toByte() }
     private val vp = LocalViewport(390.0, 844.0, "portrait", 1.0, 1)
 
     private fun store(): LocalChatStore {
-        val s = LocalChatStore("0ximp:default")
+        val s = newTestStore("0ximp:default")
         assertEquals(UnlockResult.OK, s.unlock(master, null))
         return s
     }
@@ -46,13 +52,18 @@ class ImportTest {
 
     @Test
     fun digestIsStableAcrossRestartAndSensitiveToContent() {
-        val s = store()
+        val file = File(tmp.root, "chat-local-v1-import.sqlite")
+        val s = newFileStore("0ximp:default", file)
+        assertEquals(UnlockResult.OK, s.unlock(master, null))
         s.importRows(rows())
         val before = s.verifyDigest()
         assertEquals(3, before.rows)
-        val re = LocalChatStore("0ximp:default")
-        assertEquals(UnlockResult.OK, re.unlock(master, s.snapshot()))
+        s.lock()
+        // Reopen the same file: the digest is read back from disk, not from memory.
+        val re = newFileStore("0ximp:default", file)
+        assertEquals(UnlockResult.OK, re.unlock(master, null))
         assertEquals(before, re.verifyDigest())
+        re.lock()
         // A different body under the same sendId changes the digest only when it is a new row; the same row is kept.
         val other = store()
         other.importRows(listOf(ImportRow("0xp", "1767225601234-q9w8e7r6", "out", 1767225601234L, "different", false)))
@@ -61,11 +72,15 @@ class ImportTest {
 
     @Test
     fun wrongMasterCannotReadTheImportedRows() {
-        val s = store()
+        val file = File(tmp.root, "chat-local-v1-import-wrong.sqlite")
+        val s = newFileStore("0ximp:default", file)
+        assertEquals(UnlockResult.OK, s.unlock(master, null))
         s.importRows(rows())
-        val other = LocalChatStore("0ximp:default")
-        val r = other.unlock(ByteArray(32) { 3 }, s.snapshot())
+        s.lock()
+        val other = newFileStore("0ximp:default", file)
+        val r = other.unlock(ByteArray(32) { 3 }, null)
         assertFalse(r == UnlockResult.OK && other.verifyDigest().rows == 3)
         assertTrue(r == UnlockResult.REBUILT_KCV_MISMATCH || r == UnlockResult.LOCKED_KCV_MISMATCH_PENDING)
+        other.lock()
     }
 }

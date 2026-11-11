@@ -112,6 +112,7 @@ class HistoryLocalIntegrationTest {
             registryAddress = "0x1511Caa71081C84d8a591490D1b83879088EED72",
             log = { _, _ -> },
             storageDir = dir,
+            sqlDbFactory = { network.conet.chat.localread.JdbcSqlDb.open(it) },
             net = net,
             clock = FixedClock,
             signer = FakeSigner,
@@ -249,7 +250,7 @@ class HistoryLocalIntegrationTest {
         prepare(r)
         sync(r)
         val files = dir.listFiles()!!
-        assertTrue(files.any { it.name.startsWith("chat-local-v1-") && it.name.endsWith(".sealed") })
+        assertTrue(files.any { it.name.startsWith("chat-local-v1-") && it.name.endsWith(".sqlite") })
         for (f in files) {
             val text = String(f.readBytes(), Charsets.ISO_8859_1)
             assertFalse("${f.name} leaks body", text.contains("FIXTURE-HIST"))
@@ -306,7 +307,7 @@ class HistoryLocalIntegrationTest {
         assertEquals(LocalSource.LOCKED, page.source)
         assertEquals("db_root_missing", page.error)
         assertTrue(page.items.isEmpty())
-        assertFalse(dir.listFiles()!!.any { it.name.endsWith(".sealed") })
+        assertFalse(dir.listFiles()!!.any { it.name.endsWith(".sqlite") || it.name.endsWith("-wal") })
     }
 
     @Test
@@ -345,7 +346,7 @@ class HistoryLocalIntegrationTest {
         assertEquals(1, bItems.size)
         assertEquals("sid-other", bItems[0].sendId)
         assertEquals(3, a.localStore()!!.openConversation(peer, vp).items.size)
-        assertEquals("one sealed file per account", 2, dir.listFiles()!!.count { it.name.endsWith(".sealed") })
+        assertEquals("one database file per account", 2, dir.listFiles()!!.count { it.name.endsWith(".sqlite") })
     }
 
 }

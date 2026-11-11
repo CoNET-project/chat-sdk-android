@@ -5,7 +5,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * JVM tests for the local read store (interface spec v1.0). Fixtures are synthetic:
@@ -13,6 +16,9 @@ import org.junit.Test
  * No real chat, key, or media is read. Environment: JVM on the developer host.
  */
 class LocalChatStoreTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     private val master = ByteArray(32) { (it * 7 + 3).toByte() }
     private val otherMaster = ByteArray(32) { (it * 11 + 5).toByte() }
@@ -148,7 +154,7 @@ class LocalChatStoreTest {
     }
 
     private fun fresh(account: String = "0xaaaa:default"): LocalChatStore {
-        val s = LocalChatStore(account)
+        val s = newTestStore(account)
         assertEquals(UnlockResult.OK, s.unlock(master, null))
         return s
     }
@@ -223,7 +229,7 @@ class LocalChatStoreTest {
 
     @Test
     fun pendingSyncEndsOnlyAfterFullSyncAndNotifiesOpenWindows() {
-        val store = LocalChatStore("0xpend")
+        val store = newTestStore("0xpend")
         assertEquals(UnlockResult.OK, store.unlock(master, null))
         store.applyRecord("0xp", IncomingRecord("in", 5L, LocalMediaKind.TEXT, "s5", "five", "c5"))
         store.applyRecord("0xp", IncomingRecord("in", 6L, LocalMediaKind.TEXT, "s6", "six", "c6"))
@@ -408,86 +414,110 @@ class LocalChatStoreTest {
 
     @Test
     fun accountsAreIsolated() {
-        val a = LocalChatStore("0xaaaa")
+        val file = File(tmp.root, "chat-local-v1-iso.sqlite")
+        val a = newFileStore("0xaaaa:default", file)
         assertEquals(UnlockResult.OK, a.unlock(master, null))
         a.applyRecord("0xshared", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "x", "A-secret", "c"))
-        val snapA = a.snapshot()
+        a.lock()
 
-        val b = LocalChatStore("0xbbbb")
+        // B has its own database: it sees nothing of A.
+        val b = newTestStore("0xbbbb:default")
         assertEquals(UnlockResult.OK, b.unlock(otherMaster, null))
         assertTrue(b.openConversation("0xshared", vp).items.isEmpty())
-        // A's snapshot cannot be read with B's key: kcv mismatch, and with no pending rows it rebuilds empty.
-        val c = LocalChatStore("0xaaaa")
-        assertEquals(UnlockResult.REBUILT_KCV_MISMATCH, c.unlock(otherMaster, snapA))
+        // A's file cannot be read with B's key: kcv mismatch, and with no pending rows it rebuilds empty.
+        val c = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.REBUILT_KCV_MISMATCH, c.unlock(otherMaster, null))
         assertEquals(0, c.rowCount("0xshared"))
+        c.lock()
     }
 
-    // ---- T-13: no plaintext in the snapshot ------------------------------------------
+    // ---- T-13: no plaintext on disk ------------------------------------------------
 
     @Test
-    fun snapshotHasNoPlaintextMarker() {
-        val store = fresh()
+    fun databaseFileHasNoPlaintextMarker() {
+        val file = File(tmp.root, "chat-local-v1-plain.sqlite")
+        val store = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, store.unlock(master, null))
         store.applyRecord("0xp", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "SIDMARK-7f3a", "FIXTURE-MARK-42", "c"))
         store.applyRecord("0xp", IncomingRecord("in", 2L, LocalMediaKind.IMAGE, "s2", "FIXTURE-MARK-43", "c2", widthPx = 400, heightPx = 300, mediaCid = "m"))
-        val snap = store.snapshot()
-        val text = String(snap, Charsets.ISO_8859_1)
-        assertFalse(text.contains("FIXTURE-MARK"))
-        assertFalse(text.contains("SIDMARK"))
+        store.lock()
+        // Every byte on disk is checked: the main file and the WAL, if one is left.
+        for (f in listOf(file, File(file.path + "-wal"))) {
+            if (!f.exists()) continue
+            val text = String(f.readBytes(), Charsets.ISO_8859_1)
+            assertFalse("${f.name} has plaintext", text.contains("FIXTURE-MARK"))
+            assertFalse("${f.name} has plaintext", text.contains("SIDMARK"))
+        }
         // Restore and read back.
-        val re = LocalChatStore("0xaaaa:default")
-        assertEquals(UnlockResult.OK, re.unlock(master, snap))
+        val re = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, re.unlock(master, null))
         assertEquals("FIXTURE-MARK-42", re.openConversation("0xp", vp).items.first().body)
+        re.lock()
     }
 
     // ---- T-14: newer schema is refused ---------------------------------------------
 
     @Test
     fun newerSchemaIsRefused() {
-        val store = fresh()
+        val file = File(tmp.root, "chat-local-v1-schema.sqlite")
+        val store = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, store.unlock(master, null))
         store.applyRecord("0xn", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "s", "t", "c"))
-        val snap = store.snapshot()
-        val nl = snap.indexOf('\n'.code.toByte())
-        val header = String(snap, 0, nl, Charsets.UTF_8).replace("\"schema\":1", "\"schema\":2")
-        val patched = header.toByteArray(Charsets.UTF_8) + snap.copyOfRange(nl, snap.size)
-        val re = LocalChatStore("0xaaaa")
-        assertEquals(UnlockResult.LOCKED_SCHEMA_NEWER, re.unlock(master, patched))
+        store.setMetaForTest("schemaVersion", "2")
+        store.lock()
+        val re = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.LOCKED_SCHEMA_NEWER, re.unlock(master, null))
         assertFalse(re.isUnlocked)
+        re.lock()
     }
 
     // ---- T-19 and A-3: kcv mismatch branches and cursor epoch ----------------------
 
     @Test
     fun kcvMismatchWithPendingStaysLockedAndWithoutPendingRebuilds() {
-        val s = fresh()
+        val fileA = File(tmp.root, "chat-local-v1-kcv-a.sqlite")
+        val s = newFileStore("0xaaaa:default", fileA)
+        assertEquals(UnlockResult.OK, s.unlock(master, null))
         s.applyRecord("0xk", IncomingRecord("out", 1L, LocalMediaKind.TEXT, "p", "queued", "c"), pendingPublish = true)
-        val locked = LocalChatStore("0xaaaa")
-        assertEquals(UnlockResult.LOCKED_KCV_MISMATCH_PENDING, locked.unlock(otherMaster, s.snapshot()))
+        s.lock()
+        // A pending row must survive a kcv mismatch: the file stays, the store stays locked.
+        val locked = newFileStore("0xaaaa:default", fileA)
+        assertEquals(UnlockResult.LOCKED_KCV_MISMATCH_PENDING, locked.unlock(otherMaster, null))
+        locked.lock()
 
-        val t = fresh()
+        val fileB = File(tmp.root, "chat-local-v1-kcv-b.sqlite")
+        val t = newFileStore("0xaaaa:default", fileB)
+        assertEquals(UnlockResult.OK, t.unlock(master, null))
         for (i in 0 until 30) t.applyRecord("0xk", IncomingRecord("in", i + 1L, LocalMediaKind.TEXT, "s$i", "row $i", "c$i"))
         val oldCursor = t.openConversation("0xk", vp).olderCursor
         assertNotNull(oldCursor)
-        val rebuilt = LocalChatStore("0xaaaa")
-        assertEquals(UnlockResult.REBUILT_KCV_MISMATCH, rebuilt.unlock(otherMaster, t.snapshot()))
+        t.lock()
+        val rebuilt = newFileStore("0xaaaa:default", fileB)
+        assertEquals(UnlockResult.REBUILT_KCV_MISMATCH, rebuilt.unlock(otherMaster, null))
         assertEquals("cursor_invalid", rebuilt.loadOlder("0xk", oldCursor ?: "x", vp).error)
+        rebuilt.lock()
     }
 
     @Test
     fun lockDropsMemoryAndUnlockRestoresWithSameEpochCursor() {
-        val s = fresh()
+        val file = File(tmp.root, "chat-local-v1-lock.sqlite")
+        val s = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, s.unlock(master, null))
         val idKey = keysFor(master).first
         val (msgs, ids) = fixture(23L, listOf("0xl"), 120, idKey)
         apply(s, msgs, ids)
         val p = s.openConversation("0xl", vp)
         assertTrue(p.hasOlder)
         val cursor = p.olderCursor!!
-        val snap = s.snapshot()
         s.lock()
         assertEquals(LocalSource.LOCKED, s.openConversation("0xl", vp).source)
-        assertEquals(UnlockResult.OK, s.unlock(master, snap))
-        val next = s.loadOlder("0xl", cursor, vp)
+        // Logout closed the handle; a new store on the same file restores it with the same epoch.
+        val re = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, re.unlock(master, null))
+        val next = re.loadOlder("0xl", cursor, vp)
         assertNull(next.error)
         assertTrue(next.items.isNotEmpty())
+        re.lock()
     }
 
     // ---- performance (JVM, synthetic, 50k messages, 5k in one conversation) ----------

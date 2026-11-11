@@ -1,73 +1,62 @@
 package network.conet.chat.localread
 
-import network.conet.chat.ConetChatCryptoUtil
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.TreeMap
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Local chat read store, interface spec v1.0 sections 5–10 (Android logical model).
+ * Local read store on SQLite (spec r3a 7.1–7.5, 9.1, D-A1 replacement). One store per account.
  *
- * - One store per account. Only ciphertext for bodies and media metadata; the DEK is
- *   `HKDF(master, "chat-local-db-v1|"+accountKey)` and never leaves memory (spec D1).
- * - Ordering and cursors use `(sortTs, stableId)` only (spec 3, 5).
- * - Read paths (`openConversation`, `loadOlder`) never touch the network and never wait
- *   for a sync (spec 9.1). This class has no network dependency at all.
- * - Persistence is a single encrypted snapshot ([snapshot] / [unlock]); the caller writes
- *   the bytes atomically. A SQLite-backed variant would implement the same rules.
+ * - Bodies and metadata are sealed with the DEK (AES-256-GCM, 7.2). Identity columns are blind indexes.
+ * - Reads run key-range queries on `msg` (no network, no waiting for sync: 9.1).
+ * - [lock] closes the database handle and zeroes the keys (6.5). The file stays; it cannot be read without the DEK.
  *
- * Not thread-safe beyond `synchronized(lock)`; all public methods take the lock.
+ * Not thread-safe beyond `synchronized(lock)`; every public method takes the lock.
  */
 class LocalChatStore(
     val accountKey: String,
+    db: SqlDb,
     /** Body parser (spec r2 21.2). Null = the host did not set one: media-like bodies become failed `media_parser_missing`. */
     private val mediaParser: ((ByteArray) -> ParsedBody)? = MediaManifestParser::parse,
 ) {
     private val lock = Any()
     private val rng = SecureRandom()
+    private var db: SqlDb? = db
 
     private var dek: ByteArray? = null
     private var idKey: ByteArray? = null
     private var idxKey: ByteArray? = null
+    private var epoch: String = ""
+    private var syncComplete = false
+    private var migrationState = "none"
+
     /** Bumped on every lock(); results of an older generation must be dropped by the host (spec 6.5). */
     @Volatile
     var generation: Long = 0L
         private set
+
     /** Why the store is locked, when unlock refused (spec 6.6 codes). Null when unlocked or never tried. */
     @Volatile
     var lastError: String? = null
         private set
-    private var syncComplete = false
-    /** Conversations whose last page ended at a pending cursor (spec 6.4). */
-    private val pendingOlder = HashSet<String>()
-    /** conv|digest -> survivor stable id; conv|stable id -> digest (spec 4.5). */
-    private val digestIndex = HashMap<String, String>()
-    private val digestOf = HashMap<String, String>()
-    /** conv|alias stable id (folded sendKey) -> survivor stable id (spec 4.5 alias table). */
-    private val aliases = HashMap<String, String>()
-    private var kcv: ByteArray? = null
-    private var epoch: String = newEpoch()
-    private var headIndexHash: String? = null
 
-    private val rows = TreeMap<RowKey, StoredRow>(rowComparator)
-    private val byStable = HashMap<String, RowKey>()
-    private val layouts = HashMap<LayoutKey, LayoutValue>()
-    private val failedMedia = HashSet<String>()
-    /** cid -> row, for records whose stable id is content-derived (spec 9.2 step 2). */
-    private val byCid = HashMap<String, RowKey>()
-    private var migrationState = "none"
-    /** Set by the sync layer: "idle" | "running" | "paused" | "error" (spec 6.1). */
     @Volatile
     var syncState: String = "idle"
         private set
+
     private val windows = HashMap<String, Window>()
+    private val windowViewports = HashMap<String, LocalViewport>()
     private val listeners = ArrayList<(LocalChatEvent) -> Unit>()
+    private val failedMedia = HashSet<String>()
+    private val pendingOlder = HashSet<String>()
+    private val convKeyOf = HashMap<String, String>()
+    private var lastScanHi: RowKey? = null
+    private var lastScanLo: RowKey? = null
 
     /** Count of sync records whose sortTs differed from the stored one (spec 5, counted only). */
     var tsMismatchCount: Int = 0
@@ -75,33 +64,36 @@ class LocalChatStore(
 
     val isUnlocked: Boolean get() = synchronized(lock) { dek != null }
 
-    // ---- lock / unlock / persistence --------------------------------------------------
+    // ---- unlock / lock ---------------------------------------------------------------
 
     /**
-     * Derive the DEK and open the store. [snapshot] is the bytes of the last [snapshot] call,
-     * or null for a new account. Follows spec 7.3 (kcv mismatch) and 7.5 (schema).
-     */
-    /**
      * Test convenience only: derives the local root from [master] as if it were the private key.
-     * Production code must call [unlock] with the wallet-boundary root (spec v1.1-r1 22.6).
+     * Production code calls [unlock] with the wallet-boundary root (spec r3a 25).
      */
-    fun unlock(master: ByteArray, snapshot: ByteArray?): UnlockResult {
+    fun unlock(master: ByteArray, snapshot: Nothing?): UnlockResult {
         val eoa = accountKey.substringBeforeLast(':')
         val ws = accountKey.substringAfterLast(':')
-        return unlock(master, LocalChatIds.rootDbFromPrivateKey(master, eoa, ws), snapshot)
+        return unlock(master, LocalChatIds.rootDbFromPrivateKey(master, eoa, ws))
     }
 
     /**
-     * Unlock with the protocol root [master] (K_id, sendKeys) and the local-DB root [dbRoot] (R_db:
-     * DEK, kcv, K_idx). spec v1.1-r1 section 22.2.
+     * Unlock with the protocol root [master] (kept for the history path) and the local-DB root [dbRoot]
+     * (R_db): DEK, kcv and K_idx come from R_db; K_id comes from R_db too (spec r3a 7.2, 25.1).
      */
-    fun unlock(master: ByteArray, dbRoot: ByteArray, snapshot: ByteArray?): UnlockResult {
-        val r = unlockInner(master, dbRoot, snapshot)
+    fun unlock(master: ByteArray, dbRoot: ByteArray): UnlockResult {
+        val r = synchronized(lock) {
+            try {
+                unlockInner(dbRoot)
+            } catch (e: Exception) {
+                lockMemory(closeDb = false)
+                UnlockResult.SNAPSHOT_CORRUPT
+            }
+        }
         lastError = when (r) {
             UnlockResult.OK, UnlockResult.REBUILT_KCV_MISMATCH -> null
             UnlockResult.LOCKED_KCV_MISMATCH_PENDING -> "kcv_mismatch"
             UnlockResult.LOCKED_SCHEMA_NEWER -> "schema_newer"
-            UnlockResult.SNAPSHOT_CORRUPT -> "snapshot_corrupt"
+            UnlockResult.SNAPSHOT_CORRUPT -> "db_error"
         }
         return r
     }
@@ -109,96 +101,77 @@ class LocalChatStore(
     /** Refuse to open with an error code, e.g. `db_root_missing` when the wallet boundary holds no key. */
     fun markLocked(error: String) {
         synchronized(lock) {
-            lockMemory()
+            lockMemory(closeDb = false)
             lastError = error
         }
     }
 
-    private fun unlockInner(master: ByteArray, dbRoot: ByteArray, snapshot: ByteArray?): UnlockResult {
-        return synchronized(lock) {
-        val key = LocalChatIds.dekFromRootDb(dbRoot, accountKey.substringBeforeLast(':'), accountKey.substringAfterLast(':'))
-        val mac = hmac(key, "kcv".toByteArray(Charsets.UTF_8))
-        if (snapshot == null) {
-            resetMemory()
-            dek = key
-            idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
-            idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
-            kcv = mac
-            return UnlockResult.OK
-        }
-        val split = snapshot.indexOf('\n'.code.toByte())
-        if (split <= 0) return UnlockResult.SNAPSHOT_CORRUPT
-        val header = try {
-            JSONObject(String(snapshot, 0, split, Charsets.UTF_8))
-        } catch (e: Exception) {
-            return UnlockResult.SNAPSHOT_CORRUPT
-        }
-        if (header.optString("fmt") != FORMAT_TAG) return UnlockResult.SNAPSHOT_CORRUPT
-        if (header.optInt("schema", -1) > SCHEMA_VERSION) return UnlockResult.LOCKED_SCHEMA_NEWER
-        val storedKcv = ConetChatCryptoUtil.hexToBytes(header.optString("kcv")) ?: return UnlockResult.SNAPSHOT_CORRUPT
-        if (!MessageDigest.isEqual(storedKcv, mac)) {
-            if (header.optInt("pending", 0) > 0) return UnlockResult.LOCKED_KCV_MISMATCH_PENDING
-            // Spec 7.3: nothing waiting to publish, so rebuild under a new epoch.
-            resetMemory()
-            dek = key
-            idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
-            idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
-            kcv = mac
-            return UnlockResult.REBUILT_KCV_MISMATCH
-        }
-        val plain = try {
-            open(key, snapshotAad(mac), snapshot.copyOfRange(split + 1, snapshot.size))
-        } catch (e: Exception) {
-            return UnlockResult.SNAPSHOT_CORRUPT
-        }
-        resetMemory()
+    private fun unlockInner(dbRoot: ByteArray): UnlockResult {
+        val eoa = accountKey.substringBeforeLast(':')
+        val ws = accountKey.substringAfterLast(':')
+        val key = LocalChatIds.dekFromRootDb(dbRoot, eoa, ws)
+        val d = requireDb()
         dek = key
         idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
         idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
-        kcv = mac
-        if (!loadPayload(JSONObject(String(plain, Charsets.UTF_8)))) {
-            lockMemory()
-            return UnlockResult.SNAPSHOT_CORRUPT
+        for (s in SqlSchema.DDL) d.execute(s)
+        val kcvPresent = d.query("SELECT v_enc FROM meta WHERE k = ?", arrayOf("kcv")).isNotEmpty()
+        if (!kcvPresent) {
+            initMeta()
+            loadMemory()
+            return UnlockResult.OK
         }
-        UnlockResult.OK
+        val kcvOk = try {
+            openMeta("kcv") == "kcv-ok"
+        } catch (e: Exception) {
+            false
         }
+        if (!kcvOk) {
+            val pending = d.query("SELECT COUNT(*) FROM msg WHERE pending_publish = 1").first()[0] as Long
+            if (pending > 0) {
+                // Keep the file; the caller shows the error and decides (spec 7.3).
+                lockMemory(closeDb = false)
+                return UnlockResult.LOCKED_KCV_MISMATCH_PENDING
+            }
+            // Nothing waiting to publish: rebuild under a new epoch (spec 7.3).
+            d.transaction {
+                for (t in listOf("msg", "layout", "alias", "conv", "meta")) d.execute("DELETE FROM $t")
+            }
+            initMeta()
+            loadMemory()
+            return UnlockResult.REBUILT_KCV_MISMATCH
+        }
+        val schema = openMeta("schemaVersion")?.toIntOrNull() ?: 0
+        if (schema > SqlSchema.SCHEMA_VERSION) {
+            lockMemory(closeDb = false)
+            return UnlockResult.LOCKED_SCHEMA_NEWER
+        }
+        loadMemory()
+        return UnlockResult.OK
     }
 
-    /** Encrypted snapshot of the whole store; the caller persists it atomically. Requires unlock. */
-    fun snapshot(): ByteArray = synchronized(lock) {
-        val k = requireKey()
-        val m = kcv ?: throw IllegalStateException("locked")
-        val payload = JSONObject().put("epoch", epoch).put("headIndexHash", headIndexHash ?: JSONObject.NULL)
-        val rowArr = JSONArray()
-        for (r in rows.values) rowArr.put(r.toJson())
-        payload.put("rows", rowArr)
-        val layArr = JSONArray()
-        for ((k2, v) in layouts) layArr.put(JSONObject()
-            .put("c", k2.convKey).put("s", k2.stableId).put("w", k2.widthBucket)
-            .put("o", k2.orientation).put("f", k2.fontBucket).put("v", k2.layoutVersion)
-            .put("wp", v.wPt).put("hp", v.hPt).put("u", v.updatedMs))
-        payload.put("layouts", layArr)
-        payload.put("migration", migrationState)
-        payload.put("syncComplete", syncComplete)
-        val dg = JSONArray()
-        for ((k3, v3) in digestOf) dg.put(JSONObject().put("k", k3).put("v", v3))
-        payload.put("digests", dg)
-        val al = JSONArray()
-        for ((k4, v4) in aliases) al.put(JSONObject().put("k", k4).put("v", v4))
-        payload.put("aliases", al)
-        val blob = seal(k, snapshotAad(m), payload.toString().toByteArray(Charsets.UTF_8))
-        val header = JSONObject()
-            .put("fmt", FORMAT_TAG)
-            .put("schema", SCHEMA_VERSION)
-            .put("kcv", ConetChatCryptoUtil.toHex(m))
-            .put("pending", rows.values.count { it.pendingPublish && !it.deleted })
-        header.toString().toByteArray(Charsets.UTF_8) + byteArrayOf('\n'.code.toByte()) + blob
+    private fun initMeta() {
+        setMeta("schemaVersion", SqlSchema.SCHEMA_VERSION.toString())
+        setMeta("kcv", "kcv-ok")
+        setMeta("dbEpoch", newEpoch())
+        setMeta("syncComplete", "0")
+        setMeta("migrationState", "none")
+        setMeta("layoutVersion", "1")
     }
 
-    /** Logout (spec D2): drop DEK, identity key and every decrypted or in-memory structure. */
+    private fun loadMemory() {
+        epoch = openMeta("dbEpoch") ?: newEpoch()
+        syncComplete = openMeta("syncComplete") == "1"
+        migrationState = openMeta("migrationState") ?: "none"
+    }
+
+    /** Test hook (schema and version tests only): writes a sealed meta value. Not used in production. */
+    internal fun setMetaForTest(k: String, v: String) = synchronized(lock) { setMeta(k, v) }
+
+    /** Logout (spec D2, 6.5): zero DEK and keys, close the handle. The file stays. */
     fun lock() = synchronized(lock) {
         generation++
-        lockMemory()
+        lockMemory(closeDb = true)
     }
 
     /** Step 1 of spec 6.5 only: results from before this point are stale from now on. */
@@ -207,84 +180,134 @@ class LocalChatStore(
         generation
     }
 
-    // ---- sync write path (called by the single sync writer) ---------------------------
+    private fun lockMemory(closeDb: Boolean) {
+        dek?.fill(0)
+        idKey?.fill(0)
+        idxKey?.fill(0)
+        dek = null
+        idKey = null
+        idxKey = null
+        windows.clear()
+        windowViewports.clear()
+        failedMedia.clear()
+        pendingOlder.clear()
+        convKeyOf.clear()
+        syncComplete = false
+        if (closeDb) {
+            try {
+                db?.close()
+            } catch (_: Exception) {
+            }
+            db = null
+        }
+    }
+
+    private fun requireKey(): ByteArray = dek ?: throw IllegalStateException("locked")
+    private fun requireIdKey(): ByteArray = idKey ?: throw IllegalStateException("locked")
+    private fun requireIdxKey(): ByteArray = idxKey ?: throw IllegalStateException("locked")
+    private fun requireDb(): SqlDb = db ?: throw IllegalStateException("closed")
+
+    // ---- meta (sealed values) --------------------------------------------------------
+
+    private fun setMeta(k: String, value: String) {
+        val blob = seal(requireKey(), "meta|$k".toByteArray(Charsets.UTF_8), value.toByteArray(Charsets.UTF_8))
+        requireDb().execute("INSERT OR REPLACE INTO meta (k, v_enc) VALUES (?, ?)", arrayOf(k, blob))
+    }
+
+    private fun openMeta(k: String): String? {
+        val rows = requireDb().query("SELECT v_enc FROM meta WHERE k = ?", arrayOf(k))
+        val blob = rows.firstOrNull()?.get(0) as? ByteArray ?: return null
+        return String(open(requireKey(), "meta|$k".toByteArray(Charsets.UTF_8), blob), Charsets.UTF_8)
+    }
+
+    private fun bumpEpoch() {
+        epoch = newEpoch()
+        setMeta("dbEpoch", epoch)
+    }
+
+    // ---- sync write path -------------------------------------------------------------
 
     /**
-     * Apply one source record (spec 5 and 9.2 rules). The caller has already downloaded and
-     * decrypted the body when [IncomingRecord.body] is needed.
+     * Apply one source record (spec r3a 4–5). The caller has already downloaded and decrypted the body
+     * when [IncomingRecord.body] is needed.
      */
     fun applyRecord(convKey: String, rec: IncomingRecord, pendingPublish: Boolean = false): ApplyResult {
         return synchronized(lock) {
         val k = requireKey()
-        // The stable id is known from the source's hint, else from the sendKey (which needs a body if derived).
-        val sk = rec.sendKeyHint
-            ?: if (rec.stableIdHint == null) {
-                LocalChatIds.sendKey(requireIdKey(), convKey, rec.sendId, rec.dir, rec.sortTs, rec.body)
-                    ?: return ApplyResult.REJECTED
-            } else {
-                null
-            }
-        val derivedSid = rec.stableIdHint ?: LocalChatIds.stableIdOf(requireIdxKey(), sk!!)
+        val idx = requireIdxKey()
+        val cb = LocalChatIds.convBlind(idx, convKey)
+        val sk: String? = rec.sendKeyHint ?: if (rec.stableIdHint == null) {
+            LocalChatIds.sendKey(requireIdKey(), convKey, rec.sendId, rec.dir, rec.sortTs, rec.body)
+                ?: return ApplyResult.REJECTED
+        } else {
+            null
+        }
+        val derived = rec.stableIdHint ?: LocalChatIds.stableIdOf(idx, sk!!)
         // A folded sendKey resolves to its survivor (spec 4.5): updates and tombstones follow the alias.
-        val sid = aliases[indexKey(convKey, derivedSid)] ?: derivedSid
-        val existingKey = byStable[indexKey(convKey, sid)]
-        val existing = existingKey?.let { rows[it] }
+        val sid = aliasTarget(derived) ?: derived
+        val existing = loadRow(cb, sid)
         if (existing == null) {
             if (rec.deleted) {
-                insertRow(convKey, sid, rec, null, pendingPublish, deleted = true).sendKey = sk
+                insertRow(cb, convKey, sid, rec.sortTs, rec.revision, deleted = true, pending = pendingPublish,
+                    cidBlind = null, body = null, meta = null)
                 return ApplyResult.TOMBSTONED
             }
             val body = rec.body ?: return ApplyResult.REJECTED
             val digest = LocalChatIds.contentDigest(convKey, rec.dir, rec.sortTs, body)
-            val survivor = digestIndex[indexKey(convKey, digest)]
-            if (survivor != null && survivor != sid) {
+            val survivor = digestSurvivor(cb, rec.sortTs, digest, exclude = sid)
+            if (survivor != null) {
                 // Same (peer, dir, ts, body digest) under another sendKey: fold it to the earliest (spec 4.5).
-                aliases[indexKey(convKey, derivedSid)] = survivor
+                if (sk != null) putAlias(derived, survivor)
                 return ApplyResult.COLLAPSED
             }
-            val row = insertRow(convKey, sid, rec, body, pendingPublish, deleted = false)
-            row.sendKey = sk
-            digestIndex[indexKey(convKey, digest)] = sid
-            digestOf[indexKey(convKey, sid)] = digest
-            emitInserted(row, k)
+            val parsed = parseBody(body)
+            val meta = RowMeta(parsed.kind, rec.dir, rec.sendId?.takeIf { it.isNotEmpty() }, sk, digest, mediaOf(parsed), parsed.failed)
+            insertRow(cb, convKey, sid, rec.sortTs, rec.revision, deleted = false, pending = pendingPublish,
+                cidBlind = rec.cid?.let { cidBlind(idx, it) }, body = body, meta = meta)
+            val row = loadRow(cb, sid)!!
+            emitInserted(convKey, cb, row)
             if (pendingOlder.remove(convKey)) emit(LocalChatEvent.OlderAvailable(convKey))
             return ApplyResult.INSERTED
         }
         if (rec.deleted) {
-            if (existing.deleted) return ApplyResult.SKIPPED
-            tombstone(existing)
+            if (existing.state != SqlSchema.STATE_NORMAL) return ApplyResult.SKIPPED
+            requireDb().execute("UPDATE msg SET state = ?, body_enc = NULL, meta_enc = NULL WHERE conv_blind = ? AND stable_id = ?",
+                arrayOf(SqlSchema.STATE_TOMBSTONE.toLong(), cb, sid))
+            removeLayouts(cb, sid)
             emit(LocalChatEvent.Deleted(convKey, sid))
             return ApplyResult.TOMBSTONED
         }
-        if (existing.deleted) return ApplyResult.SKIPPED
+        if (existing.state != SqlSchema.STATE_NORMAL) return ApplyResult.SKIPPED
         if (rec.sortTs != existing.sortTs) tsMismatchCount++
         if (rec.revision > existing.revision) {
             val body = rec.body ?: return ApplyResult.REJECTED
-            existing.bodyEnc = seal(k, bodyAad(convKey, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
-            existing.revision = rec.revision
-            moveCid(existing, rec.cid ?: existing.cid)
-            val parsedU = parseBody(body)
-            existing.kind = parsedU.kind
-            setMedia(existing, parsedU)
-            removeLayouts(convKey, sid)
+            val digest = LocalChatIds.contentDigest(convKey, rec.dir, rec.sortTs, body)
+            val parsed = parseBody(body)
+            val meta = RowMeta(parsed.kind, rec.dir, rec.sendId?.takeIf { it.isNotEmpty() }, sk, digest, mediaOf(parsed), parsed.failed)
+            val bodyEnc = seal(k, bodyAad(cb, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
+            requireDb().execute(
+                "UPDATE msg SET revision = ?, body_enc = ?, meta_enc = ?, cid_blind = ? WHERE conv_blind = ? AND stable_id = ?",
+                arrayOf(rec.revision.toLong(), bodyEnc, sealMeta(cb, sid, meta), rec.cid?.let { cidBlind(idx, it) } ?: existing.cidBlind, cb, sid),
+            )
+            removeLayouts(cb, sid)
             emit(LocalChatEvent.Updated(convKey, sid, rec.revision))
             return ApplyResult.UPDATED
         }
-        if (rec.revision == existing.revision && rec.cid != null && rec.cid != existing.cid) {
-            moveCid(existing, rec.cid)
+        if (rec.revision == existing.revision && rec.cid != null && cidBlind(idx, rec.cid) != existing.cidBlind) {
+            requireDb().execute("UPDATE msg SET cid_blind = ? WHERE conv_blind = ? AND stable_id = ?",
+                arrayOf(cidBlind(idx, rec.cid), cb, sid))
             return ApplyResult.CID_ONLY
         }
         ApplyResult.SKIPPED
         }
     }
 
-    // ---- read path (never touches the network, never waits for sync) -----------------
+    // ---- read path (no network, no waiting for sync) ---------------------------------
 
-    /** First screen: newest rows up to one viewport (spec v1.1 6.2). Nothing is read ahead. */
+    /** First screen: newest rows up to one viewport (spec r3a 6.2). Nothing is read ahead. */
     fun openConversation(convKey: String, vp: LocalViewport): LocalPage {
         return synchronized(lock) {
             if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, lastError ?: "locked", generation = generation)
-            sweepLayouts(vp.layoutVersion)
             val page = readPage(convKey, null, vp, first = true)
             windowViewports[convKey] = vp
             windows[convKey] = Window(oldest = lastScanLo, newest = lastScanHi, opened = true)
@@ -292,7 +315,7 @@ class LocalChatStore(
         }
     }
 
-    /** Older page strictly before [cursor]; scans up to the budget of raw rows (spec v1.1 6.3). */
+    /** Older page strictly before [cursor]; scans up to the budget of raw rows (spec r3a 6.3). */
     fun loadOlder(convKey: String, cursor: String, vp: LocalViewport): LocalPage {
         return synchronized(lock) {
             if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, lastError ?: "locked", generation = generation)
@@ -311,6 +334,7 @@ class LocalChatStore(
         synchronized(lock) {
             requireKey()
             syncComplete = true
+            setMeta("syncComplete", "1")
             for (conv in pendingOlder.toList()) emit(LocalChatEvent.OlderAvailable(conv))
             pendingOlder.clear()
         }
@@ -318,18 +342,21 @@ class LocalChatStore(
 
     val isSyncComplete: Boolean get() = synchronized(lock) { syncComplete }
 
-    /** UI measured a media item (spec 8.2). Writes only real measurements; estimates are never stored. */
+    /** UI measured a media item (spec r3a 8.2). Writes only real measurements; estimates are never stored. */
     fun reportLayout(convKey: String, stableId: String, vp: LocalViewport, wPt: Double, hPt: Double): Boolean {
         return synchronized(lock) {
-        requireKey()
-        val rk = byStable[indexKey(convKey, stableId)] ?: return false
-        val row = rows[rk] ?: return false
-        if (row.deleted) return false
-        val key = layoutKey(convKey, stableId, vp)
-        val prev = layouts[key]
-        if (prev != null && Math.abs(prev.hPt - hPt) <= LocalChatLayout.WRITE_TOLERANCE_PT) return false
-        layouts[key] = LayoutValue(wPt, hPt, System.currentTimeMillis())
-        true
+            val k = requireKey()
+            val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
+            val row = loadRow(cb, stableId) ?: return false
+            if (row.state != SqlSchema.STATE_NORMAL) return false
+            val lk = layoutKey(vp)
+            val prev = loadLayout(cb, stableId, lk)
+            if (prev != null && Math.abs(prev.second - hPt) <= LocalChatLayout.WRITE_TOLERANCE_PT) return false
+            val val_ = JSONObject().put("w", wPt).put("h", hPt).put("u", System.currentTimeMillis()).toString()
+            val blob = seal(k, layoutAad(cb, stableId, lk), val_.toByteArray(Charsets.UTF_8))
+            requireDb().execute("INSERT OR REPLACE INTO layout (conv_blind, stable_id, layout_key, val_enc) VALUES (?, ?, ?, ?)",
+                arrayOf(cb, stableId, lk, blob))
+            true
         }
     }
 
@@ -341,46 +368,62 @@ class LocalChatStore(
 
     fun subscribe(listener: (LocalChatEvent) -> Unit) = synchronized(lock) { listeners.add(listener) }
 
-    /** Spec r2 11.2 `historyImportBatch`: the store computes sendKey and stable_id, dedupes and seals. */
+    // ---- migration import, verify (spec r3a 11.1, 11.2) ------------------------------
+
+    /** Spec r3a 11.2 `historyImportBatch`: the store computes sendKey and stable_id, dedupes and seals. */
     fun importRows(rows: List<ImportRow>): ImportResult = synchronized(lock) {
         requireKey()
-        var inserted = 0
-        var existing = 0
-        var collapsed = 0
-        var rejected = 0
-        for (r in rows) {
-            val rec = IncomingRecord(r.dir, r.ts, LocalMediaKind.TEXT, r.sendId, r.body, r.cid)
-            when (applyRecord(r.convKey, rec, pendingPublish = r.pendingPublish)) {
-                ApplyResult.INSERTED, ApplyResult.TOMBSTONED -> inserted++
-                ApplyResult.COLLAPSED -> collapsed++
-                ApplyResult.REJECTED -> rejected++
-                ApplyResult.UPDATED, ApplyResult.CID_ONLY, ApplyResult.SKIPPED -> existing++
+        // One transaction per batch: the batch is stored whole or not at all, and costs one commit
+        // instead of one commit per statement (applyRecord itself does not open a transaction).
+        requireDb().transaction {
+            var inserted = 0
+            var existing = 0
+            var collapsed = 0
+            var rejected = 0
+            for (r in rows) {
+                val rec = IncomingRecord(r.dir, r.ts, LocalMediaKind.TEXT, r.sendId, r.body, r.cid)
+                when (applyRecord(r.convKey, rec, pendingPublish = r.pendingPublish)) {
+                    ApplyResult.INSERTED, ApplyResult.TOMBSTONED -> inserted++
+                    ApplyResult.COLLAPSED -> collapsed++
+                    ApplyResult.REJECTED -> rejected++
+                    ApplyResult.UPDATED, ApplyResult.CID_ONLY, ApplyResult.SKIPPED -> existing++
+                }
             }
+            ImportResult(inserted, existing, collapsed, rejected)
         }
-        ImportResult(inserted, existing, collapsed, rejected)
     }
 
     /**
-     * M3 digest over every held row in (conv, K) order: HMAC-SHA256(K_idx, h1 || h2 || ...) where
-     * hi = HMAC-SHA256(K_idx, sendKey 0x1f decimal(sort_ts) 0x1f dir 0x1f body). Interpretation of spec 11.1 M3:
-     * the separators and the aggregation are not spelled out there; to be confirmed by the interface owner.
+     * M3 digest over every held row in (conv_blind, K) order: HMAC-SHA256(K_idx, h1 || h2 || ...) where
+     * hi = HMAC-SHA256(K_idx, sendKey 0x1f decimal(sort_ts) 0x1f dir 0x1f body). The separators and the
+     * aggregation are my reading of spec 11.1 M3 (to be confirmed by the interface owner).
      */
     fun verifyDigest(): VerifyResult = synchronized(lock) {
+        val k = requireKey()
         val idx = requireIdxKey()
         val agg = Mac.getInstance("HmacSHA256")
         agg.init(SecretKeySpec(idx, "HmacSHA256"))
         var count = 0
-        for (row in rows.values) {
-            if (row.deleted || row.bodyEnc == null) continue
-            val sk = row.sendKey ?: continue
-            val body = bodyOf(row) ?: continue
+        val rows = requireDb().query(
+            "SELECT conv_blind, stable_id, sort_ts, revision, body_enc, meta_enc FROM msg WHERE state = 0 ORDER BY conv_blind, sort_ts, stable_id",
+        )
+        for (r in rows) {
+            val cb = r[0] as String
+            val sid = r[1] as String
+            val sortTs = r[2] as Long
+            val rev = (r[3] as Long).toInt()
+            val bodyEnc = r[4] as? ByteArray ?: continue
+            val meta = openMetaJson(cb, sid, r[5] as? ByteArray ?: continue)
+            val sk = meta.optString("sk", "")
+            if (sk.isEmpty()) continue
+            val body = String(open(k, bodyAad(cb, sid, rev), bodyEnc), Charsets.UTF_8)
             val h = Mac.getInstance("HmacSHA256")
             h.init(SecretKeySpec(idx, "HmacSHA256"))
             h.update(sk.toByteArray(Charsets.UTF_8))
             h.update(byteArrayOf(0x1f))
-            h.update(row.sortTs.toString().toByteArray(Charsets.US_ASCII))
+            h.update(sortTs.toString().toByteArray(Charsets.US_ASCII))
             h.update(byteArrayOf(0x1f))
-            h.update(row.dir.toByteArray(Charsets.UTF_8))
+            h.update(meta.getString("d").toByteArray(Charsets.UTF_8))
             h.update(byteArrayOf(0x1f))
             h.update(body.toByteArray(Charsets.UTF_8))
             agg.update(h.doFinal())
@@ -389,7 +432,7 @@ class LocalChatStore(
         VerifyResult(count, LocalChatIds.base64Url(agg.doFinal()))
     }
 
-    // ---- sync-layer helpers (not read API) ---------------------------------------------
+    // ---- sync-layer helpers (not read API) -------------------------------------------
 
     /**
      * A remote index record is already held with its body (spec 9.2 steps 1–2): no download, no
@@ -397,43 +440,65 @@ class LocalChatStore(
      */
     fun knowsRemote(convKey: String, sendId: String?, cid: String): Boolean {
         return synchronized(lock) {
-        requireKey()
-        if (!sendId.isNullOrEmpty()) {
-            if (aliases.containsKey(indexKey(convKey, LocalChatIds.stableIdOf(requireIdxKey(), sendId)))) return true
-            val row = stableRowKey(convKey, sendId)?.let { rows[it] } ?: return false
-            if (row.deleted || row.bodyEnc == null) return false
-            if (row.cid != cid) moveCid(row, cid)
-            return true
-        }
-        val row = byCid[cid]?.let { rows[it] } ?: return false
-        row.convKey == convKey && !row.deleted && row.bodyEnc != null
+            requireKey()
+            val idx = requireIdxKey()
+            val cb = LocalChatIds.convBlind(idx, convKey)
+            if (!sendId.isNullOrEmpty()) {
+                val sid = LocalChatIds.stableIdOf(idx, sendId)
+                if (aliasTarget(sid) != null) return true
+                val row = loadRow(cb, sid) ?: return false
+                if (row.state != SqlSchema.STATE_NORMAL || row.bodyEnc == null) return false
+                if (row.cidBlind != cidBlind(idx, cid)) {
+                    requireDb().execute("UPDATE msg SET cid_blind = ? WHERE conv_blind = ? AND stable_id = ?",
+                        arrayOf(cidBlind(idx, cid), cb, sid))
+                }
+                return true
+            }
+            val row = loadRowByCid(cb, cidBlind(idx, cid)) ?: return false
+            row.state == SqlSchema.STATE_NORMAL && row.bodyEnc != null
         }
     }
 
     /** Decrypted body of a held record, looked up by sendId (when present) or cid. Null when absent. */
     fun bodyForRemote(convKey: String, sendId: String?, cid: String): String? {
         return synchronized(lock) {
-        requireKey()
-        val row = (if (!sendId.isNullOrEmpty() && !LocalChatIds.isLegacyUuid(sendId)) stableRowKey(convKey, sendId) else byCid[cid])
-            ?.let { rows[it] } ?: return null
-        if (row.convKey != convKey || row.deleted || row.bodyEnc == null) null else bodyOf(row)
+            val k = requireKey()
+            val idx = requireIdxKey()
+            val cb = LocalChatIds.convBlind(idx, convKey)
+            val row = if (!sendId.isNullOrEmpty()) loadRow(cb, LocalChatIds.stableIdOf(idx, sendId))
+                else loadRowByCid(cb, cidBlind(idx, cid))
+            if (row == null || row.state != SqlSchema.STATE_NORMAL || row.bodyEnc == null) null
+            else String(open(k, bodyAad(cb, row.stable, row.revision), row.bodyEnc), Charsets.UTF_8)
         }
     }
 
     /** Every held (non-deleted, with body) row, optionally for one conversation, in key order. */
     fun snapshotEntries(convKey: String?): List<StoredEntry> = synchronized(lock) {
-        requireKey()
+        val k = requireKey()
+        val d = requireDb()
+        val cbFilter = convKey?.let { LocalChatIds.convBlind(requireIdxKey(), it) }
+        val rows = if (cbFilter == null) {
+            d.query("SELECT conv_blind, stable_id, sort_ts, revision, body_enc, meta_enc FROM msg WHERE state = 0 AND body_enc IS NOT NULL ORDER BY conv_blind, sort_ts, stable_id")
+        } else {
+            d.query("SELECT conv_blind, stable_id, sort_ts, revision, body_enc, meta_enc FROM msg WHERE conv_blind = ? AND state = 0 AND body_enc IS NOT NULL ORDER BY sort_ts, stable_id", arrayOf(cbFilter))
+        }
         val out = ArrayList<StoredEntry>()
-        for (row in rows.values) {
-            if (convKey != null && row.convKey != convKey) continue
-            if (row.deleted || row.bodyEnc == null) continue
-            out.add(StoredEntry(row.convKey, row.stableId, row.sortTs, row.dir, row.sendId, bodyOf(row) ?: continue))
+        for (r in rows) {
+            val cb = r[0] as String
+            val sid = r[1] as String
+            val meta = openMetaJson(cb, sid, r[5] as ByteArray)
+            val body = String(open(k, bodyAad(cb, sid, (r[3] as Long).toInt()), r[4] as ByteArray), Charsets.UTF_8)
+            out.add(StoredEntry(convKeyFor(cb), sid, r[2] as Long, meta.getString("d"), meta.optString("sid", "").ifEmpty { null }, body))
         }
         out
     }
 
-    /** Spec 11.2: no legacy local store on Android, so the first complete head sync ends migration. */
-    fun markMigrationComplete() = synchronized(lock) { migrationState = "complete" }
+    /** Spec 11.2: no legacy store on Android, so the first complete head sync ends migration. */
+    fun markMigrationComplete() = synchronized(lock) {
+        requireKey()
+        migrationState = "complete"
+        setMeta("migrationState", "complete")
+    }
 
     val migration: String get() = synchronized(lock) { migrationState }
 
@@ -441,13 +506,22 @@ class LocalChatStore(
         syncState = state
     }
 
-    // ---- clearing (spec 10) ----------------------------------------------------------
+    // ---- clearing (spec 10, T-12) ----------------------------------------------------
 
-    /** Clear one conversation; pending rows are kept and counted (T-12). */
+    /** Clear one conversation; pending rows are kept and counted; dbEpoch changes (T-12). */
     fun clearConversation(convKey: String): Int = synchronized(lock) {
         requireKey()
-        val kept = dropRows { it.convKey == convKey }
+        val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
+        val d = requireDb()
+        val kept = d.transaction {
+            val n = (d.query("SELECT COUNT(*) FROM msg WHERE conv_blind = ? AND pending_publish = 1", arrayOf(cb)).first()[0] as Long).toInt()
+            d.execute("DELETE FROM msg WHERE conv_blind = ? AND pending_publish = 0", arrayOf(cb))
+            d.execute("DELETE FROM layout WHERE conv_blind = ? AND stable_id NOT IN (SELECT stable_id FROM msg WHERE conv_blind = ?)", arrayOf(cb, cb))
+            d.execute("DELETE FROM conv WHERE conv_blind = ? AND NOT EXISTS (SELECT 1 FROM msg WHERE msg.conv_blind = conv.conv_blind)", arrayOf(cb))
+            n
+        }
         windows.remove(convKey)
+        bumpEpoch()
         emit(LocalChatEvent.Cleared("conversation", convKey, kept))
         kept
     }
@@ -455,142 +529,47 @@ class LocalChatStore(
     /** Clear the whole account database, then the next sync is a full sync (headIndexHash cleared). */
     fun clearAccount(): Int = synchronized(lock) {
         requireKey()
-        val kept = dropRows { true }
+        val d = requireDb()
+        val kept = d.transaction {
+            val n = (d.query("SELECT COUNT(*) FROM msg WHERE pending_publish = 1").first()[0] as Long).toInt()
+            d.execute("DELETE FROM msg WHERE pending_publish = 0")
+            d.execute("DELETE FROM layout WHERE NOT EXISTS (SELECT 1 FROM msg m WHERE m.conv_blind = layout.conv_blind AND m.stable_id = layout.stable_id)")
+            d.execute("DELETE FROM alias")
+            d.execute("DELETE FROM conv WHERE NOT EXISTS (SELECT 1 FROM msg WHERE msg.conv_blind = conv.conv_blind)")
+            n
+        }
         windows.clear()
-        headIndexHash = null
+        setMeta("headIndexHash", "")
+        bumpEpoch()
         emit(LocalChatEvent.Cleared("account", null, kept))
         kept
     }
 
-    fun rowCount(convKey: String): Int = synchronized(lock) { rows.values.count { it.convKey == convKey && !it.deleted } }
-
-    fun pendingCount(): Int = synchronized(lock) { rows.values.count { it.pendingPublish && !it.deleted } }
-
-    fun setHeadIndexHash(hash: String?) = synchronized(lock) { headIndexHash = hash }
-
-    // ---- internals -------------------------------------------------------------------
-
-    private fun requireKey(): ByteArray = dek ?: throw IllegalStateException("locked")
-    private fun requireIdKey(): ByteArray = idKey ?: throw IllegalStateException("locked")
-    private fun requireIdxKey(): ByteArray = idxKey ?: throw IllegalStateException("locked")
-
-    /** Row key for a non-UUID sendId: its sendKey is the sendId, so the stable id is derivable without a body. */
-    private fun stableRowKey(convKey: String, sendId: String): RowKey? =
-        byStable[indexKey(convKey, LocalChatIds.stableIdOf(requireIdxKey(), sendId))]
-
-    private fun resetMemory() {
-        rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
-        digestIndex.clear(); digestOf.clear(); aliases.clear()
-        headIndexHash = null
-        tsMismatchCount = 0
-        epoch = newEpoch()
+    fun rowCount(convKey: String): Int = synchronized(lock) {
+        val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
+        (requireDb().query("SELECT COUNT(*) FROM msg WHERE conv_blind = ? AND state = 0", arrayOf(cb)).first()[0] as Long).toInt()
     }
 
-    private fun lockMemory() {
-        dek?.fill(0); idKey?.fill(0); idxKey?.fill(0)
-        dek = null; idKey = null; idxKey = null; kcv = null
-        pendingOlder.clear()
-        syncComplete = false
-        rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
-        digestIndex.clear(); digestOf.clear(); aliases.clear()
+    fun pendingCount(): Int = synchronized(lock) {
+        requireKey()
+        (requireDb().query("SELECT COUNT(*) FROM msg WHERE pending_publish = 1 AND state = 0").first()[0] as Long).toInt()
     }
 
-    private fun insertRow(
-        convKey: String, sid: String, rec: IncomingRecord, body: String?,
-        pending: Boolean, deleted: Boolean,
-    ): StoredRow {
-        val k = requireKey()
-        val row = StoredRow(
-            convKey = convKey, stableId = sid, sortTs = rec.sortTs, dir = rec.dir,
-            sendId = rec.sendId?.takeIf { it.isNotEmpty() }, kind = body?.let { parseBody(it).kind } ?: rec.kind, cid = rec.cid,
-            revision = rec.revision, deleted = deleted, bodyEnc = null, mediaEnc = null,
-            pendingPublish = pending,
-        )
-        if (!deleted && body != null) row.bodyEnc = seal(k, bodyAad(convKey, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
-        setMedia(row, body?.let { parseBody(it) })
-        val key = RowKey(convKey, rec.sortTs, sid)
-        rows[key] = row
-        byStable[indexKey(convKey, sid)] = key
-        if (!deleted) rec.cid?.let { byCid[it] = key }
-        return row
+    fun setHeadIndexHash(hash: String?) = synchronized(lock) {
+        requireKey()
+        setMeta("headIndexHash", hash ?: "")
     }
 
-    /** Parsed body of a stored text or media row (spec r2 21.2). Missing parser: media_parser_missing. */
-    private fun parseBody(body: String): ParsedBody {
-        val parse = mediaParser ?: return ParsedBody(LocalMediaKind.UNKNOWN, failed = true, error = "media_parser_missing")
-        return parse(body.toByteArray(Charsets.UTF_8))
-    }
-
-    /** Media meta (cid, mime, size, name, dimensions, failure) is sealed with the row. Text rows carry none. */
-    private fun setMedia(row: StoredRow, parsed: ParsedBody?) {
-        val k = requireKey()
-        if (parsed == null || parsed.kind == LocalMediaKind.TEXT) {
-            row.mediaEnc = null
-            return
-        }
-        val m = JSONObject()
-            .put("cid", parsed.blob ?: JSONObject.NULL)
-            .put("mime", parsed.mime ?: JSONObject.NULL)
-            .put("w", parsed.width ?: JSONObject.NULL)
-            .put("h", parsed.height ?: JSONObject.NULL)
-            .put("size", parsed.size ?: JSONObject.NULL)
-            .put("name", parsed.name ?: JSONObject.NULL)
-            .put("f", parsed.failed)
-            .put("e", parsed.error ?: JSONObject.NULL)
-        row.mediaEnc = seal(k, mediaAad(row.convKey, row.stableId, row.revision), m.toString().toByteArray(Charsets.UTF_8))
-    }
-
-    private fun moveCid(row: StoredRow, newCid: String?) {
-        row.cid?.let { if (byCid[it] == row.key) byCid.remove(it) }
-        row.cid = newCid
-        newCid?.let { byCid[it] = row.key }
-    }
-
-    private fun tombstone(row: StoredRow) {
-        row.cid?.let { if (byCid[it] == row.key) byCid.remove(it) }
-        row.deleted = true
-        row.bodyEnc = null
-        row.mediaEnc = null
-        removeLayouts(row.convKey, row.stableId)
-    }
-
-    /** Drops non-pending rows matching [pred]; returns the number of pending rows kept. */
-    private fun dropRows(pred: (StoredRow) -> Boolean): Int {
-        var kept = 0
-        val it = rows.entries.iterator()
-        while (it.hasNext()) {
-            val (key, row) = it.next()
-            if (!pred(row)) continue
-            if (row.pendingPublish) { kept++; continue }
-            it.remove()
-            byStable.remove(indexKey(row.convKey, row.stableId))
-            digestOf.remove(indexKey(row.convKey, row.stableId))?.let { d ->
-                val dk = indexKey(row.convKey, d)
-                if (digestIndex[dk] == row.stableId) digestIndex.remove(dk)
-            }
-            row.cid?.let { if (byCid[it] == key) byCid.remove(it) }
-            removeLayouts(row.convKey, row.stableId)
-        }
-        aliases.entries.removeIf { e -> !byStable.containsKey(indexKey(e.key.substringBefore('\u0000'), e.value)) }
-        return kept
-    }
-
-    private fun removeLayouts(convKey: String, sid: String) {
-        layouts.keys.removeAll { it.convKey == convKey && it.stableId == sid }
-    }
-
-    /** Lazily drop size records of older layout versions (spec 8.5). */
-    private fun sweepLayouts(currentVersion: Int) {
-        layouts.keys.removeAll { it.layoutVersion != currentVersion }
-    }
+    // ---- paging ----------------------------------------------------------------------
 
     /**
-     * One page from [before] (spec v1.1 6.2–6.4; oracle `openPage`). Visible heights accumulate toward
-     * older rows until the sum reaches heightPt (the last row may cross). Tombstones count as 0 and
-     * advance the cursor. The raw-row budget and the visible cap apply to every page.
+     * One page from [before] (spec r3a 6.2–6.4; oracle `openPage`). Visible heights accumulate toward
+     * older rows until the sum reaches heightPt (the last row may cross). Tombstones count as 0 and advance
+     * the cursor. Raw rows are read in batches of [PAGE_BATCH] by key range (7.4); the raw-row budget and
+     * the visible cap apply to every page.
      */
     private fun readPage(convKey: String, before: RowKey?, vp: LocalViewport, first: Boolean): LocalPage {
-        val hi = before ?: RowKey(convKey + "\u0000", Long.MIN_VALUE, "")
+        val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
         val items = ArrayList<PageItem>()
         var sum = 0.0
         var scanned = 0
@@ -598,33 +577,44 @@ class LocalChatStore(
         var scanExhausted = false
         var windowHi: RowKey? = null
         var windowLo: RowKey? = null
-        val scan = rows.headMap(hi, false).descendingMap().values.iterator()
-        while (scan.hasNext()) {
-            val row = scan.next()
-            if (row.convKey != convKey) break
-            scanned++
-            if (windowHi == null) windowHi = row.key
-            windowLo = row.key
-            var stop = false
-            if (!row.deleted) {
-                val item = buildItem(row, vp)
-                items.add(item)
-                sum += item.layoutH
-                if (sum >= vp.heightPt) {
-                    stop = true
-                } else if (items.size >= CAP) {
-                    capped = true
-                    stop = true
+        var cursor: Pair<Long, String>? = before?.let { Pair(it.sortTs, it.stableId) }
+        var done = false
+        while (!done) {
+            val batch = pageBatch(cb, cursor, PAGE_BATCH)
+            if (batch.isEmpty()) break
+            for (r in batch) {
+                scanned++
+                val rk = RowKey(convKey, r.sortTs, r.stable)
+                if (windowHi == null) windowHi = rk
+                windowLo = rk
+                var stop = false
+                if (r.state == SqlSchema.STATE_NORMAL) {
+                    val item = buildItem(convKey, r, vp)
+                    items.add(item)
+                    sum += item.layoutH
+                    if (sum >= vp.heightPt) {
+                        stop = true
+                    } else if (items.size >= CAP) {
+                        capped = true
+                        stop = true
+                    }
+                }
+                if (stop) {
+                    done = true
+                    break
+                }
+                if (scanned >= SCAN_BUDGET) {
+                    scanExhausted = true
+                    done = true
+                    break
                 }
             }
-            if (stop) break
-            if (scanned >= SCAN_BUDGET) {
-                scanExhausted = true
-                break
-            }
+            cursor = batch.last().let { Pair(it.sortTs, it.stable) }
+            if (batch.size < PAGE_BATCH) done = true
         }
         val lastScanned = windowLo
-        val rawRemain = lastScanned != null && rows.lowerKey(lastScanned)?.convKey == convKey
+        val rawRemain = lastScanned != null &&
+            pageBatch(cb, Pair(lastScanned.sortTs, lastScanned.stableId), 1).isNotEmpty()
         val olderState = when {
             rawRemain || scanExhausted -> "more"
             syncComplete -> "end"
@@ -650,82 +640,294 @@ class LocalChatStore(
         )
     }
 
-    /** Raw-row window of the last page (spec O-6): lowest and highest scanned keys, tombstones included. */
-    private var lastScanHi: RowKey? = null
-    private var lastScanLo: RowKey? = null
+    private fun pageBatch(cb: String, cursor: Pair<Long, String>?, limit: Int): List<Row> {
+        val rows = requireDb().query(
+            SqlSchema.pageSql(hasCursor = cursor != null),
+            if (cursor == null) arrayOf(cb, limit.toLong())
+            else arrayOf(cb, cursor.first, cursor.first, cursor.second, limit.toLong()),
+        )
+        return rows.map { r -> rowOf(cb, r) }
+    }
 
-    private fun buildItem(row: StoredRow, vp: LocalViewport): PageItem {
-        val measured = layouts[layoutKey(row.convKey, row.stableId, vp)]
-        val (w, h, isMeasured) = if (measured != null) {
-            Triple(measured.wPt, measured.hPt, true)
+    private fun buildItem(convKey: String, r: Row, vp: LocalViewport): PageItem {
+        val k = requireKey()
+        val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
+        val meta = r.metaEnc?.let { RowMeta.from(openMetaJson(cb, r.stable, it)) }
+            ?: RowMeta(LocalMediaKind.TEXT, "in", null, null, null, null, false)
+        val body = if (meta.kind == LocalMediaKind.TEXT || meta.kind == LocalMediaKind.SYSTEM) {
+            r.bodyEnc?.let { String(open(k, bodyAad(cb, r.stable, r.revision), it), Charsets.UTF_8) }
         } else {
-            val est = estimateFor(row, vp)
+            null
+        }
+        val failed = failedMedia.contains(indexKey(convKey, r.stable)) || meta.failed
+        val measured = loadLayout(cb, r.stable, layoutKey(vp))
+        val (w, h, isMeasured) = if (measured != null) {
+            Triple(measured.first, measured.second, true)
+        } else {
+            val est = LocalChatLayout.estimate(meta.kind, meta.media?.w, meta.media?.h, failed, body, vp)
             Triple(est.first, est.second, false)
         }
-        val media = mediaOf(row)
-        val body = if (row.kind == LocalMediaKind.TEXT || row.kind == LocalMediaKind.SYSTEM) bodyOf(row) else null
-        val failed = failedMedia.contains(indexKey(row.convKey, row.stableId)) || media?.failed == true
         return PageItem(
-            stableId = row.stableId, sortTs = row.sortTs, dir = row.dir, sendId = row.sendId,
-            kind = row.kind, body = body, revision = row.revision,
+            stableId = r.stable, sortTs = r.sortTs, dir = meta.dir, sendId = meta.sendId,
+            kind = meta.kind, body = body, revision = r.revision,
             layoutW = w, layoutH = h, measured = isMeasured,
-            mediaCid = media?.cid, mediaMime = media?.mime, widthPx = media?.w, heightPx = media?.h,
-            mediaState = if (row.kind == LocalMediaKind.IMAGE || row.kind == LocalMediaKind.VIDEO || row.kind == LocalMediaKind.FILE || row.kind == LocalMediaKind.UNKNOWN) {
+            mediaCid = meta.media?.blob, mediaMime = meta.media?.mime, widthPx = meta.media?.w, heightPx = meta.media?.h,
+            mediaState = if (meta.kind == LocalMediaKind.IMAGE || meta.kind == LocalMediaKind.VIDEO || meta.kind == LocalMediaKind.FILE || meta.kind == LocalMediaKind.UNKNOWN) {
                 if (failed) "failed" else "pending"
-            } else null,
+            } else {
+                null
+            },
         )
     }
 
-    private fun estimateFor(row: StoredRow, vp: LocalViewport): Pair<Double, Double> {
-        val media = mediaOf(row)
-        val body = if (row.kind == LocalMediaKind.TEXT) bodyOf(row) else null
-        return LocalChatLayout.estimate(
-            row.kind, media?.w, media?.h,
-            failedMedia.contains(indexKey(row.convKey, row.stableId)) || mediaOf(row)?.failed == true, body, vp,
-        )
-    }
-
-    private fun bodyOf(row: StoredRow): String? {
-        val k = requireKey()
-        val enc = row.bodyEnc ?: return null
-        return String(open(k, bodyAad(row.convKey, row.stableId, row.revision), enc), Charsets.UTF_8)
-    }
-
-    private fun mediaOf(row: StoredRow): MediaMeta? {
-        val k = requireKey()
-        val enc = row.mediaEnc ?: return null
-        val o = JSONObject(String(open(k, mediaAad(row.convKey, row.stableId, row.revision), enc), Charsets.UTF_8))
-        return MediaMeta(
-            cid = o.optString("cid").takeIf { it.isNotEmpty() && it != "null" },
-            mime = o.optString("mime").takeIf { it.isNotEmpty() && it != "null" },
-            w = if (o.isNull("w")) null else o.optInt("w"),
-            h = if (o.isNull("h")) null else o.optInt("h"),
-            failed = o.optBoolean("f", false),
-        )
-    }
-
-    private fun keyOf(convKey: String, item: PageItem): RowKey = RowKey(convKey, item.sortTs, item.stableId)
-
-    private fun emitInserted(row: StoredRow, k: ByteArray) {
-        val w = windows[row.convKey] ?: return
-        val key = row.key
+    private fun emitInserted(convKey: String, cb: String, row: Row) {
+        val w = windows[convKey] ?: return
+        val key = RowKey(convKey, row.sortTs, row.stable)
         val oldest = w.oldest
-        if (oldest != null && rowComparator.compare(key, oldest) < 0) return
-        val position = if (w.newest == null || rowComparator.compare(key, w.newest) > 0) "tail" else "middle"
-        val item = buildItem(row, currentViewportFor(row.convKey))
-        emit(LocalChatEvent.Inserted(row.convKey, listOf(item), position))
-        if (position == "tail") windows[row.convKey] = w.copy(newest = key)
+        if (oldest != null && RowKeyOrder.compare(key, oldest) < 0) return
+        val position = if (w.newest == null || RowKeyOrder.compare(key, w.newest) > 0) "tail" else "middle"
+        val item = buildItem(convKey, row, windowViewports[convKey] ?: DEFAULT_VIEWPORT)
+        emit(LocalChatEvent.Inserted(convKey, listOf(item), position))
+        if (position == "tail") windows[convKey] = w.copy(newest = key)
     }
 
-    /** Window events use the viewport of the last open page; falls back to a 1-item estimate. */
-    private fun currentViewportFor(convKey: String): LocalViewport =
-        windowViewports[convKey] ?: DEFAULT_VIEWPORT
+    // ---- row storage -----------------------------------------------------------------
 
-    private val windowViewports = HashMap<String, LocalViewport>()
-
-    private fun emit(e: LocalChatEvent) {
-        for (l in listeners.toList()) l(e)
+    private fun insertRow(
+        cb: String, convKey: String, sid: String, sortTs: Long, revision: Int,
+        deleted: Boolean, pending: Boolean, cidBlind: String?, body: String?, meta: RowMeta?,
+    ) {
+        val k = requireKey()
+        val d = requireDb()
+        d.execute("INSERT OR IGNORE INTO conv (conv_blind, meta_enc) VALUES (?, ?)",
+            arrayOf(cb, seal(k, "conv|$cb".toByteArray(Charsets.UTF_8), JSONObject().put("c", convKey).toString().toByteArray(Charsets.UTF_8))))
+        convKeyOf[cb] = convKey
+        val bodyEnc = if (!deleted && body != null) seal(k, bodyAad(cb, sid, revision), body.toByteArray(Charsets.UTF_8)) else null
+        val metaEnc = if (!deleted && meta != null) sealMeta(cb, sid, meta) else null
+        d.execute(
+            "INSERT INTO msg (conv_blind, stable_id, sort_ts, revision, state, pending_publish, cid_blind, body_enc, meta_enc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf(cb, sid, sortTs, revision.toLong(), (if (deleted) SqlSchema.STATE_TOMBSTONE else SqlSchema.STATE_NORMAL).toLong(),
+                (if (pending) 1L else 0L), cidBlind, bodyEnc, metaEnc),
+        )
     }
+
+    private class Row(
+        val cb: String,
+        val stable: String,
+        val sortTs: Long,
+        val revision: Int,
+        val state: Int,
+        val pending: Boolean,
+        val cidBlind: String?,
+        val bodyEnc: ByteArray?,
+        val metaEnc: ByteArray?,
+    )
+
+    private fun rowOf(cb: String, r: Array<Any?>): Row = Row(
+        cb = cb,
+        stable = r[0] as String,
+        sortTs = r[1] as Long,
+        revision = (r[2] as Long).toInt(),
+        state = (r[3] as Long).toInt(),
+        pending = (r[4] as Long) == 1L,
+        cidBlind = r[5] as String?,
+        bodyEnc = r[6] as ByteArray?,
+        metaEnc = r[7] as ByteArray?,
+    )
+
+    private fun loadRow(cb: String, sid: String): Row? {
+        val rows = requireDb().query(
+            "SELECT stable_id, sort_ts, revision, state, pending_publish, cid_blind, body_enc, meta_enc FROM msg WHERE conv_blind = ? AND stable_id = ? LIMIT 1",
+            arrayOf(cb, sid),
+        )
+        return rows.firstOrNull()?.let { rowOf(cb, it) }
+    }
+
+    private fun loadRowByCid(cb: String, cidBlind: String): Row? {
+        val rows = requireDb().query(
+            "SELECT stable_id, sort_ts, revision, state, pending_publish, cid_blind, body_enc, meta_enc FROM msg WHERE conv_blind = ? AND cid_blind = ? LIMIT 1",
+            arrayOf(cb, cidBlind),
+        )
+        return rows.firstOrNull()?.let { rowOf(cb, it) }
+    }
+
+    private fun digestSurvivor(cb: String, sortTs: Long, digest: String, exclude: String): String? {
+        val rows = requireDb().query(
+            "SELECT stable_id, meta_enc FROM msg WHERE conv_blind = ? AND sort_ts = ? AND state = 0",
+            arrayOf(cb, sortTs),
+        )
+        for (r in rows) {
+            val sid = r[0] as String
+            if (sid == exclude) continue
+            val meta = openMetaJson(cb, sid, r[1] as? ByteArray ?: continue)
+            if (meta.optString("dg") == digest) return sid
+        }
+        return null
+    }
+
+    private fun aliasTarget(derived: String): String? {
+        val rows = requireDb().query("SELECT target_enc FROM alias WHERE alias_blind = ?", arrayOf(derived))
+        val blob = rows.firstOrNull()?.get(0) as? ByteArray ?: return null
+        return String(open(requireKey(), "alias|$derived".toByteArray(Charsets.UTF_8), blob), Charsets.UTF_8)
+    }
+
+    private fun putAlias(derived: String, survivor: String) {
+        val blob = seal(requireKey(), "alias|$derived".toByteArray(Charsets.UTF_8), survivor.toByteArray(Charsets.UTF_8))
+        requireDb().execute("INSERT OR REPLACE INTO alias (alias_blind, target_enc) VALUES (?, ?)", arrayOf(derived, blob))
+    }
+
+    private fun removeLayouts(cb: String, sid: String) {
+        requireDb().execute("DELETE FROM layout WHERE conv_blind = ? AND stable_id = ?", arrayOf(cb, sid))
+    }
+
+    private fun loadLayout(cb: String, sid: String, lk: String): Pair<Double, Double>? {
+        val rows = requireDb().query("SELECT val_enc FROM layout WHERE conv_blind = ? AND stable_id = ? AND layout_key = ?", arrayOf(cb, sid, lk))
+        val blob = rows.firstOrNull()?.get(0) as? ByteArray ?: return null
+        val o = JSONObject(String(open(requireKey(), layoutAad(cb, sid, lk), blob), Charsets.UTF_8))
+        return Pair(o.getDouble("w"), o.getDouble("h"))
+    }
+
+    private fun convKeyFor(cb: String): String {
+        convKeyOf[cb]?.let { return it }
+        val rows = requireDb().query("SELECT meta_enc FROM conv WHERE conv_blind = ?", arrayOf(cb))
+        val blob = rows.firstOrNull()?.get(0) as? ByteArray ?: return ""
+        val c = JSONObject(String(open(requireKey(), "conv|$cb".toByteArray(Charsets.UTF_8), blob), Charsets.UTF_8)).getString("c")
+        convKeyOf[cb] = c
+        return c
+    }
+
+    // ---- metadata and sealing --------------------------------------------------------
+
+    /** Kind, direction, sendKey, digest and media fields of a row, sealed with the row (spec 7.8). */
+    private data class RowMeta(
+        val kind: LocalMediaKind,
+        val dir: String,
+        val sendId: String?,
+        val sendKey: String?,
+        val digest: String?,
+        val media: MediaMeta?,
+        val failed: Boolean,
+    ) {
+        companion object {
+            fun from(o: JSONObject): RowMeta {
+                val m = o.optJSONObject("m")
+                val media = m?.let {
+                    MediaMeta(
+                        blob = it.optString("blob").takeIf { s -> s.isNotEmpty() },
+                        mime = it.optString("mime").takeIf { s -> s.isNotEmpty() },
+                        w = if (it.isNull("w")) null else it.optInt("w"),
+                        h = if (it.isNull("h")) null else it.optInt("h"),
+                        size = if (it.isNull("size")) null else it.optLong("size"),
+                        name = it.optString("name").takeIf { s -> s.isNotEmpty() },
+                        failed = it.optBoolean("f", false),
+                    )
+                }
+                return RowMeta(
+                    kind = LocalMediaKind.valueOf(o.optString("k", "TEXT")),
+                    dir = o.optString("d", "in"),
+                    sendId = o.optString("sid").takeIf { it.isNotEmpty() },
+                    sendKey = o.optString("sk").takeIf { it.isNotEmpty() },
+                    digest = o.optString("dg").takeIf { it.isNotEmpty() },
+                    media = media,
+                    failed = o.optBoolean("ff", false),
+                )
+            }
+        }
+
+        fun toJson(): JSONObject {
+            val o = JSONObject()
+                .put("k", kind.name)
+                .put("d", dir)
+                .put("sid", sendId ?: "")
+                .put("sk", sendKey ?: "")
+                .put("dg", digest ?: "")
+                .put("ff", failed)
+            media?.let {
+                o.put(
+                    "m",
+                    JSONObject()
+                        .put("blob", it.blob ?: "")
+                        .put("mime", it.mime ?: "")
+                        .put("w", it.w ?: JSONObject.NULL)
+                        .put("h", it.h ?: JSONObject.NULL)
+                        .put("size", it.size ?: JSONObject.NULL)
+                        .put("name", it.name ?: "")
+                        .put("f", it.failed),
+                )
+            }
+            return o
+        }
+    }
+
+    private data class MediaMeta(
+        val blob: String?,
+        val mime: String?,
+        val w: Int?,
+        val h: Int?,
+        val size: Long?,
+        val name: String?,
+        val failed: Boolean,
+    )
+
+    private fun mediaOf(parsed: ParsedBody): MediaMeta? {
+        if (parsed.kind == LocalMediaKind.TEXT) return null
+        return MediaMeta(parsed.blob, parsed.mime, parsed.width, parsed.height, parsed.size, parsed.name, parsed.failed)
+    }
+
+    private fun parseBody(body: String): ParsedBody {
+        val parse = mediaParser ?: return ParsedBody(LocalMediaKind.UNKNOWN, failed = true, error = "media_parser_missing")
+        return parse(body.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun sealMeta(cb: String, sid: String, meta: RowMeta): ByteArray =
+        seal(requireKey(), "$cb\u001f$sid".toByteArray(Charsets.UTF_8), meta.toJson().toString().toByteArray(Charsets.UTF_8))
+
+    private fun openMetaJson(cb: String, sid: String, blob: ByteArray): JSONObject =
+        JSONObject(String(open(requireKey(), "$cb\u001f$sid".toByteArray(Charsets.UTF_8), blob), Charsets.UTF_8))
+
+    private fun bodyAad(cb: String, sid: String, revision: Int): ByteArray =
+        "$cb\u001f$sid\u001f$revision".toByteArray(Charsets.UTF_8)
+
+    private fun layoutAad(cb: String, sid: String, lk: String): ByteArray =
+        "$cb\u001f$sid\u001f$lk".toByteArray(Charsets.UTF_8)
+
+    private fun cidBlind(idx: ByteArray, cid: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(idx, "HmacSHA256"))
+        return LocalChatIds.base64Url(mac.doFinal(cid.toByteArray(Charsets.UTF_8)))
+    }
+
+    private fun layoutKey(vp: LocalViewport): String {
+        val idx = requireIdxKey()
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(idx, "HmacSHA256"))
+        val text = "${LocalChatLayout.widthBucket(vp.widthPt)}|${vp.orientation}|${LocalChatLayout.fontBucket(vp.fontScale)}|${vp.layoutVersion}"
+        return LocalChatIds.base64Url(mac.doFinal(text.toByteArray(Charsets.UTF_8)))
+    }
+
+    private fun seal(key: ByteArray, aad: ByteArray, plain: ByteArray): ByteArray {
+        val nonce = ByteArray(12).also { rng.nextBytes(it) }
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+        c.updateAAD(aad)
+        return nonce + c.doFinal(plain)
+    }
+
+    private fun open(key: ByteArray, aad: ByteArray, blob: ByteArray): ByteArray {
+        require(blob.size > 12 + 16) { "short blob" }
+        val nonce = blob.copyOfRange(0, 12)
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+        c.updateAAD(aad)
+        return c.doFinal(blob, 12, blob.size - 12)
+    }
+
+    private fun newEpoch(): String {
+        val b = ByteArray(8).also { rng.nextBytes(it) }
+        return b.joinToString("") { "%02x".format(it) }
+    }
+
+    // ---- cursor ----------------------------------------------------------------------
 
     private fun encodeCursor(key: RowKey): String = LocalChatIds.base64Url(
         JSONObject()
@@ -750,86 +952,6 @@ class LocalChatStore(
         }
     }
 
-    private fun layoutKey(convKey: String, sid: String, vp: LocalViewport) = LayoutKey(
-        convKey, sid, LocalChatLayout.widthBucket(vp.widthPt), vp.orientation,
-        LocalChatLayout.fontBucket(vp.fontScale), vp.layoutVersion,
-    )
-
-    private fun loadPayload(o: JSONObject): Boolean {
-        return try {
-            epoch = o.getString("epoch")
-            migrationState = o.optString("migration", "none")
-            syncComplete = o.optBoolean("syncComplete", false)
-            val dg = o.optJSONArray("digests")
-            if (dg != null) for (i in 0 until dg.length()) {
-                val e = dg.getJSONObject(i)
-                val k5 = e.getString("k")
-                val d5 = e.getString("v")
-                digestOf[k5] = d5
-                digestIndex[indexKey(k5.substringBefore('\u0000'), d5)] = k5.substringAfter('\u0000')
-            }
-            val al = o.optJSONArray("aliases")
-            if (al != null) for (i in 0 until al.length()) {
-                val e = al.getJSONObject(i)
-                aliases[e.getString("k")] = e.getString("v")
-            }
-            headIndexHash = if (o.isNull("headIndexHash")) null else o.getString("headIndexHash")
-            val rowArr = o.getJSONArray("rows")
-            for (i in 0 until rowArr.length()) {
-                val r = StoredRow.fromJson(rowArr.getJSONObject(i))
-                val key = RowKey(r.convKey, r.sortTs, r.stableId)
-                rows[key] = r
-                byStable[indexKey(r.convKey, r.stableId)] = key
-                if (!r.deleted) r.cid?.let { byCid[it] = key }
-            }
-            val layArr = o.getJSONArray("layouts")
-            for (i in 0 until layArr.length()) {
-                val l = layArr.getJSONObject(i)
-                layouts[LayoutKey(l.getString("c"), l.getString("s"), l.getInt("w"), l.getString("o"), l.getInt("f"), l.getInt("v"))] =
-                    LayoutValue(l.getDouble("wp"), l.getDouble("hp"), l.getLong("u"))
-            }
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun mediaAad(convKey: String, sid: String, revision: Int): ByteArray =
-        bodyAad(convKey, sid, revision) + "|media".toByteArray(Charsets.UTF_8)
-
-    private fun snapshotAad(m: ByteArray): ByteArray = "chat-local-snapshot-v1".toByteArray(Charsets.UTF_8) + m
-
-    private fun bodyAad(convKey: String, sid: String, revision: Int): ByteArray =
-        "${LocalChatIds.convBlind(requireIdxKey(), convKey)}\u001f$sid\u001f$revision".toByteArray(Charsets.UTF_8)
-
-    private fun bodyAadLegacy(convKey: String, sid: String, revision: Int): ByteArray =
-        "$convKey\u001f$sid\u001f$revision".toByteArray(Charsets.UTF_8)
-
-    private fun hkdf(master: ByteArray, info: String): ByteArray = ConetChatCryptoUtil.hkdf(master, info, 32)
-
-    private fun hmac(key: ByteArray, data: ByteArray): ByteArray {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(key, "HmacSHA256"))
-        return mac.doFinal(data)
-    }
-
-    private fun seal(key: ByteArray, aad: ByteArray, plain: ByteArray): ByteArray {
-        val nonce = ByteArray(12).also { rng.nextBytes(it) }
-        val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
-        c.updateAAD(aad)
-        return nonce + c.doFinal(plain)
-    }
-
-    private fun open(key: ByteArray, aad: ByteArray, blob: ByteArray): ByteArray {
-        require(blob.size > 12 + 16) { "short blob" }
-        val nonce = blob.copyOfRange(0, 12)
-        val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
-        c.updateAAD(aad)
-        return c.doFinal(blob, 12, blob.size - 12)
-    }
-
     private fun base64UrlDecode(s: String): ByteArray {
         val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         val out = java.io.ByteArrayOutputStream()
@@ -848,101 +970,36 @@ class LocalChatStore(
         return out.toByteArray()
     }
 
-    private fun newEpoch(): String {
-        val b = ByteArray(8).also { SecureRandom().nextBytes(it) }
-        return ConetChatCryptoUtil.toHex(b)
+    private fun indexKey(convKey: String, sid: String): String = "$convKey\u0000$sid"
+
+    private fun emit(e: LocalChatEvent) {
+        for (l in listeners.toList()) l(e)
     }
-
-    // ---- value types -----------------------------------------------------------------
-
-    class StoredRow(
-        val convKey: String,
-        val stableId: String,
-        val sortTs: Long,
-        val dir: String,
-        val sendId: String?,
-        var kind: LocalMediaKind,
-        var cid: String?,
-        var revision: Int,
-        var deleted: Boolean,
-        var bodyEnc: ByteArray?,
-        var mediaEnc: ByteArray?,
-        var pendingPublish: Boolean,
-        /** sendKey of the row (spec r2 4.1). Persisted only inside the sealed snapshot. */
-        var sendKey: String? = null,
-    ) {
-        val key: RowKey get() = RowKey(convKey, sortTs, stableId)
-
-        fun toJson(): JSONObject = JSONObject()
-            .put("c", convKey).put("s", stableId).put("t", sortTs).put("d", dir)
-            .put("sid", sendId ?: JSONObject.NULL).put("k", kind.name).put("cid", cid ?: JSONObject.NULL)
-            .put("r", revision).put("del", deleted)
-            .put("b", bodyEnc?.let { ConetChatCryptoUtil.toHex(it) } ?: JSONObject.NULL)
-            .put("m", mediaEnc?.let { ConetChatCryptoUtil.toHex(it) } ?: JSONObject.NULL)
-            .put("p", pendingPublish)
-            .put("sk", sendKey ?: JSONObject.NULL)
-
-        companion object {
-            fun fromJson(o: JSONObject): StoredRow = StoredRow(
-                convKey = o.getString("c"), stableId = o.getString("s"), sortTs = o.getLong("t"),
-                dir = o.getString("d"),
-                sendId = if (o.isNull("sid")) null else o.getString("sid"),
-                kind = LocalMediaKind.valueOf(o.getString("k")),
-                cid = if (o.isNull("cid")) null else o.getString("cid"),
-                revision = o.getInt("r"), deleted = o.getBoolean("del"),
-                bodyEnc = if (o.isNull("b")) null else ConetChatCryptoUtil.hexToBytes(o.getString("b")),
-                mediaEnc = if (o.isNull("m")) null else ConetChatCryptoUtil.hexToBytes(o.getString("m")),
-                pendingPublish = o.getBoolean("p"),
-                sendKey = if (o.isNull("sk")) null else o.getString("sk"),
-            )
-        }
-    }
-
-    data class RowKey(val convKey: String, val sortTs: Long, val stableId: String)
-
-    private data class LayoutKey(
-        val convKey: String, val stableId: String, val widthBucket: Int,
-        val orientation: String, val fontBucket: Int, val layoutVersion: Int,
-    )
-
-    private data class LayoutValue(val wPt: Double, val hPt: Double, val updatedMs: Long)
 
     private data class Window(val oldest: RowKey?, val newest: RowKey?, val opened: Boolean)
 
-    private data class MediaMeta(val cid: String?, val mime: String?, val w: Int?, val h: Int?, val failed: Boolean)
-
     companion object {
-        const val SCHEMA_VERSION = 1
-        /** Safety cap on consumed rows for the first screen (spec v1.1 6.2). */
+        const val SCHEMA_VERSION = SqlSchema.SCHEMA_VERSION
+        /** Safety cap on consumed rows for the first screen (spec r3a 6.2). */
         const val CAP = 200
-        /** Raw-row budget for one loadOlder scan (spec v1.1 6.3). */
+        /** Raw-row budget for one scan (spec r3a 6.3). */
         const val SCAN_BUDGET = 2000
-        private const val FORMAT_TAG = "CLS1"
+        /** Raw rows fetched per key-range query (spec r3a 6.3). */
+        const val PAGE_BATCH = 64
         private val DEFAULT_VIEWPORT = LocalViewport(390.0, 844.0, "portrait", 1.0, 1)
-
-        private val rowComparator = Comparator<RowKey> { a, b ->
-            val c = LocalChatIds.compareUtf8(a.convKey, b.convKey)
-            if (c != 0) c else LocalChatIds.compareKey(a.sortTs, a.stableId, b.sortTs, b.stableId)
-        }
-
-        private fun indexKey(convKey: String, sid: String): String = "$convKey\u0000$sid"
     }
 }
 
-/** One row of a migration import (spec r2 11.2). */
-data class ImportRow(
-    val convKey: String,
-    val sendId: String?,
-    val dir: String,
-    val ts: Long,
-    val body: String,
-    val pendingPublish: Boolean,
-    val cid: String? = null,
-)
+/** Key of a row inside the store: conversation, sort key (spec r3a 3). */
+data class RowKey(val convKey: String, val sortTs: Long, val stableId: String)
 
-data class ImportResult(val inserted: Int, val existing: Int, val collapsed: Int, val rejected: Int)
-
-data class VerifyResult(val rows: Int, val digest: String)
+/** Sort order of K (spec r3a 5): sort_ts numeric, then stable_id by UTF-8 bytes; conversation first. */
+object RowKeyOrder : Comparator<RowKey> {
+    override fun compare(a: RowKey, b: RowKey): Int {
+        val c = LocalChatIds.compareUtf8(a.convKey, b.convKey)
+        return if (c != 0) c else LocalChatIds.compareKey(a.sortTs, a.stableId, b.sortTs, b.stableId)
+    }
+}
 
 /** A source record for [LocalChatStore.applyRecord]. */
 class IncomingRecord(
@@ -956,7 +1013,7 @@ class IncomingRecord(
     val deleted: Boolean = false,
     /** Source's stable id for tombstones and sendId-less records (spec 4.1). */
     val stableIdHint: String? = null,
-    /** sendKey for tombstones and revisions that reference it (spec v1.1 4.1, Q-3). */
+    /** sendKey for tombstones and revisions that reference it (spec r3a 4.1). */
     val sendKeyHint: String? = null,
     val widthPx: Int? = null,
     val heightPx: Int? = null,
@@ -971,6 +1028,7 @@ enum class UnlockResult(val opened: Boolean) {
     REBUILT_KCV_MISMATCH(true),
     LOCKED_KCV_MISMATCH_PENDING(false),
     LOCKED_SCHEMA_NEWER(false),
+    /** A database error during unlock (the file is not readable with this key or is damaged). */
     SNAPSHOT_CORRUPT(false),
 }
 
@@ -1006,7 +1064,7 @@ data class LocalPage(
     /** The safety cap fired; should not happen at normal viewport sizes. */
     val capped: Boolean = false,
     val syncState: String = "idle",
-    /** more | pending | end (spec v1.1 6.4). */
+    /** more | pending | end (spec r3a 6.4). */
     val olderState: String = if (hasOlder) "more" else "end",
     /** A loadOlder scan hit its budget: the host must ask again (spec 6.3). */
     val scanExhausted: Boolean = false,
@@ -1025,11 +1083,27 @@ data class StoredEntry(
 )
 
 sealed class LocalChatEvent {
-    data class OlderAvailable(val convKey: String) : LocalChatEvent()
-    /** The page must clear what it shows now (spec 6.5 step 2). */
-    object Locked : LocalChatEvent()
     data class Inserted(val convKey: String, val items: List<PageItem>, val position: String) : LocalChatEvent()
     data class Updated(val convKey: String, val stableId: String, val revision: Int) : LocalChatEvent()
     data class Deleted(val convKey: String, val stableId: String) : LocalChatEvent()
     data class Cleared(val scope: String, val convKey: String?, val pendingKept: Int) : LocalChatEvent()
+    /** A late older row reached a conversation whose last page ended at a pending cursor (spec 6.4). */
+    data class OlderAvailable(val convKey: String) : LocalChatEvent()
+    /** The page must clear what it shows now (spec 6.5 step 2). */
+    object Locked : LocalChatEvent()
 }
+
+/** One row of a migration import (spec r3a 11.2). */
+data class ImportRow(
+    val convKey: String,
+    val sendId: String?,
+    val dir: String,
+    val ts: Long,
+    val body: String,
+    val pendingPublish: Boolean,
+    val cid: String? = null,
+)
+
+data class ImportResult(val inserted: Int, val existing: Int, val collapsed: Int, val rejected: Int)
+
+data class VerifyResult(val rows: Int, val digest: String)

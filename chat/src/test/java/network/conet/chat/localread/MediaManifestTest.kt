@@ -53,7 +53,7 @@ class MediaManifestTest {
 
     @Test
     fun missingParserMakesMediaFailedNotText() {
-        val store = LocalChatStore("0xnoparser:default", mediaParser = null)
+        val store = LocalChatStore("0xnoparser:default", JdbcSqlDb.memory(), null)
         assertEquals(UnlockResult.OK, store.unlock(ByteArray(32) { 7 }, null))
         store.applyRecord("0xp", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "s1", "plain text", "c1"))
         val item = store.openConversation("0xp", LocalViewport(390.0, 844.0, "portrait", 1.0, 1)).items.single()

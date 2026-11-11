@@ -26,6 +26,8 @@ import network.conet.chat.localread.IncomingRecord
 import network.conet.chat.localread.LocalChatIds
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.LocalChatStore
+import network.conet.chat.localread.AndroidSqlDb
+import network.conet.chat.localread.SqlDb
 import network.conet.chat.localread.LocalMediaKind
 import network.conet.chat.localread.UnlockResult
 
@@ -69,6 +71,8 @@ class BeamioConetChatHistoryStore(
      * Null when the boundary holds no key: the local store then refuses to open (`db_root_missing`).
      */
     private val dbRootProvider: (() -> ByteArray?)? = null,
+    /** Opens the local SQLite handle (null file = in-memory). Android by default; tests inject JDBC. */
+    private val sqlDbFactory: (File?) -> SqlDb = { AndroidSqlDb.open(it) },
 ) {
     data class IndexRecord(
         val seq: Int,
@@ -216,7 +220,6 @@ class BeamioConetChatHistoryStore(
         local?.let {
             it.bumpGeneration()
             onLocalEvent?.invoke(LocalChatEvent.Locked)
-            persistLocal()
             it.lock()
         }
         local = null
@@ -580,7 +583,6 @@ class BeamioConetChatHistoryStore(
             )
             if (r == ApplyResult.INSERTED || r == ApplyResult.UPDATED) stored++
         }
-        if (stored > 0) persistLocal()
         if (s.migration != "complete") s.markMigrationComplete()
         log("info", "[history] local ingest records=${remote.size} stored=$stored known=$known failed=$failed")
         return failed == 0
@@ -588,70 +590,36 @@ class BeamioConetChatHistoryStore(
 
     // ---- local store: open, persist ----------------------------------------------------
 
+    /** SQLite file of this account (spec r3a 7.1). The device-key name (D18) is pending; SHA-256 stands in for now. */
     private fun localFile(): File? {
         val dir = storageDir ?: return null
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(localAccountKey().toByteArray(Charsets.UTF_8))
-        return File(dir, "chat-local-v1-" + ConetChatCryptoUtil.toHex(digest).take(16) + ".sealed")
+        return File(dir, "chat-local-v1-" + LocalChatIds.base64Url(digest).take(22) + ".sqlite")
     }
 
     /** accountKey = eoa + ":" + workspace; iOS and Android use the workspace `default` (spec D5). */
     private fun localAccountKey(): String = "$eoa:default"
 
-    /** Unlock the local store with the master key. A failed unlock leaves it locked: reads answer empty. */
+    /** Opens the local database and unlocks the store. No root = locked (db_root_missing). */
     private fun openLocal(master: ByteArray) {
-        val s = LocalChatStore(localAccountKey())
-        val file = localFile()
-        val snap = file?.takeIf { it.isFile }?.let { f -> try { f.readBytes() } catch (e: Exception) { null } }
         val dbRoot = dbRootProvider?.invoke()
         kIdDb = dbRoot?.let { LocalChatIds.idKeyFromRootDb(it) }
         if (dbRoot == null) {
-            s.markLocked("db_root_missing")
-            local = s
+            // No key, no file: the store is locked on an in-memory handle, so nothing is written to disk.
+            val locked = LocalChatStore(localAccountKey(), sqlDbFactory(null))
+            local = locked
+            locked.markLocked("db_root_missing")
             log("warn", "[history] local store locked: db_root_missing")
             return
         }
-        val r = s.unlock(master, dbRoot, snap)
+        val s = LocalChatStore(localAccountKey(), sqlDbFactory(localFile()))
         local = s
+        val r = s.unlock(master, dbRoot)
         if (r == UnlockResult.OK || r == UnlockResult.REBUILT_KCV_MISMATCH) {
             s.subscribe { ev -> onLocalEvent?.invoke(ev) }
         }
         // Codes only: no record counts, keys or content in the log.
         log(if (r.opened) "info" else "warn", "[history] local store unlock=$r")
-    }
-
-    /** Writes the sealed snapshot atomically (tmp + rename). Only ciphertext reaches the disk. */
-    fun persistLocal() {
-        val s = local ?: return
-        val file = localFile() ?: return
-        synchronized(localIo) {
-            if (!s.isUnlocked) return
-            try {
-                val bytes = s.snapshot()
-                file.parentFile?.mkdirs()
-                val tmp = File(file.parentFile, file.name + ".tmp")
-                FileOutputStream(tmp).use { out ->
-                    out.write(bytes)
-                    out.fd.sync()
-                }
-                if (file.exists()) file.delete()
-                if (!tmp.renameTo(file)) log("warn", "[history] local snapshot rename failed")
-            } catch (e: Exception) {
-                log("warn", "[history] local snapshot write failed: ${e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    /** Coalesced write for frequent changes (layout measurements): at most one write per 2 s. */
-    fun schedulePersist() {
-        if (!persistPending.compareAndSet(false, true)) return
-        try {
-            timers.schedule({
-                persistPending.set(false)
-                persistLocal()
-            }, 2, TimeUnit.SECONDS)
-        } catch (e: Exception) {
-            persistPending.set(false)
-        }
     }
 
     /** Runs a full head sync on the write queue (spec 9.1: the only writer). [done] gets true once it ran. */

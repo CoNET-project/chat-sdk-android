@@ -1048,7 +1048,6 @@ object BeamioConetChatModule {
             return
         }
         val written = store.reportLayout(convKey, stableId, vp, wPt, hPt)
-        if (written) hist?.schedulePersist()
         ack(reqId, true, result = JSONObject().put("written", written))
     }
 
@@ -1075,7 +1074,6 @@ object BeamioConetChatModule {
                 return
             }
         }
-        hist?.persistLocal()
         ack(reqId, true, result = JSONObject().put("pendingKept", pendingKept))
     }
 
@@ -1133,7 +1131,6 @@ object BeamioConetChatModule {
             )
         }
         val r = store.importRows(rows)
-        hist?.persistLocal()
         ack(
             reqId,
             true,

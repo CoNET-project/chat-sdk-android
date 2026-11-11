@@ -70,8 +70,8 @@ class FixtureScenarioTest {
 
         // The r1 fixture generator uses its synthetic local root for K_id (plan A) and K_idx; see receipt.
         val localRoot = sha256("fixture-local-root|$seed|$account")
-        val store = LocalChatStore("0xfixture:default")
-        assertEquals(UnlockResult.OK, store.unlock(localRoot, localRoot, null))
+        val store = newTestStore("0xfixture:default")
+        assertEquals(UnlockResult.OK, store.unlock(localRoot, localRoot))
         val idKey = LocalChatIds.idKeyFromRootDb(localRoot)
         val idxKey = LocalChatIds.idxKeyFromRootDb(localRoot)
 
