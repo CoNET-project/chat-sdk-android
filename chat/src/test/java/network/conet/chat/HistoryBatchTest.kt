@@ -17,6 +17,8 @@ import java.util.concurrent.TimeUnit
  * Offline: in-memory registry with the contract's nonce / ts / seq rules, in-memory IPFS,
  * fake signer whose EIP-712 signature binds the signed nonce and index hash.
  */
+private val TEST_WALLET_KEY = ConetChatCryptoUtil.hexToBytes("78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd")!!
+
 class HistoryBatchTest {
     private val owner = "0x" + "ab".repeat(20)
 
@@ -163,6 +165,7 @@ class HistoryBatchTest {
             clock = clock,
             signer = signer,
             autoFlush = false,
+            dbRootProvider = { network.conet.chat.localread.LocalChatIds.rootDbFromPrivateKey(TEST_WALLET_KEY, owner, "default") },
         )
         val ready = CountDownLatch(1)
         var ok = false
@@ -593,6 +596,7 @@ class HistoryBatchTest {
             clock = clock,
             signer = signer,
             autoFlush = true,
+            dbRootProvider = { network.conet.chat.localread.LocalChatIds.rootDbFromPrivateKey(TEST_WALLET_KEY, owner, "default") },
         )
         val ready = CountDownLatch(1)
         s.prepare { ready.countDown() }

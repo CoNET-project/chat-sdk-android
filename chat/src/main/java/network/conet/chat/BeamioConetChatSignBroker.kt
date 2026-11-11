@@ -35,6 +35,21 @@ object BeamioConetChatSignBroker {
         localKey = BeamioChatWalletKeyStore.normalizeKey(privateKeyHex)
     }
 
+    /**
+     * R_db for the local DB, derived here inside the wallet boundary from the in-memory private key
+     * (spec v1.1-r1 22.2). The key itself never leaves this object. Null when no local key is held.
+     */
+    fun deriveLocalRoot(eoa: String, workspace: String): ByteArray? {
+        val key = localKey
+        if (key.isEmpty()) return null
+        val p = ConetChatCryptoUtil.hexToBytes(key) ?: return null
+        try {
+            return network.conet.chat.localread.LocalChatIds.rootDbFromPrivateKey(p, eoa.lowercase(), workspace)
+        } finally {
+            p.fill(0)
+        }
+    }
+
     fun clearLocalSigner() {
         localKey = ""
         localHost = null

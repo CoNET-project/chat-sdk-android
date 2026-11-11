@@ -1,6 +1,7 @@
 package network.conet.chat
 
 import network.conet.chat.localread.LocalChatIds
+import network.conet.chat.localread.LocalSource
 import network.conet.chat.localread.LocalViewport
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -94,7 +95,13 @@ class HistoryLocalIntegrationTest {
         override fun sleep(ms: Long) {}
     }
 
+    /** Public test key from the spec vectors (not an account key). */
+    private val testPrivateKey = ConetChatCryptoUtil.hexToBytes("78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd")!!
+
     private fun store(eoaAddr: String, dir: File?, net: HistoryNet): BeamioConetChatHistoryStore =
+        storeWithRoot(eoaAddr, dir, net) { LocalChatIds.rootDbFromPrivateKey(testPrivateKey, eoaAddr, "default") }
+
+    private fun storeWithRoot(eoaAddr: String, dir: File?, net: HistoryNet, root: (() -> ByteArray?)?): BeamioConetChatHistoryStore =
         BeamioConetChatHistoryStore(
             eoa = eoaAddr,
             chainId = 224422,
@@ -109,6 +116,7 @@ class HistoryLocalIntegrationTest {
             clock = FixedClock,
             signer = FakeSigner,
             autoFlush = false,
+            dbRootProvider = root,
         )
 
     private fun prepare(s: BeamioConetChatHistoryStore) {
@@ -155,11 +163,17 @@ class HistoryLocalIntegrationTest {
         sync(r)
         val page = r.localStore()!!.openConversation(peer, vp)
         assertEquals(3, page.items.size)
-        assertEquals("sid-1", page.items[0].stableId)
-        assertEquals("sid-3", page.items[2].stableId)
-        // A sendId-less entry gets the sendId the write path assigns (HistoryBatch.recordKey); the head carries it.
-        assertEquals(HistoryBatch.recordKey(null, peer, "out", 1001L, "FIXTURE-HIST hello two"), page.items[1].stableId)
-        assertEquals(page.items[1].stableId, page.items[1].sendId)
+        val rDb = LocalChatIds.rootDbFromPrivateKey(testPrivateKey, eoa, "default")
+        val idxKey = LocalChatIds.idxKeyFromRootDb(rDb)
+        val idKey = LocalChatIds.idKeyFromRootDb(rDb)
+        // spec v1.1 4.3: stable_id = base64url(HMAC(K_idx, sendKey)), 43 characters.
+        assertEquals(LocalChatIds.stableIdOf(idxKey, "sid-1"), page.items[0].stableId)
+        assertEquals(LocalChatIds.stableIdOf(idxKey, "sid-3"), page.items[2].stableId)
+        assertEquals(43, page.items[0].stableId.length)
+        // A sendId-less entry gets the derived sendKey as its sendId (spec v1.1 4.2, D10); the stable id follows it.
+        val sendKey = LocalChatIds.sendKeyDerived(idKey, peer, "out", 1001L, "FIXTURE-HIST hello two")
+        assertEquals(sendKey, page.items[1].sendId)
+        assertEquals(LocalChatIds.stableIdOf(idxKey, sendKey), page.items[1].stableId)
         assertEquals("FIXTURE-HIST hello two", page.items[1].body)
         assertEquals("complete", r.localStore()!!.migration)
         assertEquals("idle", page.syncState)
@@ -261,14 +275,54 @@ class HistoryLocalIntegrationTest {
         again.startFullSync { syncDone.countDown() } // blocks inside readSnapshot until the gate opens
         Thread.sleep(100)
         val s = again.localStore()!!
-        val t0 = System.nanoTime()
-        val page = s.openConversation(peer, vp)
-        val ms = (System.nanoTime() - t0) / 1_000_000
-        assertEquals(3, page.items.size)
-        assertEquals("running", page.syncState)
-        assertTrue("first screen took $ms ms while sync was blocked", ms < 50)
+        // T-15 (N5): 30 first-screen reads while the sync is blocked; P95 must stay within 80 ms.
+        val times = ArrayList<Long>()
+        var last = 0
+        repeat(30) {
+            val t0 = System.nanoTime()
+            val page = s.openConversation(peer, vp)
+            times.add((System.nanoTime() - t0) / 1_000)
+            last = page.items.size
+            assertEquals("running", page.syncState)
+        }
+        assertEquals(3, last)
+        times.sort()
+        val p95Ms = times[(times.size * 95) / 100] / 1000.0
+        println("LOCALREAD_METRIC gated_first_screen_p95_ms=$p95Ms n=30 env=jvm-host")
+        assertTrue("first screen P95 $p95Ms ms while sync was blocked", p95Ms <= 80.0)
         gate.countDown()
         assertTrue(syncDone.await(30, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun withoutAWalletRootTheLocalStoreStaysLocked() {
+        // The wallet boundary holds no key: the local store refuses to open; sync still runs on the network side.
+        val chain = Chain()
+        seedChat(chain)
+        val dir = tmp.newFolder("noroot")
+        val r = storeWithRoot(eoa, dir, FakeNet(chain)) { null }
+        prepare(r)
+        val page = r.localStore()!!.openConversation(peer, vp)
+        assertEquals(LocalSource.LOCKED, page.source)
+        assertEquals("db_root_missing", page.error)
+        assertTrue(page.items.isEmpty())
+        assertFalse(dir.listFiles()!!.any { it.name.endsWith(".sealed") })
+    }
+
+    @Test
+    fun mirroredTwiceIsStoredOnce() {
+        // T-22: the same sendId-less message appended twice is one index record and one stored row.
+        val chain = Chain()
+        val w = store(eoa, null, FakeNet(chain))
+        prepare(w)
+        append(w, "in", 3000L, "FIXTURE-HIST mirrored once", null)
+        append(w, "in", 3000L, "FIXTURE-HIST mirrored once", null)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.OK, w.flushNowBlocking())
+        val dir = tmp.newFolder("mirror")
+        val r = store(eoa, dir, FakeNet(chain))
+        prepare(r)
+        sync(r)
+        assertEquals(1, r.localStore()!!.openConversation(peer, vp).items.size)
     }
 
     @Test
@@ -289,7 +343,7 @@ class HistoryLocalIntegrationTest {
         sync(b)
         val bItems = b.localStore()!!.openConversation(peer, vp).items
         assertEquals(1, bItems.size)
-        assertEquals("sid-other", bItems[0].stableId)
+        assertEquals("sid-other", bItems[0].sendId)
         assertEquals(3, a.localStore()!!.openConversation(peer, vp).items.size)
         assertEquals("one sealed file per account", 2, dir.listFiles()!!.count { it.name.endsWith(".sealed") })
     }

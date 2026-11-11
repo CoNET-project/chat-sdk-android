@@ -33,11 +33,58 @@ object LocalChatLayout {
     /** fontBucket = clamp(round(fontScale × 10), 8, 20). */
     fun fontBucket(fontScale: Double): Int = Math.round(fontScale * 10.0).toInt().coerceIn(8, 20)
 
-    /** Same clamp as the oracle: min(hi, max(lo, x)). Never throws for small viewports. */
+    /** Oracle clamp: min(hi, max(lo, x)). Never throws for small viewports. */
     private fun clampOracle(x: Double, lo: Double, hi: Double): Double = Math.min(hi, Math.max(lo, x))
 
+    /** Oracle r1: round to 0.1 pt (JS Math.round semantics for positive values). */
+    fun r1(x: Double): Double = Math.round(x * 10.0) / 10.0
+
+    private const val EM_LATIN = 0.52
+    private const val EM_DIGIT = 0.55
+    private const val EM_SPACE = 0.28
+    private const val EM_PUNCT = 0.38
+    private const val EM_CJK = 1.0
+    private const val LINE_EM = 1.4
+    private const val PAD_V_EM = 16.0
+    private const val CAPTION_EM = 24.0
+
+    private fun emFor(cp: Int): Double = when {
+        cp == 0x20 -> EM_SPACE
+        cp in 0x30..0x39 -> EM_DIGIT
+        cp in 0x41..0x5a || cp in 0x61..0x7a -> EM_LATIN
+        cp < 0x80 -> EM_PUNCT
+        else -> EM_CJK
+    }
+
     /**
-     * Estimated size in points (spec 8.3, oracle `estimateHeight`). Returns (wPt, hPt).
+     * Estimated text lines (spec v1.1 8.3, oracle `textLinesEstimate`): per-character em widths,
+     * a forced break at each newline, a break before a character that would overflow the width.
+     */
+    fun textLinesEstimate(body: String, wPt: Double, fs: Double): Int {
+        val fontPt = 16.0 * fs
+        val w = Math.max(1.0, wPt - 24.0)
+        var lines = 0
+        for (logical in body.split('\n')) {
+            lines++
+            var cur = 0.0
+            var i = 0
+            while (i < logical.length) {
+                val cp = logical.codePointAt(i)
+                i += Character.charCount(cp)
+                val a = emFor(cp) * fontPt
+                if (cur + a > w && cur > 0.0) {
+                    lines++
+                    cur = a
+                } else {
+                    cur += a
+                }
+            }
+        }
+        return lines
+    }
+
+    /**
+     * Estimated size in points (spec v1.1 8.3, oracle `estimateHeight`). Returns (wPt, hPt).
      * Estimates decide only how many rows a page takes; they are never stored.
      */
     fun estimate(
@@ -45,26 +92,33 @@ object LocalChatLayout {
         widthPx: Int?,
         heightPx: Int?,
         mediaFailed: Boolean,
+        body: String?,
         vp: LocalViewport,
     ): Pair<Double, Double> {
-        val f = vp.fontScale
-        if (mediaFailed) return Pair(widthBucket(vp.widthPt).toDouble(), 88.0 * f)
+        val fs = vp.fontScale
+        val wB = widthBucket(vp.widthPt).toDouble()
+        if (kind == LocalMediaKind.TEXT && !mediaFailed) {
+            val lines = textLinesEstimate(body.orEmpty(), vp.widthPt, fs)
+            return Pair(wB, r1(PAD_V_EM * fs + lines * LINE_EM * 16.0 * fs))
+        }
+        if (mediaFailed) return Pair(wB, r1(88.0 * fs))
         return when (kind) {
-            LocalMediaKind.TEXT -> Pair(widthBucket(vp.widthPt).toDouble(), 56.0 * f)
             LocalMediaKind.IMAGE, LocalMediaKind.VIDEO -> {
                 val wPt = Math.min(vp.widthPt - 24.0, MEDIA_MAX_W_PT)
                 val upper = MEDIA_MAX_SHARE * vp.heightPt
+                val lo = Math.min(MEDIA_MIN_H_PT, upper)
                 val hasDims = widthPx != null && heightPx != null && widthPx > 0 && heightPx > 0
                 val h = if (hasDims) {
-                    clampOracle(wPt * heightPx!!.toDouble() / widthPx!!.toDouble(), MEDIA_MIN_H_PT, upper)
+                    clampOracle(wPt * heightPx!!.toDouble() / widthPx!!.toDouble(), lo, upper)
+                } else if (kind == LocalMediaKind.VIDEO) {
+                    clampOracle(wPt * 9.0 / 16.0, lo, upper)
                 } else {
-                    // No dimensions: 4:3 for both image and video (oracle).
-                    clampOracle(wPt * 3.0 / 4.0, MEDIA_MIN_H_PT, upper)
+                    clampOracle(wPt * 3.0 / 4.0, lo, upper)
                 }
-                Pair(wPt, h)
+                Pair(wPt, r1(h + CAPTION_EM * fs))
             }
-            LocalMediaKind.FILE, LocalMediaKind.SYSTEM, LocalMediaKind.UNKNOWN ->
-                Pair(widthBucket(vp.widthPt).toDouble(), 72.0 * f)
+            LocalMediaKind.TEXT -> Pair(wB, r1(PAD_V_EM * fs))
+            LocalMediaKind.FILE, LocalMediaKind.SYSTEM, LocalMediaKind.UNKNOWN -> Pair(wB, r1(72.0 * fs))
         }
     }
 }

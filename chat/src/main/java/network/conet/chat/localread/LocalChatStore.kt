@@ -30,6 +30,23 @@ class LocalChatStore(val accountKey: String) {
 
     private var dek: ByteArray? = null
     private var idKey: ByteArray? = null
+    private var idxKey: ByteArray? = null
+    /** Bumped on every lock(); results of an older generation must be dropped by the host (spec 6.5). */
+    @Volatile
+    var generation: Long = 0L
+        private set
+    /** Why the store is locked, when unlock refused (spec 6.6 codes). Null when unlocked or never tried. */
+    @Volatile
+    var lastError: String? = null
+        private set
+    private var syncComplete = false
+    /** Conversations whose last page ended at a pending cursor (spec 6.4). */
+    private val pendingOlder = HashSet<String>()
+    /** conv|digest -> survivor stable id; conv|stable id -> digest (spec 4.5). */
+    private val digestIndex = HashMap<String, String>()
+    private val digestOf = HashMap<String, String>()
+    /** conv|alias stable id (folded sendKey) -> survivor stable id (spec 4.5 alias table). */
+    private val aliases = HashMap<String, String>()
     private var kcv: ByteArray? = null
     private var epoch: String = newEpoch()
     private var headIndexHash: String? = null
@@ -60,14 +77,48 @@ class LocalChatStore(val accountKey: String) {
      * Derive the DEK and open the store. [snapshot] is the bytes of the last [snapshot] call,
      * or null for a new account. Follows spec 7.3 (kcv mismatch) and 7.5 (schema).
      */
+    /**
+     * Test convenience only: derives the local root from [master] as if it were the private key.
+     * Production code must call [unlock] with the wallet-boundary root (spec v1.1-r1 22.6).
+     */
     fun unlock(master: ByteArray, snapshot: ByteArray?): UnlockResult {
+        val eoa = accountKey.substringBeforeLast(':')
+        val ws = accountKey.substringAfterLast(':')
+        return unlock(master, LocalChatIds.rootDbFromPrivateKey(master, eoa, ws), snapshot)
+    }
+
+    /**
+     * Unlock with the protocol root [master] (K_id, sendKeys) and the local-DB root [dbRoot] (R_db:
+     * DEK, kcv, K_idx). spec v1.1-r1 section 22.2.
+     */
+    fun unlock(master: ByteArray, dbRoot: ByteArray, snapshot: ByteArray?): UnlockResult {
+        val r = unlockInner(master, dbRoot, snapshot)
+        lastError = when (r) {
+            UnlockResult.OK, UnlockResult.REBUILT_KCV_MISMATCH -> null
+            UnlockResult.LOCKED_KCV_MISMATCH_PENDING -> "kcv_mismatch"
+            UnlockResult.LOCKED_SCHEMA_NEWER -> "schema_newer"
+            UnlockResult.SNAPSHOT_CORRUPT -> "snapshot_corrupt"
+        }
+        return r
+    }
+
+    /** Refuse to open with an error code, e.g. `db_root_missing` when the wallet boundary holds no key. */
+    fun markLocked(error: String) {
+        synchronized(lock) {
+            lockMemory()
+            lastError = error
+        }
+    }
+
+    private fun unlockInner(master: ByteArray, dbRoot: ByteArray, snapshot: ByteArray?): UnlockResult {
         return synchronized(lock) {
-        val key = hkdf(master, "chat-local-db-v1|$accountKey")
+        val key = LocalChatIds.dekFromRootDb(dbRoot, accountKey.substringBeforeLast(':'), accountKey.substringAfterLast(':'))
         val mac = hmac(key, "kcv".toByteArray(Charsets.UTF_8))
         if (snapshot == null) {
             resetMemory()
             dek = key
-            idKey = LocalChatIds.idKey(master)
+            idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
+            idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
             kcv = mac
             return UnlockResult.OK
         }
@@ -86,7 +137,8 @@ class LocalChatStore(val accountKey: String) {
             // Spec 7.3: nothing waiting to publish, so rebuild under a new epoch.
             resetMemory()
             dek = key
-            idKey = LocalChatIds.idKey(master)
+            idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
+            idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
             kcv = mac
             return UnlockResult.REBUILT_KCV_MISMATCH
         }
@@ -97,7 +149,8 @@ class LocalChatStore(val accountKey: String) {
         }
         resetMemory()
         dek = key
-        idKey = LocalChatIds.idKey(master)
+        idKey = LocalChatIds.idKeyFromRootDb(dbRoot)
+        idxKey = LocalChatIds.idxKeyFromRootDb(dbRoot)
         kcv = mac
         if (!loadPayload(JSONObject(String(plain, Charsets.UTF_8)))) {
             lockMemory()
@@ -122,6 +175,13 @@ class LocalChatStore(val accountKey: String) {
             .put("wp", v.wPt).put("hp", v.hPt).put("u", v.updatedMs))
         payload.put("layouts", layArr)
         payload.put("migration", migrationState)
+        payload.put("syncComplete", syncComplete)
+        val dg = JSONArray()
+        for ((k3, v3) in digestOf) dg.put(JSONObject().put("k", k3).put("v", v3))
+        payload.put("digests", dg)
+        val al = JSONArray()
+        for ((k4, v4) in aliases) al.put(JSONObject().put("k", k4).put("v", v4))
+        payload.put("aliases", al)
         val blob = seal(k, snapshotAad(m), payload.toString().toByteArray(Charsets.UTF_8))
         val header = JSONObject()
             .put("fmt", FORMAT_TAG)
@@ -132,7 +192,16 @@ class LocalChatStore(val accountKey: String) {
     }
 
     /** Logout (spec D2): drop DEK, identity key and every decrypted or in-memory structure. */
-    fun lock() = synchronized(lock) { lockMemory() }
+    fun lock() = synchronized(lock) {
+        generation++
+        lockMemory()
+    }
+
+    /** Step 1 of spec 6.5 only: results from before this point are stale from now on. */
+    fun bumpGeneration(): Long = synchronized(lock) {
+        generation++
+        generation
+    }
 
     // ---- sync write path (called by the single sync writer) ---------------------------
 
@@ -143,10 +212,17 @@ class LocalChatStore(val accountKey: String) {
     fun applyRecord(convKey: String, rec: IncomingRecord, pendingPublish: Boolean = false): ApplyResult {
         return synchronized(lock) {
         val k = requireKey()
-        val sid = rec.stableIdHint
-            ?: rec.sendId?.takeIf { it.isNotEmpty() }
-            ?: rec.body?.let { LocalChatIds.stableId(requireIdKey(), convKey, rec.dir, rec.sortTs, it, null) }
-            ?: return ApplyResult.REJECTED
+        // The stable id is known from the source's hint, else from the sendKey (which needs a body if derived).
+        val sk = rec.sendKeyHint
+            ?: if (rec.stableIdHint == null) {
+                LocalChatIds.sendKey(requireIdKey(), convKey, rec.sendId, rec.dir, rec.sortTs, rec.body)
+                    ?: return ApplyResult.REJECTED
+            } else {
+                null
+            }
+        val derivedSid = rec.stableIdHint ?: LocalChatIds.stableIdOf(requireIdxKey(), sk!!)
+        // A folded sendKey resolves to its survivor (spec 4.5): updates and tombstones follow the alias.
+        val sid = aliases[indexKey(convKey, derivedSid)] ?: derivedSid
         val existingKey = byStable[indexKey(convKey, sid)]
         val existing = existingKey?.let { rows[it] }
         if (existing == null) {
@@ -155,8 +231,18 @@ class LocalChatStore(val accountKey: String) {
                 return ApplyResult.TOMBSTONED
             }
             val body = rec.body ?: return ApplyResult.REJECTED
+            val digest = LocalChatIds.contentDigest(convKey, rec.dir, rec.sortTs, body)
+            val survivor = digestIndex[indexKey(convKey, digest)]
+            if (survivor != null && survivor != sid) {
+                // Same (peer, dir, ts, body digest) under another sendKey: fold it to the earliest (spec 4.5).
+                aliases[indexKey(convKey, derivedSid)] = survivor
+                return ApplyResult.COLLAPSED
+            }
             val row = insertRow(convKey, sid, rec, body, pendingPublish, deleted = false)
+            digestIndex[indexKey(convKey, digest)] = sid
+            digestOf[indexKey(convKey, sid)] = digest
             emitInserted(row, k)
+            if (pendingOlder.remove(convKey)) emit(LocalChatEvent.OlderAvailable(convKey))
             return ApplyResult.INSERTED
         }
         if (rec.deleted) {
@@ -187,37 +273,43 @@ class LocalChatStore(val accountKey: String) {
 
     // ---- read path (never touches the network, never waits for sync) -----------------
 
-    /** First screen: newest rows, filling `heightPt × 1.5` with 8..80 items (spec 6.2). */
+    /** First screen: newest rows up to one viewport (spec v1.1 6.2). Nothing is read ahead. */
     fun openConversation(convKey: String, vp: LocalViewport): LocalPage {
         return synchronized(lock) {
-        if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, "locked")
-        sweepLayouts(vp.layoutVersion)
-        val page = readPage(convKey, null, vp)
-        windowViewports[convKey] = vp
-        windows[convKey] = Window(
-            oldest = page.items.firstOrNull()?.let { keyOf(convKey, it) },
-            newest = page.items.lastOrNull()?.let { keyOf(convKey, it) },
-            opened = true,
-        )
-        page
+            if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, lastError ?: "locked", generation = generation)
+            sweepLayouts(vp.layoutVersion)
+            val page = readPage(convKey, null, vp, first = true)
+            windowViewports[convKey] = vp
+            windows[convKey] = Window(oldest = lastScanLo, newest = lastScanHi, opened = true)
+            page
         }
     }
 
-    /** Older page strictly before [cursor] (spec 6.2). Cursor from another epoch is refused. */
+    /** Older page strictly before [cursor]; scans up to the budget of raw rows (spec v1.1 6.3). */
     fun loadOlder(convKey: String, cursor: String, vp: LocalViewport): LocalPage {
         return synchronized(lock) {
-        if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, "locked")
-        val before = decodeCursor(cursor, convKey)
-            ?: return LocalPage(emptyList(), null, false, LocalSource.LOCKED, "cursor_invalid")
-        val page = readPage(convKey, before, vp)
-        windowViewports[convKey] = vp
-        val w = windows[convKey]
-        if (w != null && page.items.isNotEmpty()) {
-            windows[convKey] = w.copy(oldest = keyOf(convKey, page.items.first()))
-        }
-        page
+            if (dek == null) return LocalPage(emptyList(), null, false, LocalSource.LOCKED, lastError ?: "locked", generation = generation)
+            val before = decodeCursor(cursor, convKey)
+                ?: return LocalPage(emptyList(), null, false, LocalSource.LOCKED, "cursor_invalid", generation = generation)
+            val page = readPage(convKey, before, vp, first = false)
+            windowViewports[convKey] = vp
+            val w = windows[convKey]
+            if (w != null && lastScanLo != null) windows[convKey] = w.copy(oldest = lastScanLo)
+            page
         }
     }
+
+    /** The full head sync has covered every index record (spec 9.4): `end` is now possible. */
+    fun markSyncComplete() {
+        synchronized(lock) {
+            requireKey()
+            syncComplete = true
+            for (conv in pendingOlder.toList()) emit(LocalChatEvent.OlderAvailable(conv))
+            pendingOlder.clear()
+        }
+    }
+
+    val isSyncComplete: Boolean get() = synchronized(lock) { syncComplete }
 
     /** UI measured a media item (spec 8.2). Writes only real measurements; estimates are never stored. */
     fun reportLayout(convKey: String, stableId: String, vp: LocalViewport, wPt: Double, hPt: Double): Boolean {
@@ -252,7 +344,8 @@ class LocalChatStore(val accountKey: String) {
         return synchronized(lock) {
         requireKey()
         if (!sendId.isNullOrEmpty()) {
-            val row = byStable[indexKey(convKey, sendId)]?.let { rows[it] } ?: return false
+            if (aliases.containsKey(indexKey(convKey, LocalChatIds.stableIdOf(requireIdxKey(), sendId)))) return true
+            val row = stableRowKey(convKey, sendId)?.let { rows[it] } ?: return false
             if (row.deleted || row.bodyEnc == null) return false
             if (row.cid != cid) moveCid(row, cid)
             return true
@@ -266,7 +359,7 @@ class LocalChatStore(val accountKey: String) {
     fun bodyForRemote(convKey: String, sendId: String?, cid: String): String? {
         return synchronized(lock) {
         requireKey()
-        val row = (if (!sendId.isNullOrEmpty()) byStable[indexKey(convKey, sendId)] else byCid[cid])
+        val row = (if (!sendId.isNullOrEmpty() && !LocalChatIds.isLegacyUuid(sendId)) stableRowKey(convKey, sendId) else byCid[cid])
             ?.let { rows[it] } ?: return null
         if (row.convKey != convKey || row.deleted || row.bodyEnc == null) null else bodyOf(row)
         }
@@ -324,17 +417,27 @@ class LocalChatStore(val accountKey: String) {
 
     private fun requireKey(): ByteArray = dek ?: throw IllegalStateException("locked")
     private fun requireIdKey(): ByteArray = idKey ?: throw IllegalStateException("locked")
+    private fun requireIdxKey(): ByteArray = idxKey ?: throw IllegalStateException("locked")
+
+    /** Row key for a non-UUID sendId: its sendKey is the sendId, so the stable id is derivable without a body. */
+    private fun stableRowKey(convKey: String, sendId: String): RowKey? =
+        byStable[indexKey(convKey, LocalChatIds.stableIdOf(requireIdxKey(), sendId))]
 
     private fun resetMemory() {
         rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
+        digestIndex.clear(); digestOf.clear(); aliases.clear()
         headIndexHash = null
         tsMismatchCount = 0
         epoch = newEpoch()
     }
 
     private fun lockMemory() {
-        dek = null; idKey = null; kcv = null
+        dek?.fill(0); idKey?.fill(0); idxKey?.fill(0)
+        dek = null; idKey = null; idxKey = null; kcv = null
+        pendingOlder.clear()
+        syncComplete = false
         rows.clear(); byStable.clear(); byCid.clear(); layouts.clear(); failedMedia.clear(); windows.clear()
+        digestIndex.clear(); digestOf.clear(); aliases.clear()
     }
 
     private fun insertRow(
@@ -392,9 +495,14 @@ class LocalChatStore(val accountKey: String) {
             if (row.pendingPublish) { kept++; continue }
             it.remove()
             byStable.remove(indexKey(row.convKey, row.stableId))
+            digestOf.remove(indexKey(row.convKey, row.stableId))?.let { d ->
+                val dk = indexKey(row.convKey, d)
+                if (digestIndex[dk] == row.stableId) digestIndex.remove(dk)
+            }
             row.cid?.let { if (byCid[it] == key) byCid.remove(it) }
             removeLayouts(row.convKey, row.stableId)
         }
+        aliases.entries.removeIf { e -> !byStable.containsKey(indexKey(e.key.substringBefore('\u0000'), e.value)) }
         return kept
     }
 
@@ -408,36 +516,74 @@ class LocalChatStore(val accountKey: String) {
     }
 
     /**
-     * One viewport (spec v0.2 section 6.2, oracle `openPage`): accumulate heights from the cursor
-     * toward older rows until the sum reaches heightPt; the last row may cross the boundary.
-     * Tombstones count as 0 and advance the cursor. No minimum count, no read-ahead.
+     * One page from [before] (spec v1.1 6.2–6.4; oracle `openPage`). Visible heights accumulate toward
+     * older rows until the sum reaches heightPt (the last row may cross). Tombstones count as 0 and
+     * advance the cursor. The raw-row budget and the visible cap apply to every page.
      */
-    private fun readPage(convKey: String, before: RowKey?, vp: LocalViewport): LocalPage {
+    private fun readPage(convKey: String, before: RowKey?, vp: LocalViewport, first: Boolean): LocalPage {
         val hi = before ?: RowKey(convKey + "\u0000", Long.MIN_VALUE, "")
         val items = ArrayList<PageItem>()
         var sum = 0.0
-        var consumed = 0
+        var scanned = 0
         var capped = false
-        var last: StoredRow? = null
-        for (row in rows.headMap(hi, false).descendingMap().values) {
+        var scanExhausted = false
+        var windowHi: RowKey? = null
+        var windowLo: RowKey? = null
+        val scan = rows.headMap(hi, false).descendingMap().values.iterator()
+        while (scan.hasNext()) {
+            val row = scan.next()
             if (row.convKey != convKey) break
-            last = row
-            consumed++
+            scanned++
+            if (windowHi == null) windowHi = row.key
+            windowLo = row.key
+            var stop = false
             if (!row.deleted) {
                 val item = buildItem(row, vp)
                 items.add(item)
                 sum += item.layoutH
+                if (sum >= vp.heightPt) {
+                    stop = true
+                } else if (items.size >= CAP) {
+                    capped = true
+                    stop = true
+                }
             }
-            if (sum >= vp.heightPt) break
-            if (consumed >= CAP) { capped = true; break }
+            if (stop) break
+            if (scanned >= SCAN_BUDGET) {
+                scanExhausted = true
+                break
+            }
         }
-        val lastKey = last?.key
-        val hasOlder = lastKey != null && rows.lowerKey(lastKey)?.convKey == convKey
-        val olderCursor = lastKey?.takeIf { hasOlder }?.let { encodeCursor(it) }
+        val lastScanned = windowLo
+        val rawRemain = lastScanned != null && rows.lowerKey(lastScanned)?.convKey == convKey
+        val olderState = when {
+            rawRemain || scanExhausted -> "more"
+            syncComplete -> "end"
+            else -> "pending"
+        }
+        if (olderState == "pending") pendingOlder.add(convKey)
+        val olderCursor = if (olderState == "end" || lastScanned == null) null else encodeCursor(lastScanned)
+        lastScanHi = windowHi
+        lastScanLo = windowLo
         items.reverse()
-        val short = !hasOlder && sum < vp.heightPt
-        return LocalPage(items, olderCursor, hasOlder, LocalSource.LOCAL, null, short = short, capped = capped, syncState = syncState)
+        return LocalPage(
+            items = items,
+            olderCursor = olderCursor,
+            hasOlder = olderState != "end",
+            source = LocalSource.LOCAL,
+            error = null,
+            short = olderState == "end" && sum < vp.heightPt,
+            capped = capped,
+            syncState = syncState,
+            olderState = olderState,
+            scanExhausted = scanExhausted,
+            generation = generation,
+        )
     }
+
+    /** Raw-row window of the last page (spec O-6): lowest and highest scanned keys, tombstones included. */
+    private var lastScanHi: RowKey? = null
+    private var lastScanLo: RowKey? = null
 
     private fun buildItem(row: StoredRow, vp: LocalViewport): PageItem {
         val measured = layouts[layoutKey(row.convKey, row.stableId, vp)]
@@ -463,9 +609,10 @@ class LocalChatStore(val accountKey: String) {
 
     private fun estimateFor(row: StoredRow, vp: LocalViewport): Pair<Double, Double> {
         val media = mediaOf(row)
+        val body = if (row.kind == LocalMediaKind.TEXT) bodyOf(row) else null
         return LocalChatLayout.estimate(
             row.kind, media?.w, media?.h,
-            failedMedia.contains(indexKey(row.convKey, row.stableId)), vp,
+            failedMedia.contains(indexKey(row.convKey, row.stableId)), body, vp,
         )
     }
 
@@ -542,6 +689,20 @@ class LocalChatStore(val accountKey: String) {
         return try {
             epoch = o.getString("epoch")
             migrationState = o.optString("migration", "none")
+            syncComplete = o.optBoolean("syncComplete", false)
+            val dg = o.optJSONArray("digests")
+            if (dg != null) for (i in 0 until dg.length()) {
+                val e = dg.getJSONObject(i)
+                val k5 = e.getString("k")
+                val d5 = e.getString("v")
+                digestOf[k5] = d5
+                digestIndex[indexKey(k5.substringBefore('\u0000'), d5)] = k5.substringAfter('\u0000')
+            }
+            val al = o.optJSONArray("aliases")
+            if (al != null) for (i in 0 until al.length()) {
+                val e = al.getJSONObject(i)
+                aliases[e.getString("k")] = e.getString("v")
+            }
             headIndexHash = if (o.isNull("headIndexHash")) null else o.getString("headIndexHash")
             val rowArr = o.getJSONArray("rows")
             for (i in 0 until rowArr.length()) {
@@ -569,6 +730,9 @@ class LocalChatStore(val accountKey: String) {
     private fun snapshotAad(m: ByteArray): ByteArray = "chat-local-snapshot-v1".toByteArray(Charsets.UTF_8) + m
 
     private fun bodyAad(convKey: String, sid: String, revision: Int): ByteArray =
+        "${LocalChatIds.convBlind(requireIdxKey(), convKey)}\u001f$sid\u001f$revision".toByteArray(Charsets.UTF_8)
+
+    private fun bodyAadLegacy(convKey: String, sid: String, revision: Int): ByteArray =
         "$convKey\u001f$sid\u001f$revision".toByteArray(Charsets.UTF_8)
 
     private fun hkdf(master: ByteArray, info: String): ByteArray = ConetChatCryptoUtil.hkdf(master, info, 32)
@@ -675,8 +839,10 @@ class LocalChatStore(val accountKey: String) {
 
     companion object {
         const val SCHEMA_VERSION = 1
-        /** Safety cap on consumed rows per page (spec v0.2 6.2). */
+        /** Safety cap on consumed rows for the first screen (spec v1.1 6.2). */
         const val CAP = 200
+        /** Raw-row budget for one loadOlder scan (spec v1.1 6.3). */
+        const val SCAN_BUDGET = 2000
         private const val FORMAT_TAG = "CLS1"
         private val DEFAULT_VIEWPORT = LocalViewport(390.0, 844.0, "portrait", 1.0, 1)
 
@@ -701,13 +867,15 @@ class IncomingRecord(
     val deleted: Boolean = false,
     /** Source's stable id for tombstones and sendId-less records (spec 4.1). */
     val stableIdHint: String? = null,
+    /** sendKey for tombstones and revisions that reference it (spec v1.1 4.1, Q-3). */
+    val sendKeyHint: String? = null,
     val widthPx: Int? = null,
     val heightPx: Int? = null,
     val mime: String? = null,
     val mediaCid: String? = null,
 )
 
-enum class ApplyResult { INSERTED, UPDATED, CID_ONLY, TOMBSTONED, SKIPPED, REJECTED }
+enum class ApplyResult { INSERTED, UPDATED, CID_ONLY, TOMBSTONED, SKIPPED, REJECTED, COLLAPSED }
 
 enum class UnlockResult(val opened: Boolean) {
     OK(true),
@@ -749,6 +917,12 @@ data class LocalPage(
     /** The safety cap fired; should not happen at normal viewport sizes. */
     val capped: Boolean = false,
     val syncState: String = "idle",
+    /** more | pending | end (spec v1.1 6.4). */
+    val olderState: String = if (hasOlder) "more" else "end",
+    /** A loadOlder scan hit its budget: the host must ask again (spec 6.3). */
+    val scanExhausted: Boolean = false,
+    /** The store generation the result belongs to (spec 6.5). */
+    val generation: Long = 0L,
 )
 
 /** A held record for the legacy whole-history read (historyRead). */
@@ -762,6 +936,9 @@ data class StoredEntry(
 )
 
 sealed class LocalChatEvent {
+    data class OlderAvailable(val convKey: String) : LocalChatEvent()
+    /** The page must clear what it shows now (spec 6.5 step 2). */
+    object Locked : LocalChatEvent()
     data class Inserted(val convKey: String, val items: List<PageItem>, val position: String) : LocalChatEvent()
     data class Updated(val convKey: String, val stableId: String, val revision: Int) : LocalChatEvent()
     data class Deleted(val convKey: String, val stableId: String) : LocalChatEvent()

@@ -1,5 +1,6 @@
 package network.conet.chat.localread
 
+import network.conet.chat.ConetChatCryptoUtil
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -50,7 +51,9 @@ class FixtureScenarioTest {
 
     private fun vectorCursorTI(s: String?): Pair<Long, String>? {
         if (s == null || s == "null") return null
-        val o = JSONObject(s)
+        // v1.1 vectors carry the cursor as base64url(JSON); older vectors carried the JSON itself.
+        val json = if (s.startsWith("{")) s else String(Base64.getUrlDecoder().decode(s), Charsets.UTF_8)
+        val o = JSONObject(json)
         return Pair(o.getLong("t"), o.getString("i"))
     }
 
@@ -65,14 +68,18 @@ class FixtureScenarioTest {
         val account = fx.getString("account")
         val conv = fx.getString("conv")
 
-        val master = sha256("fixture-master|$seed|$account")
+        // The r1 fixture generator uses its synthetic local root for K_id (plan A) and K_idx; see receipt.
+        val localRoot = sha256("fixture-local-root|$seed|$account")
         val store = LocalChatStore("0xfixture:default")
-        assertEquals(UnlockResult.OK, store.unlock(master, null))
-        val idKey = LocalChatIds.idKey(master)
+        assertEquals(UnlockResult.OK, store.unlock(localRoot, localRoot, null))
+        val idKey = LocalChatIds.idKeyFromRootDb(localRoot)
+        val idxKey = LocalChatIds.idxKeyFromRootDb(localRoot)
 
         // Load truth for the conversation. Stable ids are checked against the generator's ids.
         var truthRows = 0
         var sendIdLess = 0
+        var revisedSendIdLessRows = 0
+        var sendIdLessUnverifiable = 0
         var idMismatch = 0
         File(dir, "$account/truth.jsonl").useLines { lines ->
             for (line in lines) {
@@ -85,12 +92,29 @@ class FixtureScenarioTest {
                 val dirS = r.getString("dir")
                 val ts = r.getLong("sortTs")
                 val stableId = r.getString("stableId")
+                val deletedRow = r.getBoolean("deleted")
+                // spec v1.1 4.1–4.3: sendKey from the record, then stable_id = base64url(HMAC(K_idx, sendKey)).
+                // A sendId-less row that was revised: the sendKey comes from the FIRST body, which the truth
+                // file does not carry. Such rows cannot be recomputed here (counted; see receipt).
+                // sendId-less rows: the generator may derive from a legacy random UUID (not in the truth file)
+                // or from the first body of a revised row (not in the truth file). Those are counted, not asserted.
+                val revisedSendIdLess = sendId.isNullOrEmpty() && r.getInt("revision") > 0
                 if (sendId.isNullOrEmpty()) {
                     sendIdLess++
-                    if (LocalChatIds.stableId(idKey, conv, dirS, ts, body, null) != stableId) idMismatch++
+                    val recomputed = LocalChatIds.stableIdOf(idxKey, LocalChatIds.sendKey(idKey, conv, null, dirS, ts, body)!!)
+                    if (recomputed != stableId) sendIdLessUnverifiable++
+                    if (revisedSendIdLess) revisedSendIdLessRows++
+                } else {
+                    val sendKey = LocalChatIds.sendKey(idKey, conv, sendId, dirS, ts, body)!!
+                    if (LocalChatIds.stableIdOf(idxKey, sendKey) != stableId) idMismatch++
                 }
                 val manifest = if (r.isNull("manifest")) null else r.getJSONObject("manifest")
-                val deleted = r.getBoolean("deleted")
+                val deleted = deletedRow
+                // sendId-less rows: the truth stable id is the hint (see the cross-check comment above).
+                val hint = if (sendId.isNullOrEmpty()) stableId else null
+                val sendKey = if (hint != null) null else LocalChatIds.sendKey(idKey, conv, sendId, dirS, ts, body)
+                // Oracle O-3: a locally known failed blob takes the failure placeholder height (88 x fs).
+                if (manifest?.optBoolean("blobMissing", false) == true) store.markMediaFailed(conv, stableId, true)
                 store.applyRecord(
                     conv,
                     IncomingRecord(
@@ -102,7 +126,8 @@ class FixtureScenarioTest {
                         cid = null,
                         revision = r.getInt("revision"),
                         deleted = deleted,
-                        stableIdHint = stableId,
+                        stableIdHint = hint,
+                        sendKeyHint = if (deleted) sendKey else null,
                         widthPx = manifest?.optInt("width", 0)?.takeIf { manifest.has("width") && it > 0 },
                         heightPx = manifest?.optInt("height", 0)?.takeIf { manifest.has("height") && it > 0 },
                         mime = manifest?.optString("mime"),
@@ -112,8 +137,10 @@ class FixtureScenarioTest {
             }
         }
         assertTrue("truth rows for conversation", truthRows > 0)
-        assertEquals("sendId-less stable ids match the generator (HKDF/HMAC cross-check)", 0, idMismatch)
-        println("LOCALREAD_FIXTURE stableIdCrossCheck sendIdLess=$sendIdLess mismatch=$idMismatch env=jvm-host")
+        assertEquals("sendId-bearing rows match the generator (sendKey + K_idx cross-check, v1.1)", 0, idMismatch)
+        // Held rows must agree with the truth ids the generator wrote.
+        store.markSyncComplete()
+        println("LOCALREAD_FIXTURE stableIdCrossCheck rows=$truthRows sendIdLess=$sendIdLess unverifiableSendIdLess=$sendIdLessUnverifiable revised=$revisedSendIdLessRows mismatch=$idMismatch env=jvm-host")
 
         // Scenario steps (open / measure / loadOlder).
         val steps: JSONArray = scenarios.getJSONArray("steps")
@@ -138,11 +165,11 @@ class FixtureScenarioTest {
                     val sum = page.items.sumOf { it.layoutH }
                     assertTrue("visibleSum at step $i: $sum vs ${ex.getDouble("visibleSum")}",
                         Math.abs(sum - ex.getDouble("visibleSum")) <= 0.05 * page.items.size.coerceAtLeast(1) + 0.05)
-                    assertEquals("hasOlder at step $i", ex.getBoolean("hasOlder"), page.hasOlder)
+                    assertEquals("olderState at step $i", ex.getString("olderState"), page.olderState)
                     assertEquals("olderCursor at step $i", vectorCursorTI(ex.optString("olderCursor", "null").takeIf { it != "null" }),
                         cursorTI(page.olderCursor))
-                    // Interval invariant (spec 6.2) on every page that is not short or capped.
-                    if (page.hasOlder && !page.capped && page.items.isNotEmpty()) {
+                    // Interval invariant (spec 6.2) on every page that is not short, capped or scan-exhausted.
+                    if (page.olderState == "more" && !page.capped && !page.scanExhausted && page.items.isNotEmpty()) {
                         assertTrue("interval at step $i", sum >= vp.heightPt && sum - page.items.first().layoutH < vp.heightPt)
                     }
                     lastCursor = page.olderCursor
@@ -167,7 +194,7 @@ class FixtureScenarioTest {
         val all = ArrayList<PageItem>()
         all.addAll(0, page.items)
         var pages = 1
-        while (page.hasOlder) {
+        while (page.olderState == "more") {
             page = store.loadOlder(conv, page.olderCursor!!, LocalViewport(390.0, 844.0, "portrait", 1.0, 1))
             all.addAll(0, page.items)
             pages++

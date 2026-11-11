@@ -23,6 +23,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import network.conet.chat.localread.ApplyResult
 import network.conet.chat.localread.IncomingRecord
+import network.conet.chat.localread.LocalChatIds
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.LocalChatStore
 import network.conet.chat.localread.LocalMediaKind
@@ -63,6 +64,11 @@ class BeamioConetChatHistoryStore(
     signer: HistorySigner? = null,
     /** False in tests: no timer, no head poll; tests call [flushNowBlocking]. */
     private val autoFlush: Boolean = true,
+    /**
+     * Local-DB root R_db (spec v1.1-r1 22.2): derived inside the wallet boundary from the private key.
+     * Null when the boundary holds no key: the local store then refuses to open (`db_root_missing`).
+     */
+    private val dbRootProvider: (() -> ByteArray?)? = null,
 ) {
     data class IndexRecord(
         val seq: Int,
@@ -206,8 +212,13 @@ class BeamioConetChatHistoryStore(
     fun isReady(): Boolean = ready
 
     fun destroy() {
-        persistLocal()
-        local?.lock()
+        // Spec 6.5 order: generation, UI clear, persist, zeroize, close.
+        local?.let {
+            it.bumpGeneration()
+            onLocalEvent?.invoke(LocalChatEvent.Locked)
+            persistLocal()
+            it.lock()
+        }
         local = null
         destroyed = true
         synchronized(timers) {
@@ -398,7 +409,7 @@ class BeamioConetChatHistoryStore(
         val dir = entry.optString("dir", "out")
         val body = entry.optString("body", "")
         val ts = if (entry.has("ts")) entry.optLong("ts") else clock.now()
-        val key = HistoryBatch.recordKey(entry.optString("sendId", ""), peer, dir, ts, body)
+        val key = writerSendKey(entry.optString("sendId", ""), peer, dir, ts, body) ?: return false
         val committed = committedKeys()
         val added = HistoryBatch.enqueue(
             pending,
@@ -454,7 +465,7 @@ class BeamioConetChatHistoryStore(
         for (rec in previous) {
             if (rec.key in remoteKeys) continue
             val entry = plain[rec.cid] ?: materialize(rec) ?: continue
-            val k = rec.sendId.ifEmpty { HistoryBatch.recordKey(null, entry.peer, entry.dir, entry.ts, entry.body) }
+            val k = rec.sendId.ifEmpty { null } ?: writerSendKey("", entry.peer, entry.dir, entry.ts, entry.body) ?: continue
             val added = HistoryBatch.enqueue(
                 pending,
                 HistoryBatch.PendingEntry(k, entry.peer, entry.dir, entry.ts, entry.body),
@@ -516,15 +527,31 @@ class BeamioConetChatHistoryStore(
             local?.setSyncState("error")
             return false
         }
-        ingestLocal(records.toList())
+        // Sync is complete only when every index record is held (spec 9.4): a failed fetch keeps `pending`.
+        if (ingestLocal(records.toList())) local?.markSyncComplete()
         local?.setSyncState("idle")
         return changed
     }
 
+    /**
+     * Identity written into the index as sendId (spec v1.1 4.2, D10): a non-empty sendId is kept;
+     * an empty one gets the deterministic sendKey, not a random id. Needs the master key (after prepare).
+     */
+    private fun writerSendKey(sendId: String, peer: String, dir: String, ts: Long, body: String): String? {
+        if (sendId.isNotEmpty()) return sendId
+        // K_id comes from the local-DB root (spec v1.1-r1); without a wallet root no sendKey can be derived.
+        val kId = kIdDb ?: return null
+        return LocalChatIds.sendKeyDerived(kId, peer.lowercase(), dir, ts, body)
+    }
+
+    /** K_id from the local-DB root, set when the local store opens (null while no root is held). */
+    @Volatile
+    private var kIdDb: ByteArray? = null
+
     /** Spec 9.2: held records are skipped (no download, no decrypt); the rest are fetched once and stored sealed. */
-    private fun ingestLocal(remote: List<IndexRecord>) {
-        val s = local ?: return
-        if (!s.isUnlocked) return
+    private fun ingestLocal(remote: List<IndexRecord>): Boolean {
+        val s = local ?: return false
+        if (!s.isUnlocked) return false
         var stored = 0
         var known = 0
         var failed = 0
@@ -560,6 +587,7 @@ class BeamioConetChatHistoryStore(
         if (stored > 0) persistLocal()
         if (s.migration != "complete") s.markMigrationComplete()
         log("info", "[history] local ingest records=${remote.size} stored=$stored known=$known failed=$failed")
+        return failed == 0
     }
 
     private data class MediaFields(
@@ -611,7 +639,15 @@ class BeamioConetChatHistoryStore(
         val s = LocalChatStore(localAccountKey())
         val file = localFile()
         val snap = file?.takeIf { it.isFile }?.let { f -> try { f.readBytes() } catch (e: Exception) { null } }
-        val r = s.unlock(master, snap)
+        val dbRoot = dbRootProvider?.invoke()
+        kIdDb = dbRoot?.let { LocalChatIds.idKeyFromRootDb(it) }
+        if (dbRoot == null) {
+            s.markLocked("db_root_missing")
+            local = s
+            log("warn", "[history] local store locked: db_root_missing")
+            return
+        }
+        val r = s.unlock(master, dbRoot, snap)
         local = s
         if (r == UnlockResult.OK || r == UnlockResult.REBUILT_KCV_MISMATCH) {
             s.subscribe { ev -> onLocalEvent?.invoke(ev) }

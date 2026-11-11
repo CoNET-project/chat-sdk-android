@@ -70,10 +70,11 @@ class LocalChatStoreTest {
             }
             if (rnd.nextDouble() < 0.005) m.deleted = true
         }
+        val idxKey = keysFor(master).second
         val ids = HashMap<String, String>()
         for (m in msgs) {
-            val sid = m.sendId ?: LocalChatIds.stableId(idKey, m.conv, m.dir, m.sortTs, originalBody(m), null)
-            ids[m.conv + "|" + m.n] = sid
+            val sk = LocalChatIds.sendKey(idKey, m.conv, m.sendId, m.dir, m.sortTs, originalBody(m))!!
+            ids[m.conv + "|" + m.n] = LocalChatIds.stableIdOf(idxKey, sk)
         }
         return Pair(msgs, ids)
     }
@@ -82,6 +83,8 @@ class LocalChatStoreTest {
     private fun originalBody(m: Msg): String = if (m.revised) m.body.removeSuffix(" (edited)") else m.body
 
     private fun apply(store: LocalChatStore, msgs: List<Msg>, ids: Map<String, String>) {
+        // The synthetic history stands for a finished full sync: older pages end instead of pending.
+        store.markSyncComplete()
         for (m in msgs) {
             val r = store.applyRecord(
                 m.conv,
@@ -99,8 +102,9 @@ class LocalChatStoreTest {
         }
         for (m in msgs) {
             if (m.deleted) {
+                val sk = LocalChatIds.sendKey(keysFor(master).first, m.conv, m.sendId, m.dir, m.sortTs, originalBody(m))!!
                 val r = store.applyRecord(m.conv, IncomingRecord(m.dir, m.sortTs, m.kind, m.sendId, null, m.cid,
-                    deleted = true, stableIdHint = ids[m.conv + "|" + m.n]))
+                    deleted = true, sendKeyHint = sk))
                 assertEquals(ApplyResult.TOMBSTONED, r)
             }
         }
@@ -128,7 +132,13 @@ class LocalChatStoreTest {
         return Pair(all, pages)
     }
 
-    private fun fresh(account: String = "0xaaaa"): LocalChatStore {
+    /** K_id and K_idx for the test account the convenience unlock uses (eoa 0xaaaa, workspace default). */
+    private fun keysFor(m: ByteArray): Pair<ByteArray, ByteArray> {
+        val rDb = LocalChatIds.rootDbFromPrivateKey(m, "0xaaaa", "default")
+        return Pair(LocalChatIds.idKeyFromRootDb(rDb), LocalChatIds.idxKeyFromRootDb(rDb))
+    }
+
+    private fun fresh(account: String = "0xaaaa:default"): LocalChatStore {
         val s = LocalChatStore(account)
         assertEquals(UnlockResult.OK, s.unlock(master, null))
         return s
@@ -137,23 +147,92 @@ class LocalChatStoreTest {
     // ---- ids and ordering ---------------------------------------------------------------
 
     @Test
-    fun stableIdUsesSendIdWhenPresent() {
-        val k = LocalChatIds.idKey(master)
-        assertEquals("abc.def", LocalChatIds.stableId(k, "c", "in", 1L, "x", "abc.def"))
-        assertEquals("abc.def", LocalChatIds.stableId(k, "c", "out", 9L, "y", "abc.def"))
+    fun sendKeyAndStableIdFollowSpecV11() {
+        val k = keysFor(master).first
+        val idx = keysFor(master).second
+        // Any non-empty sendId is the sendKey, UUID included (spec v1.1-r1 4.1 rule 1).
+        assertEquals("abc.def", LocalChatIds.sendKey(k, "c", "abc.def", "in", 1L, "x"))
+        val uuid = "123e4567-e89b-12d3-a456-426614174000"
+        assertEquals(uuid, LocalChatIds.sendKey(k, "c", uuid, "in", 1L, "x"))
+        // Only an empty sendId derives the sendKey from the body.
+        assertEquals(LocalChatIds.sendKeyDerived(k, "c", "in", 1L, "x"), LocalChatIds.sendKey(k, "c", "", "in", 1L, "x"))
+        assertNull(LocalChatIds.sendKey(k, "c", null, "in", 1L, null))
+        // stable_id: 43 ASCII base64url characters, bound to K_idx.
+        val sid = LocalChatIds.stableIdOf(idx, "abc.def")
+        assertEquals(43, sid.length)
+        assertTrue(sid.all { it.isLetterOrDigit() && it.code < 128 || it == '-' || it == '_' })
+        assertFalse(sid == LocalChatIds.stableIdOf(keysFor(otherMaster).second, "abc.def"))
     }
 
     @Test
-    fun contentDerivedIdIsDeterministicAndSensitive() {
-        val k = LocalChatIds.idKey(master)
-        val base = LocalChatIds.stableId(k, "c", "in", 100L, "hello", null)
-        assertEquals(base, LocalChatIds.stableId(k, "c", "in", 100L, "hello", ""))
-        assertTrue(base.startsWith("h:"))
-        assertTrue(base.substring(2).all { it.isLetterOrDigit() || it == '-' || it == '_' })
-        assertFalse(base == LocalChatIds.stableId(k, "c", "out", 100L, "hello", null))
-        assertFalse(base == LocalChatIds.stableId(k, "c", "in", 101L, "hello", null))
-        assertFalse(base == LocalChatIds.stableId(k, "c", "in", 100L, "hellp", null))
-        assertFalse(base == LocalChatIds.stableId(LocalChatIds.idKey(otherMaster), "c", "in", 100L, "hello", null))
+    fun derivedSendKeyIsDeterministicAndSensitive() {
+        val k = keysFor(master).first
+        val base = LocalChatIds.sendKeyDerived(k, "c", "in", 100L, "hello")
+        assertEquals(base, LocalChatIds.sendKeyDerived(k, "c", "in", 100L, "hello"))
+        assertTrue(base.startsWith("x"))
+        assertTrue(base.substring(1).all { it.isLetterOrDigit() || it == '-' || it == '_' })
+        assertFalse(base == LocalChatIds.sendKeyDerived(k, "c", "out", 100L, "hello"))
+        assertFalse(base == LocalChatIds.sendKeyDerived(k, "c", "in", 101L, "hello"))
+        assertFalse(base == LocalChatIds.sendKeyDerived(k, "c", "in", 100L, "hellp"))
+        assertFalse(base == LocalChatIds.sendKeyDerived(keysFor(otherMaster).first, "c", "in", 100L, "hello"))
+    }
+
+    @Test
+    fun allTombstonePageKeepsScanningUntilBudgetAndThenContinues() {
+        val store = fresh()
+        store.applyRecord("0xt", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "keep", "visible", "c0"))
+        for (i in 0 until 2100) {
+            store.applyRecord("0xt", IncomingRecord("in", 2L + i, LocalMediaKind.TEXT, null, null, null,
+                deleted = true, sendKeyHint = "gone-$i"))
+        }
+        store.markSyncComplete()
+        val vp1 = LocalViewport(390.0, 844.0, "portrait", 1.0, 1)
+        // The first 2000 raw rows are tombstones: no visible item, and the budget is reported (T-25).
+        val first = store.openConversation("0xt", vp1)
+        assertTrue(first.items.isEmpty())
+        assertTrue(first.scanExhausted)
+        assertEquals("more", first.olderState)
+        assertNotNull(first.olderCursor)
+        // Continuing with the returned cursor reaches the visible row; no page is returned empty as "end".
+        val next = store.loadOlder("0xt", first.olderCursor!!, vp1)
+        assertEquals(listOf("keep"), next.items.map { it.sendId })
+        assertEquals("end", next.olderState)
+    }
+
+    @Test
+    fun cidMoveIsRecordedWithoutRefetch() {
+        val store = fresh()
+        store.applyRecord("0xm", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "s1", "body", "c1"))
+        // PWA relinearize moves the cid; the held row answers without a body (spec 9.2, T-17).
+        assertTrue(store.knowsRemote("0xm", "s1", "c2"))
+        assertEquals("body", store.bodyForRemote("0xm", "s1", "c2"))
+        // A sendId-less record is found by its cid, and only inside its own conversation.
+        store.applyRecord("0xm", IncomingRecord("in", 2L, LocalMediaKind.TEXT, null, "plain", "c9"))
+        assertTrue(store.knowsRemote("0xm", null, "c9"))
+        assertFalse(store.knowsRemote("0xother", null, "c9"))
+    }
+
+    @Test
+    fun pendingSyncEndsOnlyAfterFullSyncAndNotifiesOpenWindows() {
+        val store = LocalChatStore("0xpend")
+        assertEquals(UnlockResult.OK, store.unlock(master, null))
+        store.applyRecord("0xp", IncomingRecord("in", 5L, LocalMediaKind.TEXT, "s5", "five", "c5"))
+        store.applyRecord("0xp", IncomingRecord("in", 6L, LocalMediaKind.TEXT, "s6", "six", "c6"))
+        val events = ArrayList<LocalChatEvent>()
+        store.subscribe { events.add(it) }
+        // Local rows ran out before the full sync: olderState is pending, not end (T-23).
+        val first = store.openConversation("0xp", LocalViewport(390.0, 10000.0, "portrait", 1.0, 1))
+        assertEquals("pending", first.olderState)
+        assertNotNull(first.olderCursor)
+        assertFalse(first.short)
+        // A late older row reaches the pending window: olderAvailable, and the page can then continue.
+        store.applyRecord("0xp", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "s1", "one", "c1"))
+        assertTrue(events.any { it is LocalChatEvent.OlderAvailable && it.convKey == "0xp" })
+        store.markSyncComplete()
+        val later = store.loadOlder("0xp", first.olderCursor!!, LocalViewport(390.0, 10000.0, "portrait", 1.0, 1))
+        assertEquals(listOf("s1"), later.items.map { it.sendId })
+        assertEquals("end", later.olderState)
+        assertNull(later.olderCursor)
     }
 
     @Test
@@ -167,7 +246,7 @@ class LocalChatStoreTest {
 
     @Test
     fun pagingMatchesTruthWithTiesTombstonesAndRevisions() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(20261111L, listOf("0xpeer1", "0xpeer2"), 3000, idKey)
         val store = fresh()
         apply(store, msgs, ids)
@@ -191,7 +270,7 @@ class LocalChatStoreTest {
 
     @Test
     fun firstScreenIsOneViewportWithoutReadAhead() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(7L, listOf("0xp"), 500, idKey)
         val store = fresh()
         apply(store, msgs, ids)
@@ -212,6 +291,7 @@ class LocalChatStoreTest {
     fun shortHistoryReturnsEverythingAndFlagsShort() {
         val store = fresh()
         store.applyRecord("0xshort", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "a", "one", "c"))
+        store.markSyncComplete()
         val page = store.openConversation("0xshort", vp)
         assertEquals(1, page.items.size)
         assertTrue(page.short)
@@ -223,7 +303,7 @@ class LocalChatStoreTest {
 
     @Test
     fun layoutMeasuredOnceIsHitOnSecondVisit() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(11L, listOf("0xq"), 400, idKey)
         val store = fresh()
         apply(store, msgs, ids)
@@ -241,7 +321,7 @@ class LocalChatStoreTest {
 
     @Test
     fun rotationAndFontSwitchKeysAndKeepOldOnes() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(13L, listOf("0xr"), 200, idKey)
         val store = fresh()
         apply(store, msgs, ids)
@@ -263,7 +343,7 @@ class LocalChatStoreTest {
         val rec = IncomingRecord("in", 1000L, LocalMediaKind.TEXT, "sid-x", "v0", "c1")
         assertEquals(ApplyResult.INSERTED, store.applyRecord("0xs", rec))
         val before = store.openConversation("0xs", vp).items.single()
-        store.reportLayout("0xs", "sid-x", vp, 300.0, 90.0)
+        store.reportLayout("0xs", before.stableId, vp, 300.0, 90.0)
         assertTrue(store.openConversation("0xs", vp).items.single().measured)
         assertEquals(ApplyResult.UPDATED, store.applyRecord("0xs", IncomingRecord("in", 1000L, LocalMediaKind.TEXT, "sid-x", "v1", "c2", revision = 1)))
         val after = store.openConversation("0xs", vp).items.single()
@@ -274,7 +354,7 @@ class LocalChatStoreTest {
         // Stale revision is ignored.
         assertEquals(ApplyResult.SKIPPED, store.applyRecord("0xs", IncomingRecord("in", 1000L, LocalMediaKind.TEXT, "sid-x", "v0", "c1", revision = 0)))
         // Tombstone keeps the key and removes the body.
-        assertEquals(ApplyResult.TOMBSTONED, store.applyRecord("0xs", IncomingRecord("in", 1000L, LocalMediaKind.TEXT, "sid-x", null, null, deleted = true, stableIdHint = "sid-x")))
+        assertEquals(ApplyResult.TOMBSTONED, store.applyRecord("0xs", IncomingRecord("in", 1000L, LocalMediaKind.TEXT, "sid-x", null, null, deleted = true, sendKeyHint = "sid-x")))
         assertTrue(store.openConversation("0xs", vp).items.isEmpty())
     }
 
@@ -282,7 +362,7 @@ class LocalChatStoreTest {
 
     @Test
     fun middleInsertionEmitsMiddleAndPagesStayExact() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(17L, listOf("0xm"), 300, idKey)
         val store = fresh()
         apply(store, msgs, ids)
@@ -297,7 +377,7 @@ class LocalChatStoreTest {
         assertEquals("middle", ev.position)
         // Full paging afterwards includes the new row exactly once.
         val (all, _) = pageAll(store, "0xm", vp)
-        assertEquals(1, all.count { it.stableId == "mid-sid" })
+        assertEquals(1, all.count { it.sendId == "mid-sid" })
         assertEquals(all.size, all.map { it.stableId }.toSet().size)
     }
 
@@ -345,7 +425,7 @@ class LocalChatStoreTest {
         assertFalse(text.contains("FIXTURE-MARK"))
         assertFalse(text.contains("SIDMARK"))
         // Restore and read back.
-        val re = LocalChatStore("0xaaaa")
+        val re = LocalChatStore("0xaaaa:default")
         assertEquals(UnlockResult.OK, re.unlock(master, snap))
         assertEquals("FIXTURE-MARK-42", re.openConversation("0xp", vp).items.first().body)
     }
@@ -386,7 +466,7 @@ class LocalChatStoreTest {
     @Test
     fun lockDropsMemoryAndUnlockRestoresWithSameEpochCursor() {
         val s = fresh()
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val (msgs, ids) = fixture(23L, listOf("0xl"), 120, idKey)
         apply(s, msgs, ids)
         val p = s.openConversation("0xl", vp)
@@ -405,7 +485,7 @@ class LocalChatStoreTest {
 
     @Test
     fun firstScreenTimingOn50kStoreJvm() {
-        val idKey = LocalChatIds.idKey(master)
+        val idKey = keysFor(master).first
         val store = fresh()
         val convs = (0 until 10).map { "0xconv$it" }
         val (msgs, ids) = fixture(99L, convs, 5000, idKey)

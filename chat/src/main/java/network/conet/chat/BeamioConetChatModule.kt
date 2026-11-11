@@ -333,6 +333,8 @@ object BeamioConetChatModule {
                 apiBaseUrl = s.apiBaseUrl,
                 registryAddress = s.chatIndexRegistryAddress,
                 storageDir = java.io.File(ctx.filesDir, "conet-chat"),
+                // Local-DB root from the wallet boundary (in-memory key only; no key -> the local store stays locked).
+                dbRootProvider = { BeamioConetChatSignBroker.deriveLocalRoot(s.eoa, "default") },
                 log = { level, msg ->
                     // Shape only (counts / short cid) — never plaintext or key material.
                     Log.i(TAG, msg)
@@ -968,7 +970,9 @@ object BeamioConetChatModule {
         return JSONObject()
             .put("items", items)
             .put("olderCursor", page.olderCursor ?: JSONObject.NULL)
-            .put("hasOlder", page.hasOlder)
+            .put("olderState", page.olderState)
+            .put("scanExhausted", page.scanExhausted)
+            .put("generation", page.generation)
             .put("syncState", page.syncState)
             .put(
                 "source",
@@ -995,6 +999,8 @@ object BeamioConetChatModule {
             is LocalChatEvent.Updated -> p.put("kind", "updated").put("convKey", ev.convKey)
                 .put("stableId", ev.stableId).put("revision", ev.revision)
             is LocalChatEvent.Deleted -> p.put("kind", "deleted").put("convKey", ev.convKey).put("stableId", ev.stableId)
+            is LocalChatEvent.OlderAvailable -> p.put("kind", "olderAvailable").put("convKey", ev.convKey)
+            LocalChatEvent.Locked -> p.put("kind", "locked")
             is LocalChatEvent.Cleared -> p.put("kind", "cleared").put("scope", ev.scope)
                 .put("convKey", ev.convKey ?: JSONObject.NULL).put("pendingKept", ev.pendingKept)
         }
@@ -1354,6 +1360,7 @@ object BeamioConetChatModule {
     private fun destroy() {
         listen.stop()
         BeamioConetChatSignBroker.cancelAll("destroyed")
+        val hadHistory = synchronized(lock) { session?.history != null }
         synchronized(lock) {
             session?.destroyed = true
             session?.history?.destroy()
@@ -1361,8 +1368,8 @@ object BeamioConetChatModule {
             session = null
             voiceSessions.clear()
         }
-        // The local store is locked (DEK and master dropped); the page clears its list on this event.
-        emitEvent(JSONObject().put("type", "event:historyChange").put("payload", JSONObject().put("kind", "locked")))
+        // The history store emits `locked` itself (before its keys are dropped). Without a store, emit it here too.
+        if (!hadHistory) emitEvent(JSONObject().put("type", "event:historyChange").put("payload", JSONObject().put("kind", "locked")))
         emitEvent(JSONObject().put("type", "event:status").put("payload", statusPayload("destroyed", null)))
     }
 
