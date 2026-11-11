@@ -823,13 +823,16 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
                     ?: loadAsset("openpgp.min.js")
                 val ethers = loadAsset("ChatCrypto/ethers.umd.min.js")
                     ?: loadAsset("ethers.umd.min.js")
-                if (openpgp.isNullOrBlank() || ethers.isNullOrBlank()) {
-                    Log.e(TAG, "missing bundled openpgp/ethers scripts")
+                // The WebSocket guard runs first. Without it the host does not start (fail closed).
+                val wsGuard = loadAsset("ChatCrypto/ws-guard.js")
+                if (openpgp.isNullOrBlank() || ethers.isNullOrBlank() || wsGuard.isNullOrBlank()) {
+                    Log.e(TAG, "missing bundled openpgp/ethers/ws-guard scripts")
                     flushReady(false)
                     return@post
                 }
                 val html = """
                 <!DOCTYPE html><html><head><meta charset="utf-8"/></head><body>
+                <script>$wsGuard</script>
                 <script>$ethers</script>
                 <script>$openpgp</script>
                 <script>

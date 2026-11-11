@@ -145,6 +145,8 @@ object BeamioConetChatModule {
             "historyReportLayout" -> handleHistoryReportLayout(body)
             "historyClearCache" -> handleHistoryClearCache(body)
             "historyFullSync" -> handleHistoryFullSync(body)
+            "historyImportBatch" -> handleHistoryImportBatch(body)
+            "historyVerifyImport" -> handleHistoryVerifyImport(body)
             "historyAppend" -> handleHistoryAppend(body)
             "mailboxCommand" -> handleMailboxCommand(body)
             "ownMailboxCommand" -> {
@@ -1085,6 +1087,78 @@ object BeamioConetChatModule {
             return
         }
         hist.startFullSync { ok -> ack(reqId, ok, result = JSONObject().put("ok", ok), error = if (ok) null else "sync_failed") }
+    }
+
+    /** Migration import (spec r2 11.2): at most 200 rows per call. Sendkeys, stable ids, dedupe and sealing are native. */
+    private fun handleHistoryImportBatch(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val hist = currentSession()?.history
+        val store = hist?.localStore()
+        if (store == null) {
+            ack(reqId, false, error = "not_ready")
+            return
+        }
+        if (body.optString("accountKey", "") != store.accountKey) {
+            ack(reqId, false, error = "account_mismatch")
+            return
+        }
+        val arr = body.optJSONArray("rows")
+        if (arr == null) {
+            ack(reqId, false, error = "bad_request")
+            return
+        }
+        if (arr.length() > 200) {
+            ack(reqId, false, error = "batch_too_large")
+            return
+        }
+        val rows = ArrayList<network.conet.chat.localread.ImportRow>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i)
+            val conv = o?.optString("convKey", "")?.lowercase().orEmpty()
+            val dir = o?.optString("dir", "").orEmpty()
+            if (o == null || conv.isEmpty() || (dir != "in" && dir != "out") || !o.has("ts") || !o.has("body")) {
+                ack(reqId, false, error = "bad_request")
+                return
+            }
+            rows.add(
+                network.conet.chat.localread.ImportRow(
+                    convKey = conv,
+                    sendId = o.optString("sendId", "").ifEmpty { null },
+                    dir = dir,
+                    ts = o.optLong("ts"),
+                    body = o.optString("body"),
+                    pendingPublish = o.optBoolean("pendingPublish", false),
+                    cid = o.optString("cid", "").ifEmpty { null },
+                ),
+            )
+        }
+        val r = store.importRows(rows)
+        hist?.persistLocal()
+        ack(
+            reqId,
+            true,
+            result = JSONObject()
+                .put("inserted", r.inserted)
+                .put("existing", r.existing)
+                .put("collapsed", r.collapsed)
+                .put("rejected", r.rejected),
+        )
+    }
+
+    /** Row count and the M3 digest of the held rows, for the PWA to compare (spec r2 11.1 M3, 11.2). */
+    private fun handleHistoryVerifyImport(body: JSONObject) {
+        val reqId = body.optInt("reqId", 0)
+        val store = currentSession()?.history?.localStore()
+        if (store == null) {
+            ack(reqId, false, error = "not_ready")
+            return
+        }
+        if (body.optString("accountKey", "") != store.accountKey) {
+            ack(reqId, false, error = "account_mismatch")
+            return
+        }
+        val v = store.verifyDigest()
+        ack(reqId, true, result = JSONObject().put("rows", v.rows).put("digest", v.digest))
     }
 
     // ---- mailbox commands / voice ----------------------------------------------------

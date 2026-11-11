@@ -231,7 +231,7 @@ class LocalChatStore(
         val existing = existingKey?.let { rows[it] }
         if (existing == null) {
             if (rec.deleted) {
-                insertRow(convKey, sid, rec, null, pendingPublish, deleted = true)
+                insertRow(convKey, sid, rec, null, pendingPublish, deleted = true).sendKey = sk
                 return ApplyResult.TOMBSTONED
             }
             val body = rec.body ?: return ApplyResult.REJECTED
@@ -243,6 +243,7 @@ class LocalChatStore(
                 return ApplyResult.COLLAPSED
             }
             val row = insertRow(convKey, sid, rec, body, pendingPublish, deleted = false)
+            row.sendKey = sk
             digestIndex[indexKey(convKey, digest)] = sid
             digestOf[indexKey(convKey, sid)] = digest
             emitInserted(row, k)
@@ -339,6 +340,54 @@ class LocalChatStore(
     }
 
     fun subscribe(listener: (LocalChatEvent) -> Unit) = synchronized(lock) { listeners.add(listener) }
+
+    /** Spec r2 11.2 `historyImportBatch`: the store computes sendKey and stable_id, dedupes and seals. */
+    fun importRows(rows: List<ImportRow>): ImportResult = synchronized(lock) {
+        requireKey()
+        var inserted = 0
+        var existing = 0
+        var collapsed = 0
+        var rejected = 0
+        for (r in rows) {
+            val rec = IncomingRecord(r.dir, r.ts, LocalMediaKind.TEXT, r.sendId, r.body, r.cid)
+            when (applyRecord(r.convKey, rec, pendingPublish = r.pendingPublish)) {
+                ApplyResult.INSERTED, ApplyResult.TOMBSTONED -> inserted++
+                ApplyResult.COLLAPSED -> collapsed++
+                ApplyResult.REJECTED -> rejected++
+                ApplyResult.UPDATED, ApplyResult.CID_ONLY, ApplyResult.SKIPPED -> existing++
+            }
+        }
+        ImportResult(inserted, existing, collapsed, rejected)
+    }
+
+    /**
+     * M3 digest over every held row in (conv, K) order: HMAC-SHA256(K_idx, h1 || h2 || ...) where
+     * hi = HMAC-SHA256(K_idx, sendKey 0x1f decimal(sort_ts) 0x1f dir 0x1f body). Interpretation of spec 11.1 M3:
+     * the separators and the aggregation are not spelled out there; to be confirmed by the interface owner.
+     */
+    fun verifyDigest(): VerifyResult = synchronized(lock) {
+        val idx = requireIdxKey()
+        val agg = Mac.getInstance("HmacSHA256")
+        agg.init(SecretKeySpec(idx, "HmacSHA256"))
+        var count = 0
+        for (row in rows.values) {
+            if (row.deleted || row.bodyEnc == null) continue
+            val sk = row.sendKey ?: continue
+            val body = bodyOf(row) ?: continue
+            val h = Mac.getInstance("HmacSHA256")
+            h.init(SecretKeySpec(idx, "HmacSHA256"))
+            h.update(sk.toByteArray(Charsets.UTF_8))
+            h.update(byteArrayOf(0x1f))
+            h.update(row.sortTs.toString().toByteArray(Charsets.US_ASCII))
+            h.update(byteArrayOf(0x1f))
+            h.update(row.dir.toByteArray(Charsets.UTF_8))
+            h.update(byteArrayOf(0x1f))
+            h.update(body.toByteArray(Charsets.UTF_8))
+            agg.update(h.doFinal())
+            count++
+        }
+        VerifyResult(count, LocalChatIds.base64Url(agg.doFinal()))
+    }
 
     // ---- sync-layer helpers (not read API) ---------------------------------------------
 
@@ -819,6 +868,8 @@ class LocalChatStore(
         var bodyEnc: ByteArray?,
         var mediaEnc: ByteArray?,
         var pendingPublish: Boolean,
+        /** sendKey of the row (spec r2 4.1). Persisted only inside the sealed snapshot. */
+        var sendKey: String? = null,
     ) {
         val key: RowKey get() = RowKey(convKey, sortTs, stableId)
 
@@ -829,6 +880,7 @@ class LocalChatStore(
             .put("b", bodyEnc?.let { ConetChatCryptoUtil.toHex(it) } ?: JSONObject.NULL)
             .put("m", mediaEnc?.let { ConetChatCryptoUtil.toHex(it) } ?: JSONObject.NULL)
             .put("p", pendingPublish)
+            .put("sk", sendKey ?: JSONObject.NULL)
 
         companion object {
             fun fromJson(o: JSONObject): StoredRow = StoredRow(
@@ -841,6 +893,7 @@ class LocalChatStore(
                 bodyEnc = if (o.isNull("b")) null else ConetChatCryptoUtil.hexToBytes(o.getString("b")),
                 mediaEnc = if (o.isNull("m")) null else ConetChatCryptoUtil.hexToBytes(o.getString("m")),
                 pendingPublish = o.getBoolean("p"),
+                sendKey = if (o.isNull("sk")) null else o.getString("sk"),
             )
         }
     }
@@ -875,6 +928,21 @@ class LocalChatStore(
         private fun indexKey(convKey: String, sid: String): String = "$convKey\u0000$sid"
     }
 }
+
+/** One row of a migration import (spec r2 11.2). */
+data class ImportRow(
+    val convKey: String,
+    val sendId: String?,
+    val dir: String,
+    val ts: Long,
+    val body: String,
+    val pendingPublish: Boolean,
+    val cid: String? = null,
+)
+
+data class ImportResult(val inserted: Int, val existing: Int, val collapsed: Int, val rejected: Int)
+
+data class VerifyResult(val rows: Int, val digest: String)
 
 /** A source record for [LocalChatStore.applyRecord]. */
 class IncomingRecord(
