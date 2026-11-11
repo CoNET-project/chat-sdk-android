@@ -1,0 +1,189 @@
+package network.conet.chat.localread
+
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assume
+import org.junit.Test
+import java.io.File
+import java.security.MessageDigest
+import java.util.Base64
+
+/**
+ * Runs the shared fixture vectors (interface/fixtures, spec v0.2 section 15) against the store.
+ *
+ * Input: `CHAT_FIXTURE_DIR` = a fixture output directory (e.g. .../fixtures/out-10k). Skipped when unset.
+ * Records come from `<account>/truth.jsonl` (plaintext truth). The IPFS/crypto path is NOT exercised
+ * here; this checks the layout, ordering, cursor and stable-id rules on the same data each platform uses.
+ * Environment: JVM on the developer host (not a device).
+ */
+class FixtureScenarioTest {
+
+    private fun sha256(text: String): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+
+    private fun kindOf(s: String): LocalMediaKind = when (s) {
+        "text" -> LocalMediaKind.TEXT
+        "image" -> LocalMediaKind.IMAGE
+        "video" -> LocalMediaKind.VIDEO
+        "file" -> LocalMediaKind.FILE
+        "system" -> LocalMediaKind.SYSTEM
+        else -> LocalMediaKind.UNKNOWN
+    }
+
+    private fun viewOf(o: JSONObject): LocalViewport {
+        val w = o.getDouble("widthPt")
+        val h = o.getDouble("heightPt")
+        val orientation = if (o.has("orientation")) o.getString("orientation") else if (h >= w) "portrait" else "landscape"
+        return LocalViewport(w, h, orientation, o.getDouble("fontScale"), o.getInt("layoutVersion"))
+    }
+
+    /** The store's cursor is base64url(JSON{v,e,c,t,i}); the vector stores the JSON form. Compare t and i. */
+    private fun cursorTI(encoded: String?): Pair<Long, String>? {
+        if (encoded == null) return null
+        val json = String(Base64.getUrlDecoder().decode(encoded + "=".repeat((4 - encoded.length % 4) % 4)), Charsets.UTF_8)
+        val o = JSONObject(json)
+        return Pair(o.getLong("t"), o.getString("i"))
+    }
+
+    private fun vectorCursorTI(s: String?): Pair<Long, String>? {
+        if (s == null || s == "null") return null
+        val o = JSONObject(s)
+        return Pair(o.getLong("t"), o.getString("i"))
+    }
+
+    @Test
+    fun fixtureVectorsAndFullWalk() {
+        val dirPath = System.getenv("CHAT_FIXTURE_DIR")
+        Assume.assumeTrue("CHAT_FIXTURE_DIR not set", dirPath != null)
+        val dir = File(dirPath!!)
+        val scenarios = JSONObject(File(dir, "expected/scenarios.json").readText(Charsets.UTF_8))
+        val fx = scenarios.getJSONObject("fixture")
+        val seed = fx.getString("seed")
+        val account = fx.getString("account")
+        val conv = fx.getString("conv")
+
+        val master = sha256("fixture-master|$seed|$account")
+        val store = LocalChatStore("0xfixture:default")
+        assertEquals(UnlockResult.OK, store.unlock(master, null))
+        val idKey = LocalChatIds.idKey(master)
+
+        // Load truth for the conversation. Stable ids are checked against the generator's ids.
+        var truthRows = 0
+        var sendIdLess = 0
+        var idMismatch = 0
+        File(dir, "$account/truth.jsonl").useLines { lines ->
+            for (line in lines) {
+                if (line.isBlank()) continue
+                val r = JSONObject(line)
+                if (r.getString("convKey") != conv) continue
+                truthRows++
+                val sendId = if (r.isNull("sendId")) null else r.getString("sendId")
+                val body = r.getString("body")
+                val dirS = r.getString("dir")
+                val ts = r.getLong("sortTs")
+                val stableId = r.getString("stableId")
+                if (sendId.isNullOrEmpty()) {
+                    sendIdLess++
+                    if (LocalChatIds.stableId(idKey, conv, dirS, ts, body, null) != stableId) idMismatch++
+                }
+                val manifest = if (r.isNull("manifest")) null else r.getJSONObject("manifest")
+                val deleted = r.getBoolean("deleted")
+                store.applyRecord(
+                    conv,
+                    IncomingRecord(
+                        dir = dirS,
+                        sortTs = ts,
+                        kind = kindOf(r.getString("kind")),
+                        sendId = sendId,
+                        body = if (deleted) null else body,
+                        cid = null,
+                        revision = r.getInt("revision"),
+                        deleted = deleted,
+                        stableIdHint = stableId,
+                        widthPx = manifest?.optInt("width", 0)?.takeIf { manifest.has("width") && it > 0 },
+                        heightPx = manifest?.optInt("height", 0)?.takeIf { manifest.has("height") && it > 0 },
+                        mime = manifest?.optString("mime"),
+                        mediaCid = manifest?.optString("blob"),
+                    ),
+                )
+            }
+        }
+        assertTrue("truth rows for conversation", truthRows > 0)
+        assertEquals("sendId-less stable ids match the generator (HKDF/HMAC cross-check)", 0, idMismatch)
+        println("LOCALREAD_FIXTURE stableIdCrossCheck sendIdLess=$sendIdLess mismatch=$idMismatch env=jvm-host")
+
+        // Scenario steps (open / measure / loadOlder).
+        val steps: JSONArray = scenarios.getJSONArray("steps")
+        var lastCursor: String? = null
+        val widthOf = HashMap<String, Double>()
+        var stepsRun = 0
+        for (i in 0 until steps.length()) {
+            val st = steps.getJSONObject(i)
+            val vp = viewOf(st.getJSONObject("view"))
+            when (st.getString("op")) {
+                "open", "loadOlder" -> {
+                    val page = if (st.getString("op") == "open") {
+                        store.openConversation(conv, vp)
+                    } else {
+                        store.loadOlder(conv, lastCursor ?: error("no cursor"), vp)
+                    }
+                    assertNull("error at step $i", page.error)
+                    page.items.forEach { widthOf[it.stableId] = it.layoutW }
+                    val ex = st.getJSONObject("expect")
+                    val exIds = ex.getJSONArray("ids").let { a -> (0 until a.length()).map { a.getString(it) } }
+                    assertEquals("ids at step $i", exIds, page.items.map { it.stableId })
+                    val sum = page.items.sumOf { it.layoutH }
+                    assertTrue("visibleSum at step $i: $sum vs ${ex.getDouble("visibleSum")}",
+                        Math.abs(sum - ex.getDouble("visibleSum")) <= 0.05 * page.items.size.coerceAtLeast(1) + 0.05)
+                    assertEquals("hasOlder at step $i", ex.getBoolean("hasOlder"), page.hasOlder)
+                    assertEquals("olderCursor at step $i", vectorCursorTI(ex.optString("olderCursor", "null").takeIf { it != "null" }),
+                        cursorTI(page.olderCursor))
+                    // Interval invariant (spec 6.2) on every page that is not short or capped.
+                    if (page.hasOlder && !page.capped && page.items.isNotEmpty()) {
+                        assertTrue("interval at step $i", sum >= vp.heightPt && sum - page.items.first().layoutH < vp.heightPt)
+                    }
+                    lastCursor = page.olderCursor
+                }
+                "measure" -> {
+                    val ids = st.getJSONArray("ids")
+                    val hs = st.getJSONArray("heights")
+                    for (k in 0 until ids.length()) {
+                        val id = ids.getString(k)
+                        val wPt = widthOf[id] ?: error("unknown id $id")
+                        store.reportLayout(conv, id, vp, wPt, hs.getDouble(k))
+                    }
+                }
+                else -> error("unknown op ${st.getString("op")}")
+            }
+            stepsRun++
+        }
+        println("LOCALREAD_FIXTURE scenarios steps=$stepsRun result=PASS env=jvm-host")
+
+        // Full walk (T-2 / P-1 on this conversation): concatenated pages equal truth, no dup, no miss.
+        var page = store.openConversation(conv, LocalViewport(390.0, 844.0, "portrait", 1.0, 1))
+        val all = ArrayList<PageItem>()
+        all.addAll(0, page.items)
+        var pages = 1
+        while (page.hasOlder) {
+            page = store.loadOlder(conv, page.olderCursor!!, LocalViewport(390.0, 844.0, "portrait", 1.0, 1))
+            all.addAll(0, page.items)
+            pages++
+        }
+        val truth = ArrayList<Pair<Long, String>>()
+        File(dir, "$account/truth.jsonl").useLines { lines ->
+            for (line in lines) {
+                if (line.isBlank()) continue
+                val r = JSONObject(line)
+                if (r.getString("convKey") != conv || r.getBoolean("deleted")) continue
+                truth.add(Pair(r.getLong("sortTs"), r.getString("stableId")))
+            }
+        }
+        truth.sortWith { a, b -> LocalChatIds.compareKey(a.first, a.second, b.first, b.second) }
+        assertEquals("full walk count", truth.size, all.size)
+        assertEquals("full walk ids", truth.map { it.second }, all.map { it.stableId })
+        println("LOCALREAD_FIXTURE fullWalk pages=$pages items=${all.size} result=PASS env=jvm-host")
+    }
+}

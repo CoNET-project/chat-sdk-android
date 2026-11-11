@@ -40,7 +40,6 @@ class LocalChatStore(val accountKey: String) {
     private val failedMedia = HashSet<String>()
     private val windows = HashMap<String, Window>()
     private val listeners = ArrayList<(LocalChatEvent) -> Unit>()
-    private val corrector = LocalChatLayoutCorrector()
 
     /** Count of sync records whose sortTs differed from the stored one (spec 5, counted only). */
     var tsMismatchCount: Int = 0
@@ -221,8 +220,6 @@ class LocalChatStore(val accountKey: String) {
         if (row.deleted) return false
         val key = layoutKey(convKey, stableId, vp)
         val prev = layouts[key]
-        val est = estimateFor(row, vp).second
-        corrector.observe(LocalChatLayout.widthBucket(vp.widthPt), est, hPt)
         if (prev != null && Math.abs(prev.hPt - hPt) <= LocalChatLayout.WRITE_TOLERANCE_PT) return false
         layouts[key] = LayoutValue(wPt, hPt, System.currentTimeMillis())
         true
@@ -342,37 +339,45 @@ class LocalChatStore(val accountKey: String) {
         layouts.keys.removeAll { it.layoutVersion != currentVersion }
     }
 
+    /**
+     * One viewport (spec v0.2 section 6.2, oracle `openPage`): accumulate heights from the cursor
+     * toward older rows until the sum reaches heightPt; the last row may cross the boundary.
+     * Tombstones count as 0 and advance the cursor. No minimum count, no read-ahead.
+     */
     private fun readPage(convKey: String, before: RowKey?, vp: LocalViewport): LocalPage {
-        val target = vp.heightPt * 1.5
         val hi = before ?: RowKey(convKey + "\u0000", Long.MIN_VALUE, "")
         val items = ArrayList<PageItem>()
-        var est = 0.0
+        var sum = 0.0
+        var consumed = 0
+        var capped = false
         var last: StoredRow? = null
         for (row in rows.headMap(hi, false).descendingMap().values) {
             if (row.convKey != convKey) break
             last = row
-            if (row.deleted) continue
-            val item = buildItem(row, vp)
-            items.add(item)
-            est += item.layoutH
-            if (items.size >= MAX_PAGE_ITEMS) break
-            if (items.size >= MIN_PAGE_ITEMS && est >= target) break
+            consumed++
+            if (!row.deleted) {
+                val item = buildItem(row, vp)
+                items.add(item)
+                sum += item.layoutH
+            }
+            if (sum >= vp.heightPt) break
+            if (consumed >= CAP) { capped = true; break }
         }
         val lastKey = last?.key
         val hasOlder = lastKey != null && rows.lowerKey(lastKey)?.convKey == convKey
         val olderCursor = lastKey?.takeIf { hasOlder }?.let { encodeCursor(it) }
         items.reverse()
-        return LocalPage(items, olderCursor, hasOlder, LocalSource.LOCAL, null)
+        val short = !hasOlder && sum < vp.heightPt
+        return LocalPage(items, olderCursor, hasOlder, LocalSource.LOCAL, null, short = short, capped = capped)
     }
 
     private fun buildItem(row: StoredRow, vp: LocalViewport): PageItem {
-        val wB = LocalChatLayout.widthBucket(vp.widthPt)
         val measured = layouts[layoutKey(row.convKey, row.stableId, vp)]
         val (w, h, isMeasured) = if (measured != null) {
             Triple(measured.wPt, measured.hPt, true)
         } else {
             val est = estimateFor(row, vp)
-            Triple(est.first, corrector.correct(wB, est.second), false)
+            Triple(est.first, est.second, false)
         }
         val media = mediaOf(row)
         val body = if (row.kind == LocalMediaKind.TEXT || row.kind == LocalMediaKind.SYSTEM) bodyOf(row) else null
@@ -437,15 +442,27 @@ class LocalChatStore(val accountKey: String) {
         for (l in listeners.toList()) l(e)
     }
 
-    private fun encodeCursor(key: RowKey): String =
-        LocalChatIds.base64Url("$epoch|${key.sortTs}|${key.stableId}".toByteArray(Charsets.UTF_8))
+    private fun encodeCursor(key: RowKey): String = LocalChatIds.base64Url(
+        JSONObject()
+            .put("v", 1)
+            .put("e", epoch.take(8))
+            .put("c", key.convKey)
+            .put("t", key.sortTs)
+            .put("i", key.stableId)
+            .toString()
+            .toByteArray(Charsets.UTF_8),
+    )
 
+    /** Null when the cursor is malformed, from another epoch (spec A-3), or for another conversation. */
     private fun decodeCursor(cursor: String, convKey: String): RowKey? {
-        val text = try { String(base64UrlDecode(cursor), Charsets.UTF_8) } catch (e: Exception) { return null }
-        val parts = text.split("|", limit = 3)
-        if (parts.size != 3 || parts[0] != epoch) return null
-        val ts = parts[1].toLongOrNull() ?: return null
-        return RowKey(convKey, ts, parts[2])
+        return try {
+            val o = JSONObject(String(base64UrlDecode(cursor), Charsets.UTF_8))
+            if (o.getInt("v") != 1 || o.getString("e") != epoch.take(8)) return null
+            if (o.getString("c") != convKey) return null
+            RowKey(convKey, o.getLong("t"), o.getString("i"))
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun layoutKey(convKey: String, sid: String, vp: LocalViewport) = LayoutKey(
@@ -588,8 +605,8 @@ class LocalChatStore(val accountKey: String) {
 
     companion object {
         const val SCHEMA_VERSION = 1
-        const val MIN_PAGE_ITEMS = 8
-        const val MAX_PAGE_ITEMS = 80
+        /** Safety cap on consumed rows per page (spec v0.2 6.2). */
+        const val CAP = 200
         private const val FORMAT_TAG = "CLS1"
         private val DEFAULT_VIEWPORT = LocalViewport(390.0, 844.0, "portrait", 1.0, 1)
 
@@ -657,6 +674,10 @@ data class LocalPage(
     val hasOlder: Boolean,
     val source: LocalSource,
     val error: String?,
+    /** Local data ended before one viewport was filled (legal). */
+    val short: Boolean = false,
+    /** The safety cap fired; should not happen at normal viewport sizes. */
+    val capped: Boolean = false,
 )
 
 sealed class LocalChatEvent {

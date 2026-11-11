@@ -190,15 +190,33 @@ class LocalChatStoreTest {
     }
 
     @Test
-    fun firstScreenSizeRules() {
+    fun firstScreenIsOneViewportWithoutReadAhead() {
         val idKey = LocalChatIds.idKey(master)
         val (msgs, ids) = fixture(7L, listOf("0xp"), 500, idKey)
         val store = fresh()
         apply(store, msgs, ids)
         val page = store.openConversation("0xp", vp)
-        assertTrue(page.items.size in 8..80)
+        assertTrue(page.hasOlder)
+        assertFalse(page.short)
         val sum = page.items.sumOf { it.layoutH }
-        assertTrue("sum $sum should reach 1.5 x height", sum >= vp.heightPt * 1.5 || page.items.size == 80)
+        val last = page.items.first().layoutH // the boundary-crossing row is the oldest one (items ascend)
+        // v0.2 6.2: heightPt <= sum <= heightPt + last item, no minimum count, no read-ahead in the payload.
+        assertTrue("sum $sum >= heightPt", sum >= vp.heightPt)
+        assertTrue("sum $sum - last < heightPt", sum - last < vp.heightPt)
+        // A viewport shorter than one row returns exactly one row.
+        val tiny = LocalViewport(390.0, 10.0, "portrait", 1.0, 1)
+        assertEquals(1, store.openConversation("0xp", tiny).items.size)
+    }
+
+    @Test
+    fun shortHistoryReturnsEverythingAndFlagsShort() {
+        val store = fresh()
+        store.applyRecord("0xshort", IncomingRecord("in", 1L, LocalMediaKind.TEXT, "a", "one", "c"))
+        val page = store.openConversation("0xshort", vp)
+        assertEquals(1, page.items.size)
+        assertTrue(page.short)
+        assertFalse(page.hasOlder)
+        assertFalse(page.capped)
     }
 
     // ---- T-4: layout cache ----------------------------------------------------------
