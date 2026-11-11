@@ -24,7 +24,11 @@ import javax.crypto.spec.SecretKeySpec
  *
  * Not thread-safe beyond `synchronized(lock)`; all public methods take the lock.
  */
-class LocalChatStore(val accountKey: String) {
+class LocalChatStore(
+    val accountKey: String,
+    /** Body parser (spec r2 21.2). Null = the host did not set one: media-like bodies become failed `media_parser_missing`. */
+    private val mediaParser: ((ByteArray) -> ParsedBody)? = MediaManifestParser::parse,
+) {
     private val lock = Any()
     private val rng = SecureRandom()
 
@@ -258,7 +262,9 @@ class LocalChatStore(val accountKey: String) {
             existing.bodyEnc = seal(k, bodyAad(convKey, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
             existing.revision = rec.revision
             moveCid(existing, rec.cid ?: existing.cid)
-            setMedia(existing, rec)
+            val parsedU = parseBody(body)
+            existing.kind = parsedU.kind
+            setMedia(existing, parsedU)
             removeLayouts(convKey, sid)
             emit(LocalChatEvent.Updated(convKey, sid, rec.revision))
             return ApplyResult.UPDATED
@@ -447,12 +453,12 @@ class LocalChatStore(val accountKey: String) {
         val k = requireKey()
         val row = StoredRow(
             convKey = convKey, stableId = sid, sortTs = rec.sortTs, dir = rec.dir,
-            sendId = rec.sendId?.takeIf { it.isNotEmpty() }, kind = rec.kind, cid = rec.cid,
+            sendId = rec.sendId?.takeIf { it.isNotEmpty() }, kind = body?.let { parseBody(it).kind } ?: rec.kind, cid = rec.cid,
             revision = rec.revision, deleted = deleted, bodyEnc = null, mediaEnc = null,
             pendingPublish = pending,
         )
         if (!deleted && body != null) row.bodyEnc = seal(k, bodyAad(convKey, sid, rec.revision), body.toByteArray(Charsets.UTF_8))
-        setMedia(row, rec)
+        setMedia(row, body?.let { parseBody(it) })
         val key = RowKey(convKey, rec.sortTs, sid)
         rows[key] = row
         byStable[indexKey(convKey, sid)] = key
@@ -460,14 +466,28 @@ class LocalChatStore(val accountKey: String) {
         return row
     }
 
-    private fun setMedia(row: StoredRow, rec: IncomingRecord) {
+    /** Parsed body of a stored text or media row (spec r2 21.2). Missing parser: media_parser_missing. */
+    private fun parseBody(body: String): ParsedBody {
+        val parse = mediaParser ?: return ParsedBody(LocalMediaKind.UNKNOWN, failed = true, error = "media_parser_missing")
+        return parse(body.toByteArray(Charsets.UTF_8))
+    }
+
+    /** Media meta (cid, mime, size, name, dimensions, failure) is sealed with the row. Text rows carry none. */
+    private fun setMedia(row: StoredRow, parsed: ParsedBody?) {
         val k = requireKey()
-        if (rec.mediaCid == null && rec.widthPx == null && rec.heightPx == null && rec.mime == null) return
+        if (parsed == null || parsed.kind == LocalMediaKind.TEXT) {
+            row.mediaEnc = null
+            return
+        }
         val m = JSONObject()
-            .put("cid", rec.mediaCid ?: JSONObject.NULL)
-            .put("mime", rec.mime ?: JSONObject.NULL)
-            .put("w", rec.widthPx ?: JSONObject.NULL)
-            .put("h", rec.heightPx ?: JSONObject.NULL)
+            .put("cid", parsed.blob ?: JSONObject.NULL)
+            .put("mime", parsed.mime ?: JSONObject.NULL)
+            .put("w", parsed.width ?: JSONObject.NULL)
+            .put("h", parsed.height ?: JSONObject.NULL)
+            .put("size", parsed.size ?: JSONObject.NULL)
+            .put("name", parsed.name ?: JSONObject.NULL)
+            .put("f", parsed.failed)
+            .put("e", parsed.error ?: JSONObject.NULL)
         row.mediaEnc = seal(k, mediaAad(row.convKey, row.stableId, row.revision), m.toString().toByteArray(Charsets.UTF_8))
     }
 
@@ -595,13 +615,13 @@ class LocalChatStore(val accountKey: String) {
         }
         val media = mediaOf(row)
         val body = if (row.kind == LocalMediaKind.TEXT || row.kind == LocalMediaKind.SYSTEM) bodyOf(row) else null
-        val failed = failedMedia.contains(indexKey(row.convKey, row.stableId))
+        val failed = failedMedia.contains(indexKey(row.convKey, row.stableId)) || media?.failed == true
         return PageItem(
             stableId = row.stableId, sortTs = row.sortTs, dir = row.dir, sendId = row.sendId,
             kind = row.kind, body = body, revision = row.revision,
             layoutW = w, layoutH = h, measured = isMeasured,
             mediaCid = media?.cid, mediaMime = media?.mime, widthPx = media?.w, heightPx = media?.h,
-            mediaState = if (row.kind == LocalMediaKind.IMAGE || row.kind == LocalMediaKind.VIDEO || row.kind == LocalMediaKind.FILE) {
+            mediaState = if (row.kind == LocalMediaKind.IMAGE || row.kind == LocalMediaKind.VIDEO || row.kind == LocalMediaKind.FILE || row.kind == LocalMediaKind.UNKNOWN) {
                 if (failed) "failed" else "pending"
             } else null,
         )
@@ -612,7 +632,7 @@ class LocalChatStore(val accountKey: String) {
         val body = if (row.kind == LocalMediaKind.TEXT) bodyOf(row) else null
         return LocalChatLayout.estimate(
             row.kind, media?.w, media?.h,
-            failedMedia.contains(indexKey(row.convKey, row.stableId)), body, vp,
+            failedMedia.contains(indexKey(row.convKey, row.stableId)) || mediaOf(row)?.failed == true, body, vp,
         )
     }
 
@@ -631,6 +651,7 @@ class LocalChatStore(val accountKey: String) {
             mime = o.optString("mime").takeIf { it.isNotEmpty() && it != "null" },
             w = if (o.isNull("w")) null else o.optInt("w"),
             h = if (o.isNull("h")) null else o.optInt("h"),
+            failed = o.optBoolean("f", false),
         )
     }
 
@@ -835,7 +856,7 @@ class LocalChatStore(val accountKey: String) {
 
     private data class Window(val oldest: RowKey?, val newest: RowKey?, val opened: Boolean)
 
-    private data class MediaMeta(val cid: String?, val mime: String?, val w: Int?, val h: Int?)
+    private data class MediaMeta(val cid: String?, val mime: String?, val w: Int?, val h: Int?, val failed: Boolean)
 
     companion object {
         const val SCHEMA_VERSION = 1

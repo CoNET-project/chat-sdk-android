@@ -566,20 +566,16 @@ class BeamioConetChatHistoryStore(
                 failed++
                 continue
             }
-            val media = mediaFields(entry.body)
+            // Kind, media fields and failure come from the body parser inside the store (spec r2 21.2).
             val r = s.applyRecord(
                 rec.peer,
                 IncomingRecord(
                     dir = entry.dir,
                     sortTs = entry.ts,
-                    kind = media.kind,
+                    kind = LocalMediaKind.TEXT,
                     sendId = sid,
                     body = entry.body,
                     cid = rec.cid,
-                    widthPx = media.width,
-                    heightPx = media.height,
-                    mime = media.mime,
-                    mediaCid = media.blob,
                 ),
             )
             if (r == ApplyResult.INSERTED || r == ApplyResult.UPDATED) stored++
@@ -588,39 +584,6 @@ class BeamioConetChatHistoryStore(
         if (s.migration != "complete") s.markMigrationComplete()
         log("info", "[history] local ingest records=${remote.size} stored=$stored known=$known failed=$failed")
         return failed == 0
-    }
-
-    private data class MediaFields(
-        val kind: LocalMediaKind,
-        val width: Int?,
-        val height: Int?,
-        val mime: String?,
-        val blob: String?,
-    )
-
-    /** Kind and manifest fields from a body. Media bodies are JSON `{kind, text, manifest}`; anything else is text. */
-    private fun mediaFields(body: String): MediaFields {
-        val text = MediaFields(LocalMediaKind.TEXT, null, null, null, null)
-        if (!body.startsWith("{")) return text
-        return try {
-            val o = JSONObject(body)
-            val kind = when (o.optString("kind")) {
-                "image" -> LocalMediaKind.IMAGE
-                "video" -> LocalMediaKind.VIDEO
-                "file" -> LocalMediaKind.FILE
-                else -> return text
-            }
-            val m = o.optJSONObject("manifest")
-            MediaFields(
-                kind,
-                m?.takeIf { it.has("width") }?.optInt("width"),
-                m?.takeIf { it.has("height") }?.optInt("height"),
-                m?.optString("mime")?.takeIf { it.isNotEmpty() },
-                m?.optString("blob")?.takeIf { it.isNotEmpty() },
-            )
-        } catch (e: Exception) {
-            text
-        }
     }
 
     // ---- local store: open, persist ----------------------------------------------------

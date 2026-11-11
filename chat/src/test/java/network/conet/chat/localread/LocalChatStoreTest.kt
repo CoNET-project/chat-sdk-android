@@ -52,12 +52,21 @@ class LocalChatStoreTest {
                 }
                 val dir = if (rnd.nextBoolean()) "in" else "out"
                 val sendId = if (rnd.nextDouble() < 0.9) "sid-$seed-$conv-$n" else null
-                val body = "FIXTURE-$seed-$n " + (if (kind == LocalMediaKind.TEXT) "hello $n" else "media $n")
                 val (w, h) = if (kind == LocalMediaKind.IMAGE || kind == LocalMediaKind.VIDEO) {
                     listOf(Pair(4, 3), Pair(3, 4), Pair(16, 9), Pair(9, 16), Pair(1, 1))[rnd.nextInt(5)].let {
                         Pair(it.first * 100, it.second * 100)
                     }
                 } else Pair(null, null)
+                // Media bodies are v1 manifests (spec r2 21.1); text is plain UTF-8.
+                val body = when (kind) {
+                    LocalMediaKind.IMAGE, LocalMediaKind.VIDEO, LocalMediaKind.FILE -> {
+                        val kn = kind.name.lowercase()
+                        val dims = if (w != null && h != null) ",\"width\":$w,\"height\":$h" else ""
+                        "{\"v\":1,\"kind\":\"$kn\",\"text\":\"FIXTURE-$seed-$n\",\"media\":{\"mime\":\"application/octet-stream\",\"size\":1,\"blob\":\"b$n\"$dims}}"
+                    }
+                    LocalMediaKind.TEXT -> "FIXTURE-$seed-$n hello $n"
+                    else -> "FIXTURE-$seed-$n system $n"
+                }
                 val m = Msg(conv, n, dir, ts, kind, sendId, body, "cid-$seed-$conv-$n", w, h)
                 msgs.add(m)
             }
