@@ -119,6 +119,13 @@ object BeamioConetChatModule {
 
     /** A pause is owed once [keepListenWhile] turns false. Main thread. */
     private var pauseOwed = false
+
+    /**
+     * G2 (25.26.4c): true only after a successful `init` whose EOA equals the native record. It is cleared when the
+     * session is replaced, destroyed or cleared. The native record itself is not affected.
+     */
+    @Volatile
+    private var nativeSessionReady = false
     private var idleCheckPosted = false
     private const val IDLE_CHECK_MS = 10_000L
 
@@ -146,25 +153,34 @@ object BeamioConetChatModule {
             ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
             return
         }
-        // Lifecycle commands and nativeImportOpen keep their normal semantics. Other names: with no native record
-        // they get the default deny (25.26.4), and the payload is not read. The two status queries answer from the
-        // vault state in both cases (W1 and passcodeStatus, table D).
+        // Allowed names keep their normal semantics. Everything else is gated by the state of the native record and
+        // of this session (25.26.4c): G0 no_key, G1 not_ready (init checks the EOA in dispatch), G2 as before. The
+        // payload is not read for any refused name.
         if (route != NoKeyGate.Route.PASS) {
             val reqId = body.optInt("reqId", -1)
             val state = NativeWallet.vault(context).state()
-            val statusQuery = route == NoKeyGate.Route.WALLET_STATUS || route == NoKeyGate.Route.PASSCODE_STATUS
-            if (statusQuery) {
-                val result = if (route == NoKeyGate.Route.WALLET_STATUS) {
-                    NoKeyGate.walletStatusOf(state)
-                } else {
-                    NoKeyGate.passcodeStatusOf(state)
+            val gate = NoKeyGate.gateOf(state, nativeSessionReady)
+            when (route) {
+                NoKeyGate.Route.WALLET_STATUS -> {
+                    ack(reqId, true, result = NoKeyGate.walletStatusFor(gate, state))
+                    return
                 }
-                ack(reqId, true, result = result)
-                return
+                NoKeyGate.Route.PASSCODE_STATUS -> {
+                    ack(reqId, true, result = NoKeyGate.passcodeStatusFor(gate))
+                    return
+                }
+                else -> Unit
             }
-            if (state is NativeWalletVault.State.NoKey) {
-                ack(reqId, false, error = NoKeyGate.NO_KEY)
-                return
+            when (NoKeyGate.answerFor(type, gate)) {
+                NoKeyGate.NO_KEY -> {
+                    ack(reqId, false, error = NoKeyGate.NO_KEY)
+                    return
+                }
+                NoKeyGate.NOT_READY -> {
+                    ack(reqId, false, error = NoKeyGate.NOT_READY)
+                    return
+                }
+                else -> Unit
             }
         }
         dispatch(type, body)
@@ -250,6 +266,19 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "key_over_bridge_refused")
             return
         }
+        // G1 (25.26.4c item 4): a native record exists and this session is not ready. The EOA in the payload must equal
+        // the record; a mismatch or a missing EOA changes nothing. A locked record cannot be checked against the EOA.
+        val vaultNow = NativeWallet.vault(ctx).state()
+        if (NoKeyGate.gateOf(vaultNow, nativeSessionReady) == NoKeyGate.Gate.G1) {
+            if (vaultNow !is NativeWalletVault.State.Ready) {
+                ack(reqId, false, error = "locked")
+                return
+            }
+            if (NoKeyGate.initAnswer(vaultNow.eoa, idEoa) != "ok") {
+                ack(reqId, false, error = "address_mismatch")
+                return
+            }
+        }
         // A listen started without the page (call push) for this wallet: the page
         // takes it over as it is. No reconnect, and the messages it holds unconfirmed
         // are handed to the page below.
@@ -257,6 +286,8 @@ object BeamioConetChatModule {
         val attach = running != null && idEoa.isNotEmpty() && running.eoa == idEoa && listen.isActive()
         val s = if (attach) running!! else Session()
         if (!attach) {
+            // A new session is not ready until its init succeeds for the record (25.26.4c, G1 -> G2).
+            nativeSessionReady = false
             synchronized(lock) {
                 listen.stop()
                 session?.history?.destroy()
@@ -356,7 +387,7 @@ object BeamioConetChatModule {
             is NativeWalletVault.State.Ready -> {
                 if (st.eoa != eoa) {
                     BeamioConetChatSignBroker.clearNativeSigner()
-                    ack(reqId, false, error = "wallet_mismatch")
+                    ack(reqId, false, error = "address_mismatch")
                     return
                 }
                 val key = vault.unlock()
@@ -366,10 +397,12 @@ object BeamioConetChatModule {
                     return
                 }
                 try {
-                    BeamioConetChatSignBroker.setNativeSigner(host, ConetChatCryptoUtil.toHex(key))
+                    BeamioConetChatSignBroker.setNativeSigner(ConetChatCryptoUtil.toHex(key))
                 } finally {
                     key.fill(0)
                 }
+                // G2 (25.26.4c): the record opened and the EOA matched, so the session is ready.
+                nativeSessionReady = true
                 done()
             }
             is NativeWalletVault.State.NoKey -> {
@@ -496,7 +529,7 @@ object BeamioConetChatModule {
         val host = BeamioOpenPgpHost.shared(ctx)
         host.ensureReady { ok ->
             if (!ok || currentSession() !== s) return@ensureReady
-            BeamioConetChatSignBroker.setNativeSigner(host, walletHex)
+            BeamioConetChatSignBroker.setNativeSigner(walletHex)
             startListen(ctx, s)
         }
         main.post {
@@ -625,6 +658,7 @@ object BeamioConetChatModule {
 
     /** Logout / wallet removed or switched: stop and forget the stored keys. */
     private fun clearIdentity(reqId: Int) {
+        nativeSessionReady = false
         val ctx = appContext
         destroy()
         BeamioConetChatSignBroker.clearNativeSigner()
@@ -1522,6 +1556,8 @@ object BeamioConetChatModule {
     }
 
     private fun destroy() {
+        // Session gone: G2 -> G1 (25.26.4c). The native record is kept.
+        nativeSessionReady = false
         listen.stop()
         BeamioConetChatSignBroker.cancelAll("destroyed")
         val hadHistory = synchronized(lock) { session?.history != null }

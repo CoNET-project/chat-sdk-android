@@ -31,8 +31,8 @@ class NoKeyRejectVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        // r3f (spec §25.26.4, revision r3f). The r3e file (4da5836e…6362) is withdrawn.
-        assertEquals("69ab42e467f3df1bab06f05327a3a8b6c7f58d708608cfbb8aeebf8103316866", sha256Hex(bytes))
+        // r3h (spec §25.26.4, r3h). The r3f file (69ab42e4…6866) and the r3e file (4da5836e…6362) are withdrawn.
+        assertEquals("b3bda74a5f126700bdc81fe9822e16bba1c7703ed67978bbf1e5b70448d4a597", sha256Hex(bytes))
     }
 
     @Test
@@ -134,7 +134,7 @@ class NoKeyRejectVectorsTest {
 
     @Test
     fun lifecycleAndImportOpenKeepTheirSemantics() {
-        for (name in listOf("hello", "pause", "resume", "destroy", "nativeImportOpen")) {
+        for (name in listOf("hello", "pause", "resume", "destroy", "nativeImportOpen", "nativeRecoveryOpen")) {
             assertEquals(name, NoKeyGate.Route.PASS, NoKeyGate.route(name))
         }
     }

@@ -1,5 +1,7 @@
 package network.conet.chat
 
+import network.conet.chat.nativekey.Eip191Signer
+import network.conet.chat.nativekey.Eip712
 import org.json.JSONObject
 
 /**
@@ -15,15 +17,15 @@ object BeamioConetChatSignBroker {
     /** Answer for a signing request made while no native key is held. */
     const val NO_KEY = "no_key"
 
-    /** Local signer: hex key (memory only) and the host that runs ethers. */
+    /**
+     * Local signer: the hex key, in memory only. Signing runs in native code (EIP-191 and EIP-712 in nativekey), so the
+     * key never reaches the WebView (AND-K-c2, A-4).
+     */
     @Volatile
     private var localKey: String = ""
-    @Volatile
-    private var localHost: BeamioOpenPgpHost? = null
 
     /** Called only with a key read from the native vault. */
-    fun setNativeSigner(host: BeamioOpenPgpHost?, privateKeyHex: String) {
-        localHost = host
+    fun setNativeSigner(privateKeyHex: String) {
         localKey = BeamioChatWalletKeyStore.normalizeKey(privateKeyHex)
     }
 
@@ -44,40 +46,49 @@ object BeamioConetChatSignBroker {
 
     fun clearNativeSigner() {
         localKey = ""
-        localHost = null
     }
 
-    fun hasNativeSigner(): Boolean = localKey.isNotEmpty() && localHost != null
+    fun hasNativeSigner(): Boolean = localKey.isNotEmpty()
 
     /** Retired: the module no longer sends a page-signing request. Kept so existing call sites compile. */
     fun setEmit(emit: ((JSONObject) -> Unit)?) = Unit
 
     /**
-     * Request EIP-191 `personal_sign(message)`. With a native key the host signs. Without one the completion
+     * Request EIP-191 `personal_sign(message)`, signed in native code with the vault key. Without a key the completion
      * fails with [NO_KEY] at once, and nothing is sent to the page.
      */
     fun requestEip191(message: String, completion: (Result<String>) -> Unit) {
         val key = localKey
-        val host = localHost
-        if (key.isNotEmpty() && host != null) {
-            host.signEip191(key, message, completion)
+        if (key.isEmpty()) {
+            completion(Result.failure(IllegalStateException(NO_KEY)))
             return
         }
-        completion(Result.failure(IllegalStateException(NO_KEY)))
+        val p = ConetChatCryptoUtil.hexToBytes(key)
+        val sig = try {
+            p?.let { Eip191Signer.sign(it, message.toByteArray(Charsets.UTF_8)) }
+        } finally {
+            p?.fill(0)
+        }
+        completion(sig?.let { Result.success(it) } ?: Result.failure(IllegalStateException("sign_failed")))
     }
 
     /**
-     * Request an EIP-712 typed data signature. With a native key the host signs. Without one the completion
+     * Request an EIP-712 typed data signature, signed in native code with the vault key. Without a key the completion
      * fails with [NO_KEY] at once, and nothing is sent to the page.
      */
     fun requestEip712(typedData: JSONObject, completion: (Result<String>) -> Unit) {
         val key = localKey
-        val host = localHost
-        if (key.isNotEmpty() && host != null) {
-            host.signEip712(key, typedData, completion)
+        if (key.isEmpty()) {
+            completion(Result.failure(IllegalStateException(NO_KEY)))
             return
         }
-        completion(Result.failure(IllegalStateException(NO_KEY)))
+        val p = ConetChatCryptoUtil.hexToBytes(key)
+        val sig = try {
+            p?.let { Eip712.signTypedData(it, typedData) }
+        } finally {
+            p?.fill(0)
+        }
+        completion(sig?.let { Result.success(it) } ?: Result.failure(IllegalStateException("sign_failed")))
     }
 
     /** Retired: no page-signing request can be pending, so a page answer has nothing to resolve. Ignored. */

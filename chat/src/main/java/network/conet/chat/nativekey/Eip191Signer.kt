@@ -27,11 +27,16 @@ object Eip191Signer {
     }
 
     /** `0x` + r || s || v (65 bytes, lower case), or `null` when [privateKey] is not a valid scalar. */
-    fun sign(privateKey: ByteArray, message: ByteArray): String? {
-        if (privateKey.size != 32) return null
+    fun sign(privateKey: ByteArray, message: ByteArray): String? = signDigest(privateKey, hashMessage(message))
+
+    /**
+     * `0x` + r || s || v for a 32-byte [hash] that is already the signing digest (EIP-191 and EIP-712 both end here).
+     * RFC 6979 nonce, low s, v = 27 + recid. `null` when [privateKey] is not a valid scalar.
+     */
+    fun signDigest(privateKey: ByteArray, hash: ByteArray): String? {
+        if (privateKey.size != 32 || hash.size != 32) return null
         val d = BigInteger(1, privateKey)
         if (d.signum() <= 0 || d >= N) return null
-        val hash = hashMessage(message)
         val signer = ECDSASigner(HMacDSAKCalculator(SHA256Digest()))
         signer.init(true, ECPrivateKeyParameters(d, DOMAIN))
         val rs = signer.generateSignature(hash)

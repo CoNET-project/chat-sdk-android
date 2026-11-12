@@ -63,8 +63,22 @@ class KeyPathGuardTest {
     @Test
     fun statusQueriesAnswerFromTheVaultStateInBothCases() {
         // AND-N4, AND-N5: walletStatus and passcodeStatus answer from the vault state, with or without a record.
-        assertTrue(module.contains("NoKeyGate.walletStatusOf(state)"))
-        assertTrue(module.contains("NoKeyGate.passcodeStatusOf(state)"))
+        assertTrue(module.contains("NoKeyGate.walletStatusFor(gate, state)"))
+        assertTrue(module.contains("NoKeyGate.passcodeStatusFor(gate)"))
+    }
+
+    @Test
+    fun walletSigningRunsInNativeCodeNotInTheWebView() {
+        // AND-K-c2, A-4: EIP-191, EIP-712 and the address use the native code; the host carries no wallet key.
+        assertTrue(broker.contains("Eip191Signer.sign("))
+        assertTrue(broker.contains("Eip712.signTypedData("))
+        assertFalse(broker.contains("host."))
+        assertFalse(broker.contains("BeamioOpenPgpHost"))
+        val host = File("src/main/java/network/conet/chat/BeamioOpenPgpHost.kt").readText()
+        assertFalse("WebView wallet key injection", host.contains("new ethers.Wallet("))
+        assertFalse(host.contains("fun signEip191("))
+        assertFalse(host.contains("fun signEip712("))
+        assertFalse(host.contains("fun walletAddress("))
     }
 
     @Test
@@ -79,7 +93,7 @@ class KeyPathGuardTest {
     @Test
     fun mnemonicAndGateCodeNeverLog() {
         // The phrase and the derived key must not reach the log (25.26.3, 25.22.5).
-        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt")) {
+        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt")) {
             val src = File("src/main/java/network/conet/chat/nativekey/$name").readText()
             assertFalse("$name logs", src.contains("Log."))
             assertFalse("$name prints", src.contains("println"))

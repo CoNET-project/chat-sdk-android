@@ -7,50 +7,83 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * AND-N4 and AND-N5 (independent verdict r3): the `walletStatus` and `passcodeStatus` answers for every vault state.
- * The account below is a synthetic address; no key is involved in these answers.
+ * `walletStatus` and `passcodeStatus` by gate (table D, r3g; AND-N4, AND-N5, T-160). The account below is a synthetic
+ * address; no key is involved in these answers.
  */
 class NoKeyStatusTest {
     private val eoa = "0xAbCdEf0000000000000000000000000000000001"
+    private val record = NativeWalletVault.State.Ready(eoa)
 
     @Test
-    fun walletStatusUnlockedCarriesTheAccountKey() {
-        val s: JSONObject = NoKeyGate.walletStatusOf(NativeWalletVault.State.Ready(eoa))
+    fun walletStatusG2UnlockedCarriesTheAccountKey() {
+        val gate = NoKeyGate.gateOf(record, sessionReady = true)
+        assertEquals(NoKeyGate.Gate.G2, gate)
+        val s: JSONObject = NoKeyGate.walletStatusFor(gate, record)
         assertEquals("unlocked", s.getString("status"))
         assertEquals("0xabcdef0000000000000000000000000000000001:default", s.getString("accountKey"))
     }
 
     @Test
-    fun walletStatusLockedHasNoAccountKey() {
+    fun walletStatusG2LockedHasNoAccountKey() {
         // A locked record has no verified account, so no accountKey is given.
-        val s = NoKeyGate.walletStatusOf(NativeWalletVault.State.Locked("marker_mismatch"))
+        val locked = NativeWalletVault.State.Locked("marker_mismatch")
+        val s = NoKeyGate.walletStatusFor(NoKeyGate.gateOf(locked, sessionReady = true), locked)
         assertEquals("locked", s.getString("status"))
         assertFalse(s.has("accountKey"))
     }
 
     @Test
-    fun walletStatusWithoutARecordIsNoKeyAndNothingElse() {
-        val s = NoKeyGate.walletStatusOf(NativeWalletVault.State.NoKey)
+    fun walletStatusG1IsNotReadyAndNeverUnlocked() {
+        // T-160: a record without a session. W1 must not report unlocked here.
+        val gate = NoKeyGate.gateOf(record, sessionReady = false)
+        assertEquals(NoKeyGate.Gate.G1, gate)
+        val s = NoKeyGate.walletStatusFor(gate, record)
+        assertEquals("not_ready", s.getString("status"))
+        assertFalse(s.has("accountKey"))
+    }
+
+    @Test
+    fun walletStatusG0IsNoKeyAndNothingElse() {
+        val gate = NoKeyGate.gateOf(NativeWalletVault.State.NoKey, sessionReady = false)
+        assertEquals(NoKeyGate.Gate.G0, gate)
+        val s = NoKeyGate.walletStatusFor(gate, NativeWalletVault.State.NoKey)
         assertEquals("no_key", s.getString("status"))
         assertFalse(s.has("accountKey"))
     }
 
     @Test
-    fun passcodeStatusReportsTheRecordWithoutAPasscodeLayer() {
-        for (state in listOf(NativeWalletVault.State.Ready(eoa), NativeWalletVault.State.Locked("unreadable"))) {
-            val p = NoKeyGate.passcodeStatusOf(state)
+    fun passcodeStatusHasKeyFromG1OnAndNotFromG0() {
+        for (gate in listOf(NoKeyGate.Gate.G1, NoKeyGate.Gate.G2)) {
+            val p = NoKeyGate.passcodeStatusFor(gate)
             assertEquals(false, p.getBoolean("set"))
             assertEquals(false, p.getBoolean("locked"))
             assertTrue(p.getBoolean("hasKey"))
         }
+        val g0 = NoKeyGate.passcodeStatusFor(NoKeyGate.Gate.G0)
+        assertEquals(false, g0.getBoolean("set"))
+        assertEquals(false, g0.getBoolean("locked"))
+        assertEquals(false, g0.getBoolean("hasKey"))
     }
 
     @Test
-    fun passcodeStatusWithoutARecordReportsNoKey() {
-        val p = NoKeyGate.passcodeStatusOf(NativeWalletVault.State.NoKey)
-        assertEquals(false, p.getBoolean("set"))
-        assertEquals(false, p.getBoolean("locked"))
-        assertEquals(false, p.getBoolean("hasKey"))
+    fun g1InitChecksTheEoaAgainstTheRecord() {
+        assertEquals("ok", NoKeyGate.initAnswer(eoa, eoa.lowercase()))
+        assertEquals("ok", NoKeyGate.initAnswer(eoa, eoa.uppercase().replace("0X", "0x")))
+        assertEquals("address_mismatch", NoKeyGate.initAnswer(eoa, "0x2222222222222222222222222222222222222222"))
+        assertEquals("address_mismatch", NoKeyGate.initAnswer(eoa, null))
+        assertEquals("address_mismatch", NoKeyGate.initAnswer(eoa, ""))
+    }
+
+    @Test
+    fun answersByGateForAGenericName() {
+        assertEquals("no_key", NoKeyGate.answerFor("deriveLocalKeys", NoKeyGate.Gate.G0))
+        assertEquals("not_ready", NoKeyGate.answerFor("deriveLocalKeys", NoKeyGate.Gate.G1))
+        assertEquals("dispatch", NoKeyGate.answerFor("send", NoKeyGate.Gate.G2))
+        assertEquals("init", NoKeyGate.answerFor("init", NoKeyGate.Gate.G1))
+        assertEquals("dispatch", NoKeyGate.answerFor("init", NoKeyGate.Gate.G2))
+        assertEquals("not_supported", NoKeyGate.answerFor("walletTransferOnce", NoKeyGate.Gate.G1))
+        assertEquals("allowed", NoKeyGate.answerFor("nativeRecoveryOpen", NoKeyGate.Gate.G1))
+        assertEquals("status", NoKeyGate.answerFor("walletStatus", NoKeyGate.Gate.G1))
     }
 
     @Test

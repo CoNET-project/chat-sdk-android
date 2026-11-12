@@ -1,0 +1,277 @@
+{
+  "file": "eip712-native-vectors.v1.json",
+  "purpose": "Native EIP-712 encoder (nativekey/Eip712.kt) against ethers v6 TypedDataEncoder and signTypedData",
+  "ethers": "6.16.0",
+  "signingKeyNote": "synthetic chat test key (SHA-256 of \"chat-local-test-private-key-v1\"); not a real wallet",
+  "cases": [
+    {
+      "id": "EIP712-MAIL-SPEC",
+      "note": "EIP-712 specification example (known digest 0xbe609aee…57bd2)",
+      "typedData": {
+        "domain": {
+          "name": "Ether Mail",
+          "version": "1",
+          "chainId": 1,
+          "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+        },
+        "types": {
+          "Person": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "wallet",
+              "type": "address"
+            }
+          ],
+          "Mail": [
+            {
+              "name": "from",
+              "type": "Person"
+            },
+            {
+              "name": "to",
+              "type": "Person"
+            },
+            {
+              "name": "contents",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "Mail",
+        "message": {
+          "from": {
+            "name": "Cow",
+            "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
+          },
+          "to": {
+            "name": "Bob",
+            "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+          },
+          "contents": "Hello, Bob!"
+        }
+      },
+      "expect": {
+        "digest": "0xbe609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2",
+        "signature": "0x8a03cb0db91bf72f3ab2713d5272bf9d10556b16b5fa4cedaa616b3b31b93995090ab4239ec0a96bbf7b6afe54607c5b91e7d88783a13a1a75471d1ba58c9f5e1c",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "id": "EIP712-SALT-DYNAMIC",
+      "note": "domain with salt and no chainId; string[] and bytes; uint256 from a decimal string",
+      "typedData": {
+        "domain": {
+          "name": "Beamio Chat",
+          "version": "2",
+          "salt": "0x1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "types": {
+          "Ping": [
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "tags",
+              "type": "string[]"
+            },
+            {
+              "name": "blob",
+              "type": "bytes"
+            }
+          ]
+        },
+        "primaryType": "Ping",
+        "message": {
+          "nonce": "12345678901234567890",
+          "tags": [
+            "a",
+            "bé"
+          ],
+          "blob": "0xdeadbeef"
+        }
+      },
+      "expect": {
+        "digest": "0x8a07254367debbf848d4fe842e099d1f3a350df471994dca4c4589e4f0ff8152",
+        "signature": "0x0836ee76f277f48b7e45b131223a7f48dff3a1147d1652c647e38aa9b064c97d7352ea6100f79e3e471c152d8f6c0bb8c3b87692e312a591d6145449834706931c",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "id": "EIP712-ARRAYS-FIXED-SIGNED",
+      "note": "T[] and T[n], bytesN, bool, empty string, negative int256 given as a decimal string",
+      "typedData": {
+        "domain": {
+          "name": "Beamio",
+          "version": "1",
+          "chainId": 8453,
+          "verifyingContract": "0x1111111111111111111111111111111111111111"
+        },
+        "types": {
+          "Item": [
+            {
+              "name": "id",
+              "type": "bytes32"
+            },
+            {
+              "name": "amount",
+              "type": "uint128"
+            },
+            {
+              "name": "delta",
+              "type": "int256"
+            }
+          ],
+          "Batch": [
+            {
+              "name": "items",
+              "type": "Item[]"
+            },
+            {
+              "name": "fixed",
+              "type": "Item[2]"
+            },
+            {
+              "name": "flag",
+              "type": "bool"
+            },
+            {
+              "name": "tag",
+              "type": "bytes4"
+            },
+            {
+              "name": "memo",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "Batch",
+        "message": {
+          "items": [
+            {
+              "id": "0x2222222222222222222222222222222222222222222222222222222222222222",
+              "amount": "0",
+              "delta": "-5"
+            },
+            {
+              "id": "0x3333333333333333333333333333333333333333333333333333333333333333",
+              "amount": "7",
+              "delta": "9"
+            },
+            {
+              "id": "0x4444444444444444444444444444444444444444444444444444444444444444",
+              "amount": "1000000",
+              "delta": "0"
+            }
+          ],
+          "fixed": [
+            {
+              "id": "0x5555555555555555555555555555555555555555555555555555555555555555",
+              "amount": "1",
+              "delta": "1"
+            },
+            {
+              "id": "0x6666666666666666666666666666666666666666666666666666666666666666",
+              "amount": "2",
+              "delta": "-1"
+            }
+          ],
+          "flag": true,
+          "tag": "0x12345678",
+          "memo": ""
+        }
+      },
+      "expect": {
+        "digest": "0x37e9e14616c1f038027ba42adf35e8f57511d0ec9faa8f3b4155d2814d30ba66",
+        "signature": "0x6d4b7ecc132b3de241c53c7128b88266f38ab1789e9dc81a0bb0404508da72c031c029a39543c9e75db20c159bafcbb9fc0c2aef1d90ecbc9864df3e1bdae38c1c",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "id": "EIP712-SMALL-INTS-NUMBERS",
+      "note": "uint8 and int8 given as JSON numbers at the limits; address value",
+      "typedData": {
+        "domain": {
+          "name": "N",
+          "chainId": 10
+        },
+        "types": {
+          "Num": [
+            {
+              "name": "a",
+              "type": "uint8"
+            },
+            {
+              "name": "b",
+              "type": "int8"
+            },
+            {
+              "name": "c",
+              "type": "address"
+            }
+          ]
+        },
+        "primaryType": "Num",
+        "message": {
+          "a": 255,
+          "b": -128,
+          "c": "0x0000000000000000000000000000000000000001"
+        }
+      },
+      "expect": {
+        "digest": "0x9ef4b3d574f176afea4128670534d134bb8e6f908aff9f6b4b3efb756339bad7",
+        "signature": "0xe748c1277a86e184d18ee9ee43c59a41dd17a46d8d2e5d82b2cb2b53f1a3ad9f309929b0060f006e2b23ff60bc6adf3a5765d9697640dbfd1bda5780306cf9cd1c",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "id": "EIP712-NESTED-STRUCT-ARRAY",
+      "note": "struct array of structs; uint256 given as hex and as decimal",
+      "typedData": {
+        "domain": {
+          "name": "Nested",
+          "version": "1",
+          "chainId": 1
+        },
+        "types": {
+          "Leaf": [
+            {
+              "name": "v",
+              "type": "uint256"
+            }
+          ],
+          "Node": [
+            {
+              "name": "leaves",
+              "type": "Leaf[]"
+            },
+            {
+              "name": "label",
+              "type": "string"
+            }
+          ]
+        },
+        "primaryType": "Node",
+        "message": {
+          "leaves": [
+            {
+              "v": "1"
+            },
+            {
+              "v": "0x10"
+            }
+          ],
+          "label": "x"
+        }
+      },
+      "expect": {
+        "digest": "0xa3e31f7852d08f7dc2c675c5518d48fb0dd7aed3c300caeab400c31b110cfe13",
+        "signature": "0xf5d589f2adacdb737253425792d9ff6a768109aa3c959157e2d3c2c085c14aae39b9fe454b245b58a964d7d89b0649a70fce353c7387ac583e15884d267d9a831c",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    }
+  ]
+}
