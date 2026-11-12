@@ -11,14 +11,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
 import java.math.BigInteger
-import java.security.GeneralSecurityException
-import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Acceptance groups for the native wallet key: new install, upgrade with a key, upgrade without a key
@@ -26,60 +19,6 @@ import javax.crypto.spec.GCMParameterSpec
  * an in-memory AES-GCM key and the files by a map, so the write order and crash points can be driven.
  */
 class NativeWalletVaultTest {
-    /** Thrown to simulate the process dying at a chosen point. It is not an Exception, so no cleanup runs. */
-    private class Crash : Error("simulated crash")
-
-    private class TestWrap : KeyWrap {
-        var failSeal = false
-        var openOverride: ((ByteArray) -> ByteArray)? = null
-        private var secret: SecretKey = newKey()
-
-        override fun seal(aad: ByteArray, plain: ByteArray): ByteArray {
-            if (failSeal) throw IllegalStateException("keystore unavailable")
-            val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-            val c = Cipher.getInstance("AES/GCM/NoPadding")
-            c.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
-            c.updateAAD(aad)
-            return iv + c.doFinal(plain)
-        }
-
-        override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? {
-            return try {
-                val c = Cipher.getInstance("AES/GCM/NoPadding")
-                c.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, sealed.copyOfRange(0, 12)))
-                c.updateAAD(aad)
-                val plain = c.doFinal(sealed.copyOfRange(12, sealed.size))
-                openOverride?.invoke(plain) ?: plain
-            } catch (e: GeneralSecurityException) {
-                null
-            }
-        }
-
-        override fun deleteKey() {
-            secret = newKey()
-        }
-
-        private fun newKey(): SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-    }
-
-    private class MemFiles : VaultFiles {
-        val map = HashMap<String, ByteArray>()
-        var failWrite: String? = null
-        var crashAfterWrite: String? = null
-
-        override fun read(name: String): ByteArray? = map[name]?.copyOf()
-
-        override fun write(name: String, bytes: ByteArray) {
-            if (failWrite == name) throw IOException("disk full")
-            map[name] = bytes.copyOf()
-            if (crashAfterWrite == name) throw Crash()
-        }
-
-        override fun delete(name: String) {
-            map.remove(name)
-        }
-    }
-
     private fun scalar(v: BigInteger): ByteArray {
         val raw = v.toByteArray()
         val out = ByteArray(32)
@@ -93,14 +32,14 @@ class NativeWalletVaultTest {
     private val keyB = scalar(BigInteger.TWO)
     private val eoaB = "0x2b5ad5c4795c026514f8317c7a215e218dccd6cf"
 
-    private fun vault(wrap: TestWrap, files: MemFiles) = NativeWalletVault(wrap, files)
+    private fun vault(wrap: NativeTestWrap, files: NativeTestFiles) = NativeWalletVault(wrap, files)
 
     // ---- A. new install -------------------------------------------------------------------
 
     @Test
     fun newInstallHasNoKeyNothingToUnlockAndNothingOnDisk() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertTrue(v.state() is State.NoKey)
         assertNull(v.unlock())
         assertTrue(files.map.isEmpty())
@@ -110,8 +49,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun upgradeAdoptsTheExistingKeyNativelyAndKeepsItAcrossRestart() {
-        val files = MemFiles()
-        val wrap = TestWrap()
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
         val v = vault(wrap, files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA, NativeWalletVault.SOURCE_LEGACY))
         assertEquals(eoaA, (v.state() as State.Ready).eoa)
@@ -124,8 +63,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun repeatedAdoptionOfTheSameWalletIsAlreadyPresentAndChangesNothing() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA, NativeWalletVault.SOURCE_LEGACY))
         val before = files.map.mapValues { it.value.copyOf() }
         assertEquals(Import.ALREADY_PRESENT, v.importKey(eoaA, keyA, NativeWalletVault.SOURCE_LEGACY))
@@ -137,15 +76,15 @@ class NativeWalletVaultTest {
 
     @Test
     fun upgradeWithoutAKeyStaysLockedAndCannotSign() {
-        val v = vault(TestWrap(), MemFiles())
+        val v = vault(NativeTestWrap(), NativeTestFiles())
         assertTrue(v.state() is State.NoKey)
         assertNull(v.unlock())
     }
 
     @Test
     fun legacyKeyThatDoesNotMatchItsAddressIsNotAdopted() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.ADDRESS_MISMATCH, v.importKey(eoaB, keyA, NativeWalletVault.SOURCE_LEGACY))
         assertTrue(v.state() is State.NoKey)
         assertTrue(files.map.isEmpty())
@@ -155,8 +94,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun nativeImportSucceedsReadsBackAndPersists() {
-        val files = MemFiles()
-        val wrap = TestWrap()
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
         val v = vault(wrap, files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
@@ -166,8 +105,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun recordNeverContainsThePlaintextKey() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         val text = String(files.map.getValue(NativeWalletVault.REC), Charsets.UTF_8)
         assertFalse(text.contains(ConetChatCryptoUtil.toHex(keyA)))
@@ -176,8 +115,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun aSecondWalletIsRefusedAndTheFirstIsNotOverwritten() {
-        val files = MemFiles()
-        val wrap = TestWrap()
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
         val v = vault(wrap, files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         val before = files.map.getValue(NativeWalletVault.REC).copyOf()
@@ -188,8 +127,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun forgetRemovesRecordMarkerAndKeySoTheVaultIsEmptyAgain() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         v.forget()
         assertTrue(files.map.isEmpty())
@@ -201,8 +140,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun wrongKeyForTheAddressWritesNothing() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.ADDRESS_MISMATCH, v.importKey(eoaB, keyA))
         assertTrue(files.map.isEmpty())
         assertTrue(v.state() is State.NoKey)
@@ -210,8 +149,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun malformedEoaAndKeysAreRejectedBeforeAnyWrite() {
-        val files = MemFiles()
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles()
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.BAD_EOA, v.importKey(eoaA.uppercase().replaceFirst("0X", "0x"), keyA))
         assertEquals(Import.BAD_EOA, v.importKey(eoaA.removePrefix("0x"), keyA))
         assertEquals(Import.BAD_KEY, v.importKey(eoaA, ByteArray(31) { 1 }))
@@ -221,8 +160,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun sealFailureWritesNothing() {
-        val files = MemFiles()
-        val wrap = TestWrap().apply { failSeal = true }
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap().apply { failSeal = true }
         val v = vault(wrap, files)
         assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
         assertTrue(files.map.isEmpty())
@@ -231,16 +170,16 @@ class NativeWalletVaultTest {
 
     @Test
     fun recordWriteFailureLeavesNothing() {
-        val files = MemFiles().apply { failWrite = NativeWalletVault.REC }
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles().apply { failWrite = NativeWalletVault.REC }
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
         assertTrue(files.map.isEmpty())
     }
 
     @Test
     fun markerWriteFailureRemovesTheUnconfirmedRecord() {
-        val files = MemFiles().apply { failWrite = NativeWalletVault.MARK }
-        val v = vault(TestWrap(), files)
+        val files = NativeTestFiles().apply { failWrite = NativeWalletVault.MARK }
+        val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
         assertTrue(files.map.isEmpty())
         assertTrue(v.state() is State.NoKey)
@@ -248,8 +187,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun readbackThatReturnsAnotherKeyRemovesTheRecord() {
-        val files = MemFiles()
-        val wrap = TestWrap().apply { openOverride = { keyB } }
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap().apply { openOverride = { keyB } }
         val v = vault(wrap, files)
         assertEquals(Import.READBACK_FAILED, v.importKey(eoaA, keyA))
         assertTrue(files.map.isEmpty())
@@ -258,9 +197,9 @@ class NativeWalletVaultTest {
 
     @Test
     fun crashAfterTheRecordIsRecoveredToNoKeyOnNextOpen() {
-        val files = MemFiles().apply { crashAfterWrite = NativeWalletVault.REC }
-        val wrap = TestWrap()
-        assertThrows(Crash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.REC }
+        val wrap = NativeTestWrap()
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
         files.crashAfterWrite = null
 
@@ -272,9 +211,9 @@ class NativeWalletVaultTest {
 
     @Test
     fun crashAfterTheMarkerLeavesAUsableWallet() {
-        val files = MemFiles().apply { crashAfterWrite = NativeWalletVault.MARK }
-        val wrap = TestWrap()
-        assertThrows(Crash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.MARK }
+        val wrap = NativeTestWrap()
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
         files.crashAfterWrite = null
 
         val restarted = vault(wrap, files)
@@ -286,8 +225,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun markerThatDoesNotMatchLocksAndKeepsTheRecord() {
-        val files = MemFiles()
-        val wrap = TestWrap()
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
         val v = vault(wrap, files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         files.map[NativeWalletVault.MARK] = "00".toByteArray()
@@ -301,8 +240,8 @@ class NativeWalletVaultTest {
 
     @Test
     fun recordThatCanNoLongerBeOpenedLocksAndKeepsTheRecord() {
-        val files = MemFiles()
-        val wrap = TestWrap()
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
         val v = vault(wrap, files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         wrap.deleteKey() // the wrapping key is gone, as after a Keystore reset

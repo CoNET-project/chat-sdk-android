@@ -1,0 +1,63 @@
+package network.conet.chat.nativekey
+
+import java.io.IOException
+import java.security.GeneralSecurityException
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+/** Thrown to simulate the process dying at a chosen point. It is not an Exception, so no cleanup runs. */
+internal class NativeTestCrash : Error("simulated crash")
+
+internal class NativeTestWrap : KeyWrap {
+    var failSeal = false
+    var openOverride: ((ByteArray) -> ByteArray)? = null
+    private var secret: SecretKey = newKey()
+
+    override fun seal(aad: ByteArray, plain: ByteArray): ByteArray {
+        if (failSeal) throw IllegalStateException("keystore unavailable")
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
+        c.updateAAD(aad)
+        return iv + c.doFinal(plain)
+    }
+
+    override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? {
+        return try {
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, sealed.copyOfRange(0, 12)))
+            c.updateAAD(aad)
+            val plain = c.doFinal(sealed.copyOfRange(12, sealed.size))
+            openOverride?.invoke(plain) ?: plain
+        } catch (e: GeneralSecurityException) {
+            null
+        }
+    }
+
+    override fun deleteKey() {
+        secret = newKey()
+    }
+
+    private fun newKey(): SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+}
+
+internal class NativeTestFiles : VaultFiles {
+    val map = HashMap<String, ByteArray>()
+    var failWrite: String? = null
+    var crashAfterWrite: String? = null
+
+    override fun read(name: String): ByteArray? = map[name]?.copyOf()
+
+    override fun write(name: String, bytes: ByteArray) {
+        if (failWrite == name) throw IOException("disk full")
+        map[name] = bytes.copyOf()
+        if (crashAfterWrite == name) throw NativeTestCrash()
+    }
+
+    override fun delete(name: String) {
+        map.remove(name)
+    }
+}
