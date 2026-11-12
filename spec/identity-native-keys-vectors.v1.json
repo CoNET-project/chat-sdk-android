@@ -1,0 +1,241 @@
+{
+  "spec": "spec v1.1-r3b §25.19（identity.native-keys.v1），第十七批：能力位接口向量",
+  "status": "能力位 identity.native-keys.v1 仍未声明。仅当 iOS 与 Android 两端都通过本文件的全部用例，并实现就绪回报后，才可加入 hello（12.3）。",
+  "note": "合成数据。请求校验与响应形状；就绪语义取决于原生存储，见 readyVariants。",
+  "forbiddenKeys": [
+    "privateKeyHex",
+    "walletPrivateKey",
+    "privateKeyArmor",
+    "pgpPrivateKeyArmored",
+    "pgpPassphrase",
+    "mnemonic"
+  ],
+  "requestCases": [
+    {
+      "name": "accept-public-only",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "reject-private-key-hex",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "identity": {
+          "privateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "privateKeyHex"
+      }
+    },
+    {
+      "name": "reject-wallet-private-key",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "walletPrivateKey": "0x1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "walletPrivateKey"
+      }
+    },
+    {
+      "name": "reject-pgp-private-armor",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "pgpPrivateKeyArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "pgpPrivateKeyArmored"
+      }
+    },
+    {
+      "name": "reject-pgp-passphrase",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "pgpPassphrase": "x"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "pgpPassphrase"
+      }
+    },
+    {
+      "name": "reject-mnemonic",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "mnemonic": "w1 w2 w3"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "mnemonic"
+      }
+    },
+    {
+      "name": "reject-missing-eoa",
+      "input": {
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": []
+      },
+      "expect": {
+        "ok": false,
+        "error": "missing_identity"
+      }
+    },
+    {
+      "name": "reject-bad-eoa-case",
+      "input": {
+        "eoa": "0x39581C72B8C7D0DE85FF22CF3AE178AE813957AA",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-bad-eoa-length",
+      "input": {
+        "eoa": "0x1234",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-pgp-public-not-armored",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "not armored",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    }
+  ],
+  "responseShape": {
+    "allowedKeys": [
+      "ready",
+      "eoa"
+    ],
+    "notes": "只允许这两个键。不得含任何私钥、助记词、armor、口令、派生值。"
+  },
+  "readyVariants": [
+    {
+      "nativeState": "has_key_readback_ok",
+      "expect": {
+        "ready": true,
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "nativeState": "no_key",
+      "expect": {
+        "ready": false,
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      }
+    },
+    {
+      "nativeState": "key_address_mismatch",
+      "expect": {
+        "ready": false,
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+      },
+      "note": "原生记录的地址与请求的 eoa 不符：不得返回 ready=true（25.6 record_mismatch 的对应情形）"
+    }
+  ],
+  "capabilityGating": [
+    {
+      "hello": "identity.native-keys.v1 present",
+      "pwaPayload": "public-only (requestCases accept-public-only)"
+    },
+    {
+      "hello": "absent",
+      "pwaPayload": "legacy payload allowed only for shells that predate this capability; the native side keeps its previous behaviour"
+    }
+  ]
+}
