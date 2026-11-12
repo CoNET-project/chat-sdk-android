@@ -115,9 +115,6 @@ object BeamioConetChatModule {
     private var idleCheckPosted = false
     private const val IDLE_CHECK_MS = 10_000L
 
-    /** X-21 bridge. No native key store is wired in this build, so it answers with rejections only. */
-    private val x21 = network.conet.chat.x21.WalletTransferBridge(now = System::currentTimeMillis)
-
     fun isAvailable(): Boolean = true
 
     fun isRunning(): Boolean = synchronized(lock) { session != null } && listen.isRunning()
@@ -174,10 +171,9 @@ object BeamioConetChatModule {
             "destroy" -> destroy()
             "clearIdentity" -> clearIdentity(body.optInt("reqId", -1))
             "provisionIdentity" -> provisionIdentity(body)
-            // X-21 (spec r3b 25.6.1, batch 14): one channel, dispatched on cmd.type; answers go out as `ack` and
-            // `walletTransferResult` payloads through the chatModuleEvent envelope.
+            // X-21 is retired (no key crosses the bridge): every walletTransfer* command is refused.
             "walletTransferOnce", "walletTransferStatus", "walletTransferSwitched" ->
-                x21.onCommand(body).forEach { emitEvent(it) }
+                ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
             else -> {
                 Log.w(TAG, "unknown command $type")
                 // Protocol v1: a command that expects an answer gets one.
