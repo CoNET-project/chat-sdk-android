@@ -1,0 +1,269 @@
+{
+  "file": "mnemonic-derivation-vectors.v1.json",
+  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
+  "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
+  "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",
+  "ethers": "6.17.0",
+  "derivationPath": "m/44'/60'/0'/0/0",
+  "passphrase": "",
+  "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+  "wordlistRule": "小写后按词 NFKD；词数 12、15、18、21、24；校验和必须有效；首尾 ASCII 空白先去除（25.26.2）",
+  "groups": [
+    "valid",
+    "invalid"
+  ],
+  "derivation": [
+    {
+      "id": "MD-1",
+      "group": "valid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "12 词，公开测试向量"
+    },
+    {
+      "id": "MD-2",
+      "group": "valid",
+      "input": "ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABOUT",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "全大写（ethers 先小写化）"
+    },
+    {
+      "id": "MD-3",
+      "group": "valid",
+      "input": "\t  abandon   abandon   abandon   abandon   abandon   abandon   abandon   abandon   abandon   abandon   abandon   about  \n",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "词间多空白与 NBSP，首尾 ASCII 空白去除"
+    },
+    {
+      "id": "MD-4",
+      "group": "valid",
+      "input": "ａｂａｎｄｏｎ abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "首词全角字母，按词 NFKD 后为 abandon"
+    },
+    {
+      "id": "MD-5",
+      "group": "valid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon address",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x54be88525b024a20229fe7f6f62dc0884e4aaa0a",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "15 词，公开测试熵 00×20"
+    },
+    {
+      "id": "MD-6",
+      "group": "valid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+      "expect": {
+        "code": "ok",
+        "eoa": "0xf278cf59f82edcf871d630f28ecc8056f25c1cdb",
+        "path": "m/44'/60'/0'/0/0"
+      },
+      "note": "24 词，公开测试熵 00×32"
+    },
+    {
+      "id": "MD-7",
+      "group": "invalid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "11 词，词数不合法"
+    },
+    {
+      "id": "MD-8",
+      "group": "invalid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about abandon",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "13 词"
+    },
+    {
+      "id": "MD-9",
+      "group": "invalid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "12 词，校验和不符（末词应为 about）"
+    },
+    {
+      "id": "MD-10",
+      "group": "invalid",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abouu",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "词不在 BIP-39 英文表"
+    },
+    {
+      "id": "MD-11",
+      "group": "invalid",
+      "input": "",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "空输入"
+    },
+    {
+      "id": "MD-12",
+      "group": "invalid",
+      "input": " \t\n ",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "仅空白"
+    },
+    {
+      "id": "MD-13",
+      "group": "invalid",
+      "input": "0x78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "助记词模式收到私钥十六进制：拒绝，且输出不得含 P（负控制）"
+    },
+    {
+      "id": "MD-14",
+      "group": "invalid",
+      "input": "about abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+      "expect": {
+        "code": "invalid_mnemonic"
+      },
+      "note": "词序颠倒，校验和不符"
+    }
+  ],
+  "importMnemonicMode": [
+    {
+      "id": "MI-1",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "record": "written",
+        "readback": "ok",
+        "passcodeState": "NO_PASSCODE",
+        "nativeRecordAfter": "present",
+        "mnemonicPersisted": false
+      }
+    },
+    {
+      "id": "MI-2",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "expectedEoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "ok",
+        "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "record": "written",
+        "readback": "ok",
+        "passcodeState": "NO_PASSCODE",
+        "nativeRecordAfter": "present",
+        "mnemonicPersisted": false
+      }
+    },
+    {
+      "id": "MI-3",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+      "ctx": {
+        "expectedEoa": "0x2222222222222222222222222222222222222222",
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "address_mismatch",
+        "record": "none",
+        "nativeRecordAfter": "none"
+      }
+    },
+    {
+      "id": "MI-4",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "nativeRecord": true
+      },
+      "expect": {
+        "code": "already_exists",
+        "record": "none",
+        "nativeRecordAfter": "present"
+      }
+    },
+    {
+      "id": "MI-5",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "nativeRecord": false,
+        "writeFail": true
+      },
+      "expect": {
+        "code": "write_failed",
+        "record": "none",
+        "nativeRecordAfter": "none",
+        "rollback": true
+      }
+    },
+    {
+      "id": "MI-6",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "nativeRecord": false,
+        "readbackFail": true
+      },
+      "expect": {
+        "code": "readback_failed",
+        "record": "none",
+        "nativeRecordAfter": "none",
+        "rollback": true
+      }
+    },
+    {
+      "id": "MI-7",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "ctx": {
+        "nativeRecord": false,
+        "cancelled": true
+      },
+      "expect": {
+        "code": "cancelled",
+        "record": "none",
+        "nativeRecordAfter": "none"
+      }
+    },
+    {
+      "id": "MI-8",
+      "input": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_mnemonic",
+        "record": "none",
+        "nativeRecordAfter": "none"
+      }
+    }
+  ]
+}

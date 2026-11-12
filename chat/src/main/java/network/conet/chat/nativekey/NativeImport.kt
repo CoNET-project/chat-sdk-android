@@ -30,12 +30,16 @@ object NativeImportHost {
     fun open(): Boolean = launcher?.invoke() == true
 }
 
-/** Import of a secp256k1 private key typed in the native page (spec 25.25.2 and 25.25.3). */
+/**
+ * Import typed in the native page: a secp256k1 private key (spec 25.25.2) or a BIP-39 phrase (spec 25.26.3).
+ * Both end in the same vault write, readback and rollback (25.25.3).
+ */
 object NativeImport {
     enum class Code(val wire: String) {
         OK("ok"),
         INVALID_FORMAT("invalid_format"),
         INVALID_KEY("invalid_key"),
+        INVALID_MNEMONIC("invalid_mnemonic"),
         ADDRESS_MISMATCH("address_mismatch"),
         ALREADY_EXISTS("already_exists"),
         WRITE_FAILED("write_failed"),
@@ -67,20 +71,40 @@ object NativeImport {
             val k = BigInteger(1, key)
             if (k.signum() <= 0 || k >= N) return Result(Code.INVALID_KEY)
             val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.INVALID_KEY)
-            if (expectedEoa != null && !expectedEoa.equals(eoa, ignoreCase = true)) {
-                return Result(Code.ADDRESS_MISMATCH)
-            }
-            return when (vault.importKey(eoa, key)) {
-                NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
-                NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
-                    Result(Code.ALREADY_EXISTS)
-                NativeWalletVault.Import.ADDRESS_MISMATCH -> Result(Code.ADDRESS_MISMATCH)
-                NativeWalletVault.Import.STORE_FAILED -> Result(Code.WRITE_FAILED)
-                NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
-                NativeWalletVault.Import.BAD_KEY, NativeWalletVault.Import.BAD_EOA -> Result(Code.INVALID_KEY)
-            }
+            return importDerived(eoa, key, expectedEoa, vault)
         } finally {
             key.fill(0)
+        }
+    }
+
+    /**
+     * Mnemonic mode (spec 25.26.3). The phrase is checked and derived in memory (25.26.1). Only the derived 32-byte
+     * key reaches the vault; the phrase is not stored, logged or returned. An invalid phrase is `invalid_mnemonic`
+     * and writes nothing. After validation, the expected-address, write and readback rules are the key mode's.
+     */
+    fun submitMnemonic(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result {
+        if (cancelled) return Result(Code.CANCELLED)
+        val key = MnemonicDerivation.deriveKey(raw) ?: return Result(Code.INVALID_MNEMONIC)
+        try {
+            val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.INVALID_KEY)
+            return importDerived(eoa, key, expectedEoa, vault)
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    private fun importDerived(eoa: String, key: ByteArray, expectedEoa: String?, vault: NativeWalletVault): Result {
+        if (expectedEoa != null && !expectedEoa.equals(eoa, ignoreCase = true)) {
+            return Result(Code.ADDRESS_MISMATCH)
+        }
+        return when (vault.importKey(eoa, key)) {
+            NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
+            NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
+                Result(Code.ALREADY_EXISTS)
+            NativeWalletVault.Import.ADDRESS_MISMATCH -> Result(Code.ADDRESS_MISMATCH)
+            NativeWalletVault.Import.STORE_FAILED -> Result(Code.WRITE_FAILED)
+            NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
+            NativeWalletVault.Import.BAD_KEY, NativeWalletVault.Import.BAD_EOA -> Result(Code.INVALID_KEY)
         }
     }
 }
