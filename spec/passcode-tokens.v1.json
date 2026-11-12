@@ -1,0 +1,106 @@
+{
+  "spec": "spec v1.1-r3b §25.17.10（第十批采纳）",
+  "source": "passcode-unified-ui-spec-2026-11-11.md 第 8 节（PWA 草案），单位与缺失项由接口负责人补全",
+  "units": "px 等同于 iOS pt 与 Android dp（@1x）。颜色为 #RRGGBB 或 #RRGGBBAA。",
+  "color": {
+    "bg": "#071126",
+    "fg": "#FFFFFF",
+    "fgMuted": "#FFFFFFBF",
+    "accent": "#FFFFFF",
+    "onAccent": "#071126",
+    "danger": "#EF4444",
+    "warn": "#FDE68A",
+    "surface": "#FFFFFF1A",
+    "border": "#FFFFFF26"
+  },
+  "font": {
+    "title": {
+      "size": 20,
+      "weight": 600
+    },
+    "body": {
+      "size": 14,
+      "weight": 400
+    },
+    "caption": {
+      "size": 12,
+      "weight": 400
+    }
+  },
+  "dot": {
+    "size": 14,
+    "gap": 12
+  },
+  "keypad": {
+    "key": {
+      "width": 72,
+      "height": 72,
+      "radius": 36
+    },
+    "grid": {
+      "cols": 3,
+      "rows": 4,
+      "labels": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "",
+        "0",
+        "delete"
+      ]
+    }
+  },
+  "radius": {
+    "card": 24
+  },
+  "motion": {
+    "shake": {
+      "durationMs": 320,
+      "amplitude": 8
+    }
+  },
+  "touch": {
+    "minTarget": 44
+  },
+  "contrast": {
+    "checks": [
+      {
+        "name": "fg on bg",
+        "ratio": 18.8,
+        "min": 4.5
+      },
+      {
+        "name": "fgMuted on bg",
+        "ratio": 10.75,
+        "min": 4.5
+      },
+      {
+        "name": "warn on bg",
+        "ratio": 15.09,
+        "min": 4.5
+      },
+      {
+        "name": "danger on bg",
+        "ratio": 5,
+        "min": 4.5
+      },
+      {
+        "name": "onAccent on accent",
+        "ratio": 18.8,
+        "min": 4.5
+      },
+      {
+        "name": "fg on surface",
+        "ratio": 14.54,
+        "min": 4.5
+      }
+    ],
+    "note": "比值为计算值（WCAG 相对亮度），须 ≥ 4.5。fgMuted、surface 按透明度与背景混合后计算。"
+  }
+}
