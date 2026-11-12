@@ -1,0 +1,213 @@
+{
+  "file": "log-scan-patterns.v1.json",
+  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
+  "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
+  "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",
+  "ethers": "6.17.0",
+  "derivationPath": "m/44'/60'/0'/0/0",
+  "passphrase": "",
+  "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+  "verdict": "任一来源任一模式命中即本次运行失败（LS-M4 须人工复核后判定）。报告不得复述命中文本，只记模式编号、来源编号、行号偏移与报告哈希。",
+  "patterns": [
+    {
+      "id": "LS-K1",
+      "class": "private-key",
+      "kind": "literal",
+      "value": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "caseInsensitive": true,
+      "failOn": "hit",
+      "note": "测试私钥 P 的十六进制（小写或大写）"
+    },
+    {
+      "id": "LS-K2",
+      "class": "private-key",
+      "kind": "literal",
+      "value": "0x78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "caseInsensitive": true,
+      "failOn": "hit",
+      "note": "带 0x 或 0X 前缀"
+    },
+    {
+      "id": "LS-K3",
+      "class": "private-key",
+      "kind": "literal",
+      "value": "eMCM4tKz/MVnQjXWFYexHa6+sL1LRKJjuCfwundDsL0=",
+      "caseInsensitive": false,
+      "failOn": "hit",
+      "note": "P 的 32 字节标准 base64"
+    },
+    {
+      "id": "LS-K4",
+      "class": "private-key",
+      "kind": "literal",
+      "value": "eMCM4tKz_MVnQjXWFYexHa6-sL1LRKJjuCfwundDsL0",
+      "caseInsensitive": false,
+      "failOn": "hit",
+      "note": "P 的 32 字节 base64url（无填充）"
+    },
+    {
+      "id": "LS-M1",
+      "class": "mnemonic",
+      "kind": "regex",
+      "value": "abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+about",
+      "caseInsensitive": true,
+      "failOn": "hit",
+      "note": "12 词公开测试助记词，词间允许任意空白"
+    },
+    {
+      "id": "LS-M2",
+      "class": "mnemonic",
+      "kind": "regex",
+      "value": "abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+address",
+      "caseInsensitive": true,
+      "failOn": "hit",
+      "note": "15 词公开测试助记词"
+    },
+    {
+      "id": "LS-M3",
+      "class": "mnemonic",
+      "kind": "regex",
+      "value": "abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+abandon\\s+art",
+      "caseInsensitive": true,
+      "failOn": "hit",
+      "note": "24 词公开测试助记词"
+    },
+    {
+      "id": "LS-M4",
+      "class": "mnemonic",
+      "kind": "wordlist-run",
+      "minRun": 12,
+      "wordlist": "BIP-39 English（2048 词）",
+      "caseInsensitive": true,
+      "failOn": "manual-review-then-fail",
+      "note": "连续 12 个以上 BIP-39 英文词，视为疑似助记词，须人工复核"
+    },
+    {
+      "id": "LS-P1",
+      "class": "pgp",
+      "kind": "literal",
+      "value": "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+      "caseInsensitive": false,
+      "failOn": "hit",
+      "note": "私钥块"
+    },
+    {
+      "id": "LS-P2",
+      "class": "pgp",
+      "kind": "literal",
+      "value": "-----BEGIN PGP",
+      "caseInsensitive": false,
+      "failOn": "hit",
+      "note": "任何 PGP 块头（日志不得含 armor）"
+    },
+    {
+      "id": "LS-G1",
+      "class": "generic-hex",
+      "kind": "regex",
+      "value": "(?:0[xX])?[0-9a-fA-F]{64}",
+      "caseInsensitive": false,
+      "failOn": "hit-unless-allowlisted",
+      "note": "任何 64 位十六进制串；仅允许运行清单中列明的非秘密值（默认空）"
+    },
+    {
+      "id": "LS-F1",
+      "class": "fixture-derived",
+      "kind": "fixture",
+      "names": [
+        "DEK",
+        "K_idx",
+        "K_id",
+        "R_proto",
+        "R_db",
+        "S",
+        "indexEncKey",
+        "channel.tk 测试值",
+        "PGP 合成口令"
+      ],
+      "formats": [
+        "hex",
+        "hex 带 0x",
+        "base64"
+      ],
+      "failOn": "hit",
+      "note": "数值由各端夹具提供，本文件只列名称；命中即失败"
+    }
+  ],
+  "sources": [
+    {
+      "id": "SRC-1",
+      "side": "native",
+      "source": "iOS 统一日志（按应用进程与 subsystem，测试时段全量；不做子集过滤）"
+    },
+    {
+      "id": "SRC-2",
+      "side": "native",
+      "source": "Android logcat（adb logcat -b all -d，覆盖全部缓冲区，测试时段）"
+    },
+    {
+      "id": "SRC-3",
+      "side": "test",
+      "source": "测试运行器输出：xcodebuild / xcresult 控制台与附件；Android instrumentation 的 stdout、stderr"
+    },
+    {
+      "id": "SRC-4",
+      "side": "crash",
+      "source": "崩溃报告：iOS DiagnosticReports（*.ips，测试设备与模拟器）；Android dropbox 中本应用的 crash 条目"
+    },
+    {
+      "id": "SRC-5",
+      "side": "webview",
+      "source": "WebView 控制台：iOS WKWebView（Web Inspector 或壳桥接日志）；Android WebView（chrome://inspect 控制台）"
+    },
+    {
+      "id": "SRC-6",
+      "side": "pwa",
+      "source": "PWA 控制台与 worker 消息：Chromium console 事件；worker postMessage 追踪（仅键名与类型）"
+    },
+    {
+      "id": "SRC-7",
+      "side": "bridge",
+      "source": "壳桥接消息记录（25.7 运行时捕获，只记键名与命令名）"
+    },
+    {
+      "id": "SRC-8",
+      "side": "network",
+      "source": "出站网络请求：测试代理记录的请求行、请求头、请求体（邮箱、节点、RPC）"
+    },
+    {
+      "id": "SRC-9",
+      "side": "harness",
+      "source": "测试夹具生成的报告文件（JSON、纯文本日志）"
+    }
+  ],
+  "scenarios": [
+    "冷启动 no_key（无记录）",
+    "nativeImportOpen 与导入页（成功与各失败码）",
+    "逐条执行 no_key 清单（no-key-reject-vectors.v1.json）",
+    "聊天发送与接收尝试（no_key 下不得出站、不得拉取邮箱）",
+    "升级：旧版缺钥（PWA 有副本）",
+    "锁定或登出"
+  ],
+  "notCovered": [
+    "操作系统框架在应用进程之外的私有日志（无法保证采集）",
+    "Keychain 与 Keystore 的内容（另行核对存储，不属于日志）",
+    "本地加密数据库文件（另行核对，不属于日志）",
+    "测试设备上非测试时段的日常日志"
+  ],
+  "selfTest": {
+    "canary": "植入 LS-K1 的金丝雀行，扫描器必须命中；未命中则本次运行无效",
+    "result": "pass (generator)"
+  },
+  "allowlist": {
+    "note": "64 位十六进制的非秘密值（如交易哈希）必须逐项列入运行清单并附原因；默认空",
+    "entries": []
+  },
+  "runRecord": [
+    "扫描器版本（脚本哈希）",
+    "模式文件哈希",
+    "来源清单与采集时段",
+    "命中数（须为 0）",
+    "覆盖与未覆盖项"
+  ]
+}
