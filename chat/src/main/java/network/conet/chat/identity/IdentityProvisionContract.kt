@@ -2,17 +2,24 @@ package network.conet.chat.identity
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.Normalizer
 
 /**
- * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 22 vectors
- * `spec/identity-native-keys-vectors.v1.json`, sha256 922d75f5…).
+ * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 23 vectors
+ * `spec/identity-native-keys-vectors.v1.json`, sha256 dd938445…).
  *
  * Field placement: `provisionIdentity` carries the public fields flat in the payload; `init` carries
  * them under `payload.identity`, never at the top level of `init`.
  *
- * Normalization (valueShapeRules rule 0): before any comparison, every character of the set S is removed,
- * not only leading and trailing ones, for key names and values alike. S is Unicode White_Space plus
- * U+FEFF, U+200B–U+200D, U+2060 and U+00AD. No platform trim() is used.
+ * Canonical form N (valueShapeRules rule 0, batch 23): NFKC first, then every character of the set S is removed,
+ * not only leading and trailing ones. S is Unicode White_Space plus U+FEFF, U+200B–U+200D, U+2060 and U+00AD.
+ * N is used for detection only. No platform trim() is used.
+ *
+ * eoa must be canonical: the raw value equals N(raw) and is lowercase 0x plus 40 lowercase hex digits.
+ * Anything else is bad_identity, and nothing is stripped and accepted.
+ *
+ * PGP public armor: the header is detected on N(text). The stored value is never rewritten, and its raw
+ * characters may not include S beyond space, tab, CR and LF.
  *
  * I-4: a normalized key name is matched case-insensitively at any depth. A normalized string value that
  * contains "PRIVATEKEYBLOCK" is refused at any depth, `payload.nodes` included. A normalized string that
@@ -61,18 +68,26 @@ object IdentityProvisionContract {
         add(0xFEFF); add(0x200B); add(0x200C); add(0x200D); add(0x2060); add(0x00AD)
     }
 
-    /** Removes every character of S (not only at the ends). Used before any comparison. */
+    /**
+     * Canonical form N (batch 23): NFKC first (fullwidth digits and letters fold to ASCII), then every character
+     * of S is removed (not only at the ends). Used for detection only, never to rewrite a stored value.
+     */
     fun normalize(s: String): String {
-        val sb = StringBuilder(s.length)
-        for (ch in s) if (ch.code !in WHITESPACE_SET_S) sb.append(ch)
+        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
+        val sb = StringBuilder(nfkc.length)
+        for (ch in nfkc) if (ch.code !in WHITESPACE_SET_S) sb.append(ch)
         return sb.toString()
     }
+
+    /** Characters of S that a PGP public armor value may still contain: space, tab, CR, LF (batch 23). */
+    private val PGP_ALLOWED_S: Set<Int> = setOf(0x20, 0x09, 0x0D, 0x0A)
 
     /** Declared after [WHITESPACE_SET_S] and [normalize]: object properties initialize in declaration order. */
     private val FORBIDDEN_NORMALIZED: Set<String> = FORBIDDEN_KEYS.map { normalize(it).lowercase() }.toSet()
 
     private val EOA_RE = Regex("^0x[0-9a-f]{40}$")
-    private val HEX64_RE = Regex("^(0x)?[0-9a-fA-F]{64}$")
+    /** Batch 23: the prefix is 0x or 0X, and the match runs on the canonical form N. */
+    private val HEX64_RE = Regex("^(0[xX])?[0-9a-fA-F]{64}$")
     private val PGP_PUBLIC_HEADER_NORMALIZED = normalize("-----BEGIN PGP PUBLIC KEY BLOCK-----")
     /** Matched on the normalized string: "PRIVATE KEY BLOCK" with its whitespace removed. */
     private const val PRIVATE_BLOCK_MARK = "PRIVATEKEYBLOCK"
@@ -92,12 +107,17 @@ object IdentityProvisionContract {
             Command.PROVISION_IDENTITY -> body
             Command.INIT -> body.optJSONObject("identity") ?: return Result.Reject("missing_identity")
         }
+        // eoa must already be canonical (batch 23): the raw value equals N(raw) and is lowercase 0x + 40 hex.
+        // Nothing is stripped and accepted.
         val rawEoa = identity.opt("eoa") ?: return Result.Reject("missing_identity")
-        val eoa = normalize(rawEoa as? String ?: return Result.Reject("bad_identity"))
-        if (!EOA_RE.matches(eoa)) return Result.Reject("bad_identity")
+        val eoa = rawEoa as? String ?: return Result.Reject("bad_identity")
+        if (eoa != normalize(eoa) || !EOA_RE.matches(eoa)) return Result.Reject("bad_identity")
+        // PGP public armor: the stored value is never rewritten. Its raw characters may not include S beyond
+        // space, tab, CR and LF. The header is detected on N(text).
         val rawPgp = identity.opt("pgpPublicKeyArmored") ?: return Result.Reject("missing_identity")
-        val pgp = normalize(rawPgp as? String ?: return Result.Reject("bad_identity"))
-        if (!pgp.startsWith(PGP_PUBLIC_HEADER_NORMALIZED)) return Result.Reject("bad_identity")
+        val pgpRaw = rawPgp as? String ?: return Result.Reject("bad_identity")
+        if (pgpRaw.any { it.code in WHITESPACE_SET_S && it.code !in PGP_ALLOWED_S }) return Result.Reject("bad_identity")
+        if (!normalize(pgpRaw).startsWith(PGP_PUBLIC_HEADER_NORMALIZED)) return Result.Reject("bad_identity")
         return Result.Accept(eoa)
     }
 

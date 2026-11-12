@@ -16,7 +16,7 @@
     "mnemonic"
   ],
   "valueShapeRules": [
-    "0. 规范化：比较前一律删除字符集 S 中的所有字符（不只首尾）。S = Unicode White_Space（U+0009–U+000D、U+0020、U+0085、U+00A0、U+1680、U+2000–U+200A、U+2028、U+2029、U+202F、U+205F、U+3000）∪ {U+FEFF、U+200B、U+200C、U+200D、U+2060、U+00AD}。键名与值同样处理。不得依赖各平台的 trim()。",
+    "0. 规范化：先做 Unicode NFKC（全角数字与字母折叠为 ASCII），再删除字符集 S 中的所有字符（不只首尾）。64 位十六进制的前缀 0x 与 0X 同样计入。S = Unicode White_Space（U+0009–U+000D、U+0020、U+0085、U+00A0、U+1680、U+2000–U+200A、U+2028、U+2029、U+202F、U+205F、U+3000）∪ {U+FEFF、U+200B、U+200C、U+200D、U+2060、U+00AD}。键名与值同样处理。不得依赖各平台的 trim()。",
     "1. 任一层级的字符串值，规范化后含子串 PRIVATEKEYBLOCK（即 PRIVATE KEY BLOCK 去掉空白后），即拒绝（不分键名；payload.nodes 之内同样适用）。",
     "2. 任一层级的字符串值，规范化后整体匹配 ^(0x)?[0-9a-fA-F]{64}$，即拒绝。唯一例外：payload 顶层键 nodes（精确字符串 nodes，未规范化）的值及其子树。payload.identity.nodes、payload.extra.nodes 等其它位置的 nodes 键不是例外。",
     "3. 多行字符串经规范化后仍是完整的长字符串，不会整体匹配规则 2（例如多行 PGP 公钥块）。",
@@ -696,6 +696,185 @@
         "ok": false,
         "error": "key_over_bridge_refused",
         "field": "privateKey​Hex"
+      }
+    },
+    {
+      "name": "reject-hex64-fullwidth-0x",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "memo": "０Ｘabababababababababababababababababababababababababababababababab"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "memo"
+      }
+    },
+    {
+      "name": "reject-hex64-fullwidth-digits",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "memo": "００００００００００００００００００００００００００００００００００００００００００００００００００００００００００００００００"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "memo"
+      }
+    },
+    {
+      "name": "reject-hex64-uppercase-0X-prefix",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "memo": "0Xabababababababababababababababababababababababababababababababab"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "memo"
+      }
+    },
+    {
+      "name": "reject-key-fullwidth-forbidden",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "ｐrivateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "ｐrivateKeyHex"
+      }
+    },
+    {
+      "name": "reject-eoa-uppercase-0X-prefix",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0X39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-eoa-with-bom",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "﻿0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-eoa-fullwidth",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "０x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-pgp-public-with-bom",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "﻿-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
+      }
+    },
+    {
+      "name": "reject-pgp-public-zero-width-header",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC​ KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "bad_identity"
       }
     },
     {
