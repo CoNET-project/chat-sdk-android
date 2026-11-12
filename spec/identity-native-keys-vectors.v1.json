@@ -1,18 +1,29 @@
 {
-  "spec": "spec v1.1-r3b §25.19（identity.native-keys.v1），第十七批：能力位接口向量",
-  "status": "能力位 identity.native-keys.v1 仍未声明。仅当 iOS 与 Android 两端都通过本文件的全部用例，并实现就绪回报后，才可加入 hello（12.3）。",
+  "spec": "spec v1.1-r3b §25.19.2、§25.19.3（identity.native-keys.v1），第十八批：字段位置、I-3、I-4",
+  "status": "能力位 identity.native-keys.v1 仍未声明。两端都通过全部用例并实现就绪回报后，才可加入 hello（12.3）。",
   "note": "合成数据。请求校验与响应形状；就绪语义取决于原生存储，见 readyVariants。",
-  "forbiddenKeys": [
-    "privateKeyHex",
-    "walletPrivateKey",
-    "privateKeyArmor",
-    "pgpPrivateKeyArmored",
-    "pgpPassphrase",
+  "fieldPlacement": {
+    "provisionIdentity": "payload 平铺：{eoa, pgpPublicKeyArmored, ownRouteArmoredPublicKey, nodes}",
+    "init": "payload.identity 嵌套：{identity: {eoa, pgpPublicKeyArmored, ownRouteArmoredPublicKey}, conetRpcUrl, chainId, nodes, ...}。公开字段不得放在 payload 顶层。",
+    "basis": "两端 SDK 的现状：iOS handleInit 与 Android handleInit 均读取 payload.identity；provisionIdentity 两端均读取 payload 平铺字段。"
+  },
+  "forbiddenKeysCaseInsensitive": [
+    "privatekeyhex",
+    "walletprivatekey",
+    "privatekeyarmor",
+    "pgpprivatekeyarmored",
+    "pgppassphrase",
     "mnemonic"
+  ],
+  "valueShapeRules": [
+    "任一字符串值含 \"PRIVATE KEY BLOCK\" → 拒绝",
+    "任一字符串值为 64 位十六进制（可带 0x）→ 拒绝",
+    "在对象与数组中递归检查"
   ],
   "requestCases": [
     {
-      "name": "accept-public-only",
+      "name": "accept-provision-public-only",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -29,7 +40,8 @@
       }
     },
     {
-      "name": "reject-private-key-hex",
+      "name": "reject-provision-private-key-hex",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -51,7 +63,8 @@
       }
     },
     {
-      "name": "reject-wallet-private-key",
+      "name": "reject-provision-wallet-private-key",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -71,7 +84,8 @@
       }
     },
     {
-      "name": "reject-pgp-private-armor",
+      "name": "reject-provision-pgp-private-armor",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -91,7 +105,8 @@
       }
     },
     {
-      "name": "reject-pgp-passphrase",
+      "name": "reject-provision-pgp-passphrase",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -111,7 +126,8 @@
       }
     },
     {
-      "name": "reject-mnemonic",
+      "name": "reject-provision-mnemonic",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -131,7 +147,8 @@
       }
     },
     {
-      "name": "reject-missing-eoa",
+      "name": "reject-provision-missing-eoa",
+      "command": "provisionIdentity",
       "input": {
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
         "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -143,7 +160,8 @@
       }
     },
     {
-      "name": "reject-bad-eoa-case",
+      "name": "reject-provision-bad-eoa-case",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581C72B8C7D0DE85FF22CF3AE178AE813957AA",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -161,7 +179,8 @@
       }
     },
     {
-      "name": "reject-bad-eoa-length",
+      "name": "reject-provision-bad-eoa-length",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x1234",
         "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
@@ -179,7 +198,8 @@
       }
     },
     {
-      "name": "reject-pgp-public-not-armored",
+      "name": "reject-provision-pgp-public-not-armored",
+      "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
         "pgpPublicKeyArmored": "not armored",
@@ -195,6 +215,155 @@
         "ok": false,
         "error": "bad_identity"
       }
+    },
+    {
+      "name": "accept-init-identity-nested",
+      "command": "init",
+      "input": {
+        "identity": {
+          "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+          "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----"
+        },
+        "conetRpcUrl": "https://rpc.test.invalid",
+        "chainId": 224422,
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "reject-init-top-level-public-fields",
+      "command": "init",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "missing_identity"
+      }
+    },
+    {
+      "name": "reject-init-private-key-in-identity",
+      "command": "init",
+      "input": {
+        "identity": {
+          "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+          "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "privateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "conetRpcUrl": "https://rpc.test.invalid",
+        "chainId": 224422,
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "privateKeyHex"
+      }
+    },
+    {
+      "name": "reject-key-case-insensitive",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "PrivateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "PrivateKeyHex"
+      }
+    },
+    {
+      "name": "reject-private-block-in-value",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "note": "-----BEGIN PGP PRIVATE KEY BLOCK-----\nx"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "note"
+      }
+    },
+    {
+      "name": "reject-hex64-value-shape",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "memo": "0xabababababababababababababababababababababababababababababababab"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "memo"
+      }
+    },
+    {
+      "name": "reject-hex64-in-array-item",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "tag": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "tag"
+      }
     }
   ],
   "responseShape": {
@@ -202,7 +371,13 @@
       "ready",
       "eoa"
     ],
-    "notes": "只允许这两个键。不得含任何私钥、助记词、armor、口令、派生值。"
+    "ackEnvelope": {
+      "type": "ack",
+      "reqId": "number",
+      "ok": "boolean",
+      "error": "string (optional)"
+    },
+    "notes": "ok 属于 ack 信封（type、reqId、ok、error）。allowedKeys 只约束应答体（result 对象）：只允许 ready 与 eoa。应答体不得含任何私钥、助记词、armor、口令、派生值。"
   },
   "readyVariants": [
     {
@@ -231,11 +406,11 @@
   "capabilityGating": [
     {
       "hello": "identity.native-keys.v1 present",
-      "pwaPayload": "public-only (requestCases accept-public-only)"
+      "pwaPayload": "provisionIdentity 平铺公开字段；init 为 payload.identity 公开字段"
     },
     {
       "hello": "absent",
-      "pwaPayload": "legacy payload allowed only for shells that predate this capability; the native side keeps its previous behaviour"
+      "pwaPayload": "旧载荷，仅供未升级的壳；原生保持原有行为"
     }
   ]
 }

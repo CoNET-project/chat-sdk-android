@@ -1,5 +1,6 @@
 package network.conet.chat.identity
 
+import network.conet.chat.identity.IdentityProvisionContract.Command
 import network.conet.chat.identity.IdentityProvisionContract.NativeKeyState
 import network.conet.chat.identity.IdentityProvisionContract.Result
 import org.json.JSONObject
@@ -10,8 +11,9 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 17, sha256 0dea5599…).
- * Synthetic material only. Checks the request rules, the ready mapping and the response keys.
+ * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 19, sha256 6bdbb384…).
+ * Synthetic material only. Checks the placement rules, I-4 (case-insensitive names, value shapes), the
+ * ready mapping and the response keys.
  */
 class IdentityNativeKeysVectorsTest {
     private val bytes = File(System.getenv("IDENTITY_VECTORS") ?: "../spec/identity-native-keys-vectors.v1.json").readBytes()
@@ -24,16 +26,23 @@ class IdentityNativeKeysVectorsTest {
         else -> error("unknown nativeState $name")
     }
 
-    @Test
-    fun vectorFileIsTheBatch17Copy() {
-        val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("0dea55998971dfdfc4fa7ff195784f8e7f437454b96ee4855f603f7f2e09e0b1", sha)
+    private fun commandOf(wire: String): Command = when (wire) {
+        "provisionIdentity" -> Command.PROVISION_IDENTITY
+        "init" -> Command.INIT
+        else -> error("unknown command $wire")
     }
 
     @Test
-    fun forbiddenKeysMatchTheVector() {
-        val arr = v.getJSONArray("forbiddenKeys")
-        assertEquals((0 until arr.length()).map { arr.getString(it) }, IdentityProvisionContract.FORBIDDEN_KEYS)
+    fun vectorFileIsTheBatch19Copy() {
+        val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        assertEquals("6bdbb3847cb24b5f7c84b12654da324f7ce5d475160ad55ab6e8ab0a00f53312", sha)
+    }
+
+    @Test
+    fun forbiddenKeysMatchTheVectorCaseInsensitively() {
+        val arr = v.getJSONArray("forbiddenKeysCaseInsensitive")
+        val vector = (0 until arr.length()).map { arr.getString(it) }
+        assertEquals(vector.toSet(), IdentityProvisionContract.FORBIDDEN_KEYS.map { it.lowercase() }.toSet())
     }
 
     @Test
@@ -45,15 +54,15 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun everyRequestCaseMatchesItsExpectedResult() {
         val cases = v.getJSONArray("requestCases")
-        assertEquals(10, cases.length())
+        assertEquals(17, cases.length())
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             val name = c.getString("name")
             val expect = c.getJSONObject("expect")
-            val got = IdentityProvisionContract.validate(c.getJSONObject("input"))
+            val got = IdentityProvisionContract.validate(commandOf(c.getString("command")), c.getJSONObject("input"))
             if (expect.getBoolean("ok")) {
                 assertTrue("$name should be accepted, got $got", got is Result.Accept)
-                assertEquals(c.getJSONObject("input").getString("eoa"), (got as Result.Accept).eoa)
+                assertEquals(name, identityEoa(c), (got as Result.Accept).eoa)
             } else {
                 assertTrue("$name should be rejected, got $got", got is Result.Reject)
                 val rej = got as Result.Reject
@@ -61,6 +70,13 @@ class IdentityNativeKeysVectorsTest {
                 if (expect.has("field")) assertEquals("$name field", expect.getString("field"), rej.field)
             }
         }
+    }
+
+    /** The eoa the accepted case carries, at the placement its command requires. */
+    private fun identityEoa(c: JSONObject): String {
+        val input = c.getJSONObject("input")
+        val src = if (c.getString("command") == "init") input.getJSONObject("identity") else input
+        return src.getString("eoa")
     }
 
     @Test
@@ -84,13 +100,13 @@ class IdentityNativeKeysVectorsTest {
     }
 
     @Test
-    fun forbiddenKeyIsRefusedEvenWhenNested() {
+    fun forbiddenKeyIsRefusedEvenWhenNestedAndUpperCased() {
         val body = JSONObject()
             .put("eoa", "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa")
             .put("pgpPublicKeyArmored", "-----BEGIN PGP PUBLIC KEY BLOCK-----\nx\n-----END PGP PUBLIC KEY BLOCK-----")
-            .put("identity", JSONObject().put("privateKeyHex", "00"))
-        val r = IdentityProvisionContract.validate(body)
-        assertEquals("key_over_bridge_refused", (r as Result.Reject).error)
-        assertEquals("privateKeyHex", r.field)
+            .put("identity", JSONObject().put("PRIVATEKEYHEX", "00"))
+        val r = IdentityProvisionContract.validate(Command.PROVISION_IDENTITY, body) as Result.Reject
+        assertEquals("key_over_bridge_refused", r.error)
+        assertEquals("PRIVATEKEYHEX", r.field)
     }
 }
