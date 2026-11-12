@@ -38,4 +38,15 @@ class KeyPathGuardTest {
         assertTrue(module.contains("network.conet.chat.x21.X21Retired.ERROR"))
         assertFalse(module.contains("WalletTransferBridge"))
     }
+
+    @Test
+    fun walletCommandsAnswerFromTheNativeVaultOnly() {
+        assertTrue(module.contains("NativeWalletCommands.walletAddress("))
+        assertTrue(module.contains("NativeMessageSigner.sign("))
+        assertTrue(module.contains("NativeImportHost.open()"))
+        // The old reply codes are gone: no_key and locked are the answers.
+        assertFalse(module.contains("native_key_missing"))
+        assertFalse(module.contains("native_key_locked"))
+        assertFalse(module.contains("native_key_unreadable"))
+    }
 }

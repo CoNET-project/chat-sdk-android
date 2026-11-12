@@ -6,7 +6,10 @@ import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
 import network.conet.chat.nativekey.KeyIntake
+import network.conet.chat.nativekey.NativeImportHost
+import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
+import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.LocalMediaKind
@@ -177,6 +180,9 @@ object BeamioConetChatModule {
             // X-21 is retired (no key crosses the bridge): every walletTransfer* command is refused.
             "walletTransferOnce", "walletTransferStatus", "walletTransferSwitched" ->
                 ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
+            "walletAddress" -> walletAddressCommand(body)
+            "gossipSign" -> gossipSignCommand(body)
+            "nativeImportOpen" -> nativeImportOpenCommand(body)
             else -> {
                 Log.w(TAG, "unknown command $type")
                 // Protocol v1: a command that expects an answer gets one.
@@ -321,7 +327,7 @@ object BeamioConetChatModule {
                 val key = vault.unlock()
                 if (key == null) {
                     BeamioConetChatSignBroker.clearNativeSigner()
-                    ack(reqId, false, error = "native_key_unreadable")
+                    ack(reqId, false, error = "locked")
                     return
                 }
                 try {
@@ -333,11 +339,11 @@ object BeamioConetChatModule {
             }
             is NativeWalletVault.State.NoKey -> {
                 BeamioConetChatSignBroker.clearNativeSigner()
-                ack(reqId, false, error = "native_key_missing")
+                ack(reqId, false, error = "no_key")
             }
             is NativeWalletVault.State.Locked -> {
                 BeamioConetChatSignBroker.clearNativeSigner()
-                ack(reqId, false, error = "native_key_locked")
+                ack(reqId, false, error = "locked")
             }
         }
     }
@@ -611,6 +617,48 @@ object BeamioConetChatModule {
                 handleInbound(line, hash, e.viaDomain, e.armor)
             }
         }
+    }
+
+    /** N0 `walletAddress` (spec 25.18.2): the account EOA, no signature. */
+    private fun walletAddressCommand(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        val ctx = appContext ?: run {
+            ack(reqId, false, error = "not_initialised")
+            return
+        }
+        val out = NativeWalletCommands.walletAddress(NativeWallet.vault(ctx))
+        if (out.code == "ok") ack(reqId, true, result = JSONObject().put("address", out.address))
+        else ack(reqId, false, error = out.code)
+    }
+
+    /**
+     * C2 `gossipSign` (spec 25.23): `{kind, message}`. `message` is the caller's gossip string; it is signed as
+     * its UTF-8 bytes. Only `gossip`, `envelope` and `group` are accepted. The reply carries the signature and
+     * the signing address, never the key.
+     */
+    private fun gossipSignCommand(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        val ctx = appContext ?: run {
+            ack(reqId, false, error = "not_initialised")
+            return
+        }
+        val kind = body.optString("kind", "")
+        val message = body.optString("message", null) ?: run {
+            ack(reqId, false, error = "bad_request")
+            return
+        }
+        val out = NativeMessageSigner.sign(NativeWallet.vault(ctx), kind, message.toByteArray(Charsets.UTF_8))
+        if (out.code == "ok") {
+            ack(reqId, true, result = JSONObject().put("signature", out.value).put("address", out.address))
+        } else {
+            ack(reqId, false, error = out.code)
+        }
+    }
+
+    /** `nativeImportOpen` (spec 25.25.1): only opens the native import page. No data in the reply. */
+    private fun nativeImportOpenCommand(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        if (NativeImportHost.open()) ack(reqId, true) else ack(reqId, false, error = "not_available")
     }
 
     /**
