@@ -4,14 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 19 vectors
- * `spec/identity-native-keys-vectors.v1.json`, sha256 6bdbb384…).
+ * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 20 vectors
+ * `spec/identity-native-keys-vectors.v1.json`, sha256 32edc7b7…).
  *
  * Field placement: `provisionIdentity` carries the public fields flat in the payload; `init` carries
  * them under `payload.identity`, never at the top level of `init`.
  *
- * I-4: key names are matched case-insensitively, and any string value (at any depth, arrays included)
- * that contains "PRIVATE KEY BLOCK" or is a 64-hex value is refused. Only the field name is reported.
+ * I-4 (narrowed in batch 20): key names are matched case-insensitively at any depth, and any string value
+ * containing "PRIVATE KEY BLOCK" is refused at any depth, `nodes` included. A 64-hex string value is refused
+ * everywhere except inside the `nodes` subtree. Only the field name is reported.
  *
  * Pure logic. The native side supplies a [NativeKeyState] from its own key store, and production
  * readback must be verified before it reports [NativeKeyState.HAS_KEY_READBACK_OK].
@@ -49,14 +50,18 @@ object IdentityProvisionContract {
     private val HEX64_RE = Regex("^(0x)?[0-9a-fA-F]{64}$")
     private const val PGP_PUBLIC_HEADER = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
     private const val PRIVATE_BLOCK_MARK = "PRIVATE KEY BLOCK"
+    /** The `nodes` subtree is exempt from the 64-hex rule only (notice I-4 narrowing, batch 20). */
+    private const val NODES_KEY = "nodes"
 
     /**
-     * Checks one request. Order: forbidden key names (any depth), value shapes (any depth), then the
-     * public identity at the placement the command requires.
+     * Checks one request. Order: forbidden key names (any depth, `nodes` included), "PRIVATE KEY BLOCK"
+     * in any string value (any depth, `nodes` included), 64-hex values outside `nodes`, then the public
+     * identity at the placement the command requires.
      */
     fun validate(command: Command, body: JSONObject): Result {
         findForbiddenKey(body)?.let { return Result.Reject("key_over_bridge_refused", it) }
-        findBadValue(body, null)?.let { return Result.Reject("key_over_bridge_refused", it) }
+        findPrivateBlock(body, null)?.let { return Result.Reject("key_over_bridge_refused", it) }
+        findHex64(body, null, insideNodes = false)?.let { return Result.Reject("key_over_bridge_refused", it) }
         val identity: JSONObject = when (command) {
             Command.PROVISION_IDENTITY -> body
             Command.INIT -> body.optJSONObject("identity") ?: return Result.Reject("missing_identity")
@@ -86,16 +91,26 @@ object IdentityProvisionContract {
     }
 
     /**
-     * The field that holds a string value with a private-key block or a 64-hex value. For an array item,
+     * The field that holds a string value containing "PRIVATE KEY BLOCK", at any depth. For an array item,
      * the field is the array's key. Only the field name is returned, never the value.
      */
-    private fun findBadValue(node: Any?, parentKey: String?): String? = when (node) {
-        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k -> findBadValue(node.opt(k), k) }
-        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findBadValue(node.opt(it), parentKey) }
-        is String -> if (isBadValue(node)) parentKey ?: "" else null
+    private fun findPrivateBlock(node: Any?, parentKey: String?): String? = when (node) {
+        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k -> findPrivateBlock(node.opt(k), k) }
+        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findPrivateBlock(node.opt(it), parentKey) }
+        is String -> if (node.uppercase().contains(PRIVATE_BLOCK_MARK)) parentKey ?: "" else null
         else -> null
     }
 
-    private fun isBadValue(s: String): Boolean =
-        s.uppercase().contains(PRIVATE_BLOCK_MARK) || HEX64_RE.matches(s)
+    /**
+     * The field that holds a 64-hex string value, outside the `nodes` subtree. For an array item, the field is
+     * the array's key. Only the field name is returned, never the value.
+     */
+    private fun findHex64(node: Any?, parentKey: String?, insideNodes: Boolean): String? = when (node) {
+        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k ->
+            findHex64(node.opt(k), k, insideNodes || k == NODES_KEY)
+        }
+        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findHex64(node.opt(it), parentKey, insideNodes) }
+        is String -> if (!insideNodes && HEX64_RE.matches(node)) parentKey ?: "" else null
+        else -> null
+    }
 }

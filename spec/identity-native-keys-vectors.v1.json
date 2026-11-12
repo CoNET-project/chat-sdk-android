@@ -346,7 +346,7 @@
       }
     },
     {
-      "name": "reject-hex64-in-array-item",
+      "name": "reject-hex64-in-nonnode-array",
       "command": "provisionIdentity",
       "input": {
         "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
@@ -355,6 +355,11 @@
         "nodes": [
           {
             "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "extra": [
+          {
             "tag": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
           }
         ]
@@ -363,6 +368,113 @@
         "ok": false,
         "error": "key_over_bridge_refused",
         "field": "tag"
+      }
+    },
+    {
+      "name": "reject-hex64-in-identity-extra",
+      "command": "init",
+      "input": {
+        "identity": {
+          "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+          "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "hint": "0xefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+        },
+        "conetRpcUrl": "https://rpc.test.invalid",
+        "chainId": 224422,
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "hint"
+      }
+    },
+    {
+      "name": "reject-private-block-under-nodes",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1",
+            "armoredPublicKey": "-----BEGIN PGP PRIVATE KEY BLOCK-----\nx"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "armoredPublicKey"
+      }
+    },
+    {
+      "name": "reject-forbidden-key-under-nodes",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1",
+            "privateKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "privateKeyHex"
+      }
+    },
+    {
+      "name": "accept-nodes-public-fields-realistic",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "ip_addr": "192.0.2.10",
+            "domain": "node-test.invalid",
+            "region": "test-region",
+            "armoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3\nQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3\nQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3\nQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3\n=ABCD\n-----END PGP PUBLIC KEY BLOCK-----"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "accept-nodes-bytes32-future-field",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1",
+            "specHash": "0xabababababababababababababababababababababababababababababababab",
+            "nodeId": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true
       }
     }
   ],
