@@ -11,9 +11,10 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 21, sha256 57b124ec…).
- * Synthetic material only. Checks the placement rules, I-4 (case-insensitive names, "PRIVATE KEY BLOCK" at any
- * depth, 64-hex values outside the exact path `payload.nodes`), the ready mapping and the response keys.
+ * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 22, sha256 922d75f5…).
+ * Synthetic material only. Checks the placement rules, normalization (whitespace set S removed before every
+ * comparison), I-4 (case-insensitive names, "PRIVATEKEYBLOCK" at any depth, 64-hex values outside the exact
+ * path `payload.nodes`), the ready mapping and the response keys.
  */
 class IdentityNativeKeysVectorsTest {
     private val bytes = File(System.getenv("IDENTITY_VECTORS") ?: "../spec/identity-native-keys-vectors.v1.json").readBytes()
@@ -35,7 +36,7 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun vectorFileIsTheBatch19Copy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("57b124ec8fd6c485cb6f42cbf4cfcb904a8081c2474e9570bbacc1d5e915c90d", sha)
+        assertEquals("922d75f5c6ba2665966761d8315830d72d9b7ea03f3dff14588b3e71dc213efe", sha)
     }
 
     @Test
@@ -54,9 +55,9 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun everyRequestCaseMatchesItsExpectedResult() {
         val cases = v.getJSONArray("requestCases")
-        assertEquals(24, cases.length())
-        // Batch 21: the five value-shape rules are the vector's text (authoritative).
-        assertEquals(5, v.getJSONArray("valueShapeRules").length())
+        assertEquals(34, cases.length())
+        // Batch 22: six value-shape rules (rule 0 is normalization); the vector's text is authoritative.
+        assertEquals(6, v.getJSONArray("valueShapeRules").length())
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             val name = c.getString("name")
