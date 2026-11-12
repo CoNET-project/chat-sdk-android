@@ -11,10 +11,11 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 23, sha256 dd938445…).
- * Synthetic material only. Checks the placement rules, canonical form N (NFKC, then S removed), eoa canonical
- * form, PGP armor value rules, I-4 (case-insensitive names, "PRIVATEKEYBLOCK" at any depth, 64-hex with 0x or
- * 0X outside the exact path `payload.nodes`), the ready mapping and the response keys.
+ * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 24, sha256 7aa7b4db…).
+ * Synthetic material only. Checks the placement rules, canonical form N (NFKD, S removed, Mn/Me/Cf removed),
+ * the key-name whitelist, eoa canonical form, PGP armor value rules, I-4 (case-insensitive names,
+ * "PRIVATEKEYBLOCK" at any depth, 64-hex with 0x or 0X outside the exact path `payload.nodes`), the ready
+ * mapping and the response keys.
  */
 class IdentityNativeKeysVectorsTest {
     private val bytes = File(System.getenv("IDENTITY_VECTORS") ?: "../spec/identity-native-keys-vectors.v1.json").readBytes()
@@ -34,9 +35,9 @@ class IdentityNativeKeysVectorsTest {
     }
 
     @Test
-    fun vectorFileIsTheBatch19Copy() {
+    fun vectorFileIsTheCurrentBatchCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("dd938445620ab087d204562e8671421a72a1320a3182876ce8cc3840fdfeec92", sha)
+        assertEquals("7aa7b4dbd93d0d42b594ab18f1d70e85a7d4b9dbba484bd7d6aba4e3851864b9", sha)
     }
 
     @Test
@@ -55,9 +56,9 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun everyRequestCaseMatchesItsExpectedResult() {
         val cases = v.getJSONArray("requestCases")
-        assertEquals(43, cases.length())
-        // Batch 23: six value-shape rules (rule 0 is NFKC plus S removal); the vector's text is authoritative.
-        assertEquals(6, v.getJSONArray("valueShapeRules").length())
+        assertEquals(53, cases.length())
+        // Batch 24: seven value-shape rules (0, 0a, 1–5); the vector's text is authoritative.
+        assertEquals(7, v.getJSONArray("valueShapeRules").length())
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             val name = c.getString("name")

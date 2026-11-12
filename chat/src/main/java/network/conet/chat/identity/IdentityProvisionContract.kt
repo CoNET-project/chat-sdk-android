@@ -5,8 +5,8 @@ import org.json.JSONObject
 import java.text.Normalizer
 
 /**
- * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 23 vectors
- * `spec/identity-native-keys-vectors.v1.json`, sha256 dd938445…).
+ * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 24 vectors
+ * `spec/identity-native-keys-vectors.v1.json`, sha256 7aa7b4db…). Batch 24 is the last change to the character set.
  *
  * Field placement: `provisionIdentity` carries the public fields flat in the payload; `init` carries
  * them under `payload.identity`, never at the top level of `init`.
@@ -69,15 +69,30 @@ object IdentityProvisionContract {
     }
 
     /**
-     * Canonical form N (batch 23): NFKC first (fullwidth digits and letters fold to ASCII), then every character
-     * of S is removed (not only at the ends). Used for detection only, never to rewrite a stored value.
+     * Canonical form N (batch 24): NFKD first (decomposes, so combining marks separate from their base letters;
+     * fullwidth and compatibility characters map to ASCII), then every character of S is removed, then every
+     * character whose general category is Mn, Me or Cf is removed. Used for detection only, never to rewrite a
+     * stored value. NFKC is not used: it would recompose "E" + U+0301 into "É" and let the mark escape removal.
      */
     fun normalize(s: String): String {
-        val nfkc = Normalizer.normalize(s, Normalizer.Form.NFKC)
-        val sb = StringBuilder(nfkc.length)
-        for (ch in nfkc) if (ch.code !in WHITESPACE_SET_S) sb.append(ch)
-        return sb.toString()
+        val nfkd = Normalizer.normalize(s, Normalizer.Form.NFKD)
+        val noWhitespace = StringBuilder(nfkd.length)
+        for (ch in nfkd) if (ch.code !in WHITESPACE_SET_S) noWhitespace.append(ch)
+        val out = StringBuilder(noWhitespace.length)
+        var i = 0
+        while (i < noWhitespace.length) {
+            val cp = noWhitespace.codePointAt(i)
+            val category = Character.getType(cp).toByte()
+            if (category != Character.NON_SPACING_MARK && category != Character.ENCLOSING_MARK && category != Character.FORMAT) {
+                out.appendCodePoint(cp)
+            }
+            i += Character.charCount(cp)
+        }
+        return out.toString()
     }
+
+    /** Key names after normalization may contain only ASCII letters, digits and underscore (batch 24). */
+    private val KEY_NAME_RE = Regex("^[A-Za-z0-9_]+$")
 
     /** Characters of S that a PGP public armor value may still contain: space, tab, CR, LF (batch 23). */
     private val PGP_ALLOWED_S: Set<Int> = setOf(0x20, 0x09, 0x0D, 0x0A)
@@ -103,6 +118,7 @@ object IdentityProvisionContract {
         findForbiddenKey(body)?.let { return Result.Reject("key_over_bridge_refused", it) }
         findPrivateBlock(body, null)?.let { return Result.Reject("key_over_bridge_refused", it) }
         findHex64(body)?.let { return Result.Reject("key_over_bridge_refused", it) }
+        findBadKeyName(body)?.let { return Result.Reject("bad_identity", it) }
         val identity: JSONObject = when (command) {
             Command.PROVISION_IDENTITY -> body
             Command.INIT -> body.optJSONObject("identity") ?: return Result.Reject("missing_identity")
@@ -160,6 +176,19 @@ object IdentityProvisionContract {
         is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k -> hex64Under(node.opt(k), k, exempt) }
         is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { hex64Under(node.opt(it), parentKey, exempt) }
         is String -> if (!exempt && HEX64_RE.matches(normalize(node))) parentKey ?: "" else null
+        else -> null
+    }
+
+    /**
+     * The first key name, at any depth and in any position including `payload.nodes`, that is not canonical or
+     * is not made only of ASCII letters, digits and underscore after normalization. The raw name is returned.
+     */
+    private fun findBadKeyName(node: Any?): String? = when (node) {
+        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k ->
+            val n = normalize(k)
+            if (k != n || !KEY_NAME_RE.matches(n)) k else findBadKeyName(node.opt(k))
+        }
+        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findBadKeyName(node.opt(it)) }
         else -> null
     }
 }
