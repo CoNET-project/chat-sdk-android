@@ -49,4 +49,33 @@ class KeyPathGuardTest {
         assertFalse(module.contains("native_key_locked"))
         assertFalse(module.contains("native_key_unreadable"))
     }
+
+    @Test
+    fun noKeyGateRunsBeforeAnyDispatch() {
+        // T-155: with no native record, the gate answers before a payload is read or a command runs.
+        val gate = module.indexOf("NoKeyGate.route(type)")
+        val dispatch = module.indexOf("dispatch(type, body)")
+        assertTrue("gate call missing", gate >= 0)
+        assertTrue("gate must come before dispatch", dispatch > gate)
+        assertTrue(module.contains("NativeWalletVault.State.NoKey"))
+    }
+
+    @Test
+    fun legacyKeyIsAdoptedBeforeTheGate() {
+        // An upgraded install whose first command is `init` must keep its wallet: the legacy key is adopted first.
+        val adopt = module.indexOf("NativeWallet.migrateLegacy(context)")
+        val gate = module.indexOf("NoKeyGate.route(type)")
+        assertTrue("adoption call missing", adopt >= 0)
+        assertTrue("adoption must come before the gate", adopt < gate)
+    }
+
+    @Test
+    fun mnemonicAndGateCodeNeverLog() {
+        // The phrase and the derived key must not reach the log (25.26.3, 25.22.5).
+        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt")) {
+            val src = File("src/main/java/network/conet/chat/nativekey/$name").readText()
+            assertFalse("$name logs", src.contains("Log."))
+            assertFalse("$name prints", src.contains("println"))
+        }
+    }
 }

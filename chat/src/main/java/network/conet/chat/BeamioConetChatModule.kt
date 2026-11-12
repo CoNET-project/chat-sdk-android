@@ -11,6 +11,7 @@ import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativeWalletVault
+import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.LocalMediaKind
 import network.conet.chat.localread.LocalPage
@@ -133,7 +134,34 @@ object BeamioConetChatModule {
         appContext = context.applicationContext
         emitFn = emit
         BeamioConetChatSignBroker.setEmit(emit)
-        when (val type = body.optString("type", "")) {
+        // A pre-upgrade wallet key is adopted before the no-key check, so an upgraded install keeps its wallet even
+        // when the first command is `init` (25.25.6 U-3, U-4). This does nothing once a native record exists or when
+        // no legacy key is left. Only the outcome is logged, never the key.
+        runCatching { NativeWallet.migrateLegacy(context) }
+            .onFailure { Log.w(TAG, "legacy wallet adoption failed: ${it.javaClass.simpleName}") }
+        val type = body.optString("type", "")
+        val route = NoKeyGate.route(type)
+        // X-21 is retired (no key crosses the bridge): refused whether or not a key exists (25.24, 25.26.4 table C).
+        if (route == NoKeyGate.Route.NOT_SUPPORTED) {
+            ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
+            return
+        }
+        // No native record: default deny (25.26.4). The payload is not read. Only the status queries answer
+        // with data; lifecycle commands and nativeImportOpen keep their normal semantics.
+        if (route != NoKeyGate.Route.PASS && NativeWallet.vault(context).state() is NativeWalletVault.State.NoKey) {
+            val reqId = body.optInt("reqId", -1)
+            when (route) {
+                NoKeyGate.Route.WALLET_STATUS -> ack(reqId, true, result = NoKeyGate.walletStatusNoKey())
+                NoKeyGate.Route.PASSCODE_STATUS -> ack(reqId, true, result = NoKeyGate.passcodeStatusNoKey())
+                else -> ack(reqId, false, error = NoKeyGate.NO_KEY)
+            }
+            return
+        }
+        dispatch(type, body)
+    }
+
+    private fun dispatch(type: String, body: JSONObject) {
+        when (type) {
             // Protocol v1: version + capabilities (see BeamioConetChatProtocol).
             "hello" -> ack(body.optInt("reqId", 0), true, result = BeamioConetChatProtocol.helloResult())
             "init" -> handleInit(body)
@@ -177,9 +205,6 @@ object BeamioConetChatModule {
             "destroy" -> destroy()
             "clearIdentity" -> clearIdentity(body.optInt("reqId", -1))
             "provisionIdentity" -> provisionIdentity(body)
-            // X-21 is retired (no key crosses the bridge): every walletTransfer* command is refused.
-            "walletTransferOnce", "walletTransferStatus", "walletTransferSwitched" ->
-                ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
             "walletAddress" -> walletAddressCommand(body)
             "gossipSign" -> gossipSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)

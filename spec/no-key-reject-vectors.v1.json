@@ -1,0 +1,568 @@
+{
+  "file": "no-key-reject-vectors.v1.json",
+  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
+  "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
+  "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",
+  "ethers": "6.17.0",
+  "derivationPath": "m/44'/60'/0'/0/0",
+  "passphrase": "",
+  "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+  "state": "no_key（原生无钱包记录）",
+  "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）",
+  "allowedUnderNoKey": [
+    "destroy",
+    "hello",
+    "nativeImportOpen",
+    "passcodeStatus",
+    "pause",
+    "resume",
+    "walletStatus"
+  ],
+  "lifecycleExcluded": [
+    "hello",
+    "pause",
+    "resume",
+    "destroy"
+  ],
+  "ackShape": {
+    "type": "ack",
+    "reqId": "<reqId>",
+    "ok": false,
+    "error": "no_key"
+  },
+  "walletCommands": [
+    {
+      "id": "NK-W2",
+      "command": "deriveLocalKeys",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W2"
+    },
+    {
+      "id": "NK-W3",
+      "command": "protocolKeys",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W3"
+    },
+    {
+      "id": "NK-W4",
+      "command": "fragmentKeys",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W4"
+    },
+    {
+      "id": "NK-W5a",
+      "command": "signMessage",
+      "kind": "selfAuth",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=selfAuth"
+    },
+    {
+      "id": "NK-W5b",
+      "command": "signMessage",
+      "kind": "pointerEip712",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=pointerEip712"
+    },
+    {
+      "id": "NK-W5c",
+      "command": "signMessage",
+      "kind": "chatRouteRegister",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=chatRouteRegister"
+    },
+    {
+      "id": "NK-W5d",
+      "command": "signMessage",
+      "kind": "envelope",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=envelope"
+    },
+    {
+      "id": "NK-W5e",
+      "command": "signMessage",
+      "kind": "group",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=group"
+    },
+    {
+      "id": "NK-W5f",
+      "command": "signMessage",
+      "kind": "voice",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=voice"
+    },
+    {
+      "id": "NK-W5g",
+      "command": "signMessage",
+      "kind": "gossip",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W5 kind=gossip"
+    },
+    {
+      "id": "NK-W6a",
+      "command": "pgpSign",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W6 / C4"
+    },
+    {
+      "id": "NK-W6b",
+      "command": "pgpDecrypt",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W6 / C3"
+    },
+    {
+      "id": "NK-W6c",
+      "command": "pgpDecryptInbound",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W6"
+    },
+    {
+      "id": "NK-W7",
+      "command": "ephemeralSign",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "W7"
+    },
+    {
+      "id": "NK-C1",
+      "command": "historySign",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "C1"
+    },
+    {
+      "id": "NK-C2",
+      "command": "gossipSign",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "C2"
+    },
+    {
+      "id": "NK-C5",
+      "command": "deriveSubkeys",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "C5"
+    },
+    {
+      "id": "NK-N0",
+      "command": "walletAddress",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N0"
+    },
+    {
+      "id": "NK-N1",
+      "command": "walletSignTypedData",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N1"
+    },
+    {
+      "id": "NK-N2",
+      "command": "walletSignMessage",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N2"
+    },
+    {
+      "id": "NK-N3",
+      "command": "walletSendTransaction",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N3"
+    },
+    {
+      "id": "NK-N3b",
+      "command": "walletTransfer",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N3b"
+    },
+    {
+      "id": "NK-N4",
+      "command": "walletSignUserOp",
+      "layer": "wallet",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "N4"
+    },
+    {
+      "id": "NK-PC1",
+      "command": "passcodeRun",
+      "mode": "enable",
+      "layer": "passcode",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "口令依附于原生记录"
+    },
+    {
+      "id": "NK-PC2",
+      "command": "passcodeRun",
+      "mode": "change",
+      "layer": "passcode",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "口令依附于原生记录"
+    },
+    {
+      "id": "NK-PC3",
+      "command": "passcodeRun",
+      "mode": "disable",
+      "layer": "passcode",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "口令依附于原生记录"
+    },
+    {
+      "id": "NK-PC4",
+      "command": "passcodeRun",
+      "mode": "unlock",
+      "layer": "passcode",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "signed": false,
+      "note": "口令依附于原生记录"
+    }
+  ],
+  "chatCommands": [
+    {
+      "id": "NK-K1",
+      "command": "init",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "身份与节点配置；PWA 无钥不发送"
+    },
+    {
+      "id": "NK-K2",
+      "command": "identity.provision",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "身份绑定；不写入公开材料；ready 不为 true"
+    },
+    {
+      "id": "NK-K3",
+      "command": "setNodes",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "节点配置"
+    },
+    {
+      "id": "NK-K4",
+      "command": "setRoutes",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "路由配置"
+    },
+    {
+      "id": "NK-K5",
+      "command": "nodesResponse",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "节点响应"
+    },
+    {
+      "id": "NK-K6",
+      "command": "send",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "1:1 发送"
+    },
+    {
+      "id": "NK-K7",
+      "command": "sendGroup",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "群组发送"
+    },
+    {
+      "id": "NK-K8",
+      "command": "ackInbound",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "入站确认"
+    },
+    {
+      "id": "NK-K9",
+      "command": "mailboxCommand",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "邮箱命令；不发起邮箱拉取"
+    },
+    {
+      "id": "NK-K10",
+      "command": "ownMailboxCommand",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "本账号邮箱命令"
+    },
+    {
+      "id": "NK-K11",
+      "command": "issueGroupTombstone",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "群组墓碑"
+    },
+    {
+      "id": "NK-K12",
+      "command": "issueGroupRoster",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "群组名册"
+    },
+    {
+      "id": "NK-K13",
+      "command": "historyRead",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "本地历史读取"
+    },
+    {
+      "id": "NK-K14",
+      "command": "historyLoad",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "本地历史加载"
+    },
+    {
+      "id": "NK-K15",
+      "command": "historyAppend",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "本地历史写入"
+    },
+    {
+      "id": "NK-K16",
+      "command": "historyListConversations",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "history* 前缀规则测试"
+    },
+    {
+      "id": "NK-K17",
+      "command": "voiceListen",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "语音监听"
+    },
+    {
+      "id": "NK-K18",
+      "command": "voiceFrame",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "语音帧"
+    },
+    {
+      "id": "NK-K19",
+      "command": "voiceUnlisten",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "语音停止监听"
+    },
+    {
+      "id": "NK-K20",
+      "command": "queryPresence",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "在线查询"
+    },
+    {
+      "id": "NK-K21",
+      "command": "queryNativeWake",
+      "layer": "chat",
+      "expectCode": "no_key",
+      "dataReturned": false,
+      "events": [],
+      "mailboxRequest": false,
+      "note": "原生唤醒查询"
+    }
+  ],
+  "retiredCommands": [
+    {
+      "id": "NK-X1",
+      "command": "walletTransferOnce",
+      "expectCode": "not_supported",
+      "note": "退役（25.24）：优先于 no_key"
+    },
+    {
+      "id": "NK-X2",
+      "command": "walletTransferStatus",
+      "expectCode": "not_supported",
+      "note": "退役（25.24）"
+    },
+    {
+      "id": "NK-X3",
+      "command": "walletTransferSwitched",
+      "expectCode": "not_supported",
+      "note": "退役（25.24）"
+    }
+  ],
+  "specialStatus": [
+    {
+      "id": "NK-S1",
+      "command": "walletStatus",
+      "expect": {
+        "status": "no_key"
+      },
+      "note": "W1 只返回状态，不返回 accountKey"
+    },
+    {
+      "id": "NK-S2",
+      "command": "passcodeStatus",
+      "expect": {
+        "set": false,
+        "locked": false,
+        "hasKey": false
+      },
+      "note": "状态查询，允许"
+    }
+  ],
+  "secretPayloadControls": [
+    {
+      "id": "NK-P1",
+      "command": "init",
+      "expectCode": "no_key",
+      "echoed": false,
+      "stored": false,
+      "note": "init 带私钥字段：拒绝，不回显"
+    },
+    {
+      "id": "NK-P2",
+      "command": "identity.provision",
+      "expectCode": "no_key",
+      "echoed": false,
+      "stored": false,
+      "note": "provision 带 PGP 私钥：拒绝，不保存"
+    },
+    {
+      "id": "NK-P3",
+      "command": "send",
+      "expectCode": "no_key",
+      "echoed": false,
+      "stored": false,
+      "note": "send 带钱包私钥字段：拒绝，不回显"
+    }
+  ]
+}
