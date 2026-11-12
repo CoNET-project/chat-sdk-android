@@ -11,9 +11,9 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 20, sha256 32edc7b7…).
- * Synthetic material only. Checks the placement rules, I-4 (case-insensitive names, "PRIVATE KEY BLOCK" and
- * 64-hex values outside `nodes`), the ready mapping and the response keys.
+ * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 21, sha256 57b124ec…).
+ * Synthetic material only. Checks the placement rules, I-4 (case-insensitive names, "PRIVATE KEY BLOCK" at any
+ * depth, 64-hex values outside the exact path `payload.nodes`), the ready mapping and the response keys.
  */
 class IdentityNativeKeysVectorsTest {
     private val bytes = File(System.getenv("IDENTITY_VECTORS") ?: "../spec/identity-native-keys-vectors.v1.json").readBytes()
@@ -35,7 +35,7 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun vectorFileIsTheBatch19Copy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("32edc7b7dc4f147c62e2c64a9342389e93edee8f050d67b01152861015a4e08b", sha)
+        assertEquals("57b124ec8fd6c485cb6f42cbf4cfcb904a8081c2474e9570bbacc1d5e915c90d", sha)
     }
 
     @Test
@@ -54,7 +54,9 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun everyRequestCaseMatchesItsExpectedResult() {
         val cases = v.getJSONArray("requestCases")
-        assertEquals(22, cases.length())
+        assertEquals(24, cases.length())
+        // Batch 21: the five value-shape rules are the vector's text (authoritative).
+        assertEquals(5, v.getJSONArray("valueShapeRules").length())
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             val name = c.getString("name")

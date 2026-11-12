@@ -16,9 +16,11 @@
     "mnemonic"
   ],
   "valueShapeRules": [
-    "任一字符串值含 \"PRIVATE KEY BLOCK\" → 拒绝",
-    "任一字符串值为 64 位十六进制（可带 0x）→ 拒绝",
-    "在对象与数组中递归检查"
+    "1. 任一层级的字符串值，只要含子串 PRIVATE KEY BLOCK，即拒绝（不分键名；payload.nodes 之内同样适用）。",
+    "2. 任一层级的字符串值，若整体（不含前后空白）匹配 ^(0x)?[0-9a-fA-F]{64}$，即拒绝。唯一例外：payload 顶层键 nodes 的值及其子树（精确路径 payload.nodes）。payload.identity.nodes、payload.extra.nodes 等其它位置的 nodes 键不是例外。",
+    "3. 含换行的多行字符串不因整体匹配被规则 2 判定为 64 位十六进制（例如多行 PGP 公钥块）。",
+    "4. 禁止键名（不区分大小写）在整个 payload 中递归检查，payload.nodes 之内同样适用。",
+    "5. 检查顺序：键名，然后 PRIVATE KEY BLOCK，然后 64 位十六进制。对象值与数组元素同样递归。拒绝时只记录字段名，不记录值。"
   ],
   "requestCases": [
     {
@@ -435,6 +437,58 @@
         "ok": false,
         "error": "key_over_bridge_refused",
         "field": "privateKeyHex"
+      }
+    },
+    {
+      "name": "reject-hex64-under-nested-nodes-in-identity",
+      "command": "init",
+      "input": {
+        "identity": {
+          "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+          "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+          "nodes": {
+            "x": "0x1212121212121212121212121212121212121212121212121212121212121212"
+          }
+        },
+        "conetRpcUrl": "https://rpc.test.invalid",
+        "chainId": 224422,
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "x"
+      }
+    },
+    {
+      "name": "reject-hex64-under-nested-nodes-in-extra",
+      "command": "provisionIdentity",
+      "input": {
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ONLY-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nTEST-ROUTE-SYNTHETIC\n-----END PGP PUBLIC KEY BLOCK-----",
+        "nodes": [
+          {
+            "region": "test",
+            "ip_addr": "192.0.2.1"
+          }
+        ],
+        "extra": {
+          "nodes": {
+            "x": "abababababababababababababababababababababababababababababababab"
+          }
+        }
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "field": "x"
       }
     },
     {

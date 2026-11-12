@@ -10,9 +10,10 @@ import org.json.JSONObject
  * Field placement: `provisionIdentity` carries the public fields flat in the payload; `init` carries
  * them under `payload.identity`, never at the top level of `init`.
  *
- * I-4 (narrowed in batch 20): key names are matched case-insensitively at any depth, and any string value
- * containing "PRIVATE KEY BLOCK" is refused at any depth, `nodes` included. A 64-hex string value is refused
- * everywhere except inside the `nodes` subtree. Only the field name is reported.
+ * I-4 (batch 21 decision, valueShapeRules in the vector file are authoritative): key names are matched
+ * case-insensitively at any depth, and any string value containing "PRIVATE KEY BLOCK" is refused at any depth,
+ * `payload.nodes` included. A 64-hex string value (whitespace-trimmed) is refused everywhere except the exact
+ * path `payload.nodes` and its subtree. Only the field name is reported.
  *
  * Pure logic. The native side supplies a [NativeKeyState] from its own key store, and production
  * readback must be verified before it reports [NativeKeyState.HAS_KEY_READBACK_OK].
@@ -50,18 +51,18 @@ object IdentityProvisionContract {
     private val HEX64_RE = Regex("^(0x)?[0-9a-fA-F]{64}$")
     private const val PGP_PUBLIC_HEADER = "-----BEGIN PGP PUBLIC KEY BLOCK-----"
     private const val PRIVATE_BLOCK_MARK = "PRIVATE KEY BLOCK"
-    /** The `nodes` subtree is exempt from the 64-hex rule only (notice I-4 narrowing, batch 20). */
+    /** Exact path `payload.nodes` is exempt from the 64-hex rule only (batch 21 decision). */
     private const val NODES_KEY = "nodes"
 
     /**
-     * Checks one request. Order: forbidden key names (any depth, `nodes` included), "PRIVATE KEY BLOCK"
-     * in any string value (any depth, `nodes` included), 64-hex values outside `nodes`, then the public
-     * identity at the placement the command requires.
+     * Checks one request. Order: forbidden key names (any depth), "PRIVATE KEY BLOCK" in any string value
+     * (any depth), 64-hex values outside the exact path `payload.nodes`, then the public identity at the
+     * placement the command requires.
      */
     fun validate(command: Command, body: JSONObject): Result {
         findForbiddenKey(body)?.let { return Result.Reject("key_over_bridge_refused", it) }
         findPrivateBlock(body, null)?.let { return Result.Reject("key_over_bridge_refused", it) }
-        findHex64(body, null, insideNodes = false)?.let { return Result.Reject("key_over_bridge_refused", it) }
+        findHex64(body)?.let { return Result.Reject("key_over_bridge_refused", it) }
         val identity: JSONObject = when (command) {
             Command.PROVISION_IDENTITY -> body
             Command.INIT -> body.optJSONObject("identity") ?: return Result.Reject("missing_identity")
@@ -102,15 +103,18 @@ object IdentityProvisionContract {
     }
 
     /**
-     * The field that holds a 64-hex string value, outside the `nodes` subtree. For an array item, the field is
-     * the array's key. Only the field name is returned, never the value.
+     * The field that holds a 64-hex string value (whitespace-trimmed match). The exemption is the exact path
+     * `payload.nodes` only: a root key named `nodes` and its subtree. Nested `nodes` keys are not exempt.
+     * For an array item, the field is the array's key. Only the field name is returned, never the value.
      */
-    private fun findHex64(node: Any?, parentKey: String?, insideNodes: Boolean): String? = when (node) {
-        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k ->
-            findHex64(node.opt(k), k, insideNodes || k == NODES_KEY)
-        }
-        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findHex64(node.opt(it), parentKey, insideNodes) }
-        is String -> if (!insideNodes && HEX64_RE.matches(node)) parentKey ?: "" else null
+    private fun findHex64(root: JSONObject): String? = root.keys().asSequence().firstNotNullOfOrNull { k ->
+        hex64Under(root.opt(k), k, exempt = k == NODES_KEY)
+    }
+
+    private fun hex64Under(node: Any?, parentKey: String?, exempt: Boolean): String? = when (node) {
+        is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k -> hex64Under(node.opt(k), k, exempt) }
+        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { hex64Under(node.opt(it), parentKey, exempt) }
+        is String -> if (!exempt && HEX64_RE.matches(node.trim())) parentKey ?: "" else null
         else -> null
     }
 }
