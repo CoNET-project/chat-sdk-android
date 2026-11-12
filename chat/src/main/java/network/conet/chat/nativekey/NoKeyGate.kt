@@ -36,4 +36,30 @@ object NoKeyGate {
     /** `passcodeStatus` without a key (§25.25.4). */
     fun passcodeStatusNoKey(): JSONObject =
         JSONObject().put("set", false).put("locked", false).put("hasKey", false)
+
+    /**
+     * `walletStatus` for any vault state (W1, spec table W1: `locked` or `unlocked` with `accountKey`).
+     * `unlocked` means the native record opened and passed its marker check. `accountKey` is
+     * `eoa + ":" + workspace` with the workspace `default` (D5). A `locked` record has no verified account,
+     * so it carries no `accountKey`.
+     */
+    fun walletStatusOf(state: NativeWalletVault.State): JSONObject = when (state) {
+        is NativeWalletVault.State.NoKey -> walletStatusNoKey()
+        is NativeWalletVault.State.Ready ->
+            JSONObject().put("status", "unlocked").put("accountKey", accountKeyOf(state.eoa))
+        is NativeWalletVault.State.Locked -> JSONObject().put("status", "locked")
+    }
+
+    /**
+     * `passcodeStatus` for any vault state (§25.25.4). The SDK has no passcode layer yet (the native
+     * passcode overlay is open), so `set` and `locked` stay false while a record exists. `hasKey` reports the
+     * record.
+     */
+    fun passcodeStatusOf(state: NativeWalletVault.State): JSONObject = when (state) {
+        is NativeWalletVault.State.NoKey -> passcodeStatusNoKey()
+        else -> JSONObject().put("set", false).put("locked", false).put("hasKey", true)
+    }
+
+    /** `eoa + ":" + workspace`, workspace `default` (25.x D5). The EOA is lower-case. */
+    fun accountKeyOf(eoa: String, workspace: String = "default"): String = eoa.lowercase() + ":" + workspace
 }

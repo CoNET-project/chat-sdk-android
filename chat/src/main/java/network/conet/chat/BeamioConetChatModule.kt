@@ -146,16 +146,26 @@ object BeamioConetChatModule {
             ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
             return
         }
-        // No native record: default deny (25.26.4). The payload is not read. Only the status queries answer
-        // with data; lifecycle commands and nativeImportOpen keep their normal semantics.
-        if (route != NoKeyGate.Route.PASS && NativeWallet.vault(context).state() is NativeWalletVault.State.NoKey) {
+        // Lifecycle commands and nativeImportOpen keep their normal semantics. Other names: with no native record
+        // they get the default deny (25.26.4), and the payload is not read. The two status queries answer from the
+        // vault state in both cases (W1 and passcodeStatus, table D).
+        if (route != NoKeyGate.Route.PASS) {
             val reqId = body.optInt("reqId", -1)
-            when (route) {
-                NoKeyGate.Route.WALLET_STATUS -> ack(reqId, true, result = NoKeyGate.walletStatusNoKey())
-                NoKeyGate.Route.PASSCODE_STATUS -> ack(reqId, true, result = NoKeyGate.passcodeStatusNoKey())
-                else -> ack(reqId, false, error = NoKeyGate.NO_KEY)
+            val state = NativeWallet.vault(context).state()
+            val statusQuery = route == NoKeyGate.Route.WALLET_STATUS || route == NoKeyGate.Route.PASSCODE_STATUS
+            if (statusQuery) {
+                val result = if (route == NoKeyGate.Route.WALLET_STATUS) {
+                    NoKeyGate.walletStatusOf(state)
+                } else {
+                    NoKeyGate.passcodeStatusOf(state)
+                }
+                ack(reqId, true, result = result)
+                return
             }
-            return
+            if (state is NativeWalletVault.State.NoKey) {
+                ack(reqId, false, error = NoKeyGate.NO_KEY)
+                return
+            }
         }
         dispatch(type, body)
     }

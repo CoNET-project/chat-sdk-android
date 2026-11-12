@@ -61,6 +61,13 @@ class KeyPathGuardTest {
     }
 
     @Test
+    fun statusQueriesAnswerFromTheVaultStateInBothCases() {
+        // AND-N4, AND-N5: walletStatus and passcodeStatus answer from the vault state, with or without a record.
+        assertTrue(module.contains("NoKeyGate.walletStatusOf(state)"))
+        assertTrue(module.contains("NoKeyGate.passcodeStatusOf(state)"))
+    }
+
+    @Test
     fun legacyKeyIsAdoptedBeforeTheGate() {
         // An upgraded install whose first command is `init` must keep its wallet: the legacy key is adopted first.
         val adopt = module.indexOf("NativeWallet.migrateLegacy(context)")

@@ -31,19 +31,41 @@ class NoKeyRejectVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("4da5836ed1864ec01ba85742b81e3736fdbea1126106f6b7a9b9503411246362", sha256Hex(bytes))
+        // r3f (spec §25.26.4, revision r3f). The r3e file (4da5836e…6362) is withdrawn.
+        assertEquals("69ab42e467f3df1bab06f05327a3a8b6c7f58d708608cfbb8aeebf8103316866", sha256Hex(bytes))
     }
 
     @Test
     fun entryCountsMatchTheManifest() {
         assertEquals(27, v.getJSONArray("walletCommands").length())
-        assertEquals(21, v.getJSONArray("chatCommands").length())
+        assertEquals(29, v.getJSONArray("chatCommands").length())
         assertEquals(3, v.getJSONArray("retiredCommands").length())
         assertEquals(2, v.getJSONArray("specialStatus").length())
         assertEquals(3, v.getJSONArray("secretPayloadControls").length())
-        // 27 + 21 = 48 no_key entries; the 3 retired entries are not_supported. Together 51.
-        assertEquals(51, v.getJSONArray("walletCommands").length() + v.getJSONArray("chatCommands").length() +
-            v.getJSONArray("retiredCommands").length())
+        val noKey = v.getJSONArray("walletCommands").length() + v.getJSONArray("chatCommands").length()
+        val notSupported = v.getJSONArray("retiredCommands").length()
+        // r3f: 27 wallet + 29 chat = 56 no_key entries; 3 retired entries are not_supported. Together 59.
+        assertEquals(56, noKey)
+        assertEquals(3, notSupported)
+        assertEquals(59, noKey + notSupported)
+        val counts = v.getJSONObject("counts")
+        assertEquals(56, counts.getInt("noKeyTotal"))
+        assertEquals(3, counts.getInt("notSupported"))
+        assertEquals(59, counts.getInt("total"))
+    }
+
+    @Test
+    fun everyNoKeyEntryRoutesToNoKey() {
+        // 56 entries answer no_key: every wallet and chat name, including the eight names added in r3f.
+        var n = 0
+        for (list in listOf(v.getJSONArray("walletCommands"), v.getJSONArray("chatCommands"))) {
+            for (i in 0 until list.length()) {
+                val c = list.getJSONObject(i)
+                assertEquals(c.getString("id"), "no_key", codeFor(c.getString("command")))
+                n++
+            }
+        }
+        assertEquals(56, n)
     }
 
     @Test
