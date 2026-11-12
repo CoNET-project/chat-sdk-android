@@ -402,8 +402,11 @@
 					"group.v1",
 					"presence.query",
 					"mailbox.command",
-					"send.mailboxWrap"
-				]
+					"send.mailboxWrap",
+					"history.local.v1",
+					"history.page.v1",
+					"layout.cache.v1"
+			]
 			},
 			"ios": {
 				"protocolVersion": 1,
@@ -418,8 +421,11 @@
 					"voice.delegated",
 					"presence.query",
 					"mailbox.command",
-					"send.mailboxWrap"
-				]
+					"send.mailboxWrap",
+					"history.local.v1",
+					"history.page.v1",
+					"layout.cache.v1"
+			]
 			},
 			"android": {
 				"protocolVersion": 1,
@@ -434,8 +440,11 @@
 					"voice.delegated",
 					"presence.query",
 					"mailbox.command",
-					"send.mailboxWrap"
-				]
+					"send.mailboxWrap",
+					"history.local.v1",
+					"history.page.v1",
+					"layout.cache.v1"
+			]
 			}
 		},
 		"negotiation": [

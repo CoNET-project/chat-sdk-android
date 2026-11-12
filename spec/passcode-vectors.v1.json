@@ -1,0 +1,478 @@
+{
+  "spec": "spec v1.1-r3b §25.16.2、§25.17.6、§25.17.7、§25.17.10（第十批）",
+  "status": "第十批：生日格式拒绝（PM 维持）；PWA 补充的 3 条转移已采纳；P-LEN 定为 8–12 位。三端实现前以本文件为准。",
+  "note": "全部为合成测试材料。结果码与消息键由 PWA 定义；原生不回送口令。",
+  "policy": {
+    "minDigits": 8,
+    "maxDigits": 12,
+    "rules": [
+      "ASCII 数字",
+      "8–12 位",
+      "不得全同数字",
+      "不得两位循环（如 12121212）",
+      "不得为 COMMON 列表（10 项）",
+      "不得为生日格式：8 位且能解释为 YYYYMMDD、MMDDYYYY 或 DDMMYYYY 之一的 1900–2099 年有效日期",
+      "不得含连续 6 位递增或递减"
+    ],
+    "common": [
+      "00000000",
+      "11111111",
+      "12345678",
+      "87654321",
+      "12341234",
+      "12121212",
+      "20202020",
+      "10101010",
+      "13131313",
+      "11223344"
+    ],
+    "reasonCodes": [
+      "non_digit",
+      "too_short",
+      "too_long",
+      "all_same",
+      "repeat_pair",
+      "common",
+      "birthday",
+      "sequence"
+    ],
+    "cases": [
+      {
+        "passcode": "20251231",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "12312025",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "31122025",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "19990101",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "01011990",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "20991231",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "19000101",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "12121980",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "29022024",
+        "expectOk": false,
+        "expectReason": "birthday",
+        "result": {
+          "ok": false,
+          "reason": "birthday"
+        }
+      },
+      {
+        "passcode": "21000101",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "19001301",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "20250230",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "13572468",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "24680246",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "10293847",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "18991231",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "29022023",
+        "expectOk": true,
+        "expectReason": null,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "passcode": "11111111",
+        "expectOk": false,
+        "expectReason": "all_same",
+        "result": {
+          "ok": false,
+          "reason": "all_same"
+        }
+      },
+      {
+        "passcode": "12121212",
+        "expectOk": false,
+        "expectReason": "repeat_pair",
+        "result": {
+          "ok": false,
+          "reason": "repeat_pair"
+        }
+      },
+      {
+        "passcode": "12345678",
+        "expectOk": false,
+        "expectReason": "common",
+        "result": {
+          "ok": false,
+          "reason": "common"
+        }
+      },
+      {
+        "passcode": "13456789",
+        "expectOk": false,
+        "expectReason": "sequence",
+        "result": {
+          "ok": false,
+          "reason": "sequence"
+        }
+      },
+      {
+        "passcode": "1234567a",
+        "expectOk": false,
+        "expectReason": "non_digit",
+        "result": {
+          "ok": false,
+          "reason": "non_digit"
+        }
+      },
+      {
+        "passcode": "1357",
+        "expectOk": false,
+        "expectReason": "too_short",
+        "result": {
+          "ok": false,
+          "reason": "too_short"
+        }
+      },
+      {
+        "passcode": "1357913579135",
+        "expectOk": false,
+        "expectReason": "too_long",
+        "result": {
+          "ok": false,
+          "reason": "too_long"
+        }
+      }
+    ]
+  },
+  "kdf": {
+    "alg": "PBKDF2-HMAC-SHA256",
+    "passcode": "24681357",
+    "saltHex": "000102030405060708090a0b0c0d0e0f",
+    "iterations": 600000,
+    "dkLen": 32,
+    "outputHex": "da119d3656f7b4149767730c7a8157cd4707c73a82f9340d7bed17539c9d05f2",
+    "note": "KAT：三端派生结果逐字节一致。口令仅为测试材料。"
+  },
+  "backoff": {
+    "schedule": [
+      {
+        "consecutiveFailures": 0,
+        "cooldownSec": 0
+      },
+      {
+        "consecutiveFailures": 1,
+        "cooldownSec": 0
+      },
+      {
+        "consecutiveFailures": 2,
+        "cooldownSec": 0
+      },
+      {
+        "consecutiveFailures": 3,
+        "cooldownSec": 0
+      },
+      {
+        "consecutiveFailures": 4,
+        "cooldownSec": 0
+      },
+      {
+        "consecutiveFailures": 5,
+        "cooldownSec": 30
+      },
+      {
+        "consecutiveFailures": 6,
+        "cooldownSec": 60
+      },
+      {
+        "consecutiveFailures": 7,
+        "cooldownSec": 300
+      },
+      {
+        "consecutiveFailures": 8,
+        "cooldownSec": 900
+      },
+      {
+        "consecutiveFailures": 9,
+        "cooldownSec": 3600
+      },
+      {
+        "consecutiveFailures": 12,
+        "cooldownSec": 3600
+      }
+    ],
+    "note": "连续错误次数；成功即清零；不擦除数据。"
+  },
+  "wrapping": {
+    "layers": [
+      "H：硬件密钥（iOS Keychain 非导出 AES-256-GCM；Android Keystore AES-256-GCM）",
+      "P：Passcode 派生 AES-256-GCM（PBKDF2 参数见 kdf）"
+    ],
+    "aadH": "beamio-native-wallet-v1|h|<eoa 小写>",
+    "aadP": "beamio-native-wallet-v1|p|<eoa 小写>|v1",
+    "versions": {
+      "record": 1,
+      "kdf": "PBKDF2-HMAC-SHA256/600000/32",
+      "wrap": "AES-256-GCM/96-bit IV/128-bit tag"
+    }
+  },
+  "stateMachine": {
+    "modes": [
+      "enable",
+      "change",
+      "disable",
+      "unlock"
+    ],
+    "results": [
+      "ok",
+      "cancelled",
+      "backoff",
+      "error"
+    ],
+    "appStates": [
+      "NO_PASSCODE",
+      "LOCKED",
+      "UNLOCKED"
+    ],
+    "transitions": [
+      {
+        "mode": "enable",
+        "from": "setup_new",
+        "event": "submit_valid",
+        "to": "setup_confirm"
+      },
+      {
+        "mode": "enable",
+        "from": "setup_new",
+        "event": "submit_invalid",
+        "to": "setup_new",
+        "message": "policy"
+      },
+      {
+        "mode": "enable",
+        "from": "setup_confirm",
+        "event": "submit_match",
+        "to": "done",
+        "result": "ok"
+      },
+      {
+        "mode": "enable",
+        "from": "setup_confirm",
+        "event": "submit_mismatch",
+        "to": "setup_new",
+        "message": "mismatch"
+      },
+      {
+        "mode": "change",
+        "from": "verify_old",
+        "event": "submit_match",
+        "to": "setup_new",
+        "message": null
+      },
+      {
+        "mode": "change",
+        "from": "verify_old",
+        "event": "submit_wrong",
+        "to": "verify_old",
+        "message": "wrong"
+      },
+      {
+        "mode": "change",
+        "from": "verify_old",
+        "event": "cooldown",
+        "to": "done",
+        "result": "backoff"
+      },
+      {
+        "mode": "change",
+        "from": "setup_confirm",
+        "event": "submit_match",
+        "to": "done",
+        "result": "ok"
+      },
+      {
+        "mode": "disable",
+        "from": "verify",
+        "event": "submit_match",
+        "to": "done",
+        "result": "ok"
+      },
+      {
+        "mode": "disable",
+        "from": "verify",
+        "event": "submit_wrong",
+        "to": "verify",
+        "message": "wrong"
+      },
+      {
+        "mode": "unlock",
+        "from": "unlock",
+        "event": "submit_match",
+        "to": "done",
+        "result": "ok"
+      },
+      {
+        "mode": "unlock",
+        "from": "unlock",
+        "event": "submit_wrong",
+        "to": "unlock",
+        "message": "wrong"
+      },
+      {
+        "mode": "unlock",
+        "from": "unlock",
+        "event": "cooldown",
+        "to": "done",
+        "result": "backoff"
+      },
+      {
+        "mode": "*",
+        "from": "*",
+        "event": "cancel",
+        "to": "done",
+        "result": "cancelled"
+      },
+      {
+        "mode": "change",
+        "from": "setup_new",
+        "event": "submit_valid",
+        "to": "setup_confirm",
+        "specAdded": true
+      },
+      {
+        "mode": "change",
+        "from": "setup_new",
+        "event": "submit_invalid",
+        "to": "setup_new",
+        "message": "policy",
+        "specAdded": true
+      },
+      {
+        "mode": "change",
+        "from": "setup_confirm",
+        "event": "submit_mismatch",
+        "to": "setup_new",
+        "message": "mismatch",
+        "pwaAdded": true
+      },
+      {
+        "mode": "disable",
+        "from": "verify",
+        "event": "cooldown",
+        "to": "done",
+        "result": "backoff",
+        "pwaAdded": true
+      },
+      {
+        "mode": "*",
+        "from": "*",
+        "event": "internal_error",
+        "to": "done",
+        "result": "error",
+        "pwaAdded": true
+      }
+    ]
+  }
+}
