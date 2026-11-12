@@ -1,0 +1,294 @@
+{
+  "file": "import-upgrade-vectors.v1.json",
+  "spec": "spec §25.24（X-21 退役）与 §25.25（原生导入），第二十六批",
+  "generator": "gen-import-upgrade-vectors.mjs",
+  "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23 同源；不是真实钱包，禁止用于生产。",
+  "testEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+  "retiredCommands": [
+    "walletTransferOnce",
+    "walletTransferStatus",
+    "walletTransferSwitched"
+  ],
+  "groups": [
+    "fresh-install",
+    "upgrade-native-key",
+    "upgrade-no-key",
+    "import-success",
+    "import-failure"
+  ],
+  "cases": [
+    {
+      "id": "U-1",
+      "group": "fresh-install",
+      "state": {
+        "native": "none",
+        "pwaCopy": "none"
+      },
+      "action": "walletAddress",
+      "expect": {
+        "code": "no_key",
+        "dataReturned": false,
+        "signed": false
+      }
+    },
+    {
+      "id": "U-2",
+      "group": "fresh-install",
+      "state": {
+        "native": "none",
+        "pwaCopy": "none"
+      },
+      "action": "walletTransferOnce",
+      "expect": {
+        "code": "not_supported",
+        "nativeRecordAfter": "none",
+        "keyBytesOverBridge": 0
+      }
+    },
+    {
+      "id": "U-3",
+      "group": "upgrade-native-key",
+      "state": {
+        "native": "present",
+        "pwaCopy": "present"
+      },
+      "action": "walletAddress",
+      "expect": {
+        "code": "ok",
+        "address": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "nativeRecordAfter": "present",
+        "keyBytesOverBridge": 0
+      }
+    },
+    {
+      "id": "U-4",
+      "group": "upgrade-native-key",
+      "state": {
+        "native": "present",
+        "pwaCopy": "present"
+      },
+      "action": "walletTransferOnce",
+      "expect": {
+        "code": "not_supported",
+        "nativeRecordAfter": "present",
+        "keyBytesOverBridge": 0
+      }
+    },
+    {
+      "id": "U-5",
+      "group": "upgrade-no-key",
+      "state": {
+        "native": "none",
+        "pwaCopy": "present"
+      },
+      "action": "walletAddress",
+      "expect": {
+        "code": "no_key",
+        "dataReturned": false,
+        "signed": false
+      }
+    },
+    {
+      "id": "U-6",
+      "group": "upgrade-no-key",
+      "state": {
+        "native": "none",
+        "pwaCopy": "present"
+      },
+      "action": "walletTransferStatus",
+      "expect": {
+        "code": "not_supported",
+        "nativeRecordAfter": "none",
+        "keyBytesOverBridge": 0
+      }
+    },
+    {
+      "id": "I-1",
+      "group": "import-success",
+      "input": "0x78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "expectedEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "nativeRecord": false
+      },
+      "note": "小写，带 0x",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "record": "written",
+        "readback": "ok",
+        "passcodeState": "NO_PASSCODE"
+      }
+    },
+    {
+      "id": "I-2",
+      "group": "import-success",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "expectedEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "nativeRecord": false
+      },
+      "note": "无 0x 前缀",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "record": "written",
+        "readback": "ok",
+        "passcodeState": "NO_PASSCODE"
+      }
+    },
+    {
+      "id": "I-3",
+      "group": "import-success",
+      "input": "  0X78C08CE2D2B3FCC5674235D61587B11DAEBEB0BD4B44A263B827F0BA7743B0BD\n",
+      "ctx": {
+        "expectedEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "nativeRecord": false
+      },
+      "note": "大写十六进制，首尾空白被去除",
+      "expect": {
+        "code": "ok",
+        "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+        "record": "written",
+        "readback": "ok",
+        "passcodeState": "NO_PASSCODE"
+      }
+    },
+    {
+      "id": "F-1",
+      "group": "import-failure",
+      "input": "zzc08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_format",
+        "record": "none",
+        "note": "非十六进制"
+      }
+    },
+    {
+      "id": "F-2",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0b",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_format",
+        "record": "none",
+        "note": "63 位"
+      }
+    },
+    {
+      "id": "F-3",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11d ebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_format",
+        "record": "none",
+        "note": "内部空白"
+      }
+    },
+    {
+      "id": "F-4",
+      "group": "import-failure",
+      "input": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_key",
+        "record": "none",
+        "note": "k = 0"
+      }
+    },
+    {
+      "id": "F-5",
+      "group": "import-failure",
+      "input": "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+      "ctx": {
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "invalid_key",
+        "record": "none",
+        "note": "k = n"
+      }
+    },
+    {
+      "id": "F-6",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "expectedEoa": "0x2222222222222222222222222222222222222222",
+        "nativeRecord": false
+      },
+      "expect": {
+        "code": "address_mismatch",
+        "record": "none",
+        "note": "期望地址不符"
+      }
+    },
+    {
+      "id": "F-7",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": true
+      },
+      "expect": {
+        "code": "already_exists",
+        "record": "none",
+        "note": "已有记录，不覆盖",
+        "nativeRecordAfter": "present"
+      }
+    },
+    {
+      "id": "F-8",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": false,
+        "writeFail": true
+      },
+      "expect": {
+        "code": "write_failed",
+        "record": "none",
+        "note": "写入失败，回滚",
+        "rollback": true
+      }
+    },
+    {
+      "id": "F-9",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": false,
+        "readbackFail": true
+      },
+      "expect": {
+        "code": "readback_failed",
+        "record": "none",
+        "note": "读回不一致，回滚",
+        "rollback": true
+      }
+    },
+    {
+      "id": "F-10",
+      "group": "import-failure",
+      "input": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+      "ctx": {
+        "nativeRecord": false,
+        "cancelled": true
+      },
+      "expect": {
+        "code": "cancelled",
+        "record": "none",
+        "note": "用户取消，无提示"
+      }
+    }
+  ]
+}
