@@ -729,7 +729,7 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         }
     }
 
-    // ---- Local wallet signer (key from BeamioChatWalletKeyStore; never logged) ----
+    // ---- Local wallet signer (key from the native vault; never logged) ----
 
     /** EIP-191 `personal_sign` of [message] with [privateKeyHex]. */
     fun signEip191(

@@ -5,6 +5,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
+import network.conet.chat.nativekey.KeyIntake
+import network.conet.chat.nativekey.NativeWallet
+import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.LocalMediaKind
 import network.conet.chat.localread.LocalPage
@@ -199,9 +202,13 @@ object BeamioConetChatModule {
         val idEoa = payload.optJSONObject("identity")?.let { id ->
             normalizeAddress(id.optString("eoaAddress", "").ifBlank { id.optString("eoa", "") })
         }.orEmpty()
-        val walletKey = BeamioChatWalletKeyStore.normalizeKey(
-            payload.optJSONObject("identity")?.optString("privateKeyHex", ""),
-        )
+        // Key material never comes over the bridge (spec 25.20.1): refuse the call and change nothing.
+        val refused = KeyIntake.initRefused(payload)
+        if (refused.isNotEmpty()) {
+            Log.w(TAG, "init refused key fields: ${refused.joinToString(",")}")
+            ack(reqId, false, error = "key_over_bridge_refused")
+            return
+        }
         // A listen started without the page (call push) for this wallet: the page
         // takes it over as it is. No reconnect, and the messages it holds unconfirmed
         // are handed to the page below.
@@ -286,44 +293,52 @@ object BeamioConetChatModule {
                 ack(reqId, false, error = "openpgp_not_ready")
                 return@ensureReady
             }
-            adoptWalletKey(ctx, host, s.eoa, walletKey) { finishInit(ctx, reqId, s, attach) }
+            adoptNativeWallet(ctx, host, reqId, s.eoa) { finishInit(ctx, reqId, s, attach) }
         }
     }
 
     /**
-     * Sign locally from now on. A key from the page is checked against the
-     * session wallet and stored; without one, a stored key for the same wallet
-     * is used; otherwise signing falls back to the page.
+     * Signing uses only the native vault key (spec 25.20.1, R5). The vault must hold the session's account
+     * with a passed readback. Otherwise init is refused and the user imports the key natively: nothing is
+     * accepted from the bridge, and the page does not sign for the wallet.
      */
-    private fun adoptWalletKey(
+    private fun adoptNativeWallet(
         ctx: Context,
         host: BeamioOpenPgpHost,
+        reqId: Int,
         eoa: String,
-        walletKey: String,
         done: () -> Unit,
     ) {
-        if (walletKey.isEmpty()) {
-            val stored = BeamioChatWalletKeyStore.load(ctx)
-            if (stored != null && stored.eoa == eoa) {
-                BeamioConetChatSignBroker.setLocalSigner(host, stored.privateKeyHex)
-            } else {
-                // Another wallet's key must not stay behind after a switch.
-                if (stored != null) BeamioChatWalletKeyStore.clear(ctx)
-                BeamioConetChatSignBroker.clearLocalSigner()
+        NativeWallet.migrateLegacy(ctx)
+        val vault = NativeWallet.vault(ctx)
+        when (val st = vault.state()) {
+            is NativeWalletVault.State.Ready -> {
+                if (st.eoa != eoa) {
+                    BeamioConetChatSignBroker.clearNativeSigner()
+                    ack(reqId, false, error = "wallet_mismatch")
+                    return
+                }
+                val key = vault.unlock()
+                if (key == null) {
+                    BeamioConetChatSignBroker.clearNativeSigner()
+                    ack(reqId, false, error = "native_key_unreadable")
+                    return
+                }
+                try {
+                    BeamioConetChatSignBroker.setNativeSigner(host, ConetChatCryptoUtil.toHex(key))
+                } finally {
+                    key.fill(0)
+                }
+                done()
             }
-            done()
-            return
-        }
-        host.walletAddress(walletKey) { addr ->
-            if (addr.getOrNull() == eoa) {
-                val saved = BeamioChatWalletKeyStore.save(ctx, eoa, walletKey)
-                BeamioConetChatSignBroker.setLocalSigner(host, walletKey)
-                Log.i(TAG, "wallet signer local stored=$saved")
-            } else {
-                Log.w(TAG, "wallet key does not match the session wallet; page signs")
-                BeamioConetChatSignBroker.clearLocalSigner()
+            is NativeWalletVault.State.NoKey -> {
+                BeamioConetChatSignBroker.clearNativeSigner()
+                ack(reqId, false, error = "native_key_missing")
             }
-            done()
+            is NativeWalletVault.State.Locked -> {
+                BeamioConetChatSignBroker.clearNativeSigner()
+                ack(reqId, false, error = "native_key_locked")
+            }
         }
     }
 
@@ -400,13 +415,15 @@ object BeamioConetChatModule {
             }
             return true
         }
+        NativeWallet.migrateLegacy(ctx)
+        val vault = NativeWallet.vault(ctx)
+        val walletEoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
         val pgp = BeamioChatPgpStore.load(ctx)
-        val wallet = BeamioChatWalletKeyStore.load(ctx)
-        if (pgp == null || !pgp.hasUserPrivate || !pgp.hasRoutePublic || wallet == null) {
+        if (pgp == null || !pgp.hasUserPrivate || !pgp.hasRoutePublic || walletEoa == null) {
             Log.w(TAG, "no stored identity for a no-page listen ($reason)")
             return false
         }
-        if (pgp.eoa.isNotBlank() && normalizeAddress(pgp.eoa) != wallet.eoa) {
+        if (pgp.eoa.isNotBlank() && normalizeAddress(pgp.eoa) != walletEoa) {
             Log.w(TAG, "stored PGP and wallet belong to different wallets; no-page listen skipped")
             return false
         }
@@ -415,8 +432,14 @@ object BeamioConetChatModule {
             Log.w(TAG, "no stored roster for a no-page listen ($reason)")
             return false
         }
+        val walletKey = vault.unlock() ?: run {
+            Log.w(TAG, "native wallet key unavailable; no-page listen skipped")
+            return false
+        }
+        val walletHex = ConetChatCryptoUtil.toHex(walletKey)
+        walletKey.fill(0)
         val s = Session().apply {
-            eoa = wallet.eoa
+            eoa = walletEoa
             pgpPrivateKeyArmored = pgp.privateKeyArmor
             pgpPublicKeyArmored = pgp.publicKeyArmor
             ownRouteArmoredPublicKey = pgp.routePublicKeyArmor
@@ -432,7 +455,7 @@ object BeamioConetChatModule {
         val host = BeamioOpenPgpHost.shared(ctx)
         host.ensureReady { ok ->
             if (!ok || currentSession() !== s) return@ensureReady
-            BeamioConetChatSignBroker.setLocalSigner(host, wallet.privateKeyHex)
+            BeamioConetChatSignBroker.setNativeSigner(host, walletHex)
             startListen(ctx, s)
         }
         main.post {
@@ -563,8 +586,9 @@ object BeamioConetChatModule {
     private fun clearIdentity(reqId: Int) {
         val ctx = appContext
         destroy()
-        BeamioConetChatSignBroker.clearLocalSigner()
+        BeamioConetChatSignBroker.clearNativeSigner()
         if (ctx != null) {
+            NativeWallet.vault(ctx).forget()
             BeamioChatWalletKeyStore.clear(ctx)
             BeamioChatPgpStore.clear(ctx)
             BeamioConetChatInboxStore.clear(ctx)
@@ -590,49 +614,32 @@ object BeamioConetChatModule {
     }
 
     /**
-     * `provisionIdentity`: the page hands over the wallet key and PGP key. The
-     * wallet key must match `eoa`; both go to secure storage (refused, not
-     * stored, when that fails). Later listens sign locally.
+     * `provisionIdentity` (spec 25.19.2): public material only. Any wallet or PGP private field is refused.
+     * The reply is `{ready, eoa}`; `ready` is true only when the native vault holds this account's key with a
+     * passed readback. The module stores nothing from this call.
      */
     private fun provisionIdentity(body: JSONObject) {
         val reqId = body.optInt("reqId", -1)
-        val ctx = appContext ?: return
         val p = body.optJSONObject("payload") ?: body
+        val refused = KeyIntake.provisionRefused(p)
+        if (refused.isNotEmpty()) {
+            Log.w(TAG, "provisionIdentity refused key fields: ${refused.joinToString(",")}")
+            ack(reqId, false, error = "key_over_bridge_refused")
+            return
+        }
+        val ctx = appContext ?: run {
+            ack(reqId, false, error = "not_initialised")
+            return
+        }
         val eoa = normalizeAddress(p.optString("eoa", "").ifBlank { p.optString("eoaAddress", "") })
-        val walletKey = BeamioChatWalletKeyStore.normalizeKey(
-            p.optString("walletPrivateKey", "").ifBlank { p.optString("privateKeyHex", "") },
-        )
-        val pgpPrivate = p.optString("pgpPrivateKeyArmored", "")
-        if (eoa.isEmpty() || walletKey.isEmpty() || !pgpPrivate.contains("BEGIN PGP PRIVATE KEY")) {
+        if (eoa.isEmpty()) {
             ack(reqId, false, error = "bad_identity")
             return
         }
-        val pgpOk = BeamioChatPgpStore.upsertFromWeb(
-            ctx,
-            JSONObject()
-                .put("privateKeyArmor", pgpPrivate)
-                .put("publicKeyArmor", p.optString("pgpPublicKeyArmored", ""))
-                .put("routePublicKeyArmor", p.optString("ownRoute", "").ifBlank { p.optString("ownRouteArmoredPublicKey", "") })
-                .put("eoa", eoa),
-        )
-        val host = BeamioOpenPgpHost.shared(ctx)
-        host.ensureReady { ok ->
-            if (!ok) {
-                ack(reqId, false, error = "openpgp_not_ready")
-                return@ensureReady
-            }
-            host.walletAddress(walletKey) { addr ->
-                if (addr.getOrNull() != eoa) {
-                    ack(reqId, false, error = "wallet_mismatch")
-                    return@walletAddress
-                }
-                val saved = BeamioChatWalletKeyStore.save(ctx, eoa, walletKey)
-                if (saved && pgpOk) BeamioConetChatSignBroker.setLocalSigner(host, walletKey)
-                Log.i(TAG, "identity provisioned stored=${saved && pgpOk}")
-                if (saved && pgpOk) ack(reqId, true, result = JSONObject().put("ok", true))
-                else ack(reqId, false, error = "secure_store_failed")
-            }
-        }
+        NativeWallet.migrateLegacy(ctx)
+        val ready = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.eoa == eoa
+        Log.i(TAG, "identity provisioned ready=$ready")
+        ack(reqId, true, result = JSONObject().put("ready", ready).put("eoa", eoa))
     }
 
     // ---- call layer entry (no page involved) ----------------------------------------------

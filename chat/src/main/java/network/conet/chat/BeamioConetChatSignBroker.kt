@@ -7,11 +7,10 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Signing for the module. With a wallet key from the page (kept in
- * [BeamioChatWalletKeyStore]) the module signs locally, so a call push can open
- * the mailbox listen without the page. Without one it falls back to model 1B: it
- * asks the host PWA to EIP-191 / EIP-712 sign and receives the signature through
- * [fulfill] (`{ action: "chatModuleSignRequest", reqId, kind, … }`).
+ * Signing for the module. The wallet key comes only from the native vault (`nativekey.NativeWallet`) and
+ * is handed here in memory, so a call push can open the mailbox listen without the page. The bridge never
+ * supplies it. Without a native key, signing falls back to model 1B: the host PWA signs EIP-191 / EIP-712
+ * through [fulfill] (`{ action: "chatModuleSignRequest", reqId, kind, … }`).
  */
 object BeamioConetChatSignBroker {
     private const val DEFAULT_TIMEOUT_MS = 30_000L
@@ -30,7 +29,8 @@ object BeamioConetChatSignBroker {
     @Volatile
     private var localHost: BeamioOpenPgpHost? = null
 
-    fun setLocalSigner(host: BeamioOpenPgpHost?, privateKeyHex: String) {
+    /** Called only with a key read from the native vault. */
+    fun setNativeSigner(host: BeamioOpenPgpHost?, privateKeyHex: String) {
         localHost = host
         localKey = BeamioChatWalletKeyStore.normalizeKey(privateKeyHex)
     }
@@ -50,12 +50,12 @@ object BeamioConetChatSignBroker {
         }
     }
 
-    fun clearLocalSigner() {
+    fun clearNativeSigner() {
         localKey = ""
         localHost = null
     }
 
-    fun hasLocalSigner(): Boolean = localKey.isNotEmpty() && localHost != null
+    fun hasNativeSigner(): Boolean = localKey.isNotEmpty() && localHost != null
 
     fun setEmit(emit: ((JSONObject) -> Unit)?) {
         this.emit = emit

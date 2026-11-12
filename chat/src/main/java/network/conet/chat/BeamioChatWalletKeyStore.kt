@@ -12,14 +12,13 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The wallet (EOA) private key the module signs `mailbox_listen`, ACKs and
- * sends with, so a call push can open the mailbox listen before the page runs.
+ * Pre-upgrade wallet key store. The app no longer writes here: the native vault
+ * (`nativekey.NativeWallet`) holds the key, and [NativeWallet.migrateLegacy] moves an
+ * existing key into it once, then calls [clear]. This object only reads and clears
+ * the old copy, and normalises key strings for callers.
  *
- * Stored only as AES-GCM ciphertext under an Android Keystore key (no user
- * authentication, so a locked phone can still answer a call push). There is no
- * plaintext fallback: when the Keystore fails, nothing is stored. The key and
- * ciphertext never go to logs. Hosts should exclude [PREFS] from backup; a
- * restored copy cannot be decrypted anyway (Keystore keys do not leave the device).
+ * The old copy is AES-GCM ciphertext under an Android Keystore key. Hosts should
+ * exclude [PREFS] from backup; a restored copy cannot be decrypted anyway.
  */
 object BeamioChatWalletKeyStore {
     const val PREFS = "beamio_chat_wallet_v1"
@@ -53,25 +52,6 @@ object BeamioChatWalletKeyStore {
                 .build(),
         )
         return gen.generateKey()
-    }
-
-    fun save(context: Context, eoa: String, privateKeyHex: String): Boolean {
-        val key = normalizeKey(privateKeyHex)
-        val owner = eoa.trim().lowercase()
-        if (key.isEmpty() || owner.isEmpty()) return false
-        return try {
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey())
-            val ct = cipher.doFinal(key.toByteArray(Charsets.US_ASCII))
-            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .putString(KEY_EOA, owner)
-                .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-                .putString(KEY_CT, Base64.encodeToString(ct, Base64.NO_WRAP))
-                .commit()
-        } catch (e: Exception) {
-            Log.w(TAG, "wallet key not stored: ${e.javaClass.simpleName}")
-            false
-        }
     }
 
     fun load(context: Context): Stored? {
