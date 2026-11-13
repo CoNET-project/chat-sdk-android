@@ -116,4 +116,22 @@ class PgpRestoreAcceptanceDeviceTest {
         assertTrue("PGP after restart", pgp2.state() is NativePgpVault.State.Ready)
         assertEquals("decrypt after restart", "ok", pgp2.decryptInbound(test.getString("armored")).code)
     }
+
+    /** Two accounts on one device keep separate PGP records on the Keystore and never overwrite each other (§42). */
+    @Test
+    fun theRecordsOfTwoAccountsStayApartOnTheKeystore() {
+        val account1 = p1.getString("eoa").lowercase()
+        val account2 = compat.getJSONArray("positives").getJSONObject(1).getString("eoa").lowercase()
+        val key1 = p1.getJSONObject("pgp").getString("privateArmor")
+        val key2 = compat.getJSONArray("positives").getJSONObject(1).getJSONObject("pgp").getString("privateArmor")
+        val files = AndroidVaultFiles(File(root, "two_accounts"))
+        val a = NativePgpVault(AndroidKeyWrap(), files, account1)
+        val b = NativePgpVault(AndroidKeyWrap(), files, account2)
+        assertEquals(NativePgpVault.Put.OK, a.put(account1, key1, ""))
+        assertEquals(NativePgpVault.Put.OK, b.put(account2, key2, ""))
+        assertEquals(NativePgpVault.Put.BAD_EOA, a.put(account2, key2, ""))
+        b.forget()
+        assertTrue("A survives B's removal", NativePgpVault(AndroidKeyWrap(), files, account1).state() is NativePgpVault.State.Ready)
+        assertTrue("B is gone", NativePgpVault(AndroidKeyWrap(), files, account2).state() is NativePgpVault.State.NoKey)
+    }
 }
