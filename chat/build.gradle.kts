@@ -42,6 +42,15 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // bcprov, bcpg and bcutil 1.87 each carry META-INF/LICENSE.md, and the three copies are byte-identical (the BouncyCastle
+    // licence). Only this one path is resolved (first copy kept), so the instrumented test APK can be merged and the licence
+    // text stays in it. Other META-INF files keep the default duplicate check.
+    packaging {
+        resources {
+            pickFirsts += setOf("META-INF/LICENSE.md")
+        }
+    }
 }
 
 dependencies {

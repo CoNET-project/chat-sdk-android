@@ -6,7 +6,6 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
@@ -15,7 +14,8 @@ import java.util.Base64
 /**
  * Runs the shared fixture vectors (interface/fixtures, spec v0.2 section 15) against the store.
  *
- * Input: `CHAT_FIXTURE_DIR` = a fixture output directory (e.g. .../fixtures/out-10k). Skipped when unset.
+ * Input: `CHAT_FIXTURE_DIR` = a fixture output directory (e.g. .../fixtures/out-10k). Required: the test fails when it is
+ * unset (it is never skipped).
  * Records come from `<account>/truth.jsonl` (plaintext truth). The IPFS/crypto path is NOT exercised
  * here; this checks the layout, ordering, cursor and stable-id rules on the same data each platform uses.
  * Environment: JVM on the developer host (not a device).
@@ -59,9 +59,10 @@ class FixtureScenarioTest {
 
     @Test
     fun fixtureVectorsAndFullWalk() {
-        val dirPath = System.getenv("CHAT_FIXTURE_DIR")
-        Assume.assumeTrue("CHAT_FIXTURE_DIR not set", dirPath != null)
-        val dir = File(dirPath!!)
+        val dirPath = requireNotNull(System.getenv("CHAT_FIXTURE_DIR")) {
+            "CHAT_FIXTURE_DIR is not set: point it at interface/fixtures/out-10k"
+        }
+        val dir = File(dirPath)
         val scenarios = JSONObject(File(dir, "expected/scenarios.json").readText(Charsets.UTF_8))
         val fx = scenarios.getJSONObject("fixture")
         val seed = fx.getString("seed")

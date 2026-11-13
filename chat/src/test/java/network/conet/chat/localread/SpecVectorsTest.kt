@@ -3,7 +3,6 @@ package network.conet.chat.localread
 import network.conet.chat.ConetChatCryptoUtil
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assume
 import network.conet.chat.localread.ApplyResult
 import network.conet.chat.localread.IncomingRecord
 import network.conet.chat.localread.LocalChatStore
@@ -18,8 +17,8 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * spec v1.1-r1 section 23 (T-34): recomputes every value in `sendkey-vectors.json` with the
- * production functions. Input: `CHAT_VECTORS` = path to the file. Skipped when unset.
- * The vectors use public test material only (not any account key).
+ * production functions. Input: `CHAT_VECTORS` = path to `interface/fixtures/vectors/sendkey-vectors.json`. Required: the
+ * test fails when it is unset (it is never skipped). The vectors use public test material only (not any account key).
  */
 class SpecVectorsTest {
 
@@ -28,9 +27,10 @@ class SpecVectorsTest {
 
     @Test
     fun recomputesEveryVector() {
-        val path = System.getenv("CHAT_VECTORS")
-        Assume.assumeTrue("CHAT_VECTORS not set", path != null)
-        val v = JSONObject(File(path!!).readText(Charsets.UTF_8))
+        val path = requireNotNull(System.getenv("CHAT_VECTORS")) {
+            "CHAT_VECTORS is not set: point it at interface/fixtures/vectors/sendkey-vectors.json"
+        }
+        val v = JSONObject(File(path).readText(Charsets.UTF_8))
         val inputs = v.getJSONObject("inputs")
         val eoa = inputs.getString("eoa")
         val workspace = inputs.getString("workspace")
