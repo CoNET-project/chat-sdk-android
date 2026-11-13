@@ -22,6 +22,9 @@ object BeamioConetChatProtocol {
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
         "identity.provision",
+        // identity.native-keys.v1 (spec 25.19.2, 25.19.3): the wallet key never crosses the bridge; provisionIdentity and
+        // init answer through IdentityProvisionContract.
+        "identity.native-keys.v1",
         "signing.local",
         "lifecycle.daemon",
         "inbound.deferAck",
