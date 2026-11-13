@@ -30,7 +30,7 @@ class NativePgpVaultTest {
     private fun fresh(): Triple<NativePgpVault, NativeTestWrap, NativeTestFiles> {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
-        return Triple(NativePgpVault(wrap, files), wrap, files)
+        return Triple(NativePgpVault(wrap, files, SYN_EOA), wrap, files)
     }
 
     private fun putEccWithPassphrase(vault: NativePgpVault) =
@@ -95,7 +95,7 @@ class NativePgpVaultTest {
     @Test
     fun writeFailureRollsBackToNothing() {
         val (vault, _, files) = fresh()
-        files.failWrite = NativePgpVault.REC
+        files.failWrite = NativePgpVault.recName(SYN_EOA)
         assertEquals(NativePgpVault.Put.STORE_FAILED, putEccWithPassphrase(vault))
         assertTrue(vault.state() is NativePgpVault.State.NoKey)
     }
@@ -118,16 +118,16 @@ class NativePgpVaultTest {
     fun aRecordWithoutItsMarkerIsRemovedAsIncomplete() {
         val (vault, _, files) = fresh()
         assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
-        files.delete(NativePgpVault.MARK)
+        files.delete(NativePgpVault.markName(SYN_EOA))
         assertTrue(vault.state() is NativePgpVault.State.NoKey)
-        assertFalse(files.map.containsKey(NativePgpVault.REC))
+        assertFalse(files.map.containsKey(NativePgpVault.recName(SYN_EOA)))
     }
 
     @Test
     fun aMarkerMismatchIsLockedAndNothingDecrypts() {
         val (vault, _, files) = fresh()
         assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
-        files.map[NativePgpVault.MARK] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
+        files.map[NativePgpVault.markName(SYN_EOA)] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
         val st = vault.state()
         assertTrue(st is NativePgpVault.State.Locked)
         assertEquals("marker_mismatch", (st as NativePgpVault.State.Locked).reason)

@@ -26,7 +26,7 @@ class NativePgpCommandTest {
     private fun ecc() = vectors.getJSONObject("keys").getJSONObject("ecc-pass")
 
     private fun vaultWithKey(): NativePgpVault {
-        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles())
+        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles(), SYN_EOA)
         assertEquals(NativePgpVault.Put.OK, vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", ecc().getString("privateArmored"), ecc().getString("passphrase")))
         return vault
     }
@@ -81,16 +81,16 @@ class NativePgpCommandTest {
 
     @Test
     fun withoutARecordTheAnswerIsNoPgpKey() {
-        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles())
+        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles(), SYN_EOA)
         assertEquals("no_pgp_key", NativeWalletCommands.pgpSign(vault, purpose, messageB64, 0x00, registry).code)
     }
 
     @Test
     fun aLockedRecordAnswersPgpLocked() {
         val files = NativeTestFiles()
-        val vault = NativePgpVault(NativeTestWrap(), files)
+        val vault = NativePgpVault(NativeTestWrap(), files, SYN_EOA)
         assertEquals(NativePgpVault.Put.OK, vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", ecc().getString("privateArmored"), ecc().getString("passphrase")))
-        files.map[NativePgpVault.MARK] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
+        files.map[NativePgpVault.markName(SYN_EOA)] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
         assertEquals("pgp_locked", NativeWalletCommands.pgpSign(vault, purpose, messageB64, 0x00, registry).code)
     }
 

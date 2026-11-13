@@ -106,7 +106,8 @@ class KeyPathGuardTest {
         // The init fields are accepted until P-IMP-PGP is decided, then they are removed. Until then they go to the
         // native record only, after the wallet check.
         assertTrue(module.contains("storeInitPgp(ctx, reqId, s.eoa, pgpArmorInInit, pgpPassphraseInInit)"))
-        assertTrue(module.contains("NativeWallet.pgp(ctx).put(eoa, armor, passphrase)"))
+        // The record is the one of the account the init names (per-account records, §42).
+        assertTrue(module.contains("NativeWallet.pgpFor(ctx, eoa).put(eoa, armor, passphrase)"))
         assertTrue(module.contains("P-IMP-PGP"))
     }
 

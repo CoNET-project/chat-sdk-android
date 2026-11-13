@@ -5,17 +5,36 @@ import org.json.JSONObject
 import java.security.MessageDigest
 
 /**
- * The PGP private key, its passphrase and its public fingerprint, held in the native wallet boundary (spec §25.22.2,
- * §25.26.4 table W6). The record is sealed with the same hardware wrap as the EOA key, under its own AAD, in its own
- * files. Plain text exists only while an operation runs; nothing here returns key material to a caller.
+ * The PGP private key of one account, its passphrase and its public fingerprint, held in the native wallet boundary (spec
+ * §25.22.2, §25.26.4 table W6). Each account has its own record (`pgp.v1.<account>.rec` and marker `pgp.v1.<account>.ok`),
+ * so accounts never overwrite each other (§41-P-IMP-PGP, multi-account rule). A pending record (`pgp.v1.pending.<account>.*`)
+ * holds a newly generated key until its registration is confirmed; it is never used as the active identity.
  *
- * Record layout: `pgp.v1.rec` (JSON: record, eoa, fingerprint, sealed hex) and the completion marker `pgp.v1.ok`
- * (SHA-256 hex of the record bytes). A record without its marker is removed at the next state check.
+ * The record is sealed with the same hardware wrap as the EOA key, under its own AAD per slot. Plain text exists only while
+ * an operation runs; nothing here returns key material to a caller. A record without its marker is removed at the next state
+ * check: an unconfirmed record is not a key.
  */
-internal class NativePgpVault(private val wrap: KeyWrap, private val files: VaultFiles) {
+internal class NativePgpVault(
+    private val wrap: KeyWrap,
+    private val files: VaultFiles,
+    /** The account this vault serves: a canonical (lower-case) address, or [NO_ACCOUNT]. */
+    val account: String,
+    private val slot: Slot = Slot.ACTIVE,
+) {
+    init {
+        require(EOA_RE.matches(account)) { "account must be a canonical address" }
+    }
+
+    enum class Slot(val fileTag: String, val aadTag: String) {
+        /** The identity in use. */
+        ACTIVE("", ""),
+
+        /** A generated key awaiting its registration. Never the active identity. */
+        PENDING("pending.", "|pending"),
+    }
 
     sealed class State {
-        /** No PGP record. The native key is required first (G0 or no PGP import yet). */
+        /** No PGP record for this account. The native key is required first (G0 or no PGP import yet). */
         object NoKey : State()
 
         /** A record passed its marker check and opened. [fingerprint] is the master-key fingerprint. */
@@ -36,33 +55,37 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     /** The plain record content. Built and dropped inside one operation. */
     private class Unlocked(val fingerprint: String, val privateArmor: String, val passphrase: String)
 
+    private val rec = recName(account, slot)
+    private val mark = markName(account, slot)
+
     /** Reports the state. Removes a record that never reached its marker. */
     @Synchronized
     fun state(): State {
-        val rec = files.read(REC)
-        val mark = files.read(MARK)
-        if (rec == null) {
-            if (mark != null) files.delete(MARK)
+        val r = files.read(rec)
+        val m = files.read(mark)
+        if (r == null) {
+            if (m != null) files.delete(mark)
             return State.NoKey
         }
-        if (mark == null) {
-            files.delete(REC)
+        if (m == null) {
+            files.delete(rec)
             return State.NoKey
         }
-        if (!mark.contentEquals(digestHex(rec).toByteArray(Charsets.US_ASCII))) return State.Locked("marker_mismatch")
-        val parsed = parseRecord(rec) ?: return State.Locked("unreadable")
+        if (!m.contentEquals(digestHex(r).toByteArray(Charsets.US_ASCII))) return State.Locked("marker_mismatch")
+        val parsed = parseRecord(r) ?: return State.Locked("unreadable")
+        if (parsed.eoa != account) return State.Locked("account_mismatch")
         val opened = open(parsed) ?: return State.Locked("unreadable")
         return State.Ready(opened.fingerprint)
     }
 
     /**
-     * Stores the PGP key for [eoa]. Replaces an earlier record for the same account. The record is written, read back
-     * and compared, then the marker is written. On any failure the earlier record is restored, or nothing is left.
-     * The passphrase, if any, is sealed with the key and never leaves the vault.
+     * Stores the PGP key for [eoa], which must be this vault's account. Replaces an earlier record of this slot. The record
+     * is written, read back and compared, then the marker is written. On any failure the earlier record is restored, or
+     * nothing is left. The passphrase, if any, is sealed with the key and never leaves the vault.
      */
     @Synchronized
     fun put(eoa: String, privateArmor: String, passphrase: String): Put {
-        if (!isCanonicalEoa(eoa)) return Put.BAD_EOA
+        if (account == NO_ACCOUNT || eoa != account) return Put.BAD_EOA
         val secret = NativePgp.parseSecret(privateArmor) ?: return Put.BAD_KEY
         val plain = JSONObject()
             .put("v", 1)
@@ -71,29 +94,29 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
             .put("pass", passphrase)
             .toString()
             .toByteArray(Charsets.UTF_8)
-        val rec = try {
-            encodeRecord(eoa, secret.fingerprint, wrap.seal(aad(eoa), plain))
+        val recBytes = try {
+            encodeRecord(account, secret.fingerprint, wrap.seal(aad(account, slot), plain))
         } catch (e: Exception) {
             return Put.STORE_FAILED
         } finally {
             plain.fill(0)
         }
-        val prevRec = files.read(REC)
-        val prevMark = files.read(MARK)
+        val prevRec = files.read(rec)
+        val prevMark = files.read(mark)
         try {
-            files.write(REC, rec)
+            files.write(rec, recBytes)
         } catch (e: Exception) {
             restore(prevRec, prevMark)
             return Put.STORE_FAILED
         }
-        val back = files.read(REC)?.let { parseRecord(it) }?.let { open(it) }
+        val back = files.read(rec)?.let { parseRecord(it) }?.let { open(it) }
         val confirmed = back != null && back.fingerprint == secret.fingerprint && back.privateArmor == privateArmor
         if (!confirmed) {
             restore(prevRec, prevMark)
             return Put.READBACK_FAILED
         }
         try {
-            files.write(MARK, digestHex(rec).toByteArray(Charsets.US_ASCII))
+            files.write(mark, digestHex(recBytes).toByteArray(Charsets.US_ASCII))
         } catch (e: Exception) {
             restore(prevRec, prevMark)
             return Put.STORE_FAILED
@@ -135,11 +158,21 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
         return NativePgp.signDocument(secret, unlocked.passphrase, domainLabel(purposeId), message, sigType)
     }
 
-    /** Removes the PGP record and its marker. Used when the EOA record is removed. */
+    /** Removes this slot's record and marker. Other accounts and the other slot are not touched. */
     @Synchronized
     fun forget() {
-        runCatching { files.delete(MARK) }
-        runCatching { files.delete(REC) }
+        runCatching { files.delete(mark) }
+        runCatching { files.delete(rec) }
+    }
+
+    /**
+     * Native-only hand-over of a pending key to the active slot (activation after a confirmed registration). Returns the armor
+     * for the caller to store in the active slot, and never leaves the native layer. `null` when no ready pending key exists.
+     */
+    @Synchronized
+    internal fun pendingArmorForActivation(): String? {
+        check(slot == Slot.PENDING) { "only the pending slot hands over a key" }
+        return unlock()?.privateArmor
     }
 
     /** Test seam: the verifier for a signature made by [sign], with the vault key only. */
@@ -160,21 +193,22 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     }
 
     private fun unlock(): Unlocked? {
-        val rec = files.read(REC) ?: return null
-        val mark = files.read(MARK) ?: return null
-        if (!mark.contentEquals(digestHex(rec).toByteArray(Charsets.US_ASCII))) return null
-        val parsed = parseRecord(rec) ?: return null
+        val r = files.read(rec) ?: return null
+        val m = files.read(mark) ?: return null
+        if (!m.contentEquals(digestHex(r).toByteArray(Charsets.US_ASCII))) return null
+        val parsed = parseRecord(r) ?: return null
+        if (parsed.eoa != account) return null
         return open(parsed)
     }
 
     private class Parsed(val eoa: String, val sealed: ByteArray)
 
-    private fun parseRecord(rec: ByteArray): Parsed? {
+    private fun parseRecord(bytes: ByteArray): Parsed? {
         return try {
-            val o = JSONObject(String(rec, Charsets.UTF_8))
+            val o = JSONObject(String(bytes, Charsets.UTF_8))
             if (o.optInt("record", 0) != RECORD_VERSION) return null
             val eoa = o.optString("eoa", "")
-            if (!isCanonicalEoa(eoa)) return null
+            if (!EOA_RE.matches(eoa)) return null
             val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
             Parsed(eoa, sealed)
         } catch (_: Exception) {
@@ -183,7 +217,7 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     }
 
     private fun open(p: Parsed): Unlocked? {
-        val plain = wrap.open(aad(p.eoa), p.sealed) ?: return null
+        val plain = wrap.open(aad(p.eoa, slot), p.sealed) ?: return null
         return try {
             val o = JSONObject(String(plain, Charsets.UTF_8))
             Unlocked(
@@ -201,11 +235,11 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     private fun restore(prevRec: ByteArray?, prevMark: ByteArray?) {
         runCatching {
             if (prevRec != null && prevMark != null) {
-                files.write(REC, prevRec)
-                files.write(MARK, prevMark)
+                files.write(rec, prevRec)
+                files.write(mark, prevMark)
             } else {
-                files.delete(MARK)
-                files.delete(REC)
+                files.delete(mark)
+                files.delete(rec)
             }
         }
     }
@@ -222,12 +256,11 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     private fun digestHex(bytes: ByteArray): String =
         ConetChatCryptoUtil.toHex(MessageDigest.getInstance("SHA-256").digest(bytes))
 
-    private fun isCanonicalEoa(eoa: String): Boolean = EOA_RE.matches(eoa)
-
     companion object {
-        const val REC = "pgp.v1.rec"
-        const val MARK = "pgp.v1.ok"
         const val RECORD_VERSION = 1
+
+        /** The account of a device with no wallet key. Its vault never holds a record. */
+        const val NO_ACCOUNT = "0x0000000000000000000000000000000000000000"
 
         /** C4 purposes. The interface owner has not yet listed them (spec 25.22.2 refers to the enumeration only). */
         val REGISTERED_PURPOSES: Set<String> = emptySet()
@@ -240,7 +273,19 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
         /** The native domain tag (spec 25.27.2 / 25.27.7 A): the caller never supplies or omits it. */
         internal fun domainLabel(purposeId: String): String = "beamio.pgp.$purposeId.v1\n"
 
-        /** AAD for the PGP record. It differs from the EOA record's AAD, so the two cannot be swapped. */
-        fun aad(eoa: String): ByteArray = "beamio-native-pgp-v1|h|${eoa.lowercase()}".toByteArray(Charsets.UTF_8)
+        private fun bare(account: String): String = account.lowercase().removePrefix("0x")
+
+        /** File name of the record of [account] in [slot]. */
+        fun recName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.rec"
+
+        /** File name of the marker of [account] in [slot]. */
+        fun markName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.ok"
+
+        /**
+         * AAD for the PGP record. It binds the account and the slot, so a record cannot be moved to another account or into
+         * the other slot. The active AAD is the one used since the native PGP record was introduced.
+         */
+        fun aad(eoa: String, slot: Slot = Slot.ACTIVE): ByteArray =
+            "beamio-native-pgp-v1|h|${eoa.lowercase()}${slot.aadTag}".toByteArray(Charsets.UTF_8)
     }
 }

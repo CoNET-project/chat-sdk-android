@@ -9,6 +9,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Thrown to simulate the process dying at a chosen point. It is not an Exception, so no cleanup runs. */
+/** The synthetic account used by the vault tests (spec test key, not a wallet). */
+internal const val SYN_EOA = "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+
 internal class NativeTestCrash : Error("simulated crash")
 
 internal class NativeTestWrap : KeyWrap {

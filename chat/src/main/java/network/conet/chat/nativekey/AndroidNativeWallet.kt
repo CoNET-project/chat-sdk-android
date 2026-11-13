@@ -144,17 +144,37 @@ object NativeWallet {
         }
     }
 
-    @Volatile
-    private var pgpInstance: NativePgpVault? = null
+    /**
+     * The PGP vault of the wallet's active account. Without a wallet key it serves no record ([NativePgpVault.NO_ACCOUNT]).
+     * Each account has its own PGP record in the same directory and wrap key; the wallet record is not touched.
+     */
+    internal fun pgp(context: Context): NativePgpVault {
+        val app = context.applicationContext
+        val eoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa ?: NativePgpVault.NO_ACCOUNT
+        return pgpFor(app, eoa)
+    }
 
-    /** The native PGP record. It shares the wallet directory and wrap key, under its own file names and AAD. */
-    internal fun pgp(context: Context): NativePgpVault =
-        pgpInstance ?: synchronized(this) {
-            pgpInstance ?: NativePgpVault(
-                AndroidKeyWrap(),
-                AndroidVaultFiles(File(context.applicationContext.filesDir, DIR)),
-            ).also { pgpInstance = it }
-        }
+    /** The active PGP record of [eoa]. A value that is not a canonical address serves no record. */
+    internal fun pgpFor(context: Context, eoa: String): NativePgpVault =
+        NativePgpVault(
+            AndroidKeyWrap(),
+            AndroidVaultFiles(File(context.applicationContext.filesDir, DIR)),
+            accountOrNone(eoa),
+        )
+
+    /** The pending slot of [eoa]: a generated key awaiting its registration. It is never the active identity. */
+    internal fun pendingPgpFor(context: Context, eoa: String): NativePgpVault =
+        NativePgpVault(
+            AndroidKeyWrap(),
+            AndroidVaultFiles(File(context.applicationContext.filesDir, DIR)),
+            accountOrNone(eoa),
+            NativePgpVault.Slot.PENDING,
+        )
+
+    private fun accountOrNone(eoa: String): String {
+        val lower = eoa.lowercase()
+        return if (Regex("^0x[0-9a-f]{40}$").matches(lower)) lower else NativePgpVault.NO_ACCOUNT
+    }
 
     /**
      * Upgrade path for the PGP key. When the EOA record is present and the PGP record is not, and the pre-upgrade PGP
@@ -166,7 +186,7 @@ object NativeWallet {
     fun migrateLegacyPgp(context: Context): Boolean {
         val app = context.applicationContext
         val eoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa ?: return false
-        val pgpVault = pgp(app)
+        val pgpVault = pgpFor(app, eoa)
         if (pgpVault.state() !is NativePgpVault.State.NoKey) return false
         val armor = BeamioChatPgpStore.legacyPrivateArmor(app)
         if (!armor.contains("BEGIN PGP PRIVATE KEY")) return false

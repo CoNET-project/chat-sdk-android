@@ -31,7 +31,7 @@ class PgpPurposeVectorsTest {
     private fun sigType(s: String): Int = s.removePrefix("0x").toInt(16)
 
     private fun vaultWithKey(): NativePgpVault {
-        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles())
+        val vault = NativePgpVault(NativeTestWrap(), NativeTestFiles(), SYN_EOA)
         assertEquals(
             NativePgpVault.Put.OK,
             vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", keys.getString("privateArmored"), keys.getString("passphrase")),

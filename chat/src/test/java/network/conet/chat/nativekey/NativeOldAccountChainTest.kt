@@ -30,7 +30,7 @@ class NativeOldAccountChainTest {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files)
+        val pgp = NativePgpVault(wrap, files, eoa.lowercase())
 
         // 1. Native import from the mnemonic; the derived address must be the account's address.
         val imported = NativeImport.submitMnemonic(mnemonic, eoa, wallet)
@@ -62,7 +62,7 @@ class NativeOldAccountChainTest {
 
         // 6. Cold start: new vault objects on the same records and the same wrapping key.
         val wallet2 = NativeWalletVault(wrap, files)
-        val pgp2 = NativePgpVault(wrap, files)
+        val pgp2 = NativePgpVault(wrap, files, eoa.lowercase())
         assertTrue("wallet after restart", wallet2.state() is NativeWalletVault.State.Ready)
         assertTrue("PGP after restart", pgp2.state() is NativePgpVault.State.Ready)
         assertEquals("decrypt after restart", "ok", pgp2.decryptInbound(test.getString("armored")).code)
@@ -77,16 +77,16 @@ class NativeOldAccountChainTest {
         // ordinary error, so the vault does not roll back). A record without its marker is not confirmed: the next state read
         // removes it, so the account has no PGP key until the restore is run again.
         pgp2.forget()
-        files.crashAfterWrite = NativePgpVault.REC
+        files.crashAfterWrite = NativePgpVault.recName(eoa.lowercase())
         try {
             NativePgpBackup.restore(wallet2, pgp2, backup, fingerprint)
             error("the simulated crash did not happen")
         } catch (_: NativeTestCrash) {
         }
         files.crashAfterWrite = null
-        assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.REC))
+        assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.recName(eoa.lowercase())))
         assertEquals("unconfirmed record is not a key", "no_pgp_key", pgp2.decryptInbound(test.getString("armored")).code)
-        assertFalse("and it is removed", files.map.containsKey(NativePgpVault.REC))
+        assertFalse("and it is removed", files.map.containsKey(NativePgpVault.recName(eoa.lowercase())))
 
         // 9. Retry: the same restore completes, and the key works.
         val retry = NativePgpBackup.restore(wallet2, pgp2, backup, fingerprint)
@@ -99,10 +99,10 @@ class NativeOldAccountChainTest {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files)
+        val pgp = NativePgpVault(wrap, files, eoa.lowercase())
         assertEquals(NativeImport.Code.OK, NativeImport.submitMnemonic(mnemonic, eoa, wallet).code)
 
-        files.failWrite = NativePgpVault.MARK
+        files.failWrite = NativePgpVault.markName(eoa.lowercase())
         assertEquals(NativePgpBackup.Code.WRITE_FAILED, NativePgpBackup.restore(wallet, pgp, backup, fingerprint).code)
         assertTrue("nothing is left behind", pgp.state() is NativePgpVault.State.NoKey)
 

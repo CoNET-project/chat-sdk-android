@@ -343,7 +343,7 @@ object BeamioConetChatModule {
         payload.optJSONArray("routes")?.let { s.routes = objects(it) }
 
         // A PGP key must come in the payload or already be in the native record; otherwise missing_identity, as before.
-        val pgpInVault = NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
+        val pgpInVault = NativeWallet.pgpFor(ctx, s.eoa).state() is NativePgpVault.State.Ready
         if (s.eoa.isEmpty() || (pgpArmorInInit.isEmpty() && !pgpInVault)) {
             ack(reqId, false, error = "missing_identity")
             return
@@ -389,7 +389,7 @@ object BeamioConetChatModule {
      */
     private fun storeInitPgp(ctx: Context, reqId: Int, eoa: String, armor: String, passphrase: String): Boolean {
         if (armor.isEmpty()) return true
-        return when (NativeWallet.pgp(ctx).put(eoa, armor, passphrase)) {
+        return when (NativeWallet.pgpFor(ctx, eoa).put(eoa, armor, passphrase)) {
             NativePgpVault.Put.OK -> {
                 BeamioChatPgpStore.clearLegacyPrivateArmor(ctx)
                 true

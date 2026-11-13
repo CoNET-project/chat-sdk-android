@@ -94,7 +94,7 @@ class PgpBackupCompatVectorsTest {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files)
+        val pgp = NativePgpVault(wrap, files, p.getString("eoa").lowercase())
         val key = MnemonicDerivation.deriveKey(mnemonicFor("P-1"))!!
         // The vault stores canonical (lower-case) addresses; the vector's checksummed form is not a stored form.
         assertEquals(NativeWalletVault.Import.OK, wallet.importKey(p.getString("eoa").lowercase(), key))

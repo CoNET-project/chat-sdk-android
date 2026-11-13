@@ -65,7 +65,7 @@ class NativeOldAccountChainDeviceTest {
 
     private fun vaults(files: VaultFiles = AndroidVaultFiles(dir)): Pair<NativeWalletVault, NativePgpVault> {
         val wrap = AndroidKeyWrap()
-        return NativeWalletVault(wrap, files) to NativePgpVault(wrap, files)
+        return NativeWalletVault(wrap, files) to NativePgpVault(wrap, files, eoa.lowercase())
     }
 
     @Before
@@ -127,7 +127,7 @@ class NativeOldAccountChainDeviceTest {
 
         // 8. Interrupted, then retried: the process dies after the record is written and before the marker.
         pgp2.forget()
-        val crashing = CrashAfterWrite(AndroidVaultFiles(dir), NativePgpVault.REC)
+        val crashing = CrashAfterWrite(AndroidVaultFiles(dir), NativePgpVault.recName(eoa.lowercase()))
         val (wallet3, pgp3) = vaults(crashing)
         try {
             NativePgpBackup.restore(wallet3, pgp3, backup, fingerprint)
