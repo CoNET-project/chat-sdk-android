@@ -113,7 +113,8 @@ internal class PgpRestoreHarness(
     private fun stepJson(step: PgpRestoreMachine.Step): JSONObject {
         val o = JSONObject().put("result", step.result)
         step.code?.let { o.put("code", it) }
-        step.note?.let { o.put("note", it) }
+        step.reevaluated?.let { o.put("reevaluated", it) }
+        step.idemKey?.let { o.put("idemKey", it) }
         return o
     }
 
@@ -148,12 +149,15 @@ internal class PgpRestoreHarness(
                     .put("pending", pendingJson)
                     .put("oldArmorWrapped", d.old.state() is NativePgpVault.State.Ready)
                     .put("crashed", d.crashed)
+                    .put("completedIdem", d.completedIdem() ?: JSONObject.NULL)
                     .put(
                         "ui",
                         JSONObject()
                             .put("state", ui.state)
                             .put("failureClass", ui.failureClass ?: JSONObject.NULL)
                             .put("offerEntry", ui.offerEntry)
+                            .put("observedVersion", ui.observedVersion ?: JSONObject.NULL)
+                            .put("code", ui.code ?: JSONObject.NULL)
                             .put("uiKey", ui.uiKey() ?: JSONObject.NULL),
                     ),
             )
@@ -164,6 +168,7 @@ internal class PgpRestoreHarness(
             .put("onchainWrites", k.onchainWrites)
             .put("backupWrites", k.backupWrites)
             .put("registrations", k.registrations)
+            .put("replacements", k.replacements)
             .put("localWrites", k.localWrites)
             .put("pendingDiscarded", k.pendingDiscarded)
             .put("externalWrites", k.externalWrites)
@@ -206,12 +211,14 @@ internal class PgpRestoreHarness(
                 "keygen" -> stepJson(
                     w.machine.keygen(
                         devId,
-                        s.getLong("expectedVersion"),
                         s.getString("idemKey"),
                         s.getBoolean("nativeConfirmed"),
+                        if (s.has("confirmSource")) s.getString("confirmSource") else "native",
                         crashAt,
                     ),
                 )
+                "cancelConfirm" -> stepJson(w.machine.cancelOrTimeout(devId, timeout = false))
+                "confirmTimeout" -> stepJson(w.machine.cancelOrTimeout(devId, timeout = true))
                 "commit" -> stepJson(w.machine.commit(devId, crashAt, s.has("writeRevert") && s.getBoolean("writeRevert")))
                 "registerDirect" -> {
                     val name = s.getString("identity")

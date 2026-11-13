@@ -92,7 +92,7 @@ class NativePgpAccountTest {
         w.setChain("P4", "B_EMPTY")
         assertEquals("failed:backup_missing", w.machine.restore("A").result)
         assertEquals("ok", w.machine.tapEntry("A").result)
-        assertEquals("ok", w.machine.keygen("A", 1, "idem-1", true).result)
+        assertEquals("ok", w.machine.keygen("A", "idem-1", true).result)
         assertEquals("ok", w.machine.commit("A").result)
         assertEquals(1, w.machine.counters.keygen)
 

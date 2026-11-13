@@ -297,8 +297,11 @@ internal class NativePgpVault(
         /** File name of the record of [account] in [slot]. */
         fun recName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.rec"
 
-        /** File name of the pending key's metadata (idempotency key and expected chain version; no key material). */
+        /** File name of the pending key's metadata (idempotency key, observed chain version and kind; no key material). */
         fun pendingMetaName(account: String): String = "pgp.v1.pending.${bare(account)}.meta"
+
+        /** File name of the idempotency key of the last completed replacement or first identity (no key material). */
+        fun completedName(account: String): String = "pgp.v1.done.${bare(account)}.idem"
 
         /** File name of the marker of [account] in [slot]. */
         fun markName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.ok"

@@ -1,6 +1,6 @@
 {
   "file": "pgp-restore-acceptance-vectors.v1.json",
-  "purpose": "P-IMP-PGP 方案 A 验收向量（spec r3l §25.30）。合成数据，只用于本地测试，不得用于生产。",
+  "purpose": "P-IMP-PGP 方案 A 验收向量（spec r3n §25.30）。合成数据，只用于本地测试，不得用于生产。",
   "generator": "gen-pgp-restore-acceptance-vectors.mjs",
   "generatorNote": "参考模拟器（纯本地，无网络、无链访问、无合约调用）。各端实现须与本模拟的 stepResults 与 final 逐项一致。",
   "sourceVector": {
@@ -115,12 +115,14 @@
     }
   },
   "model": {
-    "chainVersion": "uint，初始 0；每次成功写入 +1；externalWrite 同样 +1",
+    "casPrimitive": "链上版本号（每次链上变更 +1）。实现可用 (公钥指纹, 子密钥 keyID, 备份 sha256) 三元组代替；在本模型中两者等价，因为每次变更都改变版本号。",
+    "failureSeenState": "失败时界面所见的状态：ui.observedVersion（失败分支记录，确认时与链上现状比对）。",
     "counters": [
       "keygen",
       "onchainWrites",
       "backupWrites",
       "registrations",
+      "replacements",
       "localWrites",
       "pendingDiscarded",
       "externalWrites",
@@ -129,6 +131,7 @@
     "uiStates": [
       "not_evaluated",
       "no_identity_yet",
+      "first_identity",
       "ok",
       "failed(failureClass)",
       "undetermined",
@@ -138,7 +141,8 @@
     ],
     "rejectCodes": [
       "native_confirmation_missing",
-      "precondition_failed",
+      "confirmation_not_native",
+      "cas_conflict",
       "not_available",
       "not_awaiting_confirm",
       "pending_exists",
@@ -146,8 +150,8 @@
       "write_reverted"
     ],
     "noopCodes": [
-      "already_registered_same_key",
-      "idempotent"
+      "idempotent",
+      "already_registered_same_key"
     ],
     "resultCodes": [
       "ok",
@@ -162,8 +166,19 @@
       "reconciled_complete",
       "reconciled_write",
       "reconciled_discarded",
+      "cancelled",
+      "confirm_timeout",
       "noop"
-    ]
+    ],
+    "failureCodes": {
+      "registration_missing": "pgp_registration_missing（有备份无登记；r3o，失败类，待 Android 对齐）",
+      "first_identity": "首次建立（非失败类，无码）",
+      "backup_missing": "pgp_backup_missing",
+      "decrypt_failed": "pgp_backup_undecryptable（GCM、口令、base64）；pgp_backup_invalid（解开后不是 PGP 私钥 armor）",
+      "fingerprint_mismatch": "pgp_fingerprint_mismatch",
+      "undetermined": "pgp_source_unavailable（读取失败，不是缺失）",
+      "note": "码名采用 Android 回执 §42 已实现的名称（接口负责人定名，r3n）。\"链上无身份\"为 no_identity_yet，不属于三类失败；Android §42 将其与\"有备份但无登记\"一并归入 pgp_backup_missing，待 PM 确认（矩阵 §8.4）。"
+    }
   },
   "copy": {
     "status": "draft-for-review",
@@ -172,7 +187,7 @@
         "zh": "初始化失败，你的旧数据丢失",
         "en": "Chat setup failed. Your old data is lost.",
         "enAlternative": "Chat setup failed. Your previous Chat identity could not be restored. Your wallet and assets are not affected.",
-        "note": "项目方原文为中文。英文直译保留\"旧数据丢失\"。备选文案更准确：本地历史不依赖 PGP 私钥，未收取密文可能丢失。二者由项目方裁定。"
+        "note": "项目方原文为中文。英文直译保留\"旧数据丢失\"。备选文案更准确。由项目方裁定（矩阵 §8.2 第 18 项）。"
       },
       "chat.restore_failed.entry": {
         "zh": "生成新的聊天身份",
@@ -187,8 +202,13 @@
         "en": "Create a new Chat identity?"
       },
       "chat.new_identity.confirm.body": {
-        "zh": "这会替换此钱包在链上登记的聊天公钥。原聊天身份将不能再用于此钱包。钱包与资产不受影响。",
-        "en": "This replaces the Chat public key registered on-chain for this wallet. The previous Chat identity can no longer be used with this wallet. Your wallet and assets are not affected."
+        "zh": "旧的 Chat 身份将被替换，无法恢复。这会替换此钱包在链上登记的聊天公钥。钱包与资产不受影响。",
+        "en": "Your old Chat identity will be replaced and cannot be recovered. This replaces the Chat public key registered on-chain for this wallet. Your wallet and assets are not affected.",
+        "requiredPhrase": {
+          "zh": "旧的 Chat 身份将被替换，无法恢复",
+          "en": "Your old Chat identity will be replaced and cannot be recovered"
+        },
+        "surface": "native"
       },
       "chat.new_identity.confirm.action": {
         "zh": "确认生成",
@@ -201,18 +221,41 @@
       "chat.new_identity.retry.body": {
         "zh": "写入失败，链上未改变。可以重试。",
         "en": "The update failed and nothing on-chain changed. You can try again."
+      },
+      "chat.first_identity.body": {
+        "zh": "此钱包还没有 Chat 身份。",
+        "en": "This wallet doesn't have a Chat identity yet."
+      },
+      "chat.first_identity.entry": {
+        "zh": "创建 Chat 身份",
+        "en": "Create Chat identity"
+      },
+      "chat.first_identity.confirm.title": {
+        "zh": "创建 Chat 身份？",
+        "en": "Create Chat identity?"
+      },
+      "chat.first_identity.confirm.body": {
+        "zh": "将为此钱包创建 Chat 身份，并登记到链上。钱包与资产不受影响。",
+        "en": "A Chat identity will be created for this wallet and registered on-chain. Your wallet and assets are not affected.",
+        "surface": "native"
       }
     },
     "rules": [
-      "文案键由 PWA 集成负责人定稿（§25.29.4）；原生确认界面使用同一键，不自造文案。",
+      "文案键由 PWA 集成负责人定稿（§25.29.4）。原生确认界面使用同一键，不自造文案。",
+      "确认界面必须是原生界面，不是页面弹窗（surface: native）。提示必须包含 requiredPhrase。",
       "任何文案不得包含私钥、助记词、口令或 armor。"
     ]
   },
   "rules": [
     "三类失败（备份缺失、解不开、指纹不符）：禁止自动生成新钥、禁止自动注册、禁止覆盖链上公钥和备份。",
-    "显式替换只能在用户点击入口、原生确认、版本号一致（CAS）时发生；替换前先把可解的旧备份包裹保存在本地（R3）。",
-    "读取失败（链上或备份）不等于无记录或备份缺失，只能重试（R2）。",
+    "替换（P-IMP-REPLACE，项目方 2026-11-13）：只有用户确认之后才允许覆盖。确认必须是原生确认界面（surface: native），提示须包含 requiredPhrase。没有确认，一律不覆盖、不自动生成或注册。",
+    "CAS：确认后与写入前，先读链上现状，与失败时界面所见的状态一致才继续；否则中止（cas_conflict）、丢弃待用钥，并重新判定。",
+    "确认界面：默认焦点为取消；120 秒无操作视为取消（confirm_timeout）；不提供\"记住选择\"或后台确认。",
+    "幂等：同一幂等键的重复确认只生成一次；确认成功后以同一幂等键再次确认，返回 idempotent，不再写链。",
+    "读取失败（链上或备份）不等于无记录或备份缺失，只能重试。",
     "钱包地址与链上资产不受 Chat 初始化失败影响（walletWrites 恒为 0）。",
+    "有备份但无登记（状态不一致）：属于失败类，与三类失败走同一路径：不自动生成，不自动注册；用户确认后可替换，按 CAS 规则（r3o，PM 裁定）。",
+    "首次建立（链上无身份且无备份）：不属于失败类。允许生成，但须用户在原生确认界面确认；注册前按 CAS 核对链上确为空，不为空则中止并重新判定（r3o，PM 裁定）。",
     "冷启动只做对账与只读评估，不得生成新钥。",
     "本向量不含真实私钥。P-1、P-2 来自兼容向量；P-3、P-4 为合成测试钥，口令为空。"
   ],
@@ -264,10 +307,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -277,10 +323,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -290,6 +339,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 1,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -328,7 +378,7 @@
           {
             "op": "restore",
             "dev": "A",
-            "result": "no_identity_yet"
+            "result": "first_identity"
           }
         ],
         "final": {
@@ -345,11 +395,14 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
-                "state": "no_identity_yet",
+                "state": "first_identity",
                 "failureClass": null,
-                "offerEntry": false,
-                "uiKey": null
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": null,
+                "uiKey": "chat.first_identity.body"
               }
             },
             "B": {
@@ -358,10 +411,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -371,6 +427,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -437,10 +494,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "undetermined",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": "pgp_source_unavailable",
                 "uiKey": "chat.restore_retry.body"
               }
             },
@@ -450,10 +510,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -463,6 +526,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -529,10 +593,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "undetermined",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": "pgp_source_unavailable",
                 "uiKey": "chat.restore_retry.body"
               }
             },
@@ -542,10 +609,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -555,6 +625,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -630,10 +701,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -643,10 +717,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -656,6 +733,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 1,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -720,10 +798,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -733,10 +814,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -746,6 +830,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 1,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -810,10 +895,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "blocked",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": "wallet_not_ready",
                 "uiKey": "wallet.not_ready"
               }
             },
@@ -823,10 +911,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -836,6 +927,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -892,10 +984,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "backup_missing",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_missing",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -905,10 +1000,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -918,6 +1016,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -983,10 +1082,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "backup_missing",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_missing",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -996,10 +1098,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1009,6 +1114,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1073,10 +1179,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "awaiting_confirm",
                 "failureClass": "backup_missing",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_missing",
                 "uiKey": "chat.new_identity.confirm.body"
               }
             },
@@ -1086,10 +1195,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1099,6 +1211,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1113,7 +1226,8 @@
       "title": "备份缺失：无原生确认不得生成新钥",
       "testIds": [
         "T-184",
-        "T-196"
+        "T-196",
+        "T-202"
       ],
       "input": {
         "steps": [
@@ -1133,9 +1247,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-m4",
-            "nativeConfirmed": false
+            "nativeConfirmed": false,
+            "confirmSource": "native"
           }
         ]
       },
@@ -1177,10 +1291,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "awaiting_confirm",
                 "failureClass": "backup_missing",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_missing",
                 "uiKey": "chat.new_identity.confirm.body"
               }
             },
@@ -1190,10 +1307,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1203,6 +1323,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1258,10 +1379,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1271,10 +1395,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1284,6 +1411,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1339,10 +1467,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1352,10 +1483,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1365,6 +1499,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1376,7 +1511,7 @@
     {
       "id": "D-03",
       "group": "D",
-      "title": "解开但不是 PGP armor：按解不开处理",
+      "title": "解开但不是 PGP armor：按解不开处理（码 pgp_backup_invalid）",
       "testIds": [
         "T-185"
       ],
@@ -1420,10 +1555,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_invalid",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1433,10 +1571,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1446,6 +1587,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1502,10 +1644,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1515,10 +1660,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1528,6 +1676,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1539,7 +1688,7 @@
     {
       "id": "D-05",
       "group": "D",
-      "title": "D-1：去掉末尾 \"=\"：严格拒绝，按解不开处理（不适用则为空）",
+      "title": "D-1：去掉末尾 \"=\"：严格拒绝，按解不开处理",
       "testIds": [
         "T-186",
         "T-199"
@@ -1584,10 +1733,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1597,10 +1749,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1610,6 +1765,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1665,10 +1821,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "fingerprint_mismatch",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_fingerprint_mismatch",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1678,10 +1837,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1691,6 +1853,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1746,10 +1909,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "fingerprint_mismatch",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_fingerprint_mismatch",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1759,10 +1925,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1772,6 +1941,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1836,10 +2006,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "fingerprint_mismatch",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_fingerprint_mismatch",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -1849,10 +2022,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1862,6 +2038,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1875,7 +2052,8 @@
       "group": "E",
       "title": "备份解不开，用户确认后替换：CAS 通过，写入一次",
       "testIds": [
-        "T-193"
+        "T-193",
+        "T-203"
       ],
       "input": {
         "steps": [
@@ -1895,9 +2073,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e1",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -1947,10 +2125,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e1",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -1960,10 +2141,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -1973,6 +2157,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -1986,7 +2171,8 @@
       "group": "E",
       "title": "指纹不符，用户确认后替换：先包裹旧备份（R3），再写入",
       "testIds": [
-        "T-193"
+        "T-193",
+        "T-203"
       ],
       "input": {
         "steps": [
@@ -2006,9 +2192,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e2",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2058,10 +2244,13 @@
               "pending": null,
               "oldArmorWrapped": true,
               "crashed": false,
+              "completedIdem": "k-e2",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2071,10 +2260,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2084,6 +2276,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 3,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -2095,9 +2288,10 @@
     {
       "id": "E-03",
       "group": "E",
-      "title": "确认后链上被他人更新：CAS 失败，丢弃待用钥，重新读取",
+      "title": "确认后链上被他人更新：CAS 冲突中止，丢弃待用钥，重新判定",
       "testIds": [
-        "T-193"
+        "T-193",
+        "T-204"
       ],
       "input": {
         "steps": [
@@ -2117,9 +2311,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e3",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "externalWrite",
@@ -2163,7 +2357,9 @@
             "op": "commit",
             "dev": "A",
             "result": "rejected",
-            "code": "precondition_failed"
+            "code": "cas_conflict",
+            "idemKey": "k-e3",
+            "reevaluated": "ok"
           }
         ],
         "final": {
@@ -2180,10 +2376,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2193,10 +2392,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2206,6 +2408,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 2,
             "pendingDiscarded": 1,
             "externalWrites": 1,
@@ -2217,9 +2420,10 @@
     {
       "id": "E-04",
       "group": "E",
-      "title": "并发：两台设备同时确认，只成功一次，另一台丢弃待用钥",
+      "title": "并发：两台设备同时确认，只成功一次，另一台中止并重新判定",
       "testIds": [
-        "T-193"
+        "T-193",
+        "T-204"
       ],
       "input": {
         "steps": [
@@ -2247,16 +2451,16 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-eA",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "keygen",
             "dev": "B",
-            "expectedVersion": 1,
             "idemKey": "k-eB",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2314,7 +2518,9 @@
             "op": "commit",
             "dev": "B",
             "result": "rejected",
-            "code": "precondition_failed"
+            "code": "cas_conflict",
+            "idemKey": "k-eB",
+            "reevaluated": "ok"
           }
         ],
         "final": {
@@ -2331,10 +2537,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-eA",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2344,10 +2553,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2357,6 +2569,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 4,
             "pendingDiscarded": 1,
             "externalWrites": 0,
@@ -2368,9 +2581,10 @@
     {
       "id": "E-05",
       "group": "E",
-      "title": "重复点击确认：同一幂等键只生成一次；不同幂等键被拒",
+      "title": "重复点击确认（待用钥阶段）：同一幂等键只生成一次；不同幂等键被拒",
       "testIds": [
-        "T-194"
+        "T-194",
+        "T-205"
       ],
       "input": {
         "steps": [
@@ -2390,23 +2604,23 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e5",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e5",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e5-other",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2439,8 +2653,8 @@
           {
             "op": "keygen",
             "dev": "A",
-            "result": "ok",
-            "note": "idempotent"
+            "result": "noop",
+            "code": "idempotent"
           },
           {
             "op": "keygen",
@@ -2468,10 +2682,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e5",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2481,10 +2698,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2494,6 +2714,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -2507,7 +2728,8 @@
       "group": "E",
       "title": "替换成功后重复注册同一钥：无操作",
       "testIds": [
-        "T-194"
+        "T-194",
+        "T-205"
       ],
       "input": {
         "steps": [
@@ -2527,9 +2749,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e6",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2591,10 +2813,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e6",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2604,10 +2829,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2617,6 +2845,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -2628,10 +2857,11 @@
     {
       "id": "E-07",
       "group": "E",
-      "title": "替换成功后用过期版本号注册另一把钥：拒绝，不覆盖",
+      "title": "替换成功后用过期版本号注册另一把钥：cas_conflict，不覆盖",
       "testIds": [
         "T-193",
-        "T-194"
+        "T-194",
+        "T-204"
       ],
       "input": {
         "steps": [
@@ -2651,9 +2881,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e7",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2698,7 +2928,7 @@
             "op": "registerDirect",
             "dev": null,
             "result": "rejected",
-            "code": "precondition_failed"
+            "code": "cas_conflict"
           }
         ],
         "final": {
@@ -2715,10 +2945,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e7",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2728,10 +2961,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2741,6 +2977,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -2752,7 +2989,7 @@
     {
       "id": "E-08",
       "group": "E",
-      "title": "生成新钥后中断：冷启动后按版本号继续写入",
+      "title": "生成新钥后中断：冷启动后按 CAS 继续写入",
       "testIds": [
         "T-192"
       ],
@@ -2774,9 +3011,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e8",
             "nativeConfirmed": true,
+            "confirmSource": "native",
             "crashAt": "after_keygen"
           },
           {
@@ -2827,10 +3064,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e8",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2840,10 +3080,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2853,6 +3096,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -2886,9 +3130,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e9",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -2948,10 +3192,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e9",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -2961,10 +3208,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -2974,6 +3224,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -3007,9 +3258,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e10",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -3070,10 +3321,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-e10",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -3083,10 +3337,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3096,6 +3353,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -3110,7 +3368,7 @@
       "title": "确认后他人写入，冷启动对账：待用钥被丢弃，恢复他人写入的身份",
       "testIds": [
         "T-192",
-        "T-193"
+        "T-204"
       ],
       "input": {
         "steps": [
@@ -3130,9 +3388,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-e11",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "externalWrite",
@@ -3192,10 +3450,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -3205,10 +3466,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3218,6 +3482,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 2,
             "pendingDiscarded": 1,
             "externalWrites": 1,
@@ -3231,7 +3496,8 @@
       "group": "E",
       "title": "注册通道无原生确认：拒绝（PWA 不得直接注册）",
       "testIds": [
-        "T-196"
+        "T-196",
+        "T-202"
       ],
       "input": {
         "steps": [
@@ -3285,10 +3551,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "decrypt_failed",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -3298,10 +3567,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3311,9 +3583,2973 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-01",
+      "group": "P",
+      "title": "未确认不覆盖：确认界面中尝试在未确认时生成，随后取消",
+      "testIds": [
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p01",
+            "nativeConfirmed": false,
+            "confirmSource": "native"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "native_confirmation_missing"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A",
+            "result": "cancelled",
+            "reevaluated": "failed:backup_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "failed",
+                "failureClass": "backup_missing",
+                "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_missing",
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-02",
+      "group": "P",
+      "title": "未确认不覆盖：确认界面超时（120 秒视为取消）",
+      "testIds": [
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "confirmTimeout",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "confirmTimeout",
+            "dev": "A",
+            "result": "confirm_timeout",
+            "reevaluated": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "d95e771b034406e882e0e30fa74870bd09633e7fd2acd4bd7fc5e6c426a04da0"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-03",
+      "group": "P",
+      "title": "未确认不覆盖：确认不是原生界面（WebView 发出的确认）被拒",
+      "testIds": [
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_WRONG_PW"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p03",
+            "nativeConfirmed": true,
+            "confirmSource": "webview"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "confirmation_not_native"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "80d89ea68e82aeeded87c56cac4e3d1056002edcec7580b574674931c04220d2"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "awaiting_confirm",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_backup_undecryptable",
+                "uiKey": "chat.new_identity.confirm.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-04",
+      "group": "P",
+      "title": "确认后覆盖成功（备份缺失）",
+      "testIds": [
+        "T-203"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p04",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-p04",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-05",
+      "group": "P",
+      "title": "确认后覆盖成功（解不开：口令不符）",
+      "testIds": [
+        "T-203"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_WRONG_PW"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p05",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-p05",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-06",
+      "group": "P",
+      "title": "确认后覆盖成功（指纹不符）",
+      "testIds": [
+        "T-203"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p06",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": true,
+              "crashed": false,
+              "completedIdem": "k-p06",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 3,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-07",
+      "group": "P",
+      "title": "CAS 冲突中止（确认前链上已变化）：不生成，重新判定",
+      "testIds": [
+        "T-204"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p07",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "cas_conflict",
+            "reevaluated": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-08",
+      "group": "P",
+      "title": "CAS 冲突中止（确认后、写入前链上已变化）：丢弃待用钥，不写链，重新判定",
+      "testIds": [
+        "T-204"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p08",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "rejected",
+            "code": "cas_conflict",
+            "idemKey": "k-p08",
+            "reevaluated": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-09",
+      "group": "P",
+      "title": "重复点击幂等：确认成功后同一幂等键再次确认，不再写链",
+      "testIds": [
+        "T-205"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p09",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p09",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "noop",
+            "code": "idempotent"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-p09",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P-10",
+      "group": "P",
+      "title": "重复点击幂等：待用钥阶段同一幂等键重复确认，只生成一次",
+      "testIds": [
+        "T-205"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p10",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-p10",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "noop",
+            "code": "idempotent"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-p10",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-01",
+      "group": "Q",
+      "title": "有备份无登记：归入失败类，不自动生成或注册",
+      "testIds": [
+        "T-206"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "failed",
+                "failureClass": "registration_missing",
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": "pgp_registration_missing",
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-02",
+      "group": "Q",
+      "title": "有备份无登记后冷启动：状态不变，无自动动作",
+      "testIds": [
+        "T-206",
+        "T-191"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "failed",
+                "failureClass": "registration_missing",
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": "pgp_registration_missing",
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-03",
+      "group": "Q",
+      "title": "有备份无登记：用户确认后替换（CAS 一致），旧备份可解则先包裹",
+      "testIds": [
+        "T-206",
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-q03",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": true,
+              "crashed": false,
+              "completedIdem": "k-q03",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 3,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-04",
+      "group": "Q",
+      "title": "有备份无登记：确认后链上被他人写入，CAS 冲突中止",
+      "testIds": [
+        "T-206",
+        "T-204"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-q04",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "rejected",
+            "code": "cas_conflict",
+            "idemKey": "k-q04",
+            "reevaluated": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-05",
+      "group": "Q",
+      "title": "有备份无登记：未确认不覆盖",
+      "testIds": [
+        "T-206",
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-q05",
+            "nativeConfirmed": false,
+            "confirmSource": "native"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "native_confirmation_missing"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A",
+            "result": "cancelled",
+            "reevaluated": "failed:registration_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "failed",
+                "failureClass": "registration_missing",
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": "pgp_registration_missing",
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "Q-06",
+      "group": "Q",
+      "title": "有备份无登记（备份不可解）：用户确认后替换，不包裹旧备份",
+      "testIds": [
+        "T-206",
+        "T-203"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-q06",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:registration_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-q06",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-01",
+      "group": "N",
+      "title": "首次建立：入口出现，冷启动不自动生成",
+      "testIds": [
+        "T-207",
+        "T-191"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "first_identity"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "first_identity",
+                "failureClass": null,
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": null,
+                "uiKey": "chat.first_identity.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-02",
+      "group": "N",
+      "title": "首次建立：未确认不生成，取消后回到入口",
+      "testIds": [
+        "T-207",
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n02",
+            "nativeConfirmed": false,
+            "confirmSource": "native"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "native_confirmation_missing"
+          },
+          {
+            "op": "cancelConfirm",
+            "dev": "A",
+            "result": "cancelled",
+            "reevaluated": "first_identity"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "first_identity",
+                "failureClass": null,
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": null,
+                "uiKey": "chat.first_identity.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-03",
+      "group": "N",
+      "title": "首次建立：用户确认后生成，注册前 CAS 核对链上确为空，写入一次",
+      "testIds": [
+        "T-208"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n03",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-n03",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-04",
+      "group": "N",
+      "title": "首次建立：确认后、写入前链上被他人写入：CAS 中止，丢弃待用钥",
+      "testIds": [
+        "T-208",
+        "T-204"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n04",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "rejected",
+            "code": "cas_conflict",
+            "idemKey": "k-n04",
+            "reevaluated": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-05",
+      "group": "N",
+      "title": "首次建立：确认前链上已被他人写入：确认被拒（cas_conflict）",
+      "testIds": [
+        "T-208",
+        "T-204"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n05",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "cas_conflict",
+            "reevaluated": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-06",
+      "group": "N",
+      "title": "首次建立：重复点击幂等，只生成与写入一次",
+      "testIds": [
+        "T-209"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n06",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n06",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "noop",
+            "code": "idempotent"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-n06",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-07",
+      "group": "N",
+      "title": "首次建立：WebView 发出的确认被拒",
+      "testIds": [
+        "T-207",
+        "T-202"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n07",
+            "nativeConfirmed": true,
+            "confirmSource": "webview"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "confirmation_not_native"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "awaiting_confirm",
+                "failureClass": null,
+                "offerEntry": true,
+                "observedVersion": 0,
+                "code": null,
+                "uiKey": "chat.first_identity.confirm.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-08",
+      "group": "N",
+      "title": "首次建立：生成后中断，冷启动后按 CAS 继续写入",
+      "testIds": [
+        "T-209"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n08",
+            "nativeConfirmed": true,
+            "confirmSource": "native",
+            "crashAt": "after_keygen"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "crashed"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "reconciled_write"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": "k-n08",
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "N-09",
+      "group": "N",
+      "title": "首次建立：确认后链上被他人写入，冷启动对账：待用钥丢弃，恢复他人写入的身份",
+      "testIds": [
+        "T-208",
+        "T-192"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "idemKey": "k-n09",
+            "nativeConfirmed": true,
+            "confirmSource": "native"
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "first_identity"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "reconciled_discarded"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "completedIdem": null,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "replacements": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
             "walletWrites": 0
           }
         }
@@ -3375,10 +6611,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "failed",
                 "failureClass": "fingerprint_mismatch",
                 "offerEntry": true,
+                "observedVersion": 1,
+                "code": "pgp_fingerprint_mismatch",
                 "uiKey": "chat.restore_failed.body"
               }
             },
@@ -3388,10 +6627,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3401,6 +6643,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 0,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -3466,10 +6709,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -3479,10 +6725,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3492,6 +6741,7 @@
             "onchainWrites": 0,
             "backupWrites": 0,
             "registrations": 0,
+            "replacements": 0,
             "localWrites": 1,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -3506,7 +6756,7 @@
       "title": "替换成功后冷启动：启用新身份，无写入",
       "testIds": [
         "T-191",
-        "T-193"
+        "T-203"
       ],
       "input": {
         "steps": [
@@ -3526,9 +6776,9 @@
           {
             "op": "keygen",
             "dev": "A",
-            "expectedVersion": 1,
             "idemKey": "k-s3",
-            "nativeConfirmed": true
+            "nativeConfirmed": true,
+            "confirmSource": "native"
           },
           {
             "op": "commit",
@@ -3587,10 +6837,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": "k-s3",
               "ui": {
                 "state": "ok",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             },
@@ -3600,10 +6853,13 @@
               "pending": null,
               "oldArmorWrapped": false,
               "crashed": false,
+              "completedIdem": null,
               "ui": {
                 "state": "not_evaluated",
                 "failureClass": null,
                 "offerEntry": false,
+                "observedVersion": null,
+                "code": null,
                 "uiKey": null
               }
             }
@@ -3613,6 +6869,7 @@
             "onchainWrites": 1,
             "backupWrites": 1,
             "registrations": 1,
+            "replacements": 1,
             "localWrites": 2,
             "pendingDiscarded": 0,
             "externalWrites": 0,
@@ -3623,13 +6880,16 @@
     }
   ],
   "counts": {
-    "cases": 34,
+    "cases": 59,
     "groups": [
       "R",
       "M",
       "D",
       "F",
       "E",
+      "P",
+      "Q",
+      "N",
       "S"
     ]
   }
