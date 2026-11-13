@@ -165,6 +165,9 @@ internal class NativePgpVault(
         runCatching { files.delete(rec) }
     }
 
+    /** True for the pending slot. Used to refuse a call that mixes the two slots. */
+    fun isPendingSlot(): Boolean = slot == Slot.PENDING
+
     /**
      * Native-only hand-over of a pending key to the active slot (activation after a confirmed registration). Returns the armor
      * for the caller to store in the active slot, and never leaves the native layer. `null` when no ready pending key exists.
