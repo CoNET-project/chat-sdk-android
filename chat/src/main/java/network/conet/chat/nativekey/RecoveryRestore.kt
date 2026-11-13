@@ -84,6 +84,8 @@ internal class RecoveryEngine(
     private val registry: RegistryReader,
     private val failures: RecoveryFailureStore,
     private val clock: RecoveryClock,
+    /** The Argon2id step. Production uses [RecoveryRecord.argon2idKey]; a test replaces it to count the calls (§25.47.9). */
+    private val kdf: (ByteArray, RecoveryRecord.Stored) -> ByteArray = { p, s -> RecoveryRecord.argon2idKey(p, s) },
 ) {
     /** Path A (§25.42.5, recovery code). Steps 1 to 12. */
     fun restoreWithCode(rawCode: ByteArray): RecoveryOutcome {
@@ -147,7 +149,7 @@ internal class RecoveryEngine(
         // Step 5: the record shape.
         val parsed = RecoveryRecord.parse(record) ?: return RecoveryOutcome.fail("record_invalid")
         // Step 6: the decrypt.
-        val opened = RecoveryRecord.open(parsed.stored, parsed.imgBase64, password)
+        val opened = RecoveryRecord.open(parsed.stored, parsed.imgBase64, password, kdf)
         val phrase = when (opened) {
             is RecoveryRecord.Opened.Ok -> opened.phrase
             is RecoveryRecord.Opened.Malformed -> return RecoveryOutcome.fail("record_invalid")

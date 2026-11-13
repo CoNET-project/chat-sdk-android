@@ -130,6 +130,16 @@ class KeyPathGuardTest {
     }
 
     @Test
+    fun identityPublicIsDecidedInItsHandlerBeforeTheTable() {
+        // r3ae §25.48.2: the gate runs inside the handler, and the name is never on the allowed list.
+        val handler = module.indexOf("identityPublicCommand(body)")
+        val table = module.indexOf("NoKeyGate.route(type)")
+        assertTrue("handler call missing", handler >= 0)
+        assertTrue("handler must come before the table", handler < table)
+        assertFalse(NoKeyGate.route("identityPublic") == NoKeyGate.Route.PASS)
+    }
+
+    @Test
     fun legacyKeyIsAdoptedBeforeTheGate() {
         // An upgraded install whose first command is `init` must keep its wallet: the legacy key is adopted first.
         val adopt = module.indexOf("NativeWallet.migrateLegacy(context)")

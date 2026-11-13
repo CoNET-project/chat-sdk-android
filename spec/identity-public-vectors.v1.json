@@ -1,0 +1,566 @@
+{
+  "file": "identity-public-vectors.v1.json",
+  "purpose": "identityPublic：G2 专用只读命令，只返回公开材料（spec r3ae §25.48，项目方定案 2026-11-13）。合成数据，不含任何凭据或密钥。",
+  "spec": "v1.1-r3ae §25.48（测试 T-246 至 T-248）",
+  "revision": "spec r3ae（新增，项目方定案 2026-11-13）",
+  "generator": "gen-identity-public-vectors.mjs",
+  "names": {
+    "canonical": "identity.public",
+    "bridge": "identityPublic"
+  },
+  "gates": {
+    "G0": "no_key",
+    "G1": "not_ready",
+    "G2": "ok（公开材料；锁定与否不影响）"
+  },
+  "ackErrorCodes": [
+    "no_key",
+    "not_ready",
+    "bad_request",
+    "key_over_bridge_refused"
+  ],
+  "credentialFields": [
+    "privateKeyHex",
+    "privateKeyArmor",
+    "privateKeyArmored",
+    "pgpPrivateKeyArmored",
+    "encrypKeyArmored",
+    "pgpPassphrase",
+    "walletPrivateKey",
+    "mnemonic",
+    "recoveryCode",
+    "pin",
+    "password",
+    "accountPassword"
+  ],
+  "forbiddenResultKeys": [
+    "privateKey",
+    "privateKeyHex",
+    "privateKeyArmor",
+    "pgpPrivateKeyArmored",
+    "encrypKeyArmored",
+    "mnemonic",
+    "recoveryCode",
+    "pin",
+    "password",
+    "accountPassword",
+    "passcode",
+    "hash",
+    "img",
+    "stored",
+    "ciphertext",
+    "backupCiphertext"
+  ],
+  "syntheticNote": "EOA 为 BIP-39 公开测试助记词派生地址；PGP 公钥与路由公钥为合成占位，不是真实密钥。",
+  "cases": [
+    {
+      "id": "IP-01",
+      "group": "A",
+      "title": "G2 且 PGP 与路由公钥齐全：ok，result 含 eoa、accountKey、pgpReady true 与三项公开材料",
+      "testIds": [
+        "T-246",
+        "T-248"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-01"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-01",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": true,
+                "pgpKeyID": "syn-pgp-key-0001",
+                "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
+                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-02",
+      "group": "A",
+      "title": "G2 但尚无 PGP 记录（如恢复后未 pgpRestore）：ok，pgpReady false，不含三项 PGP 字段",
+      "testIds": [
+        "T-246",
+        "T-248"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": false,
+        "route": false
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-02"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-02",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-03",
+      "group": "A",
+      "title": "G2 有 PGP 公钥但无路由公钥：ok，pgpReady false，不含 PGP 字段（pgpReady 须两者齐全）",
+      "testIds": [
+        "T-248"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": false
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-03"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-03",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-04",
+      "group": "A",
+      "title": "G2 且锁定（passcode）：仍 ok，返回同一公开材料（只读公开材料，不受锁定影响）",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "state": "G2",
+        "locked": true,
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-04"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-04",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": true,
+                "pgpKeyID": "syn-pgp-key-0001",
+                "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
+                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-05",
+      "group": "B",
+      "title": "G0（无钥）：no_key，不返回任何公开材料",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "state": "G0"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-05"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-05",
+              "ok": false,
+              "error": "no_key"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-06",
+      "group": "B",
+      "title": "G1（有钥未 init）：not_ready，不返回 no_key（§25.26.4c）",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "state": "G1"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-06"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-06",
+              "ok": false,
+              "error": "not_ready"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-07",
+      "group": "B",
+      "title": "G0 且负载携带 privateKeyArmor：no_key，负载不解析、不回显（门控先于入参，§25.26.4 表 E）",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "state": "G0"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-07",
+            "privateKeyArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-07",
+              "ok": false,
+              "error": "no_key"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-08",
+      "group": "C",
+      "title": "G2 入参多出 foo 字段：bad_request",
+      "testIds": [
+        "T-247"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-08",
+            "foo": "x"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-08",
+              "ok": false,
+              "error": "bad_request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-09",
+      "group": "C",
+      "title": "G2 入参携带 privateKeyArmor：key_over_bridge_refused，只记字段名，不回显值",
+      "testIds": [
+        "T-247"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-09",
+            "privateKeyArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-09",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-10",
+      "group": "C",
+      "title": "G2 入参携带 encrypKeyArmored（链上加密私钥密文）：key_over_bridge_refused",
+      "testIds": [
+        "T-247"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-10",
+            "encrypKeyArmored": "synthetic-ciphertext"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-10",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-11",
+      "group": "C",
+      "title": "G2 的 reqId 为对象：bad_request，reqId 为 null",
+      "testIds": [
+        "T-247"
+      ],
+      "env": {
+        "state": "G2"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": {
+              "x": 1
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": null,
+              "ok": false,
+              "error": "bad_request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-12",
+      "group": "A",
+      "title": "Android 通道：G2 ok，通道为 cashtreesandroid",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "platform": "android",
+        "state": "G2",
+        "pgp": true,
+        "route": true
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-12"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesandroid",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-12",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": true,
+                "pgpKeyID": "syn-pgp-key-0001",
+                "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
+                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IP-13",
+      "group": "B",
+      "title": "Android 通道 G1：not_ready",
+      "testIds": [
+        "T-246"
+      ],
+      "env": {
+        "platform": "android",
+        "state": "G1"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-13"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesandroid",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-13",
+              "ok": false,
+              "error": "not_ready"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "cases": 13,
+    "A": 5,
+    "B": 4,
+    "C": 4
+  },
+  "notCovered": [
+    "本向量不并入 no-key-reject-vectors.v1.json 与 gate-state-vectors.v1.json 的清单（二者固定为 r3ab 的 59 条与 102 项）。G0、G1 的行为由本向量与 §25.26.4 默认拒绝规则覆盖。两份清单在下次修订时并入（§25.48.7）。",
+    "原生侧的公开材料来源（PGP 记录的读取）：由 pgpRestore 与 pgpIdentityCreate 的既有用例覆盖。",
+    "界面文案与 PWA 的启动流程：由 PWA Chat SDK 的启动用例覆盖。"
+  ]
+}

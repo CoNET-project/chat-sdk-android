@@ -80,14 +80,20 @@ internal object RecoveryRecord {
     }
 
     /** Opens `img` with the key derived from [password] (UTF-8 bytes). The caller zeroes the returned phrase. */
-    fun open(stored: Stored, imgBase64: String, password: ByteArray): Opened {
+    fun open(
+        stored: Stored,
+        imgBase64: String,
+        password: ByteArray,
+        kdf: (ByteArray, Stored) -> ByteArray = { p, s -> argon2idKey(p, s) },
+    ): Opened {
         val combined = try {
             Base64.getDecoder().decode(imgBase64)
         } catch (_: IllegalArgumentException) {
             return Opened.Malformed
         }
         if (combined.size < 12 + 16) return Opened.Malformed
-        val key = argon2idKey(password, stored)
+        // The KDF is a parameter only so the tests can count its calls (§25.47.9). Production passes the default.
+        val key = kdf(password, stored)
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, combined.copyOfRange(0, 12)))

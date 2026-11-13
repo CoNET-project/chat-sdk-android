@@ -7,6 +7,7 @@ import android.util.Log
 import org.json.JSONArray
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
+import network.conet.chat.nativekey.IdentityPublic
 import network.conet.chat.nativekey.NativeOpenRules
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
@@ -154,6 +155,11 @@ object BeamioConetChatModule {
         // pgpDecryptInbound (25.34): reqId first, then the gate, inside the handler. It is not routed through the table.
         if (type == "pgpDecryptInbound") {
             handlePgpDecryptInbound(body)
+            return
+        }
+        // identityPublic (25.48): G2 only, read-only. Like pgpDecryptInbound it is decided in its handler, gate first.
+        if (type == "identityPublic") {
+            identityPublicCommand(body)
             return
         }
         val route = NoKeyGate.route(type)
@@ -934,6 +940,40 @@ object BeamioConetChatModule {
             JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false)
                 .put("error", "not_supported"),
         )
+    }
+
+    /**
+     * `identityPublic` (spec r3ae §25.48): the public account material. G0 `no_key` and G1 `not_ready` are answered before the
+     * payload is read; in G2 the input is checked, then the result is built from the native public facts only. A refused
+     * credential field is logged by name only.
+     */
+    private fun identityPublicCommand(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        val ctx = appContext
+        val reply = if (ctx == null) {
+            IdentityPublic.Reply(IdentityPublic.NOT_READY, null)
+        } else {
+            val gate = NoKeyGate.gateOf(NativeWallet.vault(ctx).state(), NativeSessionState.isReady())
+            IdentityPublic.answer(
+                gate,
+                { body.keys().asSequence().map { it.toString() }.toList() },
+                reqId,
+                identityPublicSource(),
+            )
+        }
+        reply.refused?.let { Log.w(TAG, "identityPublic refused field: $it") }
+        emitEvent(IdentityPublic.ackPayload(reqId, reply))
+    }
+
+    /**
+     * The native source of identityPublic. The account is the session's. The PGP part is none for now: the native PGP record
+     * holds only the sealed private armor, the fingerprint and the EOA, with no key ID of its own and no route public key, so
+     * `pgpReady` stays false until that source is defined (r3ae report). The session's PGP copies come from the PWA's init,
+     * and are not used here.
+     */
+    private fun identityPublicSource(): IdentityPublic.Source = object : IdentityPublic.Source {
+        override fun eoa(): String? = currentSession()?.eoa
+        override fun pgp(): IdentityPublic.PgpPublic? = null
     }
 
     /**
