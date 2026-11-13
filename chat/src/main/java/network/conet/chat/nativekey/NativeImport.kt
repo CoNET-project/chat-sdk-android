@@ -1,5 +1,6 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.ConetChatCryptoUtil
 import java.math.BigInteger
 
 /**
@@ -9,6 +10,30 @@ import java.math.BigInteger
  * `nativeImportOpen`, which asks the host to show that page. Nothing here logs the input or the key.
  */
 object NativeWalletCommands {
+    /** Largest message `pgpSign` will take (decoded bytes). */
+    const val PGP_SIGN_MAX_BYTES = 65_536
+
+    /**
+     * C4 `pgpSign` (spec 25.22.2): a document signature by the vault's PGP key. The page sends the purpose and the
+     * message (base64), and gets back the armored signature only. The purpose must be in [registry]. Until the interface
+     * owner lists the purposes, every call answers `purpose_not_registered`. Certification signatures are refused.
+     * Errors: `bad_request` (message missing or not base64), `too_long`, `no_pgp_key`, `pgp_locked`,
+     * `purpose_not_registered`, `sig_type_not_allowed`, `bad_passphrase`, `sign_failed`.
+     */
+    internal fun pgpSign(
+        vault: NativePgpVault,
+        purposeId: String,
+        messageBase64: String?,
+        sigType: Int,
+        registry: Set<String> = NativePgpVault.REGISTERED_PURPOSES,
+    ): NativeOutcome {
+        val message = messageBase64?.let { runCatching { ConetChatCryptoUtil.base64Decode(it) }.getOrNull() }
+            ?: return NativeOutcome("bad_request")
+        if (message.size > PGP_SIGN_MAX_BYTES) return NativeOutcome("too_long")
+        val out = vault.sign(purposeId, sigType, message, registry)
+        return if (out.ok) NativeOutcome("ok", value = out.value) else NativeOutcome(out.code)
+    }
+
     /** N0 `walletAddress`: no signature, only the account's EOA. `no_key` and `locked` carry no data. */
     fun walletAddress(vault: NativeWalletVault): NativeOutcome =
         when (val st = vault.state()) {

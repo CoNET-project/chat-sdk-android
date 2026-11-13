@@ -11,6 +11,7 @@ import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgpVault
+import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.localread.LocalChatEvent
@@ -121,12 +122,8 @@ object BeamioConetChatModule {
     /** A pause is owed once [keepListenWhile] turns false. Main thread. */
     private var pauseOwed = false
 
-    /**
-     * G2 (25.26.4c): true only after a successful `init` whose EOA equals the native record. It is cleared when the
-     * session is replaced, destroyed or cleared. The native record itself is not affected.
-     */
-    @Volatile
-    private var nativeSessionReady = false
+    /** Read-only for the shell's gate: true only after a successful `init` for the native record (25.26.4c, G2). */
+    fun isNativeSessionReady(): Boolean = NativeSessionState.isReady()
     private var idleCheckPosted = false
     private const val IDLE_CHECK_MS = 10_000L
 
@@ -162,7 +159,7 @@ object BeamioConetChatModule {
         if (route != NoKeyGate.Route.PASS) {
             val reqId = body.optInt("reqId", -1)
             val state = NativeWallet.vault(context).state()
-            val gate = NoKeyGate.gateOf(state, nativeSessionReady)
+            val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
             when (route) {
                 NoKeyGate.Route.WALLET_STATUS -> {
                     ack(reqId, true, result = NoKeyGate.walletStatusFor(gate, state))
@@ -236,6 +233,7 @@ object BeamioConetChatModule {
             "provisionIdentity" -> provisionIdentity(body)
             "walletAddress" -> walletAddressCommand(body)
             "gossipSign" -> gossipSignCommand(body)
+            "pgpSign" -> pgpSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             else -> {
                 Log.w(TAG, "unknown command $type")
@@ -272,7 +270,7 @@ object BeamioConetChatModule {
         // G1 (25.26.4c item 4): a native record exists and this session is not ready. The EOA in the payload must equal
         // the record; a mismatch or a missing EOA changes nothing. A locked record cannot be checked against the EOA.
         val vaultNow = NativeWallet.vault(ctx).state()
-        if (NoKeyGate.gateOf(vaultNow, nativeSessionReady) == NoKeyGate.Gate.G1) {
+        if (NoKeyGate.gateOf(vaultNow, NativeSessionState.isReady()) == NoKeyGate.Gate.G1) {
             if (vaultNow !is NativeWalletVault.State.Ready) {
                 ack(reqId, false, error = "locked")
                 return
@@ -290,7 +288,7 @@ object BeamioConetChatModule {
         val s = if (attach) running!! else Session()
         if (!attach) {
             // A new session is not ready until its init succeeds for the record (25.26.4c, G1 -> G2).
-            nativeSessionReady = false
+            NativeSessionState.reset()
             synchronized(lock) {
                 listen.stop()
                 session?.history?.destroy()
@@ -431,7 +429,7 @@ object BeamioConetChatModule {
                     key.fill(0)
                 }
                 // G2 (25.26.4c): the record opened and the EOA matched, so the session is ready.
-                nativeSessionReady = true
+                NativeSessionState.markReady()
                 done()
             }
             is NativeWalletVault.State.NoKey -> {
@@ -688,7 +686,7 @@ object BeamioConetChatModule {
 
     /** Logout / wallet removed or switched: stop and forget the stored keys. */
     private fun clearIdentity(reqId: Int) {
-        nativeSessionReady = false
+        NativeSessionState.reset()
         val ctx = appContext
         destroy()
         BeamioConetChatSignBroker.clearNativeSigner()
@@ -750,6 +748,29 @@ object BeamioConetChatModule {
         val out = NativeMessageSigner.sign(NativeWallet.vault(ctx), kind, message.toByteArray(Charsets.UTF_8))
         if (out.code == "ok") {
             ack(reqId, true, result = JSONObject().put("signature", out.value).put("address", out.address))
+        } else {
+            ack(reqId, false, error = out.code)
+        }
+    }
+
+    /**
+     * C4 `pgpSign` (spec 25.22.2): the page gets the armored signature only. The gate runs before this, so it is reached
+     * in G2 only. The PGP private key and its passphrase stay in the native record.
+     */
+    private fun pgpSignCommand(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        val ctx = appContext ?: run {
+            ack(reqId, false, error = "not_initialised")
+            return
+        }
+        val out = NativeWalletCommands.pgpSign(
+            NativeWallet.pgp(ctx),
+            body.optString("purposeId", ""),
+            body.optString("message", "").ifEmpty { null },
+            body.optInt("sigType", -1),
+        )
+        if (out.code == "ok") {
+            ack(reqId, true, result = JSONObject().put("signature", out.value))
         } else {
             ack(reqId, false, error = out.code)
         }
@@ -1587,7 +1608,7 @@ object BeamioConetChatModule {
 
     private fun destroy() {
         // Session gone: G2 -> G1 (25.26.4c). The native record is kept.
-        nativeSessionReady = false
+        NativeSessionState.reset()
         listen.stop()
         BeamioConetChatSignBroker.cancelAll("destroyed")
         val hadHistory = synchronized(lock) { session?.history != null }
