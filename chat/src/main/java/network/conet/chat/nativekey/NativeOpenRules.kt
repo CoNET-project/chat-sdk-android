@@ -83,6 +83,6 @@ internal object NativeOpenRules {
 
     val accountHost: Host = object : Host {
         override fun registered(): Boolean = NativeAccountCreateHost.launcher != null
-        override fun open(reqId: Any): Boolean = NativeAccountCreateHost.open()
+        override fun open(reqId: Any): Boolean = NativeAccountCreateHost.open(reqId)
     }
 }

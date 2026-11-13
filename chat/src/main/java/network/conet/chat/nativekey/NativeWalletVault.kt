@@ -101,7 +101,7 @@ class NativeWalletVault(
     @Synchronized
     fun importKey(eoa: String, key: ByteArray, source: String = SOURCE_NATIVE_IMPORT): Import {
         if (!isCanonicalEoa(eoa)) return Import.BAD_EOA
-        if (source != SOURCE_NATIVE_IMPORT && source != SOURCE_LEGACY) return Import.BAD_KEY
+        if (source != SOURCE_NATIVE_IMPORT && source != SOURCE_NATIVE_CREATE && source != SOURCE_LEGACY) return Import.BAD_KEY
         if (key.size != 32) return Import.BAD_KEY
         val derived = WalletAddress.fromPrivateKey(key) ?: return Import.BAD_KEY
         if (derived != eoa) return Import.ADDRESS_MISMATCH
@@ -186,6 +186,7 @@ class NativeWalletVault(
         const val MARK = "wallet.v1.ok"
         const val RECORD_VERSION = 1
         const val SOURCE_NATIVE_IMPORT = "native_import"
+        const val SOURCE_NATIVE_CREATE = "native_create"
         const val SOURCE_LEGACY = "legacy_migration"
 
         /** Hardware-layer AAD (spec 25.17.5): binds the record to its EOA. */

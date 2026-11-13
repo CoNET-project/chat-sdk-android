@@ -53,7 +53,7 @@ class KeyPathGuardTest {
         assertTrue(module.contains("NativeOpenRules.accountCreateOpen("))
         val rules = File("src/main/java/network/conet/chat/nativekey/NativeOpenRules.kt").readText()
         assertTrue(rules.contains("NativeImportHost.open()"))
-        assertTrue(rules.contains("NativeAccountCreateHost.open()"))
+        assertTrue(rules.contains("NativeAccountCreateHost.open(reqId)"))
         assertTrue(module.contains("\"nativeAccountCreateOpen\" -> nativeAccountCreateOpenCommand(body)"))
         // The old reply codes are gone: no_key and locked are the answers.
         assertFalse(module.contains("native_key_missing"))
@@ -127,6 +127,22 @@ class KeyPathGuardTest {
         assertFalse("WebView host still reads a private key", host.contains("openpgp.readPrivateKey"))
         assertFalse("WebView host still unlocks a key", host.contains("openpgp.decryptKey"))
         assertFalse("WebView host still takes an armor argument for a private key", host.contains("privateKeyArmor"))
+    }
+
+    @Test
+    fun w2ToW4AreInProcessOnlyAndNotBridgeCommands() {
+        // §25.37.4 補充 (r3al): W2, W3 and W4 are not bridge commands. They must not be dispatched from the bridge.
+        for (cmd in listOf("deriveLocalKeys", "protocolKeys", "fragmentKeys")) {
+            assertFalse("bridge dispatch for $cmd", module.contains("\"$cmd\" ->"))
+        }
+        assertTrue(module.contains("\"deriveSubkeys\" ->"))
+    }
+
+    @Test
+    fun pgpIdentityCreateAnswersWaitingRegistrationAndWritesNothing() {
+        // §25.37.4 b, §25.35.3: until the write path is approved, the bridge answers waiting_registration and writes no chain.
+        assertTrue(module.contains("put(\"code\", \"waiting_registration\")"))
+        assertFalse(module.contains("\"pgpIdentityCreate\" -> pgpIdentityCreateNotSupported"))
     }
 
     @Test

@@ -15,6 +15,7 @@ import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
+import network.conet.chat.nativekey.NativeAccountCreateHost
 import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
@@ -254,18 +255,10 @@ object BeamioConetChatModule {
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
             "nativeAccountCreateOpen" -> nativeAccountCreateOpenCommand(body)
-            // Derivation (§25.3 W2 to W4, §25.15.3 C5, §25.43): the key is unlocked here and cleared after the call.
+            // Derivation (§25.15.3 C5, §25.43): the key is unlocked here and cleared after the call. W2, W3 and W4 are not
+            // bridge commands (§25.37.4 補充, r3al): they stay in-process and are not dispatched here.
             "deriveSubkeys" -> derivationCommand(body) { key, eoa ->
                 NativeDerivationCommands.deriveSubkeys(key, body.optString("accountKey", ""), eoa)
-            }
-            "deriveLocalKeys" -> derivationCommand(body) { key, eoa ->
-                NativeDerivationCommands.deriveLocalKeys(key, body.optString("accountKey", ""), eoa)
-            }
-            "protocolKeys" -> derivationCommand(body) { key, eoa ->
-                NativeDerivationCommands.protocolKeys(key, body.optString("accountKey", ""), eoa)
-            }
-            "fragmentKeys" -> derivationCommand(body) { key, eoa ->
-                NativeDerivationCommands.fragmentKeys(key, body.optString("accountKey", ""), body.optJSONArray("batch"), eoa)
             }
             "ephemeralSign" -> emitEvent(derivationAck(PgpDecryptInbound.reqIdOf(body), NativeDerivationCommands.ephemeralSign(body)))
             // C1 historySign is in-process only (§25.43.3): the bridge answers not_supported, and nothing else.
@@ -274,7 +267,7 @@ object BeamioConetChatModule {
             )
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
-            "pgpIdentityCreate" -> pgpIdentityCreateNotSupported(body)
+            "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             else -> {
                 Log.w(TAG, "unknown command $type")
                 // Protocol v1: a command that expects an answer gets one.
@@ -887,6 +880,8 @@ object BeamioConetChatModule {
      */
     private fun nativeAccountCreateOpenCommand(body: JSONObject) {
         val ctx = appContext
+        // The result follows as `nativeAccountCreateResult` for this reqId (§25.46.6). No key or phrase passes through here.
+        NativeAccountCreateHost.events = { payload -> emitEvent(payload) }
         nativeOpenAck(body, "nativeAccountCreateOpen") { fields, reqId ->
             // handleCommand sets appContext before dispatch. Without it the gate cannot be read, so the page is not opened.
             val gate = ctx?.let { NoKeyGate.gateOf(NativeWallet.vault(it).state(), NativeSessionState.isReady()) }
@@ -950,14 +945,15 @@ object BeamioConetChatModule {
     }
 
     /**
-     * `pgpIdentityCreate` (§25.35.2): the on-chain registration path is pending approval (§25.44), so it is refused as
-     * `not_supported`. It is not silently dropped and it does nothing else.
+     * `pgpIdentityCreate` (§25.35.2, §25.35.3, §25.37.4 b): the on-chain registration path is pending approval (§25.44), so
+     * the bridge answers `pgpIdentityCreateResult` with `waiting_registration` and writes nothing to the chain. An unknown
+     * `reqId` gets the event with a null reqId, as the other results do.
      */
-    private fun pgpIdentityCreateNotSupported(body: JSONObject) {
+    private fun pgpIdentityCreateWaiting(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         emitEvent(
-            JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false)
-                .put("error", "not_supported"),
+            JSONObject().put("type", "pgpIdentityCreateResult").put("reqId", reqId ?: JSONObject.NULL)
+                .put("code", "waiting_registration"),
         )
     }
 
