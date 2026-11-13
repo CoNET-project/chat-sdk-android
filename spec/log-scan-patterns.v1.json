@@ -239,13 +239,18 @@
         "source": "spec 25.17（视觉 token）"
       },
       {
+        "name": "interface/protocol/pgp-purpose-vectors.v1.json",
+        "sha256": "c55610e0b0596d79d8bb03ae88fa9ba10809f12d65f5a4e593de1acf579a4ef1",
+        "source": "spec 25.27.7（r3i）"
+      },
+      {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
         "sha256": "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda",
         "source": "spec 25.26.1"
       },
       {
         "name": "interface/spec.md（本 spec，r3g 定稿）",
-        "sha256": "c8ad44b3826b2466ca72039df4fb343a4fb9c79119aaf4f90fcca743520fd396",
+        "sha256": "3067fc24accc0c5e2a59cc48d8450fc5aa74b3c69c4d6a244536251ceca38128",
         "source": "本 spec 自身（定稿后计算，不得再改 spec）"
       }
     ],
@@ -276,6 +281,10 @@
       },
       {
         "name": "interface/ui/passcode-tokens.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/pgp-purpose-vectors.v1.json",
         "specRecorded": true
       }
     ],

@@ -1,0 +1,705 @@
+{
+  "file": "pgp-purpose-vectors.v1.json",
+  "spec": "spec §25.27 REGISTERED_PURPOSES（r3i，PM 加派 2026-11-13）",
+  "generator": "gen-pgp-purpose-vectors.mjs",
+  "testKeyNote": "本向量不含任何密钥，也不含签名。输出为确定性数据。",
+  "registeredPurposes": [],
+  "registryNote": "当前登记集合为空集。核对范围：PWA（src/SilentPassUI/src、src/posPwa/src、worktree SilentPassUI 与 SilentPassUI-v2）中没有 PGP 私钥签名调用（无 signingKeys、sign(、signDetached、createCleartextSignature）。",
+  "sigTypeRule": {
+    "allowed": [
+      "0x00",
+      "0x01"
+    ],
+    "refusedCode": "sig_type_not_allowed",
+    "order": 1
+  },
+  "purposeRule": {
+    "refusedCode": "purpose_not_registered",
+    "order": 2,
+    "format": "purposeId 为 ASCII，首字符为字母，其后为字母或数字，长度 1 至 32；不合格者同样返回 purpose_not_registered"
+  },
+  "sigTypes": [
+    {
+      "value": "0x00",
+      "name": "binary document signature",
+      "allowed": true
+    },
+    {
+      "value": "0x01",
+      "name": "canonical text document signature",
+      "allowed": true
+    },
+    {
+      "value": "0x02",
+      "name": "standalone signature",
+      "allowed": false
+    },
+    {
+      "value": "0x10",
+      "name": "generic certification of a User ID and Public-Key packet（认证）",
+      "allowed": false
+    },
+    {
+      "value": "0x11",
+      "name": "persona certification（认证）",
+      "allowed": false
+    },
+    {
+      "value": "0x12",
+      "name": "casual certification（认证）",
+      "allowed": false
+    },
+    {
+      "value": "0x13",
+      "name": "positive certification（认证）",
+      "allowed": false
+    },
+    {
+      "value": "0x18",
+      "name": "subkey binding signature",
+      "allowed": false
+    },
+    {
+      "value": "0x19",
+      "name": "primary key binding signature",
+      "allowed": false
+    },
+    {
+      "value": "0x1f",
+      "name": "signature directly on a key",
+      "allowed": false
+    },
+    {
+      "value": "0x20",
+      "name": "key revocation signature",
+      "allowed": false
+    },
+    {
+      "value": "0x28",
+      "name": "subkey revocation signature",
+      "allowed": false
+    },
+    {
+      "value": "0x30",
+      "name": "certification revocation signature",
+      "allowed": false
+    },
+    {
+      "value": "0x40",
+      "name": "timestamp signature",
+      "allowed": false
+    }
+  ],
+  "candidates": [
+    {
+      "purposeId": "chatEnvelope",
+      "use": "1:1 聊天信封的 PGP 签名（现行信封签名为 EOA，不是 PGP）",
+      "registered": false,
+      "domainTag": "beamio.pgp.chatEnvelope.v1\\n"
+    },
+    {
+      "purposeId": "groupMessage",
+      "use": "群组消息的 PGP 签名（现行群组签名为 EOA，不是 PGP）",
+      "registered": false,
+      "domainTag": "beamio.pgp.groupMessage.v1\\n"
+    },
+    {
+      "purposeId": "voiceSignal",
+      "use": "语音信令的 PGP 签名（现行语音为加密，无 PGP 签名）",
+      "registered": false,
+      "domainTag": "beamio.pgp.voiceSignal.v1\\n"
+    }
+  ],
+  "domainCases": [
+    {
+      "id": "A-chatEnvelope",
+      "purposeId": "chatEnvelope",
+      "use": "1:1 聊天信封的 PGP 签名（现行信封签名为 EOA，不是 PGP）",
+      "registered": false,
+      "domainTagUtf8": "beamio.pgp.chatEnvelope.v1\\n",
+      "domainTagHex": "6265616d696f2e7067702e63686174456e76656c6f70652e76310a",
+      "domainTagBytes": 27,
+      "domainTagSha256": "7f90a603272512994190b566a7933395a9155fd3d415b180e6c4109ee1590b4b",
+      "sampleMessageHex": "53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "sampleMessageBytes": 79,
+      "signedPayloadHex": "6265616d696f2e7067702e63686174456e76656c6f70652e76310a53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "signedPayloadBytes": 106,
+      "signedPayloadSha256": "d1b3101a494fb50cac20910ff8027300c58d064fad2fd28e7b062ec9e9fa7e9e",
+      "rule": "签名对象 = 域标签字节 ‖ 消息字节。域标签由原生生成，调用方不得提供或省略。",
+      "expect": {
+        "domainTagHex": "6265616d696f2e7067702e63686174456e76656c6f70652e76310a",
+        "signedPayloadSha256": "d1b3101a494fb50cac20910ff8027300c58d064fad2fd28e7b062ec9e9fa7e9e"
+      }
+    },
+    {
+      "id": "A-groupMessage",
+      "purposeId": "groupMessage",
+      "use": "群组消息的 PGP 签名（现行群组签名为 EOA，不是 PGP）",
+      "registered": false,
+      "domainTagUtf8": "beamio.pgp.groupMessage.v1\\n",
+      "domainTagHex": "6265616d696f2e7067702e67726f75704d6573736167652e76310a",
+      "domainTagBytes": 27,
+      "domainTagSha256": "151ede8d41cdc70b794a4d5d9970463bf6e3448fa67c359a26f5ba01fcabdb4f",
+      "sampleMessageHex": "53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "sampleMessageBytes": 79,
+      "signedPayloadHex": "6265616d696f2e7067702e67726f75704d6573736167652e76310a53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "signedPayloadBytes": 106,
+      "signedPayloadSha256": "8eca8c93040e27d9758c145cf92e183fc7dd28fb89a52bd375560bf0313c44f3",
+      "rule": "签名对象 = 域标签字节 ‖ 消息字节。域标签由原生生成，调用方不得提供或省略。",
+      "expect": {
+        "domainTagHex": "6265616d696f2e7067702e67726f75704d6573736167652e76310a",
+        "signedPayloadSha256": "8eca8c93040e27d9758c145cf92e183fc7dd28fb89a52bd375560bf0313c44f3"
+      }
+    },
+    {
+      "id": "A-voiceSignal",
+      "purposeId": "voiceSignal",
+      "use": "语音信令的 PGP 签名（现行语音为加密，无 PGP 签名）",
+      "registered": false,
+      "domainTagUtf8": "beamio.pgp.voiceSignal.v1\\n",
+      "domainTagHex": "6265616d696f2e7067702e766f6963655369676e616c2e76310a",
+      "domainTagBytes": 26,
+      "domainTagSha256": "487405860ec09917be35db3841c2d10505cbffd1f8aa0720f849b367b114803b",
+      "sampleMessageHex": "53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "sampleMessageBytes": 79,
+      "signedPayloadHex": "6265616d696f2e7067702e766f6963655369676e616c2e76310a53796e7468657469632050475020707572706f73652073616d706c652e20e59088e68890e6a0b7e4be8befbc8ce4b88de698afe79c9fe5ae9ee6b688e681afe380820a5365636f6e64206c696e652e",
+      "signedPayloadBytes": 105,
+      "signedPayloadSha256": "1939d55cec11846788ddff4d757836b44d1bd5e6284d1186978d0c3fb47b0f1f",
+      "rule": "签名对象 = 域标签字节 ‖ 消息字节。域标签由原生生成，调用方不得提供或省略。",
+      "expect": {
+        "domainTagHex": "6265616d696f2e7067702e766f6963655369676e616c2e76310a",
+        "signedPayloadSha256": "1939d55cec11846788ddff4d757836b44d1bd5e6284d1186978d0c3fb47b0f1f"
+      }
+    }
+  ],
+  "refusalCases": [
+    {
+      "id": "B-chatEnvelope-0x00",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x00",
+      "sigTypeName": "binary document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x01",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x01",
+      "sigTypeName": "canonical text document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x02",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x02",
+      "sigTypeName": "standalone signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x10",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x10",
+      "sigTypeName": "generic certification of a User ID and Public-Key packet（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x11",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x11",
+      "sigTypeName": "persona certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x12",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x12",
+      "sigTypeName": "casual certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x13",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x13",
+      "sigTypeName": "positive certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x18",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x18",
+      "sigTypeName": "subkey binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x19",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x19",
+      "sigTypeName": "primary key binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x1f",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x1f",
+      "sigTypeName": "signature directly on a key",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x20",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x20",
+      "sigTypeName": "key revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x28",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x28",
+      "sigTypeName": "subkey revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x30",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x30",
+      "sigTypeName": "certification revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-chatEnvelope-0x40",
+      "purposeId": "chatEnvelope",
+      "sigType": "0x40",
+      "sigTypeName": "timestamp signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x00",
+      "purposeId": "groupMessage",
+      "sigType": "0x00",
+      "sigTypeName": "binary document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x01",
+      "purposeId": "groupMessage",
+      "sigType": "0x01",
+      "sigTypeName": "canonical text document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x02",
+      "purposeId": "groupMessage",
+      "sigType": "0x02",
+      "sigTypeName": "standalone signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x10",
+      "purposeId": "groupMessage",
+      "sigType": "0x10",
+      "sigTypeName": "generic certification of a User ID and Public-Key packet（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x11",
+      "purposeId": "groupMessage",
+      "sigType": "0x11",
+      "sigTypeName": "persona certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x12",
+      "purposeId": "groupMessage",
+      "sigType": "0x12",
+      "sigTypeName": "casual certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x13",
+      "purposeId": "groupMessage",
+      "sigType": "0x13",
+      "sigTypeName": "positive certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x18",
+      "purposeId": "groupMessage",
+      "sigType": "0x18",
+      "sigTypeName": "subkey binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x19",
+      "purposeId": "groupMessage",
+      "sigType": "0x19",
+      "sigTypeName": "primary key binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x1f",
+      "purposeId": "groupMessage",
+      "sigType": "0x1f",
+      "sigTypeName": "signature directly on a key",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x20",
+      "purposeId": "groupMessage",
+      "sigType": "0x20",
+      "sigTypeName": "key revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x28",
+      "purposeId": "groupMessage",
+      "sigType": "0x28",
+      "sigTypeName": "subkey revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x30",
+      "purposeId": "groupMessage",
+      "sigType": "0x30",
+      "sigTypeName": "certification revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-groupMessage-0x40",
+      "purposeId": "groupMessage",
+      "sigType": "0x40",
+      "sigTypeName": "timestamp signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x00",
+      "purposeId": "voiceSignal",
+      "sigType": "0x00",
+      "sigTypeName": "binary document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x01",
+      "purposeId": "voiceSignal",
+      "sigType": "0x01",
+      "sigTypeName": "canonical text document signature",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x02",
+      "purposeId": "voiceSignal",
+      "sigType": "0x02",
+      "sigTypeName": "standalone signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x10",
+      "purposeId": "voiceSignal",
+      "sigType": "0x10",
+      "sigTypeName": "generic certification of a User ID and Public-Key packet（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x11",
+      "purposeId": "voiceSignal",
+      "sigType": "0x11",
+      "sigTypeName": "persona certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x12",
+      "purposeId": "voiceSignal",
+      "sigType": "0x12",
+      "sigTypeName": "casual certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x13",
+      "purposeId": "voiceSignal",
+      "sigType": "0x13",
+      "sigTypeName": "positive certification（认证）",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x18",
+      "purposeId": "voiceSignal",
+      "sigType": "0x18",
+      "sigTypeName": "subkey binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x19",
+      "purposeId": "voiceSignal",
+      "sigType": "0x19",
+      "sigTypeName": "primary key binding signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x1f",
+      "purposeId": "voiceSignal",
+      "sigType": "0x1f",
+      "sigTypeName": "signature directly on a key",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x20",
+      "purposeId": "voiceSignal",
+      "sigType": "0x20",
+      "sigTypeName": "key revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x28",
+      "purposeId": "voiceSignal",
+      "sigType": "0x28",
+      "sigTypeName": "subkey revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x30",
+      "purposeId": "voiceSignal",
+      "sigType": "0x30",
+      "sigTypeName": "certification revocation signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    },
+    {
+      "id": "B-voiceSignal-0x40",
+      "purposeId": "voiceSignal",
+      "sigType": "0x40",
+      "sigTypeName": "timestamp signature",
+      "expect": {
+        "ok": false,
+        "code": "sig_type_not_allowed"
+      }
+    }
+  ],
+  "invalidCases": [
+    {
+      "id": "C-01",
+      "purposeId": "",
+      "purposeIdBytesHex": "",
+      "why": "空字符串",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-02",
+      "purposeId": " chatEnvelope",
+      "purposeIdBytesHex": "2063686174456e76656c6f7065",
+      "why": "前导空白",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-03",
+      "purposeId": "chatEnvelope\n",
+      "purposeIdBytesHex": "63686174456e76656c6f70650a",
+      "why": "尾随换行",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-04",
+      "purposeId": "beamio.pgp.chatEnvelope.v1\n",
+      "purposeIdBytesHex": "6265616d696f2e7067702e63686174456e76656c6f70652e76310a",
+      "why": "调用方提供了完整域标签（禁止）",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-05",
+      "purposeId": "chat/Envelope",
+      "purposeIdBytesHex": "636861742f456e76656c6f7065",
+      "why": "含斜杠",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-06",
+      "purposeId": "chatEnvelope ",
+      "purposeIdBytesHex": "63686174456e76656c6f706520",
+      "why": "尾随空白",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-07",
+      "purposeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "purposeIdBytesHex": "6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161",
+      "why": "超过 64 字节",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-08",
+      "purposeId": "聊天信封",
+      "purposeIdBytesHex": "e8818ae5a4a9e4bfa1e5b081",
+      "why": "非 ASCII",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    },
+    {
+      "id": "C-09",
+      "purposeId": "arbitraryDomain",
+      "purposeIdBytesHex": "617262697472617279446f6d61696e",
+      "why": "未登记（T-125 的样例）",
+      "sigType": "0x00",
+      "expect": {
+        "ok": false,
+        "code": "purpose_not_registered"
+      }
+    }
+  ],
+  "positiveSignatureCases": [],
+  "positiveSignatureNote": "无签名正例：任何用途登记之前，签名路径对所有用途都必须拒绝。用途登记后，须按 spec §25.27.7 补入 openpgp.js 6.3.0 互通的签名正例。",
+  "rules": [
+    "域标签由原生生成，调用方不得提供或省略（spec §25.22.2）。",
+    "以 0x01 签名的消息不得含 CR（0x0D）。本批无已登记用途，此规则在首个用途登记时生效并补向量。",
+    "不得修改向量来迁就实现。"
+  ]
+}

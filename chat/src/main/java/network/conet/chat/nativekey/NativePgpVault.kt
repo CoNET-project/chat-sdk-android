@@ -124,15 +124,15 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
         message: ByteArray,
         registry: Set<String> = REGISTERED_PURPOSES,
     ): NativePgp.Outcome {
+        // Order (spec 25.27.6, r3i): the signature type is judged first, then the purpose.
+        if (sigType !in NativePgp.ALLOWED_SIG_TYPES) return NativePgp.Outcome.fail("sig_type_not_allowed")
         if (!PURPOSE_RE.matches(purposeId) || purposeId !in registry) {
             return NativePgp.Outcome.fail("purpose_not_registered")
         }
-        if (sigType !in NativePgp.ALLOWED_SIG_TYPES) return NativePgp.Outcome.fail("sig_type_not_allowed")
         val unlocked = unlock() ?: return refusal()
         val secret = NativePgp.parseSecret(unlocked.privateArmor)
             ?: return NativePgp.Outcome.fail("bad_pgp_key")
-        val label = "beamio.pgp.$purposeId.v1\n"
-        return NativePgp.signDocument(secret, unlocked.passphrase, label, message, sigType)
+        return NativePgp.signDocument(secret, unlocked.passphrase, domainLabel(purposeId), message, sigType)
     }
 
     /** Removes the PGP record and its marker. Used when the EOA record is removed. */
@@ -147,7 +147,7 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
     internal fun verifySignature(purposeId: String, message: ByteArray, armoredSignature: String): Boolean {
         val unlocked = unlock() ?: return false
         val secret = NativePgp.parseSecret(unlocked.privateArmor) ?: return false
-        return NativePgp.verifyDocument(secret, "beamio.pgp.$purposeId.v1\n", message, armoredSignature)
+        return NativePgp.verifyDocument(secret, domainLabel(purposeId), message, armoredSignature)
     }
 
     private fun refusal(): NativePgp.Outcome {
@@ -233,7 +233,12 @@ internal class NativePgpVault(private val wrap: KeyWrap, private val files: Vaul
         val REGISTERED_PURPOSES: Set<String> = emptySet()
 
         private val EOA_RE = Regex("^0x[0-9a-f]{40}$")
-        private val PURPOSE_RE = Regex("^[A-Za-z][A-Za-z0-9_]{0,31}$")
+
+        /** spec 25.27.6: ASCII, first character a letter, then letters or digits; 1 to 32 bytes. Used with `matches`. */
+        private val PURPOSE_RE = Regex("[A-Za-z][A-Za-z0-9]{0,31}")
+
+        /** The native domain tag (spec 25.27.2 / 25.27.7 A): the caller never supplies or omits it. */
+        internal fun domainLabel(purposeId: String): String = "beamio.pgp.$purposeId.v1\n"
 
         /** AAD for the PGP record. It differs from the EOA record's AAD, so the two cannot be swapped. */
         fun aad(eoa: String): ByteArray = "beamio-native-pgp-v1|h|${eoa.lowercase()}".toByteArray(Charsets.UTF_8)
