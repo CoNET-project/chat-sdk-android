@@ -6,8 +6,9 @@ import org.json.JSONObject
  * Key fields the bridge refuses (spec 25.20.1 rule 1; negative cases T-127, T-127b, T-103). Only a non-blank
  * value counts. Callers log field names and never values.
  *
- * `init` refuses wallet keys. The PGP armor it still carries is not listed here: native PGP (R7) is not
- * approved yet, so that path stays until R7. `provisionIdentity` refuses every key field.
+ * `init` refuses wallet keys. The PGP armor it still carries is not listed here: `init` writes that armor only into the
+ * native PGP record (R7, commit 81fc851; spec 25.22.2), never into the session or back to the page. The field is removed
+ * when P-IMP-PGP is decided (§36-B). `provisionIdentity` refuses every key field.
  */
 object KeyIntake {
     val INIT_REFUSED: List<String> = listOf("privateKeyHex", "walletPrivateKey")
