@@ -1,0 +1,30 @@
+THIRD-PARTY NOTICES for network.conet:chat (Android AAR)
+
+This file lists the third-party JavaScript files shipped in assets/ChatCrypto/ and the licence texts that go with them.
+Each file was compared byte for byte with the upstream npm package named below. None of them is modified.
+
+1. OpenPGP.js 6.3.0
+   File:      assets/ChatCrypto/openpgp.min.js
+   SHA-256:   46d3e5b6bfe4f0d19b44fd3aa826ac1c67174e95a97be082a3982160b6caae4e
+   Upstream:  npm package openpgp@6.3.0, file dist/openpgp.min.js; source at https://github.com/openpgpjs/openpgpjs
+   Licence:   GNU Lesser General Public License, version 3 or any later version (LGPL-3.0+), as declared by the
+              upstream package. The file's own banner reads "this is LGPL licensed code, see LICENSE".
+   Texts:     licenses/LGPL-3.0-openpgpjs-6.3.0-LICENSE.txt   (upstream LICENSE, SHA-256 e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118)
+              licenses/GPL-3.0-COPYING.txt                    (GNU GPL version 3, which the LGPL incorporates; SHA-256 8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903)
+
+2. ethers 6.16.0
+   File:      assets/ChatCrypto/ethers.umd.min.js
+   SHA-256:   9a85a5aa81305f85e6546452fd2093a8a68932bed3cec4f6491e4d031a90bc95
+   Upstream:  npm package ethers@6.16.0, file dist/ethers.umd.min.js; source at https://github.com/ethers-io/ethers.js
+   Copyright: (c) 2016-2025 Richard Moore
+   Licence:   MIT. The minified build carries no banner, so this notice and the text below are its copyright notice.
+   Text:      licenses/MIT-ethers-6.16.0-LICENSE.txt (upstream LICENSE.md, SHA-256 44eea86637405118248327fbe9d9fa95d04c7a57221c7e8c155f736db9f1b612)
+
+3. assets/ChatCrypto/ws-guard.js is written for this SDK. It is not third-party code.
+
+Not in this AAR: the Java dependencies (BouncyCastle bcprov, bcpg and bcutil 1.87) are resolved by the consuming
+application's build. Each of their jars carries META-INF/LICENSE.md.
+
+Replacing the LGPL component: openpgp.min.js is a separate file, loaded at run time by the WebView from the
+application's assets. It is not compiled into the SDK's classes. See the engineering note in the project receipt
+(§39) for the obligations and the options. That note is an engineering assessment, not legal advice.
