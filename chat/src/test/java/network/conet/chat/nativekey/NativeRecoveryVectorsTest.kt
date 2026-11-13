@@ -11,9 +11,10 @@ import java.io.IOException
 import java.security.MessageDigest
 
 /**
- * Spec §25.42 (r3u) against `spec/native-recovery-vectors.v1.json`, 24 cases (A-path 13, B-path 11). Each case runs the real
- * [RecoveryEngine] with the vector's registry fixtures, device state and clock. The results must match in order, and the
- * final state must match. Synthetic data only: the phrase is the BIP-39 public test vector.
+ * Spec §25.42 (r3u) and §25.47 (r3ab) against `spec/native-recovery-vectors.v1.json`, 38 cases: the r3u 24 unchanged, plus
+ * R-14 to R-22 and B-12 to B-16. Each case runs the real [RecoveryEngine] with the vector's registry fixtures, device state
+ * and clock. The results must match in order, and the final state must match. Synthetic data only: the phrase is the BIP-39
+ * public test vector.
  */
 class NativeRecoveryVectorsTest {
     private val raw = File(System.getenv("NATIVE_RECOVERY_VECTORS") ?: "../spec/native-recovery-vectors.v1.json").readBytes()
@@ -22,13 +23,13 @@ class NativeRecoveryVectorsTest {
     @Test
     fun vectorFileIsThePinnedBatch() {
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        assertEquals("cf9e087b31a79f80f8cb51f76a97c6c786b4e4e9aea87dddae4f81762d44e5c9", sha)
+        assertEquals("8537389d59a99e29f901edf0a044170091fa10af00fbf8cbb479b91400ac2c28", sha)
     }
 
     @Test
-    fun theTwentyFourCasesAllMatchTheSpec() {
+    fun theThirtyEightCasesAllMatchTheSpec() {
         val cases = doc.getJSONArray("cases")
-        assertEquals(24, cases.length())
+        assertEquals(38, cases.length())
         for (i in 0 until cases.length()) {
             runCase(cases.getJSONObject(i))
         }
@@ -41,6 +42,7 @@ class NativeRecoveryVectorsTest {
         val env = c.getJSONObject("env")
         val device = env.optJSONObject("device") ?: JSONObject()
         val rpcFails = env.optString("rpc") == "fail"
+        val legacyFails = rpcFails || env.optString("legacyRpc") == "fail"
 
         val inner = NativeTestFiles()
         val files = FaultyFiles(inner, writeFail = device.optBoolean("writeFail"), readbackFail = device.optBoolean("readbackFail"))
@@ -53,10 +55,13 @@ class NativeRecoveryVectorsTest {
         // The fault wrapper only starts corrupting reads after a write, so pre-populating above is unaffected.
         val failures = MemoryFailureStore()
         val clock = FakeClock(1_700_000_000_000L)
+        // A device that already has failures: the count is set at the clock's now, so a cooldown starts from this moment.
+        if (device.has("failures")) failures.save(device.getInt("failures"), clock.now)
         val registry = FixtureRegistry(
             current = doc.getJSONObject("fixtures").getJSONObject("registry"),
             legacy = doc.getJSONObject("fixtures").getJSONObject("legacyRegistry"),
             fail = rpcFails,
+            legacyFail = legacyFails,
         )
         val engine = RecoveryEngine(vault, registry, failures, RecoveryClock { clock.now })
 
@@ -115,6 +120,7 @@ class NativeRecoveryVectorsTest {
         private val current: JSONObject,
         private val legacy: JSONObject,
         private val fail: Boolean,
+        private val legacyFail: Boolean,
     ) : RegistryReader {
         override fun byNameHash(indexHash: ByteArray): String? {
             if (fail) error("rpc unavailable")
@@ -129,7 +135,7 @@ class NativeRecoveryVectorsTest {
         }
 
         override fun legacyByAccountName(name: String): String? {
-            if (fail) error("rpc unavailable")
+            if (legacyFail) error("rpc unavailable")
             val k = "name:$name"
             return if (legacy.has(k)) legacy.getString(k) else null
         }

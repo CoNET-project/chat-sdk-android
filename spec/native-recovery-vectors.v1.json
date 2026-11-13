@@ -1,7 +1,7 @@
 {
   "file": "native-recovery-vectors.v1.json",
   "purpose": "原生恢复页与恢复引擎（spec r3u §25.42）：路径 A（恢复码）与路径 B（账号名加密码）的步骤、错误码、退避，以及记录的解密兼容性。合成数据：恢复码、口令、账号名、注册表记录均为生成器构造，助记词为 BIP-39 公开测试助记词。",
-  "spec": "v1.1-r3u §25.42（测试 T-228 至 T-232）",
+  "spec": "v1.1-r3u §25.42（测试 T-228 至 T-232）；r3ab §25.47.1 至 §25.47.7 增补 R-14 至 R-22、B-12 至 B-16（测试 T-241、T-242）",
   "generator": "gen-native-recovery-vectors.mjs",
   "sourceAlgorithm": {
     "file": "src/SilentPassUI（PWA SilentPassUI-v2 工作树 services/beamio.ts）",
@@ -51,6 +51,14 @@
     "regex": "^[0-9A-Za-z]{22}$",
     "source": "uuid62.v4()（20000 个样本全部符合）"
   },
+  "storedBounds": {
+    "m": "8192..65536（KB，r3ab §25.47.6）",
+    "t": "1..10",
+    "p": "1..4",
+    "mAtLeast8p": true,
+    "v": 19,
+    "note": "越界或 v 不为 19：record_invalid，解密前判定"
+  },
   "backoff": {
     "table": {
       "5": 30,
@@ -67,7 +75,16 @@
       "nameHash:0xc994c0e53eb8fa2986fd8ef845c5cf46067a6440b22e0fb2e3554a421b6ef173": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXh4VVpZbnl5a0RsSm84eHI1L1g5OFArQVRBK3dFeW10WEZDZVlmZThjTlYvTnE2QVI4U3BBc2pWUUIxRDNtckd1Y1NNRlhTVG1qcGxHczYvbk5xRVBXLzdaWDkrQitsODBpbk0vamhWREpoS0hMRlBGUU9KTHkwVlNlSUFJZ2xOSENvMzViMFU3MFNHeVRnbEpnRG1ibmdmWmlhYlprTFlLYmNMbzE2VTUwdStiWVdkZ2VpUFU0blZxWE53PSJ9",
       "nameHash:0x93b4445c85cd2870edc3313600259d551efe29dc3bc71b681fc9395aba500c56": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhRZzBoS1hwSEhBeTR0ZGRoaFh1Q1FVOUE3MmVTUzhsbnNWR2tGS2lhbnI5bURPSUQvcCtrbFJsRm9JYWxhL3FOYUV3YjZOZFFyWlM4TWZVK1M2V3h4cnhQSWZKVWRNaWg0S0tQV3FlUkRQYVVwbVV3TkIra0h0bFl5Tld5Ym5uQW9wYkE3dXVVZFFOdEFsNHlKMytqWkhZQWhPeml6dWRSZG9QdHF2eEJtNWFqTGwxdHpHMUlxNVhHOEhBPSJ9",
       "nameHash:0xb9a03d1bf6adc79ed017cb2e1c7e30b976b479b0253d5e1427f3d9e9dfa31767": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhvd3pUQ3FtUjk3c1FYVWJhTDBvK1VYdmVnM1pzYy9YZStJbGtaUEpIbFBwendRKzlqbWRrR1JDbFBiSEtkb3o3S3hRM1ArMndqVHlveG1kQzcwUEltQT09In0=",
-      "name:syn_recover_0001": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXgvOFBHRUR1b1FPK0FBVEo0MWRwZC9EL2pZbU5WOTNYNnpqeHBUM0g0QTlibTRzTE1UL1dyL2RzUXYzNnlQR3QvTmxtbDB2Zk1senhRWXg3d0p4MjdwdXZ2QzNrZDBsZHBkQXJQNk9WQzV1QmlSTWdHNVI5UFVaNThnN21DZUU5WndrMnN0N0FYNDUzd1M3UnpxQlVYeDR0T2xDOHpBZlFKallrQ21LRnlyOXd4N2xjZEtGQ0JpdHUya3FvPSJ9"
+      "name:syn_recover_0001": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXgvOFBHRUR1b1FPK0FBVEo0MWRwZC9EL2pZbU5WOTNYNnpqeHBUM0g0QTlibTRzTE1UL1dyL2RzUXYzNnlQR3QvTmxtbDB2Zk1senhRWXg3d0p4MjdwdXZ2QzNrZDBsZHBkQXJQNk9WQzV1QmlSTWdHNVI5UFVaNThnN21DZUU5WndrMnN0N0FYNDUzd1M3UnpxQlVYeDR0T2xDOHpBZlFKallrQ21LRnlyOXd4N2xjZEtGQ0JpdHUya3FvPSJ9",
+      "nameHash:0x55ebbd6c6aa3abffbe18e893e91776cae5b5e129eca35282e9c9a81a87fafb69": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjAsInAiOjEsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0=",
+      "nameHash:0x1e7073321ed267f095848abeac1198a87fa9cd96e7849f4f14062e3e10f1677d": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjExLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhibis1VXBLOWxvNXVNTTFTTWttU0JWdTZKMW9xZDVDaDRhTHRHczBNdklyMHduU2xMOUoyMlp5RVBNVnpmSk5iaFNDblcvaUlrZG9ONFp2RUdBNENMek84TEYrMTBqN0kwb3YxOFY5REpHR21kRWJzQU5pRmt6UTJzQi90ZVc0NzNtTEcvTklqbXVzY0JFWFhVVlBJMWE5a0V3dFMyVlBwVW5xaWJPMTRKNFN1cEZETld5T3E5RFpVeURzPSJ9",
+      "nameHash:0x0bc79e271230f4efe1e11f99dcd1a31d968915c3d79740ebf2bc280ff7571dba": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjEsInAiOjAsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0=",
+      "nameHash:0x982df34611064a8901800d625d80d1433cead0084d0f3b58ce77075fe45406cb": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjEsInAiOjUsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiVTFsT1NWWXRNREF3TURBeHZFYk9pZXBsUy9YcWZHT0l3SDJHNURtdkhxKzY1RjA5RmI0TmVKaWk0RE9wakhCa1AvdDhGSGpRMk9mOGN6cnRrUmNvUCs3Ylpvb1EwVDVWdzZwSjFhRmlwamwvOFFYc2d4WnpkVFBuOWduamsvVGVzK2ZMbUk4ZjduclVMMmZnekFmYkFGNTc5aS9nU2RqdHlCaU0rNFVKRkdVVVAzSU9lUWNNbjBBelVNcmhQQnFUTHBpZVcrTVFta0U9In0=",
+      "nameHash:0xf206f6cc84410cba7a69f8801012d0d46dfbaea8660f96b2bd1a576497dc0f5d": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjQwOTYsInQiOjEsInAiOjEsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiVTFsT1NWWXRNREF3TURBeDBOcDNMeGJHb3E1MlV2VTJCRmlsN3A5QmJ4RlZSdkticTBURmNsN0VMSWJvdHoxWWdIY3RUOTZrbzJOK3kzYjVvakpBZUZlb21YVDZjejhWTUtibWhtKzVpQTBDTU1FWFVFN0JmcWpwTFFuMW0vQmRlRU5nZ1JHSXRxWXlLN1MzZWZ0NmJ6VEp3QUFnRnlKcTdCUVlwUGdGRVVVRFRla2xWSXh6ak9XM1NrUlU2NmJmWEhXb3dVZ0VDenM9In0=",
+      "nameHash:0x157ff1184cb7b4d2d8e9b15ecc8a6be3ef176ab64e5e235c1a29c50b4e013ab4": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjY1NTM3LCJ0IjoxLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhJSXhtc2FTejdVR2tYVmw2NEswTktMTm5wQktEbDRacEMwWUc2RDF6NkpFWW8zT1VqOFVKMVpHZTV4K1RtRTlMc1BsWlpYQkVIV2hIOXBNOGxnYkxaN1FGU2QvL0plY2d6Rkx5UjlVRk5Hb2hoUUdxam9kOXp4N2ppMmdzTldFTWliUy9qd0Z2YkhhdHI5N0FyUFg4Zkp6cUlHN0hqV0pRMlF4VVlWTlhFVnYyV1p0TzRPaGNCVFBUdmZZPSJ9",
+      "nameHash:0xfe2880217115c76261a894f6467b29d90c514d0482981add67dd21b81bc7fff8": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTgsIm0iOjgxOTIsInQiOjEsInAiOjEsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiVTFsT1NWWXRNREF3TURBeDFkWDVQT0E0RTVVSUpkTjF1NlJSY2FCTEVNaGtBemZoY2FRVTAvWTRqdnZxY0lvK3hWbHlDVTl5OE12WTl6MmI4Z1FZWWEyaTZLcHo2OTFFSVJtU2Ivcjd0SEJSYWFlSy8yQXI4UnppbzN3MkRvMWU1Qy93elRRcDJOc3M1VCszKzJHcTNrNHBaeWl2alZkMFdMNHJVVy93MDZZV0VaN1NrMnhxNUFsTkFqeDk5OXV1b0UzNTFMQ2VmTjA9In0=",
+      "nameHash:0x4c8df5c9f41f921b2ecb7f67b5bc7e40b4ea4675ab62189f73f3637a945ff094": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjEsInAiOjEsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiVTFsT1NWWXRNREF3TURBeEU5TklCUGYrby9zeDlvczRkWDgrdS84VStLUkpJajFYdVVVSmJCM0RLNERvSDJxRWtwblZ2R0M3U3ZPWCtSMmlsenlIUWtNaFlDZlJoTVdjMkFZM2tHUitkOWhPcm5Mdm8yRjlqdk1uUEpoNnBNTWkvLzBKU1RqL1grN3pDVy95c3JvMElEM21JYUp2MG9OTXhLbS9VWlgwYVNzcVd3bnV6ZnJaM3FlVEJna3g1MENsV0FtQjZRNUFhYnc9In0=",
+      "name:syn_badparam_0003": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjgxOTIsInQiOjAsInAiOjEsInNhbHQiOiJVMWxPTFZOQlRGUXRNREF3TURBd01RPT0iLCJoYXNoIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0ifSwiaW1nIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9In0="
     },
     "legacyRegistry": {
       "name:syn_legacy_0002": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXgvOFBHRUR1b1FPK0FBVEo0MWRwZC9EL2pZbU5WOTNYNnpqeHBUM0g0QTlibTRzTE1UL1dyL2RzUXYzNnlQR3QvTmxtbDB2Zk1senhRWXg3d0p4MjdwdXZ2QzNrZDBsZHBkQXJQNk9WQzV1QmlSTWdHNVI5UFVaNThnN21DZUU5WndrMnN0N0FYNDUzd1M3UnpxQlVYeDR0T2xDOHpBZlFKallrQ21LRnlyOXd4N2xjZEtGQ0JpdHUya3FvPSJ9"
@@ -1155,12 +1172,499 @@
           "cooldownActive": false
         }
       }
+    },
+    {
+      "id": "R-14",
+      "group": "A",
+      "title": "路径 A：形状合格（22 位）但值超过 128 位：按形状接受，无记录为 not_found，不改变状态（§25.47.4）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-14",
+            "code": "zzzzzzzzzzzzzzzzzzzzzz"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-14",
+            "code": "not_found"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-15",
+      "group": "A",
+      "title": "记录 t=0：record_invalid，解密前判定（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-15",
+            "code": "B1r8Nwew0T4W863P3Z7cJ1"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-15",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-16",
+      "group": "A",
+      "title": "记录 t=11（密文有效）：record_invalid，不得因参数有效而恢复（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-16",
+            "code": "JuV0fhlthJWiyRGp3VsmPL"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-16",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-17",
+      "group": "A",
+      "title": "记录 p=0：record_invalid（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-17",
+            "code": "hkI8pAvsu4MUmpxPHoPKX3"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-17",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-18",
+      "group": "A",
+      "title": "记录 p=5（密文有效）：record_invalid（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-18",
+            "code": "XSglQMYT6IrH10lAiAhhzs"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-18",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-19",
+      "group": "A",
+      "title": "记录 m=4096（低于 8192 KB 下限，密文有效）：record_invalid（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-19",
+            "code": "84UN9WDOKhFDQK5tbmzt5y"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-19",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-20",
+      "group": "A",
+      "title": "记录 m=65537（超过 65536 KB 上限，密文有效）：record_invalid（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-20",
+            "code": "XAqcFjWRqjjdl4p8s1ojdZ"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-20",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-21",
+      "group": "A",
+      "title": "记录 v=18（密文有效）：record_invalid（§25.47.7）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-21",
+            "code": "fcr0rxvmBuQsdg8mXDVJfv"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-21",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-22",
+      "group": "A",
+      "title": "记录 m=8192、t=1、p=1（下限端点，密文有效）：恢复成功（§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-22",
+            "code": "3fYzJ0jbDlPMoWNz3dmJ6Q"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-22",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-12",
+      "group": "B",
+      "title": "路径 B：当前注册表无记录，迁移前注册表读取失败：network_error，不计数，不改变状态（§25.47.1）",
+      "testIds": [
+        "T-241"
+      ],
+      "env": {
+        "legacyRpc": "fail"
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-12",
+            "name": "syn_nobody_0004",
+            "password": "x1"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-12",
+            "code": "network_error"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-13",
+      "group": "B",
+      "title": "路径 B：冷却中输入为空：invalid_format，先于冷却判定，不计数（§25.47.2）",
+      "testIds": [
+        "T-241"
+      ],
+      "env": {
+        "rpc": "fail",
+        "device": {
+          "failures": 5,
+          "cooldownActive": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-13",
+            "name": "syn_recover_0001",
+            "password": ""
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-13",
+            "code": "invalid_format"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 5,
+          "cooldownActive": true
+        }
+      }
+    },
+    {
+      "id": "B-14",
+      "group": "B",
+      "title": "路径 B：冷却中输入有效：backoff，cooldownSec 30，不读取（即使读取会失败，也不得返回 network_error）（§25.47.2）",
+      "testIds": [
+        "T-241"
+      ],
+      "env": {
+        "rpc": "fail",
+        "device": {
+          "failures": 5,
+          "cooldownActive": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-14",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-14",
+            "code": "backoff",
+            "cooldownSec": 30
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 5,
+          "cooldownActive": true
+        }
+      }
+    },
+    {
+      "id": "B-15",
+      "group": "B",
+      "title": "路径 B：只在迁移前注册表有记录：legacy_record，不清零，也不增加错误次数（§25.47.3）",
+      "testIds": [
+        "T-241"
+      ],
+      "env": {
+        "device": {
+          "failures": 3
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-15",
+            "name": "syn_legacy_0002",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-15",
+            "code": "legacy_record"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 3,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-16",
+      "group": "B",
+      "title": "路径 B：记录参数 t=0：record_invalid，不计数（§25.42.7、§25.47.6）",
+      "testIds": [
+        "T-242"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-16",
+            "name": "syn_badparam_0003",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-16",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
     }
   ],
   "counts": {
-    "cases": 24,
-    "A": 13,
-    "B": 11
+    "cases": 38,
+    "A": 22,
+    "B": 16
   },
   "toolVersions": {
     "ethers": "6.16.0",

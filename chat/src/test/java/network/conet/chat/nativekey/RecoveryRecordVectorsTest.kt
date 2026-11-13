@@ -39,6 +39,11 @@ class RecoveryRecordVectorsTest {
             val index = "0x" + ConetChatCryptoUtil.keccak256(code).joinToString("") { "%02x".format(it) }
             assertEquals(name, c.getString("index"), index)
 
+            // A record below the r3ab floor (8192 KB) is refused before any decryption (§25.47.6): it is not opened.
+            if (c.getJSONObject("params").getInt("m") < RecoveryRecord.MIN_M_KB) {
+                assertNull(name, RecoveryRecord.parse(c.getString("record")))
+                continue
+            }
             val parsed = RecoveryRecord.parse(c.getString("record"))
             assertNotNull(name, parsed)
             val p = c.getJSONObject("params")
@@ -60,7 +65,7 @@ class RecoveryRecordVectorsTest {
 
     @Test
     fun aWrongCodeIsAWrongPasswordNotAPhrase() {
-        val good = doc.getJSONArray("cases").getJSONObject(1)
+        val good = doc.getJSONArray("cases").getJSONObject(0)
         val parsed = RecoveryRecord.parse(good.getString("record"))!!
         val wrong = doc.getJSONArray("negatives").getJSONObject(0).getString("code").toByteArray(Charsets.UTF_8)
         assertEquals(RecoveryRecord.Opened.WrongPassword, RecoveryRecord.open(parsed.stored, parsed.imgBase64, wrong))
@@ -68,7 +73,7 @@ class RecoveryRecordVectorsTest {
 
     @Test
     fun aTamperedImageIsNotAPhrase() {
-        val c = doc.getJSONArray("cases").getJSONObject(1)
+        val c = doc.getJSONArray("cases").getJSONObject(0)
         val parsed = RecoveryRecord.parse(c.getString("record"))!!
         val img = parsed.imgBase64.toCharArray()
         img[img.size - 4] = if (img[img.size - 4] == 'A') 'B' else 'A'
@@ -86,6 +91,19 @@ class RecoveryRecordVectorsTest {
         // Parameters above the bounds are refused before Argon2 runs.
         val huge = """{"stored":{"algo":"argon2id","v":19,"m":${RecoveryRecord.MAX_M_KB + 1},"t":3,"p":1,"hash":"AAAA","salt":"AAAAAAAAAAAAAAAAAAAAAA=="},"img":"AAAA"}"""
         assertNull(RecoveryRecord.parse(Base64.getEncoder().encodeToString(huge.toByteArray())))
+    }
+
+    /** The r3ab floor, checked at the parser only (no Argon2 runs): 8191 KB is refused, 8192 KB is the lowest accepted. */
+    @Test
+    fun theMemoryFloorIs8192KibAndIsCheckedBeforeDecryption() {
+        fun record(m: Int): String {
+            val json = """{"stored":{"algo":"argon2id","v":19,"m":$m,"t":1,"p":1,"hash":"AAAA","salt":"AAAAAAAAAAAAAAAAAAAAAA=="},"img":"AAAA"}"""
+            return Base64.getEncoder().encodeToString(json.toByteArray())
+        }
+        assertNull(RecoveryRecord.parse(record(8_191)))
+        assertNotNull(RecoveryRecord.parse(record(8_192)))
+        assertNull(RecoveryRecord.parse(record(RecoveryRecord.MAX_M_KB + 1)))
+        assertEquals(8_192, RecoveryRecord.MIN_M_KB)
     }
 
     @Test

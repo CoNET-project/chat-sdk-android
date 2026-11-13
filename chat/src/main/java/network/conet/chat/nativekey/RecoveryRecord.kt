@@ -22,9 +22,11 @@ import javax.crypto.spec.SecretKeySpec
  */
 internal object RecoveryRecord {
     /**
-     * Bounds on the stored Argon2id parameters (spec §25.47.6), so a damaged record cannot ask for unbounded memory or time:
-     * 1 <= t <= 10, 1 <= p <= 4, 8p <= m <= 65536 KB; the output is 32 bytes and v must be 19.
+     * Bounds on the stored Argon2id parameters (spec §25.47.6, r3ab), so a damaged record cannot ask for unbounded memory
+     * or time: 8192 <= m <= 65536 KB (the same 8 MiB floor as the X-19 wrapper), 1 <= t <= 10, 1 <= p <= 4, m >= 8p;
+     * the output is 32 bytes and v must be 19. Checked before any decryption: a record outside these is `record_invalid`.
      */
+    const val MIN_M_KB = 8_192
     const val MAX_M_KB = 65_536
     const val MAX_T = 10
     const val MAX_P = 4
@@ -47,7 +49,7 @@ internal object RecoveryRecord {
             val s = json.getJSONObject("stored")
             val fieldsOk = s.optString("algo") == "argon2id" && s.optInt("v") == 19 &&
                 s.optString("hash").isNotEmpty()
-            val inRange = s.getInt("m") in 8..MAX_M_KB && s.getInt("t") in 1..MAX_T && s.getInt("p") in 1..MAX_P &&
+            val inRange = s.getInt("m") in MIN_M_KB..MAX_M_KB && s.getInt("t") in 1..MAX_T && s.getInt("p") in 1..MAX_P &&
                 s.getInt("m") >= 8 * s.getInt("p")
             val salt = Base64.getDecoder().decode(s.getString("salt"))
             val img = json.getString("img")
