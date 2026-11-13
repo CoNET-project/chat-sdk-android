@@ -184,6 +184,21 @@ internal object NativePgp {
     private fun encryptionKeys(ring: PGPSecretKeyRing): List<PGPSecretKey> =
         ring.secretKeys.asSequence().filter { it.publicKey.isEncryptionKey }.toList()
 
+    /** Replaces each CRLF with LF. A lone CR is kept. */
+    private fun crlfToLf(bytes: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream(bytes.size)
+        var i = 0
+        while (i < bytes.size) {
+            if (bytes[i] == 0x0D.toByte() && i + 1 < bytes.size && bytes[i + 1] == 0x0A.toByte()) {
+                i++
+                continue
+            }
+            out.write(bytes[i].toInt())
+            i++
+        }
+        return out.toByteArray()
+    }
+
     /** The literal data inside an optional compression layer. Signature packets are skipped. `null` if absent. */
     private fun literalBytes(clear: InputStream): ByteArray? {
         val factory = PGPObjectFactory(clear, BcKeyFingerprintCalculator())
@@ -191,7 +206,13 @@ internal object NativePgp {
         while (obj != null) {
             when (obj) {
                 is PGPCompressedData -> return literalBytes(obj.dataStream)
-                is PGPLiteralData -> return obj.inputStream.use { it.readBytes() }
+                is PGPLiteralData -> {
+                    val bytes = obj.inputStream.use { it.readBytes() }
+                    // A text literal is stored with CRLF line endings (RFC 4880 canonical text). openpgp.js and gopenpgp
+                    // return the native LF form; so does this, for text literals only (interop, §41). Binary is untouched.
+                    val text = obj.format == PGPLiteralData.UTF8.code || obj.format == PGPLiteralData.TEXT.code
+                    return if (text) crlfToLf(bytes) else bytes
+                }
                 is PGPOnePassSignatureList, is PGPSignatureList -> Unit
                 else -> return null
             }
