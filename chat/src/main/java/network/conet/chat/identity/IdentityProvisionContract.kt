@@ -143,6 +143,17 @@ object IdentityProvisionContract {
             .put("ready", state == NativeKeyState.HAS_KEY_READBACK_OK)
             .put("eoa", eoa)
 
+    /**
+     * The state the reply reports, from the native wallet vault. [vaultEoa] is the account of a record that passed
+     * readback, or null when there is no such record (no key, or a locked one). Only a record for [requestedEoa] is
+     * HAS_KEY_READBACK_OK; a record for another account is a mismatch. Anything else fails closed as NO_KEY.
+     */
+    fun nativeKeyState(vaultEoa: String?, requestedEoa: String): NativeKeyState = when {
+        vaultEoa == null -> NativeKeyState.NO_KEY
+        vaultEoa.equals(requestedEoa, ignoreCase = true) -> NativeKeyState.HAS_KEY_READBACK_OK
+        else -> NativeKeyState.KEY_ADDRESS_MISMATCH
+    }
+
     /** The key name as written in the input (raw, not normalized), if an object at any depth has a forbidden name. */
     private fun findForbiddenKey(node: Any?): String? = when (node) {
         is JSONObject -> node.keys().asSequence().firstNotNullOfOrNull { k ->

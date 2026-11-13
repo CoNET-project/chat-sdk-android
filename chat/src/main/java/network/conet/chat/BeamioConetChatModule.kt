@@ -5,7 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
-import network.conet.chat.nativekey.KeyIntake
+import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeImportHost
 import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
@@ -260,12 +260,15 @@ object BeamioConetChatModule {
         val idEoa = payload.optJSONObject("identity")?.let { id ->
             normalizeAddress(id.optString("eoaAddress", "").ifBlank { id.optString("eoa", "") })
         }.orEmpty()
-        // Key material never comes over the bridge (spec 25.20.1): refuse the call and change nothing.
-        val refused = KeyIntake.initRefused(payload)
-        if (refused.isNotEmpty()) {
-            Log.w(TAG, "init refused key fields: ${refused.joinToString(",")}")
-            ack(reqId, false, error = "key_over_bridge_refused")
-            return
+        // identity.native-keys.v1 (spec 25.19.2, 25.19.3, 25.20.1): the contract checks the init payload before any state
+        // changes. Key material is refused, and the EOA must be canonical.
+        when (val checked = IdentityProvisionContract.validate(IdentityProvisionContract.Command.INIT, payload)) {
+            is IdentityProvisionContract.Result.Reject -> {
+                Log.w(TAG, "init refused: ${checked.error}")
+                ack(reqId, false, error = checked.error)
+                return
+            }
+            is IdentityProvisionContract.Result.Accept -> Unit
         }
         // G1 (25.26.4c item 4): a native record exists and this session is not ready. The EOA in the payload must equal
         // the record; a mismatch or a missing EOA changes nothing. A locked record cannot be checked against the EOA.
@@ -792,25 +795,24 @@ object BeamioConetChatModule {
     private fun provisionIdentity(body: JSONObject) {
         val reqId = body.optInt("reqId", -1)
         val p = body.optJSONObject("payload") ?: body
-        val refused = KeyIntake.provisionRefused(p)
-        if (refused.isNotEmpty()) {
-            Log.w(TAG, "provisionIdentity refused key fields: ${refused.joinToString(",")}")
-            ack(reqId, false, error = "key_over_bridge_refused")
+        // The contract refuses key material and non-canonical input before anything else is read.
+        val checked = IdentityProvisionContract.validate(IdentityProvisionContract.Command.PROVISION_IDENTITY, p)
+        if (checked is IdentityProvisionContract.Result.Reject) {
+            Log.w(TAG, "provisionIdentity refused: ${checked.error}")
+            ack(reqId, false, error = checked.error)
             return
         }
+        val eoa = (checked as IdentityProvisionContract.Result.Accept).eoa
         val ctx = appContext ?: run {
             ack(reqId, false, error = "not_initialised")
             return
         }
-        val eoa = normalizeAddress(p.optString("eoa", "").ifBlank { p.optString("eoaAddress", "") })
-        if (eoa.isEmpty()) {
-            ack(reqId, false, error = "bad_identity")
-            return
-        }
         NativeWallet.migrateLegacy(ctx)
-        val ready = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.eoa == eoa
-        Log.i(TAG, "identity provisioned ready=$ready")
-        ack(reqId, true, result = JSONObject().put("ready", ready).put("eoa", eoa))
+        val vaultEoa = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.eoa
+        val state = IdentityProvisionContract.nativeKeyState(vaultEoa, eoa)
+        val result = IdentityProvisionContract.readyResponse(eoa, state)
+        Log.i(TAG, "identity provisioned ready=${result.optBoolean("ready")}")
+        ack(reqId, true, result = result)
     }
 
     // ---- call layer entry (no page involved) ----------------------------------------------
