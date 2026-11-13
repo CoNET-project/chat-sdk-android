@@ -1,0 +1,1334 @@
+{
+  "file": "pgp-bridge-command-vectors.v1.json",
+  "purpose": "原生桥命令向量（spec r3q）：A 组为 §25.34 的 pgpDecryptInbound（通话 offer 的原生 PGP 解密）；C 组为 §25.35 的 P-IMP-PGP 桥接命令，结果映射到 pgp-restore-acceptance-vectors.v1.json。合成数据，只用于测试。",
+  "spec": "v1.1-r3q §25.34、§25.35（测试 T-210 至 T-215）",
+  "generator": "gen-pgp-bridge-command-vectors.mjs",
+  "sourceVectors": [
+    {
+      "file": "pgp-backup-compat-vectors.v1.json",
+      "sha256": "7c1515fc8f7468386db8195348f5e784caa77d1462dd33f997b865c2d3b8850c",
+      "use": "P-1（收件人，合成，口令为空）、P-2（非收件人）"
+    },
+    {
+      "file": "pgp-restore-acceptance-vectors.v1.json",
+      "sha256": "25656c1656400198e569ffac8f4bc007c01e93097170d1c960ce884df0915365",
+      "use": "C 组的映射目标与核对"
+    }
+  ],
+  "account": {
+    "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+    "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+    "note": "BIP-39 公开测试助记词派生（m/44'/60'/0'/0/0），非任何真实账户"
+  },
+  "recipient": {
+    "keyID": "SYN-PGPKEYID-A-0001",
+    "primaryFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+    "subkeyKeyID": "6629DED57B806861",
+    "source": "pgp-backup-compat-vectors P-1（合成）"
+  },
+  "nonRecipient": {
+    "keyID": "SYN-PGPKEYID-B-0002",
+    "primaryFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+    "source": "pgp-backup-compat-vectors P-2（合成）"
+  },
+  "toolVersions": {
+    "openpgp": "6.3.0",
+    "node": "v22.23.3"
+  },
+  "limits": {
+    "armoredMessageMaxBytes": 65536,
+    "note": "接口负责人定的默认上限，待 PM 确认（§25.34.2）"
+  },
+  "errorCodes": {
+    "commandAck": [
+      "bad_request",
+      "key_over_bridge_refused",
+      "payload_too_large",
+      "account_mismatch",
+      "not_openpgp_message",
+      "recipient_mismatch",
+      "decrypt_failed",
+      "plaintext_not_utf8",
+      "no_key",
+      "not_ready",
+      "locked",
+      "timeout",
+      "pending_exists",
+      "already_exists",
+      "pgp_source_unavailable",
+      "confirmation_not_native",
+      "not_supported"
+    ],
+    "eventResult": {
+      "pgpRestoreResult": [
+        "ok",
+        "pgp_backup_missing",
+        "pgp_backup_undecryptable",
+        "pgp_backup_invalid",
+        "pgp_fingerprint_mismatch",
+        "pgp_source_unavailable",
+        "pgp_registration_missing",
+        "write_failed",
+        "readback_failed"
+      ],
+      "pgpIdentityCreateResult": [
+        "ok",
+        "idempotent",
+        "cancelled",
+        "confirm_timeout",
+        "cas_conflict",
+        "write_reverted",
+        "retry_write",
+        "readback_failed"
+      ]
+    }
+  },
+  "gateNote": "§25.26.4c：门控先于读取 payload。G0 no_key，G1 not_ready，locked 按 §25.22.4，均不解析 armoredMessage、不出站。",
+  "cases": [
+    {
+      "id": "A-01",
+      "group": "A",
+      "title": "通话 offer 解密成功，返回 offer 信号",
+      "testIds": [
+        "T-210"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-01",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-01",
+          "ok": true,
+          "result": {
+            "plaintext": "{\"type\":\"voice_call_offer_v1\",\"callId\":\"c-a1-1\",\"sessionId\":\"s-a1-1\",\"proto\":3,\"callerSignature\":\"SYNTHETIC\"}",
+            "signal": {
+              "kind": "offer",
+              "type": "voice_call_offer_v1",
+              "callId": "c-a1-1",
+              "sessionId": "s-a1-1"
+            }
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-02",
+      "group": "A",
+      "title": "普通聊天行：成功，信号为 null（不是错误）",
+      "testIds": [
+        "T-210"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-02",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAAAZwA8FySKldeQgZ6Z1PbtEiA5Yc9k97EdJ12kiY\n0yUwoVnXIOScQT1FkDLi+fBXgrUXaTxEf7gsq3NNmgEPMOJsniqHAx5F7T0v\naESYJCvS0mMBUfyf+48qc9ChJ4gTX07Tc1f0B7u6ccf8IhHkmPjO71Dizd5O\nkywwqGE7JjwUas6/pgI6FipY6YP/G9OCGalNEQABjRD9Gl+B9QRP+WLBBb0L\nKKZ7KRZtNZfwAfPAwMX0qyI=\n=wjNh\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-02",
+          "ok": true,
+          "result": {
+            "plaintext": "{\"sendId\":\"msg-a1-2\",\"from\":\"peer\",\"text\":\"hello\"}",
+            "signal": null
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-03",
+      "group": "A",
+      "title": "信封内嵌 voice_end_v1，按 classify 口径取出",
+      "testIds": [
+        "T-210"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-03",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAJWMrLFvjoMaGPPq3V1yT1ejG/axLdVWRx+Z2g0+i\nPgAwQQHgoHeCI3F9bvNdjClPTBPaI9mnSrOVoDirwK6B6p/jr/y3Vg1HhRZU\nOa/d2+1W0pQBTnUrPI0yIIAZa+JVNhUnhHpxdIF/tq76thqrE3SQJ6hBHDGm\nOl00PyCNPo4xmXgSKj3XobB69mrWVnz2sG6FL1apsaBWZ1/zN2t8jHtPpIxU\nDek9yBZL1iMXChTDsOvMDyFky0xiLgG0lSBYaqhgnDukaZZmZa4DqYjoTe4u\nhjAx59/wiupwK2O1kZSO4c+PfKMj\n=2Zy1\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-03",
+          "ok": true,
+          "result": {
+            "plaintext": "{\"timestamp\":1,\"text\":\"{\\\"type\\\":\\\"voice_end_v1\\\",\\\"callId\\\":\\\"c-a1-3\\\",\\\"sessionId\\\":\\\"s-a1-3\\\"}\"}",
+            "signal": {
+              "kind": "end",
+              "type": "voice_end_v1",
+              "callId": "c-a1-3",
+              "sessionId": "s-a1-3"
+            }
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-04",
+      "group": "A",
+      "title": "CRLF 文本字面量：明文按 §25.32 转为 LF，信号为 ringing",
+      "testIds": [
+        "T-210"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-04",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAlEaSw2SPTr/yG+v8CY6dM7D3Ej3gm566xPObdbWq\nrFswTWii/4K2vyn7v7Z89ptmchnJofrvx/EfMERKozR6id/f0EcaWDQpAjht\nZiyNJ8PW0n4B1pNod0FE6i+Qmq4pS4WlGp5hrvrq4W4SgHN+U6LBzbyCudVJ\nNQSDfqucyyMdCmGgugckAjcozmUukh+fuBgNEJifT1dC9OgytEWQwcdr2FkC\nXWpHG+ZOXryoZbye0ad8TtiyjXjBrx7DRRdz/mECh0zOLjDqhO/D2g2uyx0=\n=6m0W\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-04",
+          "ok": true,
+          "result": {
+            "plaintext": "{\n\"type\":\"voice_call_ringing_v1\",\n\"callId\":\"c-a1-4\",\"sessionId\":\"s-a1-4\"\n}",
+            "signal": {
+              "kind": "ringing",
+              "type": "voice_call_ringing_v1",
+              "callId": "c-a1-4",
+              "sessionId": "s-a1-4"
+            }
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-05",
+      "group": "A",
+      "title": "reject 且 reason 为 busy：rejectReason 为 busy",
+      "testIds": [
+        "T-210"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-05",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAPJKoC0TEjvb/2dtK2Aj7dvhiJpTSQ2DG1KXvts1+\nonQwtkPfbb7QJT33mSuyeKqbRNhrWy0w6oUVp10oa699FRlTMSYwkMJcltyR\nKkGG6fUR0ocBbzlVPC3/I0lPARhupL/Z5A6S9vLjkPJ3gCAb7QqydVLHr69c\ncIb4REzYQKuglhHQc9xA9Fryo9eRnYTsEGCR6WMImIxjPUdES+Nu2OH36ama\nE0MxGql/w29VprDnIQyqVcXusltnX31PCO/8o0XB5dMp9M1GOotdDISfTNx+\n3ZhTTlLl1vg=\n=OjP+\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-05",
+          "ok": true,
+          "result": {
+            "plaintext": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-a1-5\",\"sessionId\":\"s-a1-5\",\"reason\":\"busy\"}",
+            "signal": {
+              "kind": "reject",
+              "type": "voice_call_reject_v1",
+              "callId": "c-a1-5",
+              "sessionId": "s-a1-5",
+              "rejectReason": "busy"
+            }
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-06",
+      "group": "A",
+      "title": "G0（设备无原生钥记录）：no_key，不读 payload",
+      "testIds": [
+        "T-211"
+      ],
+      "gate": "G0",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-06",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-06",
+          "ok": false,
+          "error": "no_key"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-07",
+      "group": "A",
+      "title": "G1（有记录未就绪）：not_ready，不读 payload",
+      "testIds": [
+        "T-211"
+      ],
+      "gate": "G1",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-07",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-07",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-08",
+      "group": "A",
+      "title": "G2 但 Passcode 锁定：locked，不读 payload",
+      "testIds": [
+        "T-211"
+      ],
+      "gate": "G2_locked",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-08",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-08",
+          "ok": false,
+          "error": "locked"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-09",
+      "group": "A",
+      "title": "输入不是 OpenPGP（base64 的 JSON 明文）：not_openpgp_message",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-09",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "eyJ0eXBlIjoidm9pY2VfY2FsbF9vZmZlcl92MSIsImNhbGxJZCI6ImMtYTEtOSIsInNlc3Npb25JZCI6InMtYTEtOSJ9"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-09",
+          "ok": false,
+          "error": "not_openpgp_message"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-10",
+      "group": "A",
+      "title": "只有签名、没有加密：not_openpgp_message",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-10",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nxA0DAQoWIgUT/EzM7IIByxF1AGr2nZZzaWduZWQgb25secK7BAEWCgBtBYJq\n9p2WCRAiBRP8TMzsgkUUAAAAAAAcACBzYWx0QG5vdGF0aW9ucy5vcGVucGdw\nanMub3Jn24tNJXg08I85zIqCZ9bQhbIpafbkzs8tkNmBG3uL/DoWIQRIiMel\nsE2LGNO2NuwiBRP8TMzsggAAEBsBAL63zzz43Cg1DnWvsfjebxpLcy0vfUk5\nXoOcXXghkkQpAQCiRTiTVGZRDENrgUcCINllGBJoU9i/8kgZ/4ufKzmuCg==\n=DopE\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-10",
+          "ok": false,
+          "error": "not_openpgp_message"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-11",
+      "group": "A",
+      "title": "收件人为 P-2，不是本账户钥：recipient_mismatch（解密前拒绝）",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-11",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4D09qLL9jfQI8SAQdAkBGBX2X85GaqzqUoJmLwOcwN6lUWgA0aK7+ny1UR\n4Wowo74jNcseFrBUIuTF6phlTDsSTxrF4BPl9XJBPRlhtKsfM5z0N5ctAVxO\n+KKdU1yb0nEB4JvVEvdCzLHDH06BDwgHz+hll41rIZtKc9ac3e5oxIZyu80z\npqclmhyiAAMTfSUz9ADzQl4XT5/viI8+pkHdjavzHv6RjN4Z+/zoUBMg2yB2\n1L2ukaIy/YqWtDDMajt8s6PWvWZIKwsZF/jttqa6Iw==\n=Vxwn\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-11",
+          "ok": false,
+          "error": "recipient_mismatch"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-12",
+      "group": "A",
+      "title": "请求携带 privateKeyHex：key_over_bridge_refused，只记字段名，不回显值",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-12",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n",
+        "privateKeyHex": "0x1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-12",
+          "ok": false,
+          "error": "key_over_bridge_refused"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-13",
+      "group": "A",
+      "title": "密文超过 65536 字节：payload_too_large（先于 armor 解析）",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-13",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessageRepeat": {
+          "char": "A",
+          "count": 65537
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-13",
+          "ok": false,
+          "error": "payload_too_large"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-14",
+      "group": "A",
+      "title": "accountKey 与当前解锁账户不符：account_mismatch",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-14",
+        "accountKey": "0x0000000000000000000000000000000000000001:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-14",
+          "ok": false,
+          "error": "account_mismatch"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-15",
+      "group": "A",
+      "title": "未知字段 extra：bad_request",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": "a1-15",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n",
+        "extra": 1
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "a1-15",
+          "ok": false,
+          "error": "bad_request"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "A-16",
+      "group": "A",
+      "title": "reqId 为对象：bad_request，reqId 为 null（§25.28.3）",
+      "testIds": [
+        "T-212"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpDecryptInbound",
+        "reqId": {
+          "x": 1
+        },
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "armoredMessage": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAZwNKpXidSut7xKfMz7xt/JsBESYxCjlllYz4uwRQ\nVXwwszLAikD/1vXpMJKHQPhrVc14sHxCiQTHR4nm+XS2uH9PX/mbPnxQgzK8\nFZQMhmIB0p4B+thNBmVnaGjZpq2pOdfHR/B8DkDYmuas0H4n0LIGZzG35oC3\ngHhsMadHP9h2EekpOseZR8MZs59CNkOBNKgSZR12A/mK7oGT0ETITcCmCHPe\na/DrMqEsxQ1bg03oXdPWzT2rvuGv6Gx7SwsJWk2hUUZGjAdlnY8Vv2X4q5l5\ndT+WfHhXu8q4Ck/Ra05RkdGHygDbcCleE3sVS57LnA==\n=rqg7\n-----END PGP MESSAGE-----\n"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": null,
+          "ok": false,
+          "error": "bad_request"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-01",
+      "group": "C",
+      "title": "只读评估：备份缺失，返回失败类与入口，不写本地不写链",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-01",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "M-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-01",
+          "ok": true,
+          "result": {
+            "state": "failed",
+            "failureClass": "backup_missing",
+            "code": "pgp_backup_missing",
+            "offerEntry": true,
+            "uiKey": "chat.restore_failed.body"
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-02",
+      "group": "C",
+      "title": "只读评估：链上无记录，进入首次建立入口，不显示失败提示",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-02",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "R-02",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-02",
+          "ok": true,
+          "result": {
+            "state": "first_identity",
+            "failureClass": null,
+            "code": null,
+            "offerEntry": true,
+            "uiKey": "chat.first_identity.body"
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-03",
+      "group": "C",
+      "title": "只读评估：链上或备份读取失败，状态 undetermined，只提供重试（mock RPC 超时）",
+      "testIds": [
+        "T-213",
+        "T-216"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-03",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "R-03",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-03",
+          "ok": true,
+          "result": {
+            "state": "undetermined",
+            "failureClass": null,
+            "code": "pgp_source_unavailable",
+            "offerEntry": false,
+            "uiKey": "chat.restore_retry.body"
+          }
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-04",
+      "group": "C",
+      "title": "只读评估在 G1：not_ready，不读链",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G1",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-04",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-04",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-05",
+      "group": "C",
+      "title": "只读评估在 G0：no_key",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G0",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-05",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-05",
+          "ok": false,
+          "error": "no_key"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-06",
+      "group": "C",
+      "title": "恢复成功：写本地并读回，不写链，不生成钥",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-06",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "R-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-06",
+          "ok": true,
+          "result": {
+            "accepted": true
+          }
+        },
+        "events": [
+          {
+            "type": "pgpRestoreResult",
+            "reqId": "c3-c-06",
+            "code": "ok",
+            "state": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-07",
+      "group": "C",
+      "title": "恢复：指纹不符，禁止覆盖、禁止生成、禁止注册",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-07",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "F-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-07",
+          "ok": true,
+          "result": {
+            "accepted": true
+          }
+        },
+        "events": [
+          {
+            "type": "pgpRestoreResult",
+            "reqId": "c3-c-07",
+            "code": "pgp_fingerprint_mismatch",
+            "state": "failed",
+            "failureClass": "fingerprint_mismatch",
+            "uiKey": "chat.restore_failed.body"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-08",
+      "group": "C",
+      "title": "恢复：有备份但无登记，归入失败类（pgp_registration_missing）",
+      "testIds": [
+        "T-213",
+        "T-206"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-08",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "Q-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-08",
+          "ok": true,
+          "result": {
+            "accepted": true
+          }
+        },
+        "events": [
+          {
+            "type": "pgpRestoreResult",
+            "reqId": "c3-c-08",
+            "code": "pgp_registration_missing",
+            "state": "failed",
+            "failureClass": "registration_missing",
+            "uiKey": "chat.restore_failed.body"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-09",
+      "group": "C",
+      "title": "恢复：备份解不开（口令不符或 GCM 失败）",
+      "testIds": [
+        "T-213"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-09",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "mapsTo": {
+        "vector": "D-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-09",
+          "ok": true,
+          "result": {
+            "accepted": true
+          }
+        },
+        "events": [
+          {
+            "type": "pgpRestoreResult",
+            "reqId": "c3-c-09",
+            "code": "pgp_backup_undecryptable",
+            "state": "failed",
+            "failureClass": "decrypt_failed",
+            "uiKey": "chat.restore_failed.body"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-10",
+      "group": "C",
+      "title": "替换（备份缺失）：用户在原生确认界面确认，CAS 通过，写链一次",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-10",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-10"
+      },
+      "nativeFlow": [
+        "原生确认界面：确认生成"
+      ],
+      "mapsTo": {
+        "vector": "P-04",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-10",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-10",
+            "code": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-11",
+      "group": "C",
+      "title": "替换：用户取消，链上与本地均不变",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-11",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-11"
+      },
+      "nativeFlow": [
+        "原生确认界面：取消"
+      ],
+      "mapsTo": {
+        "vector": "P-01",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-11",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-11",
+            "code": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-12",
+      "group": "C",
+      "title": "替换：120 秒无操作，视为取消（confirm_timeout）",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-12",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-12"
+      },
+      "nativeFlow": [
+        "原生确认界面：120 秒无操作"
+      ],
+      "mapsTo": {
+        "vector": "P-02",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-12",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-12",
+            "code": "confirm_timeout"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-13",
+      "group": "C",
+      "title": "确认前链上已变化：cas_conflict，不生成，重新判定",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-13",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-13"
+      },
+      "nativeFlow": [
+        "链上版本在确认前变化"
+      ],
+      "mapsTo": {
+        "vector": "P-07",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-13",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-13",
+            "code": "cas_conflict"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-14",
+      "group": "C",
+      "title": "确认后、写入前链上已变化：丢弃待用钥，不写链（cas_conflict）",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-14",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-14"
+      },
+      "nativeFlow": [
+        "原生确认：确认生成",
+        "写入前链上版本变化"
+      ],
+      "mapsTo": {
+        "vector": "P-08",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-14",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-14",
+            "code": "cas_conflict"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-15",
+      "group": "C",
+      "title": "同一幂等键再次确认：idempotent，不再写链",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-15",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-15"
+      },
+      "nativeFlow": [
+        "成功后同一 idempotencyKey 再次提交"
+      ],
+      "mapsTo": {
+        "vector": "P-09",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-15",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "replace"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-15",
+            "code": "idempotent"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-16",
+      "group": "C",
+      "title": "待用钥阶段另一幂等键：pending_exists（ack 拒绝）",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-16",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-16"
+      },
+      "mapsTo": {
+        "vector": "E-05",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-16",
+          "ok": false,
+          "error": "pending_exists"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-17",
+      "group": "C",
+      "title": "身份已恢复：already_exists（ack 拒绝），不进入确认界面",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-17",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-17"
+      },
+      "mapsTo": {
+        "vector": "R-06",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-17",
+          "ok": false,
+          "error": "already_exists"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-18",
+      "group": "C",
+      "title": "状态 undetermined：pgp_source_unavailable（ack 拒绝），不进入确认界面",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-18",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-18"
+      },
+      "mapsTo": {
+        "vector": "R-04",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-18",
+          "ok": false,
+          "error": "pgp_source_unavailable"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-19",
+      "group": "C",
+      "title": "首次建立：用户确认后生成，注册前 CAS 核对链上为空，写入一次",
+      "testIds": [
+        "T-214",
+        "T-207"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-19",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-19"
+      },
+      "nativeFlow": [
+        "原生确认界面：确认创建"
+      ],
+      "mapsTo": {
+        "vector": "N-03",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-19",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "first"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-19",
+            "code": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-20",
+      "group": "C",
+      "title": "首次建立：取消后回到入口，不生成",
+      "testIds": [
+        "T-214",
+        "T-207"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-20",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-20"
+      },
+      "nativeFlow": [
+        "原生确认界面：取消"
+      ],
+      "mapsTo": {
+        "vector": "N-02",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-20",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "first"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-20",
+            "code": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-21",
+      "group": "C",
+      "title": "WebView 发出确认（携带 confirm 字段）：confirmation_not_native，不生成",
+      "testIds": [
+        "T-214",
+        "T-196"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-21",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "confirm": true,
+        "idempotencyKey": "idem-c-21"
+      },
+      "mapsTo": {
+        "vector": "P-03",
+        "device": "A"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-21",
+          "ok": false,
+          "error": "confirmation_not_native"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-22",
+      "group": "C",
+      "title": "请求携带 observedVersion（CAS 基准只在原生保存）：bad_request",
+      "testIds": [
+        "T-215"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-22",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "observedVersion": 1,
+        "idempotencyKey": "idem-c-22"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-22",
+          "ok": false,
+          "error": "bad_request"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-23",
+      "group": "C",
+      "title": "创建命令在 G1：not_ready",
+      "testIds": [
+        "T-215"
+      ],
+      "gate": "G1",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-23",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-23"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-23",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-24",
+      "group": "C",
+      "title": "创建命令在 G0：no_key",
+      "testIds": [
+        "T-215"
+      ],
+      "gate": "G0",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-24",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-24"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-24",
+          "ok": false,
+          "error": "no_key"
+        },
+        "events": []
+      }
+    }
+  ],
+  "counts": {
+    "cases": 40,
+    "A": 16,
+    "C": 24
+  },
+  "notCovered": [
+    "decrypt_failed 的 MDC 篡改用例：需要篡改密文且保持 armor 有效，待 gopenpgp（iOS）与 bcpg（Android）互通时补充。",
+    "二进制字面量（格式 b）的 offer：offer 为文本，本向量不覆盖；§25.32 的格式 b 规则由 pgp-literal-newline-vectors.v1.json 覆盖。",
+    "pgpIdentityCreate 确认界面的文案与按钮：由原生界面实现，本向量只覆盖结果码。文案键见 §25.30.7。",
+    "链上读取：本向量为命令层，链上读取的 mock 口径见 §25.36（T-216），不在本生成器中访问链。"
+  ]
+}

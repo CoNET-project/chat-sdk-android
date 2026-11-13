@@ -81,9 +81,27 @@ internal object NativePgp {
      * Decrypts an armored OpenPGP message to the recipient [secret]. [passphrase] unlocks the key in memory only.
      * Refusals: `bad_message`, `not_recipient`, `bad_passphrase`, `decrypt_failed`, `integrity_failed`.
      */
+    /** A decrypted literal: `ok` with its OpenPGP [format] (the char code) and [bytes], or a refusal [code]. */
+    class LiteralResult private constructor(val code: String, val format: Int, val bytes: ByteArray?) {
+        val ok: Boolean get() = code == "ok"
+
+        companion object {
+            fun ok(format: Int, bytes: ByteArray) = LiteralResult("ok", format, bytes)
+            fun fail(code: String) = LiteralResult(code, -1, null)
+        }
+    }
+
     fun decryptMessage(secret: Secret, passphrase: String, armoredMessage: String): Outcome {
-        if (!armoredMessage.contains("BEGIN PGP MESSAGE")) return Outcome.fail("bad_message")
-        val list = encryptedList(armoredMessage) ?: return Outcome.fail("bad_message")
+        val literal = decryptLiteral(secret, passphrase, armoredMessage)
+        return if (literal.ok) Outcome.ok(String(literal.bytes!!, Charsets.UTF_8)) else Outcome.fail(literal.code)
+    }
+
+    /**
+     * The literal of the first public-key packet this ring can open, with its format. Refusal codes as [decryptMessage].
+     */
+    fun decryptLiteral(secret: Secret, passphrase: String, armoredMessage: String): LiteralResult {
+        if (!armoredMessage.contains("BEGIN PGP MESSAGE")) return LiteralResult.fail("bad_message")
+        val list = encryptedList(armoredMessage) ?: return LiteralResult.fail("bad_message")
         val decryptor = BcPBESecretKeyDecryptorBuilder(BcPGPDigestCalculatorProvider()).build(passphrase.toCharArray())
         val candidates = encryptionKeys(secret.ring)
         var recipientFound = false
@@ -97,23 +115,34 @@ internal object NativePgp {
                 val priv: PGPPrivateKey = try {
                     sk.extractPrivateKey(decryptor)
                 } catch (_: PGPException) {
-                    return Outcome.fail("bad_passphrase")
+                    return LiteralResult.fail("bad_passphrase")
                 }
-                val bytes = try {
-                    literalBytes(enc.getDataStream(BcPublicKeyDataDecryptorFactory(priv)))
+                val part = try {
+                    literalPart(enc.getDataStream(BcPublicKeyDataDecryptorFactory(priv)))
                 } catch (_: Exception) {
                     lastCode = "decrypt_failed"
                     continue
                 }
-                if (bytes == null) {
+                if (part == null) {
                     lastCode = "decrypt_failed"
                     continue
                 }
-                if (enc.isIntegrityProtected && !enc.verify()) return Outcome.fail("integrity_failed")
-                return Outcome.ok(String(bytes, Charsets.UTF_8))
+                if (enc.isIntegrityProtected && !enc.verify()) return LiteralResult.fail("integrity_failed")
+                return LiteralResult.ok(part.format, part.bytes)
             }
         }
-        return Outcome.fail(if (recipientFound) lastCode else "not_recipient")
+        return LiteralResult.fail(if (recipientFound) lastCode else "not_recipient")
+    }
+
+    /**
+     * The key IDs of the public-key packets, for the recipient check (spec 25.34.2, step 4). An anonymous packet is 0.
+     * `null` when the text is not an OpenPGP encrypted message with an integrity-protected data packet.
+     */
+    internal fun recipientKeyIds(armoredMessage: String): List<Long>? {
+        if (!armoredMessage.contains("BEGIN PGP MESSAGE")) return null
+        val list = encryptedList(armoredMessage) ?: return null
+        if (list.isEmpty() || list.none { it.isIntegrityProtected }) return null
+        return list.filterIsInstance<PGPPublicKeyEncryptedData>().map { it.keyID }
     }
 
     /**
@@ -199,19 +228,21 @@ internal object NativePgp {
         return out.toByteArray()
     }
 
-    /** The literal data inside an optional compression layer. Signature packets are skipped. `null` if absent. */
-    private fun literalBytes(clear: InputStream): ByteArray? {
+    private class LiteralPart(val format: Int, val bytes: ByteArray)
+
+    /** The literal data inside an optional compression layer, with its format. Signature packets are skipped. `null` if absent. */
+    private fun literalPart(clear: InputStream): LiteralPart? {
         val factory = PGPObjectFactory(clear, BcKeyFingerprintCalculator())
         var obj = factory.nextObject()
         while (obj != null) {
             when (obj) {
-                is PGPCompressedData -> return literalBytes(obj.dataStream)
+                is PGPCompressedData -> return literalPart(obj.dataStream)
                 is PGPLiteralData -> {
                     val bytes = obj.inputStream.use { it.readBytes() }
                     // A text literal is stored with CRLF line endings (RFC 4880 canonical text). openpgp.js and gopenpgp
                     // return the native LF form; so does this, for text literals only (interop, §41). Binary is untouched.
                     val text = obj.format == PGPLiteralData.UTF8.code || obj.format == PGPLiteralData.TEXT.code
-                    return if (text) crlfToLf(bytes) else bytes
+                    return LiteralPart(obj.format, if (text) crlfToLf(bytes) else bytes)
                 }
                 is PGPOnePassSignatureList, is PGPSignatureList -> Unit
                 else -> return null

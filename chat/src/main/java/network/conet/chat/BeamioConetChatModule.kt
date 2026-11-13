@@ -10,7 +10,9 @@ import network.conet.chat.nativekey.NativeImportHost
 import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
+import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
+import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
@@ -147,6 +149,11 @@ object BeamioConetChatModule {
         runCatching { NativeWallet.migrateLegacyPgp(context) }
             .onFailure { Log.w(TAG, "legacy PGP adoption failed: ${it.javaClass.simpleName}") }
         val type = body.optString("type", "")
+        // pgpDecryptInbound (25.34): reqId first, then the gate, inside the handler. It is not routed through the table.
+        if (type == "pgpDecryptInbound") {
+            handlePgpDecryptInbound(body)
+            return
+        }
         val route = NoKeyGate.route(type)
         // X-21 is retired (no key crosses the bridge): refused whether or not a key exists (25.24, 25.26.4 table C).
         if (route == NoKeyGate.Route.NOT_SUPPORTED) {
@@ -720,6 +727,37 @@ object BeamioConetChatModule {
                 handleInbound(line, hash, e.viaDomain, e.armor)
             }
         }
+    }
+
+    /**
+     * `pgpDecryptInbound` (spec 25.34, A1). Order: `reqId`, then the gate (25.34.4), then the payload in
+     * [PgpDecryptInbound.answer]. The plaintext goes only into the ack. The log holds the command name and result code.
+     */
+    private fun handlePgpDecryptInbound(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        fun refuse(code: String) {
+            emitEvent(
+                JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code),
+            )
+            Log.i(TAG, "pgpDecryptInbound result=$code")
+        }
+        if (reqId == null) return refuse("bad_request")
+        val ctx = appContext ?: return refuse("not_ready")
+        val vault = NativeWallet.vault(ctx)
+        val state = vault.state()
+        val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
+        PgpDecryptInbound.gateRefusal(gate, state is NativeWalletVault.State.Locked)?.let { return refuse(it) }
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return refuse("locked")
+        val pgp = NativeWallet.pgpFor(ctx, eoa)
+        val source = object : PgpDecryptInbound.Source {
+            override fun subkeyKeyIdHex(): String? = pgp.identity()?.subkeyKeyId
+            override fun decryptLiteral(armoredMessage: String): NativePgp.LiteralResult =
+                pgp.decryptInboundLiteral(armoredMessage)
+        }
+        val answer = PgpDecryptInbound.answer(body, eoa, source)
+        if (!answer.ok) return refuse(answer.error ?: "decrypt_failed")
+        emitEvent(JSONObject().put("type", "ack").put("reqId", reqId).put("ok", true).put("result", answer.result))
+        Log.i(TAG, "pgpDecryptInbound result=ok")
     }
 
     /** N0 `walletAddress` (spec 25.18.2): the account EOA, no signature. */

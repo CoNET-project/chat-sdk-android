@@ -140,6 +140,18 @@ internal class NativePgpVault(
     }
 
     /**
+     * The same decrypt as [decryptInbound], but returns the literal's format and bytes, so the caller can check the
+     * UTF-8 rule (spec 25.34.2, step 6). Refusals: `no_pgp_key`, `pgp_locked`, and the codes of [NativePgp.decryptLiteral].
+     */
+    @Synchronized
+    fun decryptInboundLiteral(armoredMessage: String): NativePgp.LiteralResult {
+        val unlocked = unlock() ?: return NativePgp.LiteralResult.fail(refusal().code)
+        val secret = NativePgp.parseSecret(unlocked.privateArmor)
+            ?: return NativePgp.LiteralResult.fail("bad_pgp_key")
+        return NativePgp.decryptLiteral(secret, unlocked.passphrase, armoredMessage)
+    }
+
+    /**
      * Document signature (C4) over `beamio.pgp.<purposeId>.v1\n || message`. The purpose must be in [registry], and the
      * signature type must be 0x00 or 0x01. Certification signatures are refused. Returns an armored signature.
      */
