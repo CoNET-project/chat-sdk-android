@@ -162,6 +162,18 @@ object NativeWallet {
             accountOrNone(eoa),
         )
 
+    /**
+     * The restore device for [eoa] (P-IMP-PGP): the same wrap and files as [pgpFor], so a restored record is the one that
+     * [pgpFor] reads afterwards.
+     */
+    internal fun pgpRestoreDevice(context: Context, eoa: String, id: String): PgpRestoreDevice =
+        PgpRestoreDevice(
+            id,
+            accountOrNone(eoa),
+            AndroidKeyWrap(),
+            AndroidVaultFiles(File(context.applicationContext.filesDir, DIR)),
+        )
+
     /** The pending slot of [eoa]: a generated key awaiting its registration. It is never the active identity. */
     internal fun pendingPgpFor(context: Context, eoa: String): NativePgpVault =
         NativePgpVault(

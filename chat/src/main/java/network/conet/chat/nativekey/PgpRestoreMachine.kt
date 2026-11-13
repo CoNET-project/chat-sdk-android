@@ -206,7 +206,8 @@ internal class PgpRestoreMachine(
     }
 
     /** Read-only evaluation of the chain against the device's wallet (§25.30.2). Returns the result code. */
-    private fun evalRestore(dev: PgpRestoreDevice): String {
+    /** [write] false is the read-only evaluation (§25.35.2 `pgpRestoreEvaluate`): nothing is written locally. */
+    private fun evalRestore(dev: PgpRestoreDevice, write: Boolean = true): String {
         if (!wallet.ready()) {
             dev.ui = PgpRestoreUi("blocked", code = "wallet_not_ready")
             return "blocked"
@@ -253,7 +254,7 @@ internal class PgpRestoreMachine(
             dev.ui = PgpRestoreUi("failed", "fingerprint_mismatch", offerEntry = true, observedVersion = v, code = "pgp_fingerprint_mismatch")
             return "failed:fingerprint_mismatch"
         }
-        if (!onChain.sameAs(identityOf(dev))) {
+        if (write && !onChain.sameAs(identityOf(dev))) {
             if (dev.active.put(dev.account, armor, "") != NativePgpVault.Put.OK) {
                 dev.ui = PgpRestoreUi("undetermined", code = "write_failed")
                 return "undetermined"
@@ -262,6 +263,12 @@ internal class PgpRestoreMachine(
         }
         dev.ui = PgpRestoreUi("ok")
         return "ok"
+    }
+
+    /** `pgpRestoreEvaluate` (§25.35.2): the evaluation only. Writes nothing, generates nothing, registers nothing. */
+    fun evaluate(devId: String): Step {
+        val dev = devices.getValue(devId)
+        return Step(evalRestore(dev, write = false))
     }
 
     fun restore(devId: String, crashAt: String? = null): Step {

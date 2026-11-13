@@ -14,6 +14,7 @@ import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
 import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.PgpDecryptInbound
+import network.conet.chat.nativekey.PgpRestoreBridge
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
@@ -244,6 +245,9 @@ object BeamioConetChatModule {
             "pgpSign" -> pgpSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
+            "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
+            "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
+            "pgpIdentityCreate" -> pgpIdentityCreateNotSupported(body)
             else -> {
                 Log.w(TAG, "unknown command $type")
                 // Protocol v1: a command that expects an answer gets one.
@@ -354,9 +358,9 @@ object BeamioConetChatModule {
         }
         payload.optJSONArray("routes")?.let { s.routes = objects(it) }
 
-        // A PGP key must come in the payload or already be in the native record; otherwise missing_identity, as before.
-        val pgpInVault = NativeWallet.pgpFor(ctx, s.eoa).state() is NativePgpVault.State.Ready
-        if (s.eoa.isEmpty() || (pgpArmorInInit.isEmpty() && !pgpInVault)) {
+        // The EOA is what G2 needs (§25.26.4c). The PGP key is not required here: a recovered wallet has none until pgpRestore
+        // runs, and pgpRestore needs G2 (§25.30.2 step 1). PGP-dependent chat features stay off until then.
+        if (s.eoa.isEmpty()) {
             ack(reqId, false, error = "missing_identity")
             return
         }
@@ -853,6 +857,69 @@ object BeamioConetChatModule {
             NativeRecoveryHost.OpenAnswer.NOT_AVAILABLE -> answer(false, "not_available")
             NativeRecoveryHost.OpenAnswer.OPENED -> answer(true)
         }
+    }
+
+    private val pgpRestoreWorker = Executors.newSingleThreadExecutor()
+    private val PGP_RESTORE_FIELDS = setOf("type", "reqId", "accountKey")
+    private val PGP_RESTORE_REFUSED = setOf(
+        "privateKeyHex", "privateKeyArmored", "privateKeyArmor", "pgpPrivateKeyArmored", "pgpPassphrase", "passphrase",
+        "walletPrivateKey", "mnemonic", "recoveryCode", "pin", "password", "accountPassword",
+    )
+
+    /**
+     * `pgpRestoreEvaluate` (read only) and `pgpRestore` (evaluate, then write locally on a match; spec §25.35.2 to §25.35.4).
+     * The gate has run already, so the wallet is G2. The fields are `type`, `reqId`, `accountKey`. A key or passphrase field
+     * is `key_over_bridge_refused`. The chain read and the wallet work run on a worker thread. `pgpRestore` acks `accepted`
+     * at once and sends `pgpRestoreResult` when the work is done. Nothing here writes the chain, generates a key, or registers.
+     */
+    private fun pgpRestoreCommand(body: JSONObject, evaluateOnly: Boolean) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        fun answer(ok: Boolean, error: String? = null, result: Any? = null) {
+            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
+            if (ok) {
+                if (result != null) payload.put("result", result)
+            } else {
+                payload.put("error", error ?: "error")
+            }
+            emitEvent(payload)
+        }
+        val keys = body.keys().asSequence().map { it.toString() }.toList()
+        if (keys.any { it in PGP_RESTORE_REFUSED }) return answer(false, "key_over_bridge_refused")
+        if (keys.any { it !in PGP_RESTORE_FIELDS }) return answer(false, "bad_request")
+        if (reqId == null) return answer(false, "bad_request")
+        val ctx = appContext ?: return answer(false, "not_ready")
+        val state = NativeWallet.vault(ctx).state()
+        if (state is NativeWalletVault.State.Locked) return answer(false, "locked")
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return answer(false, "no_key")
+        val accountKey = body.optString("accountKey", "")
+        val cut = accountKey.lastIndexOf(':')
+        if (cut <= 0 || cut == accountKey.length - 1 || !accountKey.substring(0, cut).equals(eoa, ignoreCase = true)) {
+            return answer(false, "account_mismatch")
+        }
+        if (evaluateOnly) {
+            pgpRestoreWorker.execute {
+                answer(true, result = PgpRestoreBridge.evaluate(PgpRestoreBridge.productionMachine(ctx, eoa)))
+            }
+            return
+        }
+        answer(true, result = JSONObject().put("accepted", true))
+        pgpRestoreWorker.execute {
+            val event = PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa))
+            emitEvent(event.put("type", "pgpRestoreResult").put("reqId", reqId))
+            Log.i(TAG, "pgpRestore result=${event.optString("code")}")
+        }
+    }
+
+    /**
+     * `pgpIdentityCreate` (§25.35.2): the on-chain registration path is pending approval (§25.44), so it is refused as
+     * `not_supported`. It is not silently dropped and it does nothing else.
+     */
+    private fun pgpIdentityCreateNotSupported(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        emitEvent(
+            JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false)
+                .put("error", "not_supported"),
+        )
     }
 
     private val RECOVERY_OPEN_FIELDS = setOf("type", "reqId")

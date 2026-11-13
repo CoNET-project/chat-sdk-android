@@ -128,12 +128,14 @@ object IdentityProvisionContract {
         val rawEoa = identity.opt("eoa") ?: return Result.Reject("missing_identity")
         val eoa = rawEoa as? String ?: return Result.Reject("bad_identity")
         if (eoa != normalize(eoa) || !EOA_RE.matches(eoa)) return Result.Reject("bad_identity")
-        // PGP public armor: the stored value is never rewritten. Its raw characters may not include S beyond
-        // space, tab, CR and LF. The header is detected on N(text).
-        val rawPgp = identity.opt("pgpPublicKeyArmored") ?: return Result.Reject("missing_identity")
-        val pgpRaw = rawPgp as? String ?: return Result.Reject("bad_identity")
-        if (pgpRaw.any { it.code in WHITESPACE_SET_S && it.code !in PGP_ALLOWED_S }) return Result.Reject("bad_identity")
-        if (!normalize(pgpRaw).startsWith(PGP_PUBLIC_HEADER_NORMALIZED)) return Result.Reject("bad_identity")
+        // The PGP public key is optional here. A recovered wallet has none until pgpRestore (§25.30.2), and G2 needs only the
+        // EOA (§25.26.4c). When it is present it must be a public armor: the stored value is never rewritten, its raw
+        // characters may not include S beyond space, tab, CR and LF, and the header is detected on N(text).
+        identity.opt("pgpPublicKeyArmored")?.let { rawPgp ->
+            val pgpRaw = rawPgp as? String ?: return Result.Reject("bad_identity")
+            if (pgpRaw.any { it.code in WHITESPACE_SET_S && it.code !in PGP_ALLOWED_S }) return Result.Reject("bad_identity")
+            if (!normalize(pgpRaw).startsWith(PGP_PUBLIC_HEADER_NORMALIZED)) return Result.Reject("bad_identity")
+        }
         return Result.Accept(eoa)
     }
 
