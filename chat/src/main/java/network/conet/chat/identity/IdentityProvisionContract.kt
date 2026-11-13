@@ -110,6 +110,14 @@ object IdentityProvisionContract {
     private const val NODES_KEY = "nodes"
 
     /**
+     * A PGP public armor in the form the production save accepts (§25.48.4, r3ag): its raw characters may not include S beyond
+     * space, tab, CR and LF, and the header is detected on N(text). The value is only checked, never rewritten.
+     */
+    internal fun isPublicArmor(raw: String): Boolean =
+        raw.none { it.code in WHITESPACE_SET_S && it.code !in PGP_ALLOWED_S } &&
+            normalize(raw).startsWith(PGP_PUBLIC_HEADER_NORMALIZED)
+
+    /**
      * Checks one request. Order (rule 5): key names, then "PRIVATEKEYBLOCK" in any string value (any depth), then
      * 64-hex values outside the exact path `payload.nodes`, then the public identity at the placement the
      * command requires.
@@ -133,8 +141,7 @@ object IdentityProvisionContract {
         // characters may not include S beyond space, tab, CR and LF, and the header is detected on N(text).
         identity.opt("pgpPublicKeyArmored")?.let { rawPgp ->
             val pgpRaw = rawPgp as? String ?: return Result.Reject("bad_identity")
-            if (pgpRaw.any { it.code in WHITESPACE_SET_S && it.code !in PGP_ALLOWED_S }) return Result.Reject("bad_identity")
-            if (!normalize(pgpRaw).startsWith(PGP_PUBLIC_HEADER_NORMALIZED)) return Result.Reject("bad_identity")
+            if (!isPublicArmor(pgpRaw)) return Result.Reject("bad_identity")
         }
         return Result.Accept(eoa)
     }

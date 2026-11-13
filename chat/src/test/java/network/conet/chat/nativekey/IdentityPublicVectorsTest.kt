@@ -9,9 +9,9 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * `spec/identity-public-vectors.v1.json` (spec r3ae §25.48): the 13 cases for `identityPublic`. Each case sets the gate from its
- * state (a locked G2 is still G2), gives the decision the native public facts the case describes, and compares the ack with
- * the vector. The payload is read only in G2.
+ * `spec/identity-public-vectors.v1.json` (spec r3ae §25.48, r3ag): the 14 cases for `identityPublic`. Each case sets the gate from
+ * its state (a locked G2 is still G2), gives the decision the native PGP record the case describes, and compares the ack with the
+ * vector. The payload is read only in G2.
  */
 class IdentityPublicVectorsTest {
     private val bytes = File(System.getenv("IDENTITY_PUBLIC_VECTORS") ?: "../spec/identity-public-vectors.v1.json").readBytes()
@@ -19,7 +19,8 @@ class IdentityPublicVectorsTest {
     private val cases = v.getJSONArray("cases")
 
     private val accountEoa = "0x9858effd232b4033e47d90003d41ec34ecaeda94"
-    private val publicArmor = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
+    private val pgpArmor = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
+    private val routeArmor = "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-route-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
 
     private fun sha256Hex(b: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
@@ -40,23 +41,22 @@ class IdentityPublicVectorsTest {
     }
 
     /**
-     * The native facts a case describes. The PGP part is present only with `pgp`, and then `pgpReady` needs the route key too
-     * (IP-03 has a PGP key and no route key, so it is not ready).
+     * The native PGP record a case describes. `pgpLayout: legacy` is the old layout (IP-14). `pgp` gives the current layout, and
+     * then the route key is present only with `route`: IP-03 has a PGP key and no route key, so it is not ready.
      */
-    private fun sourceFor(env: JSONObject): IdentityPublic.Source {
-        val pgp = if (env.optBoolean("pgp")) {
-            IdentityPublic.PgpPublic(
-                keyId = "syn-pgp-key-0001",
-                publicArmor = publicArmor,
-                routeArmor = if (env.optBoolean("route")) "synthetic-route-public-0001" else "",
-            )
-        } else {
-            null
-        }
-        return object : IdentityPublic.Source {
-            override fun eoa(): String? = accountEoa
-            override fun pgp(): IdentityPublic.PgpPublic? = pgp
-        }
+    private fun recordFor(env: JSONObject): IdentityPublic.PgpRecord = when {
+        env.optString("pgpLayout") == "legacy" -> IdentityPublic.PgpRecord.LegacyLayout
+        env.optBoolean("pgp") -> IdentityPublic.PgpRecord.Current(
+            keyId = "syn-pgp-key-0001",
+            publicArmor = pgpArmor,
+            routeArmor = if (env.optBoolean("route")) routeArmor else "",
+        )
+        else -> IdentityPublic.PgpRecord.Absent
+    }
+
+    private fun sourceOf(record: IdentityPublic.PgpRecord): IdentityPublic.Source = object : IdentityPublic.Source {
+        override fun eoa(): String? = accountEoa
+        override fun pgp(): IdentityPublic.PgpRecord = record
     }
 
     /** The ack the decision gives for one case's call. */
@@ -68,21 +68,21 @@ class IdentityPublicVectorsTest {
             gateFor(env.getString("state")),
             { req.keys().asSequence().map { it.toString() }.toList() },
             reqId,
-            sourceFor(env),
+            sourceOf(recordFor(env)),
         )
         return IdentityPublic.ackPayload(reqId, reply)
     }
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("478d2a7d0ccad18e586a71f057738cc58616cfbaf8f233684f7c10afdbdee095", sha256Hex(bytes))
+        assertEquals("47c9b1e324afac4e1dae409c782107be7cd5482c9783393e192fc32b2de47465", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        assertEquals(13, cases.length())
-        assertEquals(13, v.getJSONObject("counts").getInt("cases"))
-        for ((group, n) in listOf("A" to 5, "B" to 4, "C" to 4)) {
+        assertEquals(14, cases.length())
+        assertEquals(14, v.getJSONObject("counts").getInt("cases"))
+        for ((group, n) in listOf("A" to 6, "B" to 4, "C" to 4)) {
             assertEquals(group, n, (0 until cases.length()).count { cases.getJSONObject(it).getString("group") == group })
         }
     }
@@ -124,13 +124,21 @@ class IdentityPublicVectorsTest {
     fun aSuccessfulResultCarriesOnlyThePublicFields() {
         // The result of every ok case: no forbidden key (§25.48.5), and the account key is eoa:default.
         val forbidden = v.getJSONArray("forbiddenResultKeys")
-        for (id in listOf("IP-01", "IP-02", "IP-03", "IP-04", "IP-12")) {
+        for (id in listOf("IP-01", "IP-02", "IP-03", "IP-04", "IP-12", "IP-14")) {
             val result = run(caseOf(id)).getJSONObject("result")
             for (f in 0 until forbidden.length()) {
                 assertFalse("$id carries ${forbidden.getString(f)}", result.has(forbidden.getString(f)))
             }
             assertEquals(id, accountEoa + ":default", result.getString("accountKey"))
         }
+    }
+
+    @Test
+    fun anOldLayoutRecordIsOkWithoutPgpFields() {
+        // §25.48.9: not an error, pgpReady false, and only the three base fields.
+        val result = run(caseOf("IP-14")).getJSONObject("result")
+        assertEquals(setOf("eoa", "accountKey", "pgpReady"), result.keys().asSequence().map { it.toString() }.toSet())
+        assertFalse(result.getBoolean("pgpReady"))
     }
 
     @Test
@@ -141,11 +149,26 @@ class IdentityPublicVectorsTest {
     }
 
     @Test
+    fun armorMustBePublicArmorForPgpReady() {
+        // r3ag: both fields are PGP public armor. A private armor, or a route key that is not armor, is not ready, and
+        // not an error (the ack stays ok, with no PGP fields).
+        fun pgpReadyWith(current: IdentityPublic.PgpRecord.Current): Boolean {
+            val reply = IdentityPublic.answer(NoKeyGate.Gate.G2, { listOf("type", "reqId") }, "x", sourceOf(current))
+            assertTrue(reply.ok)
+            return reply.result!!.getBoolean("pgpReady")
+        }
+        assertTrue(pgpReadyWith(IdentityPublic.PgpRecord.Current("syn-pgp-key-0001", pgpArmor, routeArmor)))
+        assertFalse(pgpReadyWith(IdentityPublic.PgpRecord.Current("syn-pgp-key-0001", "-----BEGIN PGP PRIVATE KEY BLOCK-----\nx\n-----END PGP PRIVATE KEY BLOCK-----", routeArmor)))
+        assertFalse(pgpReadyWith(IdentityPublic.PgpRecord.Current("syn-pgp-key-0001", pgpArmor, "synthetic-route-public-0001")))
+        assertFalse(pgpReadyWith(IdentityPublic.PgpRecord.Current("", pgpArmor, routeArmor)))
+    }
+
+    @Test
     fun theGateAnswersBeforeThePayloadIsRead() {
         // G0 and G1 never read the field names: a payload that would throw on read still gets no_key or not_ready.
         val poisoned = { error("the payload was read") }
-        assertEquals(IdentityPublic.NO_KEY, IdentityPublic.answer(NoKeyGate.Gate.G0, poisoned, "x", sourceFor(JSONObject())).error)
-        assertEquals(IdentityPublic.NOT_READY, IdentityPublic.answer(NoKeyGate.Gate.G1, poisoned, "x", sourceFor(JSONObject())).error)
+        assertEquals(IdentityPublic.NO_KEY, IdentityPublic.answer(NoKeyGate.Gate.G0, poisoned, "x", sourceOf(IdentityPublic.PgpRecord.Absent)).error)
+        assertEquals(IdentityPublic.NOT_READY, IdentityPublic.answer(NoKeyGate.Gate.G1, poisoned, "x", sourceOf(IdentityPublic.PgpRecord.Absent)).error)
     }
 
     @Test
@@ -159,7 +182,7 @@ class IdentityPublicVectorsTest {
                 NoKeyGate.Gate.G2,
                 { listOf("type", "reqId", field) },
                 "x",
-                sourceFor(JSONObject().put("pgp", true).put("route", true)),
+                sourceOf(IdentityPublic.PgpRecord.Absent),
             )
             assertEquals(field, IdentityPublic.KEY_REFUSED, reply.error)
             assertEquals(field, field, reply.refused)

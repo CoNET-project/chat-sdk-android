@@ -966,14 +966,13 @@ object BeamioConetChatModule {
     }
 
     /**
-     * The native source of identityPublic. The account is the session's. The PGP part is none for now: the native PGP record
-     * holds only the sealed private armor, the fingerprint and the EOA, with no key ID of its own and no route public key, so
-     * `pgpReady` stays false until that source is defined (r3ae report). The session's PGP copies come from the PWA's init,
-     * and are not used here.
+     * The native source of identityPublic. The account is the session's. The PGP record is not read here yet, so the PGP part is
+     * `NotRead` and `pgpReady` stays false. That is not an error, and it is not "no identity" (§25.48.9, §25.30.3). The session's
+     * PGP copies come from the PWA's init, and are not used here.
      */
     private fun identityPublicSource(): IdentityPublic.Source = object : IdentityPublic.Source {
         override fun eoa(): String? = currentSession()?.eoa
-        override fun pgp(): IdentityPublic.PgpPublic? = null
+        override fun pgp(): IdentityPublic.PgpRecord = IdentityPublic.PgpRecord.NotRead
     }
 
     /**

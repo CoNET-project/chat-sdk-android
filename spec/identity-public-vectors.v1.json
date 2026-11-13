@@ -90,7 +90,7 @@
                 "pgpReady": true,
                 "pgpKeyID": "syn-pgp-key-0001",
                 "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
-                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+                "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-route-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
               }
             }
           }
@@ -215,7 +215,7 @@
                 "pgpReady": true,
                 "pgpKeyID": "syn-pgp-key-0001",
                 "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
-                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+                "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-route-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
               }
             }
           }
@@ -509,7 +509,7 @@
                 "pgpReady": true,
                 "pgpKeyID": "syn-pgp-key-0001",
                 "pgpPublicKeyArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-public-only\n-----END PGP PUBLIC KEY BLOCK-----",
-                "ownRouteArmoredPublicKey": "synthetic-route-public-0001"
+                "ownRouteArmoredPublicKey": "-----BEGIN PGP PUBLIC KEY BLOCK-----\nsynthetic-route-public-only\n-----END PGP PUBLIC KEY BLOCK-----"
               }
             }
           }
@@ -550,15 +550,57 @@
           }
         }
       ]
+    },
+    {
+      "id": "IP-14",
+      "group": "A",
+      "title": "G2 且 PGP 记录为旧布局（只读路径不迁移）：ok，pgpReady false，不含 PGP 字段，不是错误（§25.48.9）",
+      "testIds": [
+        "T-248"
+      ],
+      "env": {
+        "state": "G2",
+        "pgp": true,
+        "route": true,
+        "pgpLayout": "legacy"
+      },
+      "steps": [
+        {
+          "op": "call",
+          "req": {
+            "type": "identityPublic",
+            "reqId": "IP-14"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "IP-14",
+              "ok": true,
+              "result": {
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+                "pgpReady": false
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "counts": {
-    "cases": 13,
-    "A": 5,
+    "cases": 14,
+    "A": 6,
     "B": 4,
     "C": 4
   },
   "notCovered": [
+    "旧布局记录的迁移（由已有的加载路径完成，不由 identityPublic 完成）：IP-14 只固定 pgpReady false 的结果。",
     "本向量不并入 no-key-reject-vectors.v1.json 与 gate-state-vectors.v1.json 的清单（二者固定为 r3ab 的 59 条与 102 项）。G0、G1 的行为由本向量与 §25.26.4 默认拒绝规则覆盖。两份清单在下次修订时并入（§25.48.7）。",
     "原生侧的公开材料来源（PGP 记录的读取）：由 pgpRestore 与 pgpIdentityCreate 的既有用例覆盖。",
     "界面文案与 PWA 的启动流程：由 PWA Chat SDK 的启动用例覆盖。"

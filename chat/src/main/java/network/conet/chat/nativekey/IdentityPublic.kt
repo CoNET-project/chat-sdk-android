@@ -1,18 +1,21 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.identity.IdentityProvisionContract
 import org.json.JSONObject
 
 /**
- * `identityPublic` (spec r3ae §25.48): the account's public material, for G2 only. It is read-only: it writes nothing,
- * signs nothing and unlocks nothing, so the passcode lock does not affect it.
+ * `identityPublic` (spec r3ae §25.48, r3ag): the account's public material, for G2 only. It is read-only: it writes nothing,
+ * signs nothing, unlocks nothing and migrates nothing, so the passcode lock does not affect it.
  *
- * Order: the gate first (G0 `no_key`, G1 `not_ready`), with the payload not read. Then the input: a credential or key field
- * is `key_over_bridge_refused` (only its name is kept, for the log), any other field besides `type` and `reqId` is
- * `bad_request`, and a `reqId` that is not a string or a non-negative integer is `bad_request` (§25.28.3). Then the result.
+ * Order: the gate first (G0 `no_key`, G1 `not_ready`), with the payload not read. Then the input: a credential or key field is
+ * `key_over_bridge_refused` (only its name is kept, for the log), any other field besides `type` and `reqId` is `bad_request`,
+ * and a `reqId` that is not a string or a non-negative integer is `bad_request` (§25.28.3). Then the result.
  *
- * The result is built from the fixed fields below and nothing else, so no secret, hash, stored block or ciphertext can reach
- * it (§25.48.5). `pgpReady` is true only when the native record holds the key ID, the PGP public armor and the route public
- * armor together. The PGP fields are not taken from the PWA's copies in the session.
+ * The result is built from fixed fields only, so no secret, hash, stored block or ciphertext can reach it (§25.48.5).
+ * `pgpReady` is true only when the current-layout PGP record holds a key ID, a PGP public armor and a route public armor, all
+ * non-empty, and both armors are public armor in the form the production save accepts (§25.48.4, r3ag). An old-layout record,
+ * or no record, gives `pgpReady` false with no PGP fields. That is not an error and not "no identity" (§25.48.9). Nothing here
+ * creates, restores or overwrites a key, and nobody may act on `pgpReady` false alone (§25.30.3).
  */
 internal object IdentityPublic {
     const val NO_KEY = NoKeyGate.NO_KEY
@@ -28,16 +31,28 @@ internal object IdentityPublic {
 
     private val ALLOWED_FIELDS: Set<String> = setOf("type", "reqId")
 
-    /** The PGP public material of the native record. The three values are all needed for `pgpReady`. */
-    class PgpPublic(val keyId: String, val publicArmor: String, val routeArmor: String)
+    /** What the native PGP record gives this read. The read path never migrates an old layout (§25.48.9). */
+    sealed interface PgpRecord {
+        /** No native source for the record is read here yet. */
+        object NotRead : PgpRecord
+
+        /** The account has no PGP record. */
+        object Absent : PgpRecord
+
+        /** The record is in the old layout. The read path leaves it as it is. */
+        object LegacyLayout : PgpRecord
+
+        /** The current layout, with its public parts as stored. */
+        class Current(val keyId: String, val publicArmor: String, val routeArmor: String) : PgpRecord
+    }
 
     /** The public facts the decision reads. Each one comes from the native layer, never from the payload. */
     interface Source {
         /** The account of this session, `0x…` (any case), or null when there is none. */
         fun eoa(): String?
 
-        /** The native PGP public material, or null when the native record does not hold it. */
-        fun pgp(): PgpPublic?
+        /** What the native PGP record gives this read. */
+        fun pgp(): PgpRecord
     }
 
     /** The decision. [error] is null for ok; [refused] is the first credential field name, for the log only. */
@@ -63,15 +78,22 @@ internal object IdentityPublic {
             .put("eoa", eoa)
             .put("accountKey", NoKeyGate.accountKeyOf(eoa))
             .put("pgpReady", false)
-        val pgp = source.pgp()
-        if (pgp != null && pgp.keyId.isNotEmpty() && pgp.publicArmor.isNotEmpty() && pgp.routeArmor.isNotEmpty()) {
+        // Only the current layout can be ready. NotRead, Absent and LegacyLayout leave pgpReady false, with no PGP fields.
+        val current = (source.pgp() as? PgpRecord.Current)?.takeIf { isReady(it) }
+        if (current != null) {
             result.put("pgpReady", true)
-                .put("pgpKeyID", pgp.keyId)
-                .put("pgpPublicKeyArmored", pgp.publicArmor)
-                .put("ownRouteArmoredPublicKey", pgp.routeArmor)
+                .put("pgpKeyID", current.keyId)
+                .put("pgpPublicKeyArmored", current.publicArmor)
+                .put("ownRouteArmoredPublicKey", current.routeArmor)
         }
         return Reply(null, result)
     }
+
+    /** `pgpReady` (§25.48.4, r3ag): the three values are non-empty, and both armors are PGP public armor. */
+    private fun isReady(c: PgpRecord.Current): Boolean =
+        c.keyId.isNotEmpty() &&
+            IdentityProvisionContract.isPublicArmor(c.publicArmor) &&
+            IdentityProvisionContract.isPublicArmor(c.routeArmor)
 
     /** The ack envelope (§25.45): `result` only on success. `reqId` is echoed as sent, or null. */
     fun ackPayload(reqId: Any?, reply: Reply): JSONObject {
