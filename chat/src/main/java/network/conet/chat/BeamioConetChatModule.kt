@@ -10,6 +10,7 @@ import network.conet.chat.nativekey.NativeImportHost
 import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
+import network.conet.chat.nativekey.NativePgpVault
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.localread.LocalChatEvent
@@ -49,9 +50,9 @@ object BeamioConetChatModule {
 
     class Session {
         @Volatile var eoa: String = ""
-        @Volatile var pgpPrivateKeyArmored: String = ""
+        // The PGP private key and its passphrase are not held by the session: they live in the native PGP record
+        // (nativekey.NativePgpVault), and only the native decryption reads them (§36-B).
         @Volatile var pgpPublicKeyArmored: String = ""
-        @Volatile var pgpPassphrase: String = ""
         @Volatile var ownRouteArmoredPublicKey: String = ""
         @Volatile var mailboxIp: String = ""
         /** Route key ID the running listen sent its last `mailbox_listen` to (log + handoff check). */
@@ -146,6 +147,8 @@ object BeamioConetChatModule {
         // no legacy key is left. Only the outcome is logged, never the key.
         runCatching { NativeWallet.migrateLegacy(context) }
             .onFailure { Log.w(TAG, "legacy wallet adoption failed: ${it.javaClass.simpleName}") }
+        runCatching { NativeWallet.migrateLegacyPgp(context) }
+            .onFailure { Log.w(TAG, "legacy PGP adoption failed: ${it.javaClass.simpleName}") }
         val type = body.optString("type", "")
         val route = NoKeyGate.route(type)
         // X-21 is retired (no key crosses the bridge): refused whether or not a key exists (25.24, 25.26.4 table C).
@@ -302,18 +305,22 @@ object BeamioConetChatModule {
             synchronized(seenArmor) { seenArmor.clear() }
         }
 
+        // TODO(P-IMP-PGP, §36-B): `identity.pgpPrivateKeyArmored` and `identity.pgpPassphrase` are still accepted here
+        // until the source of the PGP key is decided. They go straight into the native PGP record after the wallet
+        // check (storeInitPgp), and never into the session or the page. Remove them with P-IMP-PGP.
+        var pgpArmorInInit = ""
+        var pgpPassphraseInInit = ""
         payload.optJSONObject("identity")?.let { id ->
             s.eoa = normalizeAddress(id.optString("eoaAddress", "").ifBlank { id.optString("eoa", "") })
-            s.pgpPrivateKeyArmored = id.optString("pgpPrivateKeyArmored", "")
+            pgpArmorInInit = id.optString("pgpPrivateKeyArmored", "")
             s.pgpPublicKeyArmored = id.optString("pgpPublicKeyArmored", "")
-            s.pgpPassphrase = id.optString("pgpPassphrase", "")
+            pgpPassphraseInInit = id.optString("pgpPassphrase", "")
             s.ownRouteArmoredPublicKey = id.optString("ownRouteArmoredPublicKey", "")
                 .ifBlank { id.optString("routePublicKeyArmored", "") }
             s.mailboxIp = id.optString("mailboxIp", "")
         }
-        if (s.pgpPrivateKeyArmored.isEmpty() || s.ownRouteArmoredPublicKey.isEmpty()) {
+        if (s.ownRouteArmoredPublicKey.isEmpty() || s.pgpPublicKeyArmored.isEmpty()) {
             BeamioChatPgpStore.load(ctx)?.let { kc ->
-                if (s.pgpPrivateKeyArmored.isEmpty()) s.pgpPrivateKeyArmored = kc.privateKeyArmor
                 if (s.pgpPublicKeyArmored.isEmpty()) s.pgpPublicKeyArmored = kc.publicKeyArmor
                 if (s.ownRouteArmoredPublicKey.isEmpty()) s.ownRouteArmoredPublicKey = kc.routePublicKeyArmor
                 if (s.mailboxIp.isEmpty()) s.mailboxIp = kc.mailboxIp
@@ -337,17 +344,18 @@ object BeamioConetChatModule {
         }
         payload.optJSONArray("routes")?.let { s.routes = objects(it) }
 
-        if (s.eoa.isEmpty() || !s.pgpPrivateKeyArmored.contains("BEGIN PGP PRIVATE KEY")) {
+        // A PGP key must come in the payload or already be in the native record; otherwise missing_identity, as before.
+        val pgpInVault = NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
+        if (s.eoa.isEmpty() || (pgpArmorInInit.isEmpty() && !pgpInVault)) {
             ack(reqId, false, error = "missing_identity")
             return
         }
 
-        // Keep the killed-app voice path working: it reads the PGP key / route / roster from here.
+        // Keep the killed-app voice path working: it reads the route / roster from here (public material only).
         try {
             BeamioChatPgpStore.upsertFromWeb(
                 ctx,
                 JSONObject()
-                    .put("privateKeyArmor", s.pgpPrivateKeyArmored)
                     .put("publicKeyArmor", s.pgpPublicKeyArmored)
                     .put("routePublicKeyArmor", s.ownRouteArmoredPublicKey)
                     .put("eoa", s.eoa),
@@ -365,7 +373,9 @@ object BeamioConetChatModule {
                 ack(reqId, false, error = "openpgp_not_ready")
                 return@ensureReady
             }
-            adoptNativeWallet(ctx, host, reqId, s.eoa) { finishInit(ctx, reqId, s, attach) }
+            adoptNativeWallet(ctx, host, reqId, s.eoa) {
+                if (storeInitPgp(ctx, reqId, s.eoa, pgpArmorInInit, pgpPassphraseInInit)) finishInit(ctx, reqId, s, attach)
+            }
         }
     }
 
@@ -374,6 +384,25 @@ object BeamioConetChatModule {
      * with a passed readback. Otherwise init is refused and the user imports the key natively: nothing is
      * accepted from the bridge, and the page does not sign for the wallet.
      */
+    /**
+     * `init`'s PGP fields (to be removed with P-IMP-PGP). A key in the payload is written to the native PGP record for
+     * the wallet's account, after the wallet check. Nothing is kept in the session, and nothing goes back to the page.
+     * With no key in the payload, the existing record stands. Returns `false` after acking an error.
+     */
+    private fun storeInitPgp(ctx: Context, reqId: Int, eoa: String, armor: String, passphrase: String): Boolean {
+        if (armor.isEmpty()) return true
+        return when (NativeWallet.pgp(ctx).put(eoa, armor, passphrase)) {
+            NativePgpVault.Put.OK -> {
+                BeamioChatPgpStore.clearLegacyPrivateArmor(ctx)
+                true
+            }
+            else -> {
+                ack(reqId, false, error = "pgp_key_rejected")
+                false
+            }
+        }
+    }
+
     private fun adoptNativeWallet(
         ctx: Context,
         host: BeamioOpenPgpHost,
@@ -490,10 +519,12 @@ object BeamioConetChatModule {
             return true
         }
         NativeWallet.migrateLegacy(ctx)
+        NativeWallet.migrateLegacyPgp(ctx)
         val vault = NativeWallet.vault(ctx)
         val walletEoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
         val pgp = BeamioChatPgpStore.load(ctx)
-        if (pgp == null || !pgp.hasUserPrivate || !pgp.hasRoutePublic || walletEoa == null) {
+        val pgpReady = NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
+        if (pgp == null || !pgpReady || !pgp.hasRoutePublic || walletEoa == null) {
             Log.w(TAG, "no stored identity for a no-page listen ($reason)")
             return false
         }
@@ -514,7 +545,6 @@ object BeamioConetChatModule {
         walletKey.fill(0)
         val s = Session().apply {
             eoa = walletEoa
-            pgpPrivateKeyArmored = pgp.privateKeyArmor
             pgpPublicKeyArmored = pgp.publicKeyArmor
             ownRouteArmoredPublicKey = pgp.routePublicKeyArmor
             mailboxIp = pgp.mailboxIp
@@ -664,6 +694,7 @@ object BeamioConetChatModule {
         BeamioConetChatSignBroker.clearNativeSigner()
         if (ctx != null) {
             NativeWallet.vault(ctx).forget()
+            NativeWallet.pgp(ctx).forget()
             BeamioChatWalletKeyStore.clear(ctx)
             BeamioChatPgpStore.clear(ctx)
             BeamioConetChatInboxStore.clear(ctx)
@@ -1495,7 +1526,6 @@ object BeamioConetChatModule {
             BeamioChatPgpStore.upsertFromWeb(
                 ctx,
                 JSONObject()
-                    .put("privateKeyArmor", s.pgpPrivateKeyArmored)
                     .put("routePublicKeyArmor", v.routeArmor),
             )
             val roster = BeamioChatPgpStore.loadSiNodes(ctx)

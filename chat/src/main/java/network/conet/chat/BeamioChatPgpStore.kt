@@ -12,7 +12,9 @@ import org.json.JSONObject
  * Guardian **SI IP roster**. Used so a killed app can still decrypt a mailbox
  * `voice_offer_fetch` and POST to entries.
  *
- * Never stores the EOA private key or mnemonic. Backed by EncryptedSharedPreferences.
+ * Never stores the EOA private key, the mnemonic, or the PGP private key. The PGP private key lives in the native
+ * vault (`nativekey.NativePgpVault`, spec §25.22.2). Only [legacyPrivateArmor] still reads an older copy, once, for
+ * migration. Backed by EncryptedSharedPreferences.
  */
 object BeamioChatPgpStore {
     private const val PREFS = "beamio_chat_pgp_v1"
@@ -42,8 +44,8 @@ object BeamioChatPgpStore {
         val region: String = "",
     )
 
+    /** Public PGP material and routing. The PGP private key is not part of this model. */
     data class Secrets(
-        val privateKeyArmor: String,
         val publicKeyArmor: String = "",
         val pgpKeyId: String = "",
         val routePublicKeyArmor: String = "",
@@ -52,8 +54,6 @@ object BeamioChatPgpStore {
         val mailboxIp: String = "",
         val eoa: String = "",
     ) {
-        val hasUserPrivate: Boolean
-            get() = privateKeyArmor.contains("BEGIN PGP PRIVATE KEY")
         val hasRoutePublic: Boolean
             get() = routePublicKeyArmor.contains("BEGIN PGP PUBLIC KEY")
     }
@@ -88,10 +88,16 @@ object BeamioChatPgpStore {
         }
     }
 
+    /** Legacy copy of the PGP private key (written before the vault held it). Read once, for migration only. */
+    fun legacyPrivateArmor(context: Context): String =
+        prefs(context).getString(KEY_PRIVATE, "").orEmpty()
+
+    /** Removes the legacy private copy once the vault holds the key. */
+    fun clearLegacyPrivateArmor(context: Context): Boolean =
+        prefs(context).edit().remove(KEY_PRIVATE).commit()
+
     fun load(context: Context): Secrets? {
         val p = prefs(context)
-        val privateArmor = p.getString(KEY_PRIVATE, "").orEmpty()
-        if (!privateArmor.contains("BEGIN PGP PRIVATE KEY")) return null
         val domainsJson = p.getString(KEY_ENTRIES, "[]").orEmpty()
         val domains = try {
             val arr = JSONArray(domainsJson)
@@ -102,7 +108,6 @@ object BeamioChatPgpStore {
             emptyList()
         }
         return Secrets(
-            privateKeyArmor = privateArmor,
             publicKeyArmor = p.getString(KEY_PUBLIC, "").orEmpty(),
             pgpKeyId = p.getString(KEY_KEY_ID, "").orEmpty(),
             routePublicKeyArmor = p.getString(KEY_ROUTE, "").orEmpty(),
@@ -114,14 +119,12 @@ object BeamioChatPgpStore {
     }
 
     fun save(context: Context, secrets: Secrets): Boolean {
-        if (!secrets.hasUserPrivate) return false
         val store = prefs(context)
         if (!lastPrefsSecure) {
-            Log.w(TAG, "secure store unavailable; PGP key not saved")
+            Log.w(TAG, "secure store unavailable; public PGP material not saved")
             return false
         }
         val editor = store.edit()
-            .putString(KEY_PRIVATE, secrets.privateKeyArmor)
         if (secrets.publicKeyArmor.isNotBlank()) {
             editor.putString(KEY_PUBLIC, secrets.publicKeyArmor)
         }
@@ -147,7 +150,10 @@ object BeamioChatPgpStore {
         return ok
     }
 
-    /** Merge partial PWA JSON payload into existing store (private required). */
+    /**
+     * Merge partial PWA JSON payload into existing store. Public fields only: a `privateKeyArmor` in the payload is
+     * ignored and never stored (the vault holds the PGP private key).
+     */
     fun upsertFromWeb(context: Context, json: String): Boolean {
         return try {
             upsertFromWeb(context, JSONObject(json.ifBlank { "{}" }))
@@ -158,8 +164,6 @@ object BeamioChatPgpStore {
     }
 
     fun upsertFromWeb(context: Context, body: JSONObject): Boolean {
-        val privateArmor = body.optString("privateKeyArmor", "").trim()
-        if (!privateArmor.contains("BEGIN PGP PRIVATE KEY")) return false
         val prev = load(context)
         val domains = when {
             body.has("entryDomains") -> {
@@ -175,7 +179,6 @@ object BeamioChatPgpStore {
             else -> prev?.entryDomains.orEmpty()
         }
         val secrets = Secrets(
-            privateKeyArmor = privateArmor,
             publicKeyArmor = body.optString("publicKeyArmor", "").trim()
                 .ifBlank { prev?.publicKeyArmor.orEmpty() },
             pgpKeyId = body.optString("pgpKeyId", "").trim()

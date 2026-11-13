@@ -289,109 +289,6 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
      * `evaluateJavascript` often never delivers async IIFE Promise results, which left
      * inbound frames stuck after `inbound frame` with no decrypt ok/fail.
      */
-    fun decryptInboundArmor(
-        privateKeyArmor: String,
-        passphrase: String,
-        armoredMessage: String,
-        callback: (Result<DecryptInbound>) -> Unit,
-    ) {
-        ensureReady { ok ->
-            if (!ok) {
-                Log.e(TAG, "decrypt_inbound: openpgp host not ready")
-                callback(Result.failure(IllegalStateException("openpgp host not ready")))
-                return@ensureReady
-            }
-            val wv = webView
-            if (wv == null) {
-                Log.e(TAG, "decrypt_inbound: webview missing")
-                callback(Result.failure(IllegalStateException("webview missing")))
-                return@ensureReady
-            }
-            if (!privateKeyArmor.contains("BEGIN PGP PRIVATE KEY")) {
-                Log.e(TAG, "decrypt_inbound: missing private key armor")
-                callback(Result.failure(IllegalStateException("missing_private_key")))
-                return@ensureReady
-            }
-            if (!armoredMessage.contains("BEGIN PGP MESSAGE")) {
-                Log.e(TAG, "decrypt_inbound: missing message armor")
-                callback(Result.failure(IllegalStateException("missing_message_armor")))
-                return@ensureReady
-            }
-            val requestId = nextJsRequestId()
-            Log.i(
-                TAG,
-                "decrypt_inbound: start id=$requestId armorChars=${armoredMessage.length}",
-            )
-            decryptTiming[requestId] = longArrayOf(SystemClock.elapsedRealtime(), 0L, 0L)
-            registerJsResult(requestId) { parsed ->
-                logDecryptTiming(requestId)
-                if (!parsed.ok) {
-                    Log.e(TAG, "decrypt_inbound: ${parsed.error.ifBlank { "decrypt_fail" }}")
-                    callback(
-                        Result.failure(
-                            IllegalStateException(parsed.error.ifBlank { "decrypt_fail" }),
-                        ),
-                    )
-                    return@registerJsResult
-                }
-                Log.i(
-                    TAG,
-                    "decrypt_inbound: ok id=$requestId textChars=${parsed.text.length} hash=${parsed.armorHash.take(18)}",
-                )
-                callback(
-                    Result.success(
-                        DecryptInbound(
-                            text = parsed.text,
-                            armorHash = parsed.armorHash,
-                        ),
-                    ),
-                )
-            }
-            val js = """
-            (async function(){
-              const requestId = ${jsString(requestId)};
-              function post(payload) {
-                try { BeamioOpenPgpAndroid.postResult(requestId, payload); } catch (_) {}
-                return payload;
-              }
-              try {
-                const armoredMessage = ${jsString(armoredMessage)};
-                const passphrase = ${jsString(passphrase)};
-                let pk = await openpgp.readPrivateKey({ armoredKey: ${jsString(privateKeyArmor)} });
-                if (!pk.isDecrypted() && passphrase.length) {
-                  pk = await openpgp.decryptKey({ privateKey: pk, passphrase: passphrase });
-                }
-                const msg = await openpgp.readMessage({ armoredMessage: armoredMessage });
-                const { data } = await openpgp.decrypt({ message: msg, decryptionKeys: pk });
-                const text = typeof data === 'string' ? data : String(data);
-                const armorHash = ethers.keccak256(ethers.toUtf8Bytes(armoredMessage));
-                return post(JSON.stringify({ ok: true, text: text, armorHash: armorHash }));
-              } catch (e) {
-                const msg = (e && e.message) ? e.message : String(e);
-                return post(JSON.stringify({ ok: false, error: msg }));
-              }
-            })()
-            """.trimIndent()
-            main.post {
-                decryptTiming[requestId]?.set(1, SystemClock.elapsedRealtime())
-                wv.evaluateJavascript(js) { raw ->
-                    // Secondary path: Bridge.postResult is primary.
-                    if (!pendingJsResults.containsKey(requestId)) return@evaluateJavascript
-                    val parsed = parseJsJsonResult(raw)
-                    if (parsed == null) {
-                        Log.e(
-                            TAG,
-                            "decrypt_inbound: empty/null evaluateJavascript raw=${raw?.take(120)}",
-                        )
-                        // Do not fail yet — Bridge.postResult may still arrive.
-                        return@evaluateJavascript
-                    }
-                    deliverJsResult(requestId, parsed)
-                }
-            }
-        }
-    }
-
     // ---- Module crypto (model 1B: the PWA signs, this host only encrypts / verifies) ----
 
     /**
@@ -616,11 +513,6 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
 
     // The wallet signing functions (EIP-191, EIP-712, address) were removed from this host. They run in native code
     // in nativekey (Eip191Signer, Eip712, WalletAddress), so the wallet key never enters the WebView (AND-K-c2, A-4).
-
-    data class DecryptInbound(
-        val text: String,
-        val armorHash: String,
-    )
 
     /** Boots the hidden WebView (OpenPGP.js + ethers) once; [callback] gets `true` when usable. */
     fun ensureReady(callback: (Boolean) -> Unit) {

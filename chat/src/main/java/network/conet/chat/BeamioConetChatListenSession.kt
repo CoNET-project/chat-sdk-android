@@ -2,6 +2,8 @@ package network.conet.chat
 
 import android.content.Context
 import android.util.Log
+import network.conet.chat.nativekey.NativeWallet
+import network.conet.chat.nativekey.NativePgp
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.SecureRandom
@@ -409,30 +411,27 @@ internal class BeamioConetChatListenSession {
             onFailure: (() -> Unit)? = null,
             onLine: (line: String, armorHash: String) -> Unit,
         ) {
-            BeamioOpenPgpHost.shared(app).decryptInboundArmor(
-                session.pgpPrivateKeyArmored,
-                session.pgpPassphrase,
-                armored,
-            ) { result ->
-                result.onSuccess { dec ->
-                    var line = normalizeInboundPlaintext(dec.text)
-                    if (line.isBlank()) return@onSuccess
+            // Native decryption inside the wallet boundary (§36-B): the vault holds the PGP key and its passphrase, and
+            // only the plaintext comes back. The callback runs on the main thread, as it did from the WebView host.
+            val outcome = NativeWallet.pgp(app).decryptInbound(armored)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                val text = outcome.value
+                if (outcome.ok && text != null) {
+                    var line = normalizeInboundPlaintext(text)
+                    if (line.isBlank()) return@post
+                    val armorHash = NativePgp.armorHash(armored)
                     try {
                         val env = JSONObject(line)
-                        env.put("_beamioPgpArmorHash", dec.armorHash)
+                        env.put("_beamioPgpArmorHash", armorHash)
                         line = env.toString()
                     } catch (_: Exception) {
                     }
-                    onLine(line, dec.armorHash)
-                }
-                result.onFailure { err ->
-                    val msg = err.message.orEmpty()
-                    if (msg.contains("No decryption key", ignoreCase = true)) {
-                        Log.w(TAG, "inbound PGP not for this listen key")
-                    } else {
-                        Log.w(TAG, "inbound decrypt failed")
-                        onFailure?.invoke()
-                    }
+                    onLine(line, armorHash)
+                } else if (outcome.code == "not_recipient") {
+                    Log.w(TAG, "inbound PGP not for this listen key")
+                } else {
+                    Log.w(TAG, "inbound decrypt failed: ${outcome.code}")
+                    onFailure?.invoke()
                 }
             }
         }

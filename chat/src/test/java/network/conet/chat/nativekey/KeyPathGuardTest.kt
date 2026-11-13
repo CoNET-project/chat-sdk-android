@@ -82,6 +82,42 @@ class KeyPathGuardTest {
     }
 
     @Test
+    fun pgpPrivateKeyIsNotHeldBySessionOrPgpStore() {
+        // §36-B: the PGP private key lives in the native PGP record. The session does not hold it, and the PgpStore
+        // never writes it.
+        assertFalse(module.contains("var pgpPrivateKeyArmored"))
+        assertFalse(module.contains("@Volatile var pgpPassphrase"))
+        assertFalse(module.contains("s.pgpPrivateKeyArmored"))
+        assertFalse(module.contains("kc.privateKeyArmor"))
+        assertFalse(module.contains("pgp.privateKeyArmor"))
+        val store = File("src/main/java/network/conet/chat/BeamioChatPgpStore.kt").readText()
+        assertFalse(store.contains("putString(KEY_PRIVATE"))
+        assertFalse(store.contains("hasUserPrivate"))
+        assertTrue(store.contains("fun clearLegacyPrivateArmor("))
+    }
+
+    @Test
+    fun initStoresAPgpKeyOnlyInTheNativeRecordAndIsMarkedForRemoval() {
+        // The init fields are accepted until P-IMP-PGP is decided, then they are removed. Until then they go to the
+        // native record only, after the wallet check.
+        assertTrue(module.contains("storeInitPgp(ctx, reqId, s.eoa, pgpArmorInInit, pgpPassphraseInInit)"))
+        assertTrue(module.contains("NativeWallet.pgp(ctx).put(eoa, armor, passphrase)"))
+        assertTrue(module.contains("P-IMP-PGP"))
+    }
+
+    @Test
+    fun inboundDecryptionRunsInTheVaultAndTheWebViewHoldsNoPgpKey() {
+        val listen = File("src/main/java/network/conet/chat/BeamioConetChatListenSession.kt").readText()
+        assertTrue(listen.contains("NativeWallet.pgp(app).decryptInbound(armored)"))
+        assertFalse(listen.contains("decryptInboundArmor"))
+        val host = File("src/main/java/network/conet/chat/BeamioOpenPgpHost.kt").readText()
+        assertFalse("WebView host still decrypts with a private key", host.contains("decryptInboundArmor"))
+        assertFalse("WebView host still reads a private key", host.contains("openpgp.readPrivateKey"))
+        assertFalse("WebView host still unlocks a key", host.contains("openpgp.decryptKey"))
+        assertFalse("WebView host still takes an armor argument for a private key", host.contains("privateKeyArmor"))
+    }
+
+    @Test
     fun legacyKeyIsAdoptedBeforeTheGate() {
         // An upgraded install whose first command is `init` must keep its wallet: the legacy key is adopted first.
         val adopt = module.indexOf("NativeWallet.migrateLegacy(context)")
@@ -93,7 +129,7 @@ class KeyPathGuardTest {
     @Test
     fun mnemonicAndGateCodeNeverLog() {
         // The phrase and the derived key must not reach the log (25.26.3, 25.22.5).
-        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt")) {
+        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt", "NativePgp.kt", "NativePgpVault.kt")) {
             val src = File("src/main/java/network/conet/chat/nativekey/$name").readText()
             assertFalse("$name logs", src.contains("Log."))
             assertFalse("$name prints", src.contains("println"))

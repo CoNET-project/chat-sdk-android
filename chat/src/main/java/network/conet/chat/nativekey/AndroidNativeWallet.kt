@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import network.conet.chat.BeamioChatPgpStore
 import network.conet.chat.BeamioChatWalletKeyStore
 import network.conet.chat.ConetChatCryptoUtil
 import java.io.File
@@ -141,5 +142,38 @@ object NativeWallet {
         } finally {
             key.fill(0)
         }
+    }
+
+    @Volatile
+    private var pgpInstance: NativePgpVault? = null
+
+    /** The native PGP record. It shares the wallet directory and wrap key, under its own file names and AAD. */
+    internal fun pgp(context: Context): NativePgpVault =
+        pgpInstance ?: synchronized(this) {
+            pgpInstance ?: NativePgpVault(
+                AndroidKeyWrap(),
+                AndroidVaultFiles(File(context.applicationContext.filesDir, DIR)),
+            ).also { pgpInstance = it }
+        }
+
+    /**
+     * Upgrade path for the PGP key. When the EOA record is present and the PGP record is not, and the pre-upgrade PGP
+     * store holds a private key for the same account, the key is copied into the vault. The legacy copy is removed
+     * only after the vault has confirmed it. The legacy store never held a passphrase; the passphrase arrives with
+     * `init`. Returns `true` when a key was adopted.
+     */
+    @Synchronized
+    fun migrateLegacyPgp(context: Context): Boolean {
+        val app = context.applicationContext
+        val eoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa ?: return false
+        val pgpVault = pgp(app)
+        if (pgpVault.state() !is NativePgpVault.State.NoKey) return false
+        val armor = BeamioChatPgpStore.legacyPrivateArmor(app)
+        if (!armor.contains("BEGIN PGP PRIVATE KEY")) return false
+        val legacyEoa = BeamioChatPgpStore.load(app)?.eoa?.trim()?.lowercase().orEmpty()
+        if (legacyEoa.isNotEmpty() && legacyEoa != eoa) return false
+        val adopted = pgpVault.put(eoa, armor, "") == NativePgpVault.Put.OK
+        if (adopted) BeamioChatPgpStore.clearLegacyPrivateArmor(app)
+        return adopted
     }
 }
