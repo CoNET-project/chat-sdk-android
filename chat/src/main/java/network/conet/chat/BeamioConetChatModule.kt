@@ -46,7 +46,7 @@ object BeamioConetChatModule {
         val region: String,
         val armoredPublicKey: String,
     ) {
-        fun asStoreNode() = BeamioChatPgpStore.SiNode(ip, domain, region)
+        fun asStoreNode() = BeamioChatPgpStore.SiNode(ip, domain, region, armoredPublicKey)
     }
 
     class Session {
@@ -338,7 +338,7 @@ object BeamioConetChatModule {
             s.nodes = parseNodes(nodesRaw)
         } else {
             val saved = BeamioChatPgpStore.loadSiNodes(ctx)
-            if (saved.isNotEmpty()) s.nodes = saved.map { Node(it.ip, it.domain, it.region, "") }
+            if (saved.isNotEmpty()) s.nodes = saved.map { Node(it.ip, it.domain, it.region, it.armoredPublicKey) }
         }
         payload.optJSONArray("routes")?.let { s.routes = objects(it) }
 
@@ -358,7 +358,8 @@ object BeamioConetChatModule {
                     .put("routePublicKeyArmor", s.ownRouteArmoredPublicKey)
                     .put("eoa", s.eoa),
             )
-            if (s.nodes.isNotEmpty() && BeamioChatPgpStore.loadSiNodes(ctx).isEmpty()) {
+            // A payload roster that carries PGP keys replaces the stored one: background listen starts from the stored keys.
+            if (nodesRaw != null && s.nodes.any { it.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY") }) {
                 BeamioChatPgpStore.storeChainRoster(ctx, s.nodes.map { it.asStoreNode() }, s.mailboxIp.ifBlank { null })
             }
         } catch (e: Exception) {
@@ -530,9 +531,10 @@ object BeamioConetChatModule {
             Log.w(TAG, "stored PGP and wallet belong to different wallets; no-page listen skipped")
             return false
         }
-        val nodes = BeamioChatPgpStore.loadSiNodes(ctx)
-        if (nodes.isEmpty()) {
-            Log.w(TAG, "no stored roster for a no-page listen ($reason)")
+        // Only stored nodes that carry a PGP key can be entries; none keyed means the listen does not start.
+        val nodes = BeamioChatPgpStore.noPageRoster(BeamioChatPgpStore.loadSiNodes(ctx))
+        if (nodes == null) {
+            Log.w(TAG, "no-page listen: no stored node has a PGP key ($reason); open the app once to refresh the roster")
             return false
         }
         val walletKey = vault.unlock() ?: run {
@@ -546,7 +548,7 @@ object BeamioConetChatModule {
             pgpPublicKeyArmored = pgp.publicKeyArmor
             ownRouteArmoredPublicKey = pgp.routePublicKeyArmor
             mailboxIp = pgp.mailboxIp
-            this.nodes = nodes.map { Node(it.ip, it.domain, it.region, "") }
+            this.nodes = nodes.map { Node(it.ip, it.domain, it.region, it.armoredPublicKey) }
             deferAck = true
         }
         synchronized(lock) {
@@ -1834,7 +1836,7 @@ object BeamioConetChatModule {
     }
 
     /**
-     * POST via entry ≠ B (blocking). Wraps the armor to the entry route PGP when known, like the
+     * POST via entry ≠ B (blocking). Wraps the armor to each keyed entry's route PGP; an entry whose wrap fails is skipped and never gets the unwrapped armor. Like the
      * TS gossip core (`outerWrap`). [onBody] receives the 2xx response body (mailbox JSON replies).
      */
     private fun postToEntries(
@@ -1856,10 +1858,9 @@ object BeamioConetChatModule {
             }
         }
         val host = BeamioOpenPgpHost.shared(ctx)
-        val candidates = s.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in exclude
-        }.shuffled()
+        // Only keyed entries. Nodes without a PGP key are skipped, and there is no roster fallback that posts
+        // unwrapped armor (the bare roster POST is removed).
+        val candidates = BeamioChatPgpStore.keyedEntries(s.nodes.map { it.asStoreNode() }, exclude).values.shuffled()
 
         // One entry at a time; the next only after a clear failure (connection
         // error or reset, non-2xx, `ok:false`, or no answer in 8 s). A timed-out
@@ -1868,30 +1869,27 @@ object BeamioConetChatModule {
         val started = System.currentTimeMillis()
         for (entry in candidates.take(4)) {
             if (System.currentTimeMillis() - started > 25_000L) break
-            var postArmor = armor
-            if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
-                val latch = CountDownLatch(1)
-                host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
-                    r.getOrNull()?.let { postArmor = it }
-                    latch.countDown()
-                }
-                latch.await(8, TimeUnit.SECONDS)
+            var wrapped: String? = null
+            val latch = CountDownLatch(1)
+            host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
+                wrapped = r.getOrNull()
+                latch.countDown()
+            }
+            latch.await(8, TimeUnit.SECONDS)
+            val postArmor = wrapped
+            if (postArmor == null) {
+                Log.w(TAG, "post_to_entries: wrap failed or timed out for entry=${entry.ip}; entry skipped")
+                continue
             }
             val result = BeamioSiCipherPost.post(
-                postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1, timeoutMs = 8_000L,
+                postArmor, listOf(entry), exclude, maxAttempts = 1, timeoutMs = 8_000L,
             )
             if (result.ok) {
                 onBody?.invoke(result.body)
                 return true
             }
         }
-        if (candidates.isNotEmpty()) return false
-        // No node list in the session yet: the stored roster (same one-at-a-time post).
-        val result = BeamioSiCipherPost.post(
-            armor, BeamioChatPgpStore.loadSiNodes(ctx), exclude, maxAttempts = 4, timeoutMs = 8_000L,
-        )
-        if (result.ok) onBody?.invoke(result.body)
-        return result.ok
+        return false
     }
 
     /** `true` the first time [armorHash] is seen (bounded, last 512). */

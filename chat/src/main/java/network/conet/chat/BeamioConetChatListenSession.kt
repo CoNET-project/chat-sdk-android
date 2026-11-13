@@ -189,18 +189,11 @@ internal class BeamioConetChatListenSession {
         }
         if (!stillAlive(gen)) return false
 
-        val withPgp = session.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in mailboxIps && n.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")
-        }
-        val fallback = session.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in mailboxIps
-        }
-        val roster = (if (withPgp.isNotEmpty()) withPgp else fallback)
-            .associateBy { BeamioSiCipherPost.normalizeIp(it.ip) }
-        if (roster.isEmpty()) throw IllegalStateException("no_entry_c")
-        val siNodes = roster.values.map { BeamioChatPgpStore.SiNode(it.ip, it.domain, it.region) }
+        // Only nodes with a PGP route key are entries. Without a key the entry cannot be wrapped, and the inner armor is
+        // never sent unwrapped, so there is no fallback to unkeyed nodes.
+        val roster = BeamioChatPgpStore.keyedEntries(session.nodes.map { it.asStoreNode() }, mailboxIps)
+        if (roster.isEmpty()) throw IllegalStateException("no_entry_key")
+        val siNodes = roster.values.toList()
 
         val skip = mailboxIps.toMutableSet()
         var lastError: String? = null
@@ -211,16 +204,14 @@ internal class BeamioConetChatListenSession {
             skip.add(entryIp)
             val entry = roster[entryIp] ?: continue
             val url = BeamioSiCipherPost.postUrl(entryIp) ?: continue
-            val armored = if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
-                try {
-                    await(15) { cb ->
-                        BeamioOpenPgpHost.shared(app).wrapArmorToEntryRoute(innerArmor, entry.armoredPublicKey, cb)
-                    }
-                } catch (_: Exception) {
-                    innerArmor
+            // A failed wrap skips this entry. The inner armor is never posted unwrapped.
+            val armored: String = try {
+                await<String>(15) { cb ->
+                    BeamioOpenPgpHost.shared(app).wrapArmorToEntryRoute(innerArmor, entry.armoredPublicKey, cb)
                 }
-            } else {
-                innerArmor
+            } catch (e: Exception) {
+                Log.w(TAG, "mailbox_listen entry=$entryIp wrap failed: ${e.message}; entry skipped")
+                continue
             }
             Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain} route=${routeKeyId.ifEmpty { "?" }}")
             val started = System.currentTimeMillis()

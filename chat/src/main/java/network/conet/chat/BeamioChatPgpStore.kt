@@ -38,10 +38,15 @@ object BeamioChatPgpStore {
     @JvmField
     var onRosterUpsertFromWeb: ((Context) -> Unit)? = null
 
+    /**
+     * A chain node. [armoredPublicKey] is its PGP route key. A node without one is never used as an entry, because the
+     * entry wrap needs the key. Rosters stored before this field existed load with "" until a keyed roster replaces them.
+     */
     data class SiNode(
         val ip: String,
         val domain: String = "",
         val region: String = "",
+        val armoredPublicKey: String = "",
     )
 
     /** Public PGP material and routing. The PGP private key is not part of this model. */
@@ -245,25 +250,49 @@ object BeamioChatPgpStore {
                     ip = ip,
                     domain = obj.optString("domain", "").trim(),
                     region = obj.optString("region", "").trim(),
+                    armoredPublicKey = obj.optString("armoredPublicKey", "").trim(),
                 ),
             )
         }
         return out
     }
 
+    /**
+     * Entries a post or a listen may use: nodes with a PGP route key, by normalized IP, minus [exclude]. A node
+     * without a key is skipped. It is never posted to unwrapped.
+     */
+    fun keyedEntries(nodes: List<SiNode>, exclude: Set<String>): Map<String, SiNode> {
+        val out = LinkedHashMap<String, SiNode>()
+        for (node in nodes) {
+            if (!node.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) continue
+            val ip = BeamioSiCipherPost.normalizeIp(node.ip) ?: continue
+            if (ip in exclude) continue
+            out.putIfAbsent(ip, node)
+        }
+        return out
+    }
+
+    /**
+     * The roster a background (no-page) listen starts from: the stored nodes that have a key. Null when none has one,
+     * so the listen does not start. Opening the app once refreshes the roster with keys.
+     */
+    fun noPageRoster(stored: List<SiNode>): List<SiNode>? =
+        keyedEntries(stored, emptySet()).values.toList().takeIf { it.isNotEmpty() }
+
     private fun decodeSiNodes(json: String?): List<SiNode> {
         if (json.isNullOrBlank()) return emptyList()
         return parseSiNodes(json)
     }
 
-    private fun encodeSiNodes(nodes: List<SiNode>): String {
+    internal fun encodeSiNodes(nodes: List<SiNode>): String {
         val arr = JSONArray()
         for (node in nodes) {
             arr.put(
                 JSONObject()
                     .put("ip", node.ip)
                     .put("domain", node.domain)
-                    .put("region", node.region),
+                    .put("region", node.region)
+                    .put("armoredPublicKey", node.armoredPublicKey),
             )
         }
         return arr.toString()
