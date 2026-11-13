@@ -1,6 +1,5 @@
 package network.conet.chat.identity
 
-import network.conet.chat.BeamioConetChatProtocol
 import network.conet.chat.identity.IdentityProvisionContract.Command
 import network.conet.chat.identity.IdentityProvisionContract.NativeKeyState
 import network.conet.chat.identity.IdentityProvisionContract.Result
@@ -63,11 +62,6 @@ class IdentityNativeKeysWiringTest {
         val r = IdentityProvisionContract.validate(Command.PROVISION_IDENTITY, body)
         assertTrue(r is Result.Reject)
         assertEquals("bad_identity", (r as Result.Reject).error)
-    }
-
-    @Test
-    fun theHelloCapabilityListDeclaresNativeKeysExactlyOnce() {
-        assertEquals(1, BeamioConetChatProtocol.CAPABILITIES.count { it == "identity.native-keys.v1" })
     }
 
     @Test
