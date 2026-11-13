@@ -124,6 +124,14 @@ def main():
     with open(args.wordlist, "r", encoding="utf-8") as f:
         wordset = set(w for w in f.read().split("\n") if w)
     allow = set()
+    # digestAllowlist (25.26.5 LS-G1, r3g): exact full SHA-256 literals, each listed by name in the pattern file. A 64-hex
+    # value is allowed only when the whole value equals one of them. Nothing else is relaxed.
+    listed = (spec.get("digestAllowlist") or {}).get("entries", [])
+    listed_count = 0
+    for entry in listed:
+        if isinstance(entry, dict) and entry.get("sha256"):
+            allow.add(entry["sha256"].lower())
+            listed_count += 1
     if args.allow:
         with open(args.allow, "r", encoding="utf-8") as f:
             for line in f:
@@ -191,6 +199,7 @@ def main():
         "hit_locations": locations,
         "manual_review": manual,
         "not_loaded": not_loaded,
+        "digest_allowlist_entries": listed_count,
         "allowlist_entries": len(allow),
         "result": result,
     }

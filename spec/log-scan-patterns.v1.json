@@ -108,7 +108,7 @@
       "value": "(?:0[xX])?[0-9a-fA-F]{64}",
       "caseInsensitive": false,
       "failOn": "hit-unless-allowlisted",
-      "note": "任何 64 位十六进制串；仅允许运行清单中列明的非秘密值（默认空）"
+      "note": "任何 64 位十六进制串（可带 0x）；仅当整串等于 digestAllowlist 中的完整字面值时放行（精确相等，不放宽）"
     },
     {
       "id": "LS-F1",
@@ -123,7 +123,8 @@
         "S",
         "indexEncKey",
         "channel.tk 测试值",
-        "PGP 合成口令"
+        "PGP 合成口令",
+        "恢复码（uuid62 形式）测试值"
       ],
       "formats": [
         "hex",
@@ -199,9 +200,94 @@
     "canary": "植入 LS-K1 的金丝雀行，扫描器必须命中；未命中则本次运行无效",
     "result": "pass (generator)"
   },
-  "allowlist": {
-    "note": "64 位十六进制的非秘密值（如交易哈希）必须逐项列入运行清单并附原因；默认空",
-    "entries": []
+  "digestAllowlist": {
+    "rule": "LS-G1 仅在 64 位串整体等于下列某一完整字面值时放行（精确相等）。不得按正则、前缀、长度或位置放宽。",
+    "entries": [
+      {
+        "name": "interface/protocol/identity-native-keys-vectors.v1.json",
+        "sha256": "7aa7b4dbd93d0d42b594ab18f1d70e85a7d4b9dbba484bd7d6aba4e3851864b9",
+        "source": "spec 修订记录（第二十四批哈希）"
+      },
+      {
+        "name": "interface/protocol/gossip-sign-vectors.v1.json",
+        "sha256": "429d83f00aba02ea49fe68e9d80e72089a8221c6445871774af131c26dc51335",
+        "source": "spec 25.23.3"
+      },
+      {
+        "name": "interface/protocol/import-upgrade-vectors.v1.json",
+        "sha256": "0e0a5c88657f1a519254aae8ef9b0218614430d006fd84e58c3415493a5e928b",
+        "source": "spec 25.25.6"
+      },
+      {
+        "name": "interface/protocol/mnemonic-derivation-vectors.v1.json",
+        "sha256": "ec646d4d63201059582d93620e0e7ef2bee8bbe44d5822570c2d7ce40d274230",
+        "source": "spec 25.26.2"
+      },
+      {
+        "name": "interface/protocol/no-key-reject-vectors.v1.json",
+        "sha256": "b3bda74a5f126700bdc81fe9822e16bba1c7703ed67978bbf1e5b70448d4a597",
+        "source": "spec 25.26.4、25.26.6（r3f）"
+      },
+      {
+        "name": "interface/protocol/gate-state-vectors.v1.json",
+        "sha256": "e789d90175db53035397ddb1dbdb729b1df92b7d855d234dc006abf4906e3a27",
+        "source": "spec 25.26.4c（r3g）"
+      },
+      {
+        "name": "interface/ui/passcode-tokens.v1.json",
+        "sha256": "48ac9bad09f748c7f965ecb42b332d6b4c5d765cc5940f1c98964a3f2e74f007",
+        "source": "spec 25.17（视觉 token）"
+      },
+      {
+        "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
+        "sha256": "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda",
+        "source": "spec 25.26.1"
+      },
+      {
+        "name": "interface/spec.md（本 spec，r3g 定稿）",
+        "sha256": "c8ad44b3826b2466ca72039df4fb343a4fb9c79119aaf4f90fcca743520fd396",
+        "source": "本 spec 自身（定稿后计算，不得再改 spec）"
+      }
+    ],
+    "specRecordCheck": [
+      {
+        "name": "interface/protocol/identity-native-keys-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/gossip-sign-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/import-upgrade-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/mnemonic-derivation-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/no-key-reject-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/gate-state-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/ui/passcode-tokens.v1.json",
+        "specRecorded": true
+      }
+    ],
+    "notRegistered": [
+      "interface/ui/passcode-vectors.v1.json（spec 未登记哈希）",
+      "interface/protocol/negative-tests-v1.json（spec 未登记哈希）",
+      "interface/protocol/chat-daemon-vectors.v1.json（spec 未登记哈希）",
+      "interface/protocol/media-manifest-vectors.v1.json（spec 未登记哈希）",
+      "interface/protocol/import-digest-vectors.v1.json（spec 未登记哈希）",
+      "fixtures/vectors/estimator-kinds-v1.json、fixtures/vectors/sendkey-vectors.json、s5-*-registry.v1.json（spec 未登记哈希）",
+      "interface/protocol/log-scan-patterns.v1.json（本文件自身，不能包含自身哈希）"
+    ]
   },
   "runRecord": [
     "扫描器版本（脚本哈希）",
