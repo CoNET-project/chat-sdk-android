@@ -151,7 +151,7 @@ class KeyPathGuardTest {
     @Test
     fun mnemonicAndGateCodeNeverLog() {
         // The phrase and the derived key must not reach the log (25.26.3, 25.22.5).
-        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt", "NativePgp.kt", "NativePgpVault.kt", "NativeOpenRules.kt", "NativeAccountCreate.kt")) {
+        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt", "NativePgp.kt", "NativePgpVault.kt", "NativeOpenRules.kt", "NativeAccountCreate.kt", "NativeDerivation.kt", "NativeDerivationCommands.kt", "IdentityPublic.kt")) {
             val src = File("src/main/java/network/conet/chat/nativekey/$name").readText()
             assertFalse("$name logs", src.contains("Log."))
             assertFalse("$name prints", src.contains("println"))

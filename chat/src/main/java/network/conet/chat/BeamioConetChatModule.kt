@@ -8,6 +8,8 @@ import org.json.JSONArray
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.IdentityPublic
+import network.conet.chat.nativekey.NativeDerivationCommands
+import network.conet.chat.nativekey.VoiceChannelKeys
 import network.conet.chat.nativekey.NativeOpenRules
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
@@ -252,6 +254,24 @@ object BeamioConetChatModule {
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
             "nativeAccountCreateOpen" -> nativeAccountCreateOpenCommand(body)
+            // Derivation (§25.3 W2 to W4, §25.15.3 C5, §25.43): the key is unlocked here and cleared after the call.
+            "deriveSubkeys" -> derivationCommand(body) { key, eoa ->
+                NativeDerivationCommands.deriveSubkeys(key, body.optString("accountKey", ""), eoa)
+            }
+            "deriveLocalKeys" -> derivationCommand(body) { key, eoa ->
+                NativeDerivationCommands.deriveLocalKeys(key, body.optString("accountKey", ""), eoa)
+            }
+            "protocolKeys" -> derivationCommand(body) { key, eoa ->
+                NativeDerivationCommands.protocolKeys(key, body.optString("accountKey", ""), eoa)
+            }
+            "fragmentKeys" -> derivationCommand(body) { key, eoa ->
+                NativeDerivationCommands.fragmentKeys(key, body.optString("accountKey", ""), body.optJSONArray("batch"), eoa)
+            }
+            "ephemeralSign" -> emitEvent(derivationAck(PgpDecryptInbound.reqIdOf(body), NativeDerivationCommands.ephemeralSign(body)))
+            // C1 historySign is in-process only (§25.43.3): the bridge answers not_supported, and nothing else.
+            "historySign" -> emitEvent(
+                derivationAck(PgpDecryptInbound.reqIdOf(body), NativeDerivationCommands.Outcome.fail(NativeDerivationCommands.NOT_SUPPORTED)),
+            )
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
             "pgpIdentityCreate" -> pgpIdentityCreateNotSupported(body)
@@ -940,6 +960,39 @@ object BeamioConetChatModule {
             JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false)
                 .put("error", "not_supported"),
         )
+    }
+
+    /**
+     * A derivation command (W2 to W4, C5). The account key is unlocked for the call and cleared after it. Only the value the spec
+     * allows across the bridge is sent. A vault that is not ready answers `locked`.
+     */
+    private fun derivationCommand(body: JSONObject, run: (ByteArray, String) -> NativeDerivationCommands.Outcome) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        val outcome = withUnlockedAccount(run)
+        emitEvent(derivationAck(reqId, outcome))
+    }
+
+    private fun withUnlockedAccount(run: (ByteArray, String) -> NativeDerivationCommands.Outcome): NativeDerivationCommands.Outcome {
+        val locked = NativeDerivationCommands.Outcome.fail(NativeDerivationCommands.LOCKED)
+        val ctx = appContext ?: return locked
+        val vault = NativeWallet.vault(ctx)
+        val ready = vault.state() as? NativeWalletVault.State.Ready ?: return locked
+        val key = vault.unlock() ?: return locked
+        try {
+            return run(key, ready.eoa)
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    private fun derivationAck(reqId: Any?, outcome: NativeDerivationCommands.Outcome): JSONObject {
+        val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", outcome.ok)
+        if (outcome.ok) {
+            outcome.result?.let { payload.put("result", it) }
+        } else {
+            payload.put("error", outcome.error)
+        }
+        return payload
     }
 
     /**
@@ -1799,8 +1852,9 @@ object BeamioConetChatModule {
     }
 
     private fun destroy() {
-        // Session gone: G2 -> G1 (25.26.4c). The native record is kept.
+        // Session gone: G2 -> G1 (25.26.4c). The native record is kept. Voice temporary keys end with the session (X-15).
         NativeSessionState.reset()
+        VoiceChannelKeys.clear()
         listen.stop()
         BeamioConetChatSignBroker.cancelAll("destroyed")
         val hadHistory = synchronized(lock) { session?.history != null }

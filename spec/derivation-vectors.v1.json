@@ -1,0 +1,218 @@
+{
+  "file": "derivation-vectors.v1.json",
+  "purpose": "派生细则向量（spec r3v §25.43）：C1 historySign、W3/W4 协议密钥、C5 deriveSubkeys、W7 ephemeralSign。两端共用。公开测试密钥与合成值。",
+  "spec": "v1.1-r3v §25.43（测试 T-233 至 T-236）",
+  "generator": "gen-derivation-vectors.mjs",
+  "authoritative": {
+    "sdk": "vendor/conet-chat-sdk/dist/local/keys.js、dist/voice-v3.js（PWA SilentPassUI-v2 工作树，编译产物）",
+    "walletLayer": "src/services/walletCore.ts（deriveProtocolKeys、deriveSubkeys）；worker/history.ts（init、fragmentKey）"
+  },
+  "inputs": {
+    "mnemonicNote": "BIP-39 公开测试助记词（12 个 abandon 加 about），路径 m/44'/60'/0'/0/0",
+    "P": "1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
+    "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+    "workspace": "default",
+    "chainId": 224422,
+    "tk": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+    "tkAddress": "0xa8049bb68181799124f98e467dd749e120abfa64",
+    "sid": "0123456789abcdef0123456789abcdef",
+    "wk": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw=",
+    "relayKeyId": "syn-pgpkeyid-a-0001",
+    "timestamp": 1762992000
+  },
+  "encodings": {
+    "hkdf": "HKDF-SHA256（RFC 5869），输出 32 字节；盐缺省为零长度；info 为 UTF-8",
+    "S": "小写 0x + 130 位十六进制，UTF-8 为 132 字节",
+    "keccak": "keccak256(utf8(S))，32 字节",
+    "genesisCid": "\"0x\" + 64 位小写十六进制（历史 worker 中的 cid_-1，作为 info 的字符串）",
+    "hexOutputs": "派生输出在 C5 与 W3、W4 的应答中为小写十六进制，不带 0x 前缀"
+  },
+  "cases": [
+    {
+      "id": "D-01",
+      "group": "C1",
+      "title": "historySign：协议域、S（EIP-191）与 R_proto = keccak256(utf8(S))",
+      "testIds": [
+        "T-233"
+      ],
+      "expect": {
+        "domain": "beamio.chat.history.v1|224422|0x9858effd232b4033e47d90003d41ec34ecaeda94",
+        "S": "0xa07449dee9b1a485ac07a45e72f3159de72af3e073e05230b2385c544d0094c5520f3feee6b6188c79426041cbf30d2c4057cc655db17d4949ec83aa18d4a3d91c",
+        "sUtf8Bytes": 132,
+        "RPROTO": "bae6641061fe9613e9459d540f3d4cf9b79f2d90413a4cfb31e44ef8f281cfd4"
+      }
+    },
+    {
+      "id": "D-02",
+      "group": "W3",
+      "title": "indexEncKey = HKDF(R_proto, \"index-enc\")，空盐，32 字节",
+      "testIds": [
+        "T-233"
+      ],
+      "expect": {
+        "indexEncKey": "85e0663673ac4703583c6aafb3b99462b97ac068a170b52e0398a9dd31b150cf"
+      }
+    },
+    {
+      "id": "D-03",
+      "group": "W3",
+      "title": "genesisCid = \"0x\" + hex(HKDF(R_proto, \"frag-genesis\"))",
+      "testIds": [
+        "T-233"
+      ],
+      "expect": {
+        "genesisCid": "0xa4521e0d0d3ffa8e10c3fb340bfcb4850727c6f34752bda110b82173e84ea22f",
+        "genesisBytes": "a4521e0d0d3ffa8e10c3fb340bfcb4850727c6f34752bda110b82173e84ea22f"
+      }
+    },
+    {
+      "id": "D-04",
+      "group": "W4",
+      "title": "片段 0 的密钥：HKDF(R_proto, \"frag|0|\" + genesisCid)",
+      "testIds": [
+        "T-234"
+      ],
+      "expect": {
+        "seq": 0,
+        "prevCid": "0xa4521e0d0d3ffa8e10c3fb340bfcb4850727c6f34752bda110b82173e84ea22f",
+        "fragKey": "05df431d230cdaa97ae2711792db852d23dd86b964f49768307404b0d3a01aa8"
+      }
+    },
+    {
+      "id": "D-05",
+      "group": "W4",
+      "title": "片段 1 的密钥：HKDF(R_proto, \"frag|1|\" + prevCid)，prevCid 为 CID 字符串",
+      "testIds": [
+        "T-234"
+      ],
+      "expect": {
+        "seq": 1,
+        "prevCid": "bafySYN0000000000000000000000000000000000000000000000001",
+        "fragKey": "fa20a9bfe59fd7969b04ca1337b4afa55e617f5e1ea64171d7bd4da9f8c8beae"
+      }
+    },
+    {
+      "id": "D-06",
+      "group": "C5",
+      "title": "R_db = HKDF(P, \"beamio-chat-local-root|v1|eoa|default\", salt \"beamio-chat-local-root|salt|v1\")（仅进程内；C5 不返回）",
+      "testIds": [
+        "T-235"
+      ],
+      "expect": {
+        "RDB": "f54fff8f2fbaf8a2014154362ff1d228f73c0d422c94fd336f4f35db63e86c52"
+      },
+      "notReturned": true
+    },
+    {
+      "id": "D-07",
+      "group": "C5",
+      "title": "C5 返回：K_id、K_idx、DEK、kcv（小写 eoa，工作区 default）",
+      "testIds": [
+        "T-235"
+      ],
+      "expect": {
+        "kId": "d08e4866d3e18097e6407a9dcb316dc3eda7038d6b554ea6d1310b68ae0e1071",
+        "kIdx": "a7a3208f4b9d39aa14a088b0ff34eb277686bb561eff1ebd680939d6e03c1023",
+        "dek": "4779476b08197d2816b2eb4dab3b306cf1882855251c27d4d5a27a9f33449d1f",
+        "kcv": "f19d655fc43101e09e622046d08780296cfa99f01af4c832d17dabfd6683f530"
+      }
+    },
+    {
+      "id": "D-08",
+      "group": "C5",
+      "title": "DEK 的 info 必须用小写 eoa：大小写混合的 eoa 得到不同的 DEK（负例）",
+      "testIds": [
+        "T-235"
+      ],
+      "expect": {
+        "dekLowercase": "4779476b08197d2816b2eb4dab3b306cf1882855251c27d4d5a27a9f33449d1f",
+        "dekMixedCaseWouldBe": "6989ad636f2c82ac56f3001f22497910ae6d1dd164abbecfc4c90424d57debd4"
+      },
+      "mustDiffer": [
+        "dekLowercase",
+        "dekMixedCaseWouldBe"
+      ]
+    },
+    {
+      "id": "D-09",
+      "group": "C5",
+      "title": "stable_id = base64url(HMAC(K_idx, utf8(sendKey)))（示例）",
+      "testIds": [
+        "T-235"
+      ],
+      "expect": {
+        "sendKey": "SYN-SENDKEY-0001",
+        "stableId": "A9eoJuys2GPQH2qZlvf3JciWmAXFHmKyhkgz--37wnQ"
+      }
+    },
+    {
+      "id": "D-10",
+      "group": "C5",
+      "title": "conv_blind = base64url(HMAC(K_idx, utf8(convKey)))（示例）",
+      "testIds": [
+        "T-235"
+      ],
+      "expect": {
+        "convKey": "SYN-CONV-0001",
+        "convBlind": "_s00-cZ0B7ONtv0187UXTlgVnku46XcDoFvz5fF5jvo"
+      }
+    },
+    {
+      "id": "W-01",
+      "group": "W7",
+      "title": "voiceListen 文本与 T 的 EIP-191 签名（relayKeyId 转大写）",
+      "testIds": [
+        "T-236"
+      ],
+      "expect": {
+        "temp": "0xa8049bb68181799124f98e467dd749e120abfa64",
+        "text": "conet.voice.sse.listen.v3|0123456789abcdef0123456789abcdef|AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw=|SYN-PGPKEYID-A-0001|1762992000",
+        "tempSig": "0x7abdbac2a757034615484b6e4b0f4eef3c627cc5f0c9d2cf0a6f99015b00427116f7aeb5e5b301527b8bdb9635bffc381a40fcffe60f088276ffbd12b43d8cde1c"
+      }
+    }
+  ],
+  "negativeCases": [
+    {
+      "id": "N-01",
+      "title": "C5 与 R_db、R_proto 不出现在结果中",
+      "testIds": [
+        "T-235"
+      ]
+    },
+    {
+      "id": "N-02",
+      "title": "W7 的 tk 只允许 voiceListen 文本；voicePay 文本由账户签名（W5 kind voice），不经 W7",
+      "testIds": [
+        "T-236"
+      ]
+    },
+    {
+      "id": "N-03",
+      "title": "W7 的 sid 不是 32 位小写十六进制：bad_request",
+      "testIds": [
+        "T-236"
+      ]
+    },
+    {
+      "id": "N-04",
+      "title": "W7 的 relayKeyId 在文本中转大写",
+      "testIds": [
+        "T-236"
+      ]
+    }
+  ],
+  "counts": {
+    "cases": 11,
+    "negative": 4
+  },
+  "toolVersions": {
+    "ethers": "6.16.0",
+    "node": "v22.23.3"
+  },
+  "notCovered": [
+    "R_proto 的 S 依赖 EIP-191 的 RFC 6979 确定性签名（ethers 与 ethers 的其它实现一致）。其它实现应以本向量的 S 为准。",
+    "W4 对 prevCid 的取值规则（片段链的 CID 来源）：由片段链的写入路径决定，本向量只给出 HKDF 的输入输出。",
+    "语音临时密钥 T 的生成（ethers.Wallet.createRandom）不在向量中。向量用合成的 tk。",
+    "派生的数据格式（密文布局）见 §8、§21、§23，不在本生成器中。"
+  ]
+}
