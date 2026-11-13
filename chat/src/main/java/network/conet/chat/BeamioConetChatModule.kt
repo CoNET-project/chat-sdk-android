@@ -12,6 +12,7 @@ import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
+import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
@@ -242,6 +243,7 @@ object BeamioConetChatModule {
             "gossipSign" -> gossipSignCommand(body)
             "pgpSign" -> pgpSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)
+            "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
             else -> {
                 Log.w(TAG, "unknown command $type")
                 // Protocol v1: a command that expects an answer gets one.
@@ -823,6 +825,17 @@ object BeamioConetChatModule {
     private fun nativeImportOpenCommand(body: JSONObject) {
         val reqId = body.optInt("reqId", -1)
         if (NativeImportHost.open()) ack(reqId, true) else ack(reqId, false, error = "not_available")
+    }
+
+    /**
+     * `nativeRecoveryOpen` (spec 25.26.4e.2): only opens the native recovery screen. The ack carries no data. The result
+     * follows as the event `nativeRecoveryResult` for this reqId: code and public address, never the code or the phrase.
+     */
+    private fun nativeRecoveryOpenCommand(body: JSONObject) {
+        val reqId = body.optInt("reqId", -1)
+        if (reqId < 0) return
+        NativeRecoveryHost.events = { payload -> emitEvent(payload) }
+        if (NativeRecoveryHost.open(reqId)) ack(reqId, true) else ack(reqId, false, error = "not_available")
     }
 
     /**

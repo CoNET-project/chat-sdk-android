@@ -1,0 +1,43 @@
+{
+  "file": "recovery-record-vectors.v1.json",
+  "spec": "spec §25.26.4e.3 path A (synthetic); record layout from SilentPassUI beamio.ts createRecover / restoreWithRedeem",
+  "generator": "gen-recovery-record-vectors.mjs",
+  "synthetic": "Codes and salts are fixed synthetic values. The mnemonic is the BIP-39 public test vector (entropy 00). Not a real wallet.",
+  "index": "keccak256(utf8(code)) (createRecover registers recoverCode.hash; restoreWithRedeem looks up solidityPackedKeccak256([string]))",
+  "cases": [
+    {
+      "name": "pwa-default-params",
+      "code": "2KLmY0uA3CYt2mDVM5o7MB",
+      "index": "0x8486babc0665c371847f09943b145366336fcdca90099fa4ee389dbb6f78112a",
+      "record": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiQUJFaU0wUlZabmVJbWFxN3pOM3Uvdz09IiwiaGFzaCI6Ikc3MWNWN3k1NVpWL1ZJVTVyRk0wbWwvb0ZTR2l4TzdwSGV4V21DaWZjOXc9In0sImltZyI6IkFRSURCQVVHQndnSkNnc01MVzI4VXJkRW1HeTVOdDN3cGNQTEloUkpqNkNPbFcvdHViVlFOVG9SemVJOXJVenBHSmZMcnM1dytSdUlBTUFSaWRBdjRieGJjdXFXbnJiQ1pnelBIMGlHSlg0QXczdXdDT3RHZmhkekkwS0JrLytYNmYyMUNYaXcrTlFOS2pmVmJvdEhhS1NEZExObGc1eEZyMVVHQ0hZOG84RWN1NHpiWTZKbjNpTnhkWDlqelJqY05HT3hIa0pXbmZzPSJ9",
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "params": {
+        "m": 32768,
+        "t": 3,
+        "p": 1
+      },
+      "pinForStored": "2468"
+    },
+    {
+      "name": "small-params",
+      "code": "0swFTnex6snHrxlMKLfJgA",
+      "index": "0xcb88ff1d7fa5a425ae92afd25e04a72458147bea6c644d08bb02b48717f4b74f",
+      "record": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjEwMjQsInQiOjEsInAiOjEsInNhbHQiOiI4T0hTdzdTbGxvZDRhVkJCTWlNUkFBPT0iLCJoYXNoIjoiY3dYMjdDakpaN1YyczdSaSs1U1lxYVBzRkdFNUwzZnJBZlRha1dadm42ST0ifSwiaW1nIjoiREFzS0NRZ0hCZ1VFQXdJQnJOcXArT1pHb1QvaEdEWVEzYjQyNVZFdjFkQ1pmbWt0NnNoamVTM1Z1UWxIUkpScHVtT3NYbnh3RllDSWYzWUhpOUgzVWpBZVdZdzRhVmV5UkcxZ1VSN3VueTl5NWVqeW9GQ0dqWVF0OWVxSnJmRU5sSmI5OEtBVGRYU1cwUFNqa0ZoZjNiWUhjc282UTczNkRWZHBKN0hKQXNESGhVdHREK3pZcElubmlGbnNDRUdBejErQjdXV2dBbk09In0=",
+      "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "params": {
+        "m": 1024,
+        "t": 1,
+        "p": 1
+      },
+      "pinForStored": ""
+    }
+  ],
+  "negatives": [
+    {
+      "name": "wrong-code-does-not-decrypt",
+      "code": "0wcFtOGNXQnQFZ8QRh12Uh",
+      "record": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjEwMjQsInQiOjEsInAiOjEsInNhbHQiOiI4T0hTdzdTbGxvZDRhVkJCTWlNUkFBPT0iLCJoYXNoIjoiY3dYMjdDakpaN1YyczdSaSs1U1lxYVBzRkdFNUwzZnJBZlRha1dadm42ST0ifSwiaW1nIjoiREFzS0NRZ0hCZ1VFQXdJQnJOcXArT1pHb1QvaEdEWVEzYjQyNVZFdjFkQ1pmbWt0NnNoamVTM1Z1UWxIUkpScHVtT3NYbnh3RllDSWYzWUhpOUgzVWpBZVdZdzRhVmV5UkcxZ1VSN3VueTl5NWVqeW9GQ0dqWVF0OWVxSnJmRU5sSmI5OEtBVGRYU1cwUFNqa0ZoZjNiWUhjc282UTczNkRWZHBKN0hKQXNESGhVdHREK3pZcElubmlGbnNDRUdBejErQjdXV2dBbk09In0=",
+      "expect": "record_invalid"
+    }
+  ]
+}
