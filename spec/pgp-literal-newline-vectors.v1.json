@@ -1,0 +1,102 @@
+{
+  "file": "pgp-literal-newline-vectors.v1.json",
+  "purpose": "PGP 字面量换行的互通向量（spec r3n §25.32）。规则：格式 u、t 的 CRLF 转为 LF；单独的 CR 保留；格式 b 不变。合成数据，只用于测试。",
+  "generator": "gen-pgp-literal-newline-vectors.mjs",
+  "rule": {
+    "text": "读取 PGP 字面量数据时：格式为 UTF-8（u）或文本（t）时，把 CRLF（0x0D 0x0A）转为 LF（0x0A），单独的 CR 保留；格式为二进制（b）时，不变。",
+    "references": "Android §41 第 3 节（commit 0fa6249，NativePgp.literalBytes）；openpgp.js decrypt(format: utf8)；gopenpgp（§41 第 2 节 GO-E2）。"
+  },
+  "recipient": {
+    "keyID": "SYN-PGPKEYID-A-0001",
+    "primaryFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+    "subkeyKeyID": "6629DED57B806861",
+    "privateArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZT1RYJKwYBBAHaRw8BAQdAmPNLRZx+DcNRPEVsgU8v4kM7yO+AFTqd\nAutkgQVRw48AAQDf9JV8Cg5vVoJCNrL15512Uq4fpq5BUT3ZV+y4Lt4LJQ+v\nzRNTWU4tUEdQS0VZSUQtQS0wMDAxwsATBBMWCgCFBYJq9lPVAwsJBwkQIgUT\n/EzM7IJFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ9cO\n58KNlBBWZwRpfb6GSAzUOtiPDcgEL667ESanxHo5BRUKCA4MBBYAAgECGQEC\nmwMCHgEWIQRIiMelsE2LGNO2NuwiBRP8TMzsggAAwM4A/0/cmO2fs79Gubqo\nc/b3snfQ8uePRVIF3uBEjT+tlU2SAPwM5sI3JxJ5FY4sEhxKUBGmaVRihARZ\nJPKUmmwKAWZ3AcddBGr2U9USCisGAQQBl1UBBQEBB0D/k8yWcmyyeyxhvXC5\nfqBOuyqXFwzt+e7Yrgg7VuCPBAMBCAcAAP9HH27QfWMBTdhdayBNx6+mwx01\nuqa+S0bcEQWd2hJBuA8ywr4EGBYKAHAFgmr2U9UJECIFE/xMzOyCRRQAAAAA\nABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmckMhWzPzlgRMs8FxPk\nItTLWa4PPupMRg3bftdA2KzXsAKbDBYhBEiIx6WwTYsY07Y27CIFE/xMzOyC\nAACO2AD+JudoOwqQUnwOJRjWM37M0LqYZzYsMzrGrbNLZ/r50uYBAMjWEbF0\nRxH2rpgdbGmay6wdtpNZjM5vo5jDsNnHUsMO\n=G1Qy\n-----END PGP PRIVATE KEY BLOCK-----\n",
+    "source": "pgp-backup-compat-vectors P-1（合成，口令为空）"
+  },
+  "sourceVector": {
+    "file": "pgp-backup-compat-vectors.v1.json",
+    "sha256": "7c1515fc8f7468386db8195348f5e784caa77d1462dd33f997b865c2d3b8850c"
+  },
+  "toolVersions": {
+    "openpgp": "6.3.0",
+    "node": "v22.23.3"
+  },
+  "cases": [
+    {
+      "id": "LT-1",
+      "literalFormat": "u",
+      "note": "LF 文本",
+      "plaintextInput": "\"line one\\nline two\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAW6+NLGCvgvzowP03yoZNBLqEKrbgim5YxDj4nBKF\n1VMw3glYtBiVo0jbm0KDr+AmJ5SKxhmPNGwJ5zRA/5JLZoGpYS8Bo4stAoFp\nReWZIRbH0kMBXP5wscct+sCruRBchCEoNPkC6+GrKeFNi47hZuXZZKRXPpTm\nYodxxdVmLN4Bga8LBDu4cDtg7W/bT13fX2S9loPt\n=KNIC\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "6c696e65206f6e650d0a6c696e652074776f",
+      "expectedNativeHex": "6c696e65206f6e650a6c696e652074776f",
+      "openpgpUtf8Output": "line one\nline two",
+      "crlfToLfApplied": true
+    },
+    {
+      "id": "LT-2",
+      "literalFormat": "u",
+      "note": "CRLF 文本（输入含 CRLF）",
+      "plaintextInput": "\"a\\r\\nb\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAIAf38WE2YCad297a/qr7T15P3tKjOrE9d0u9Bh3n\nKn4wJflWy63zHs6rWeFgBd+dG26nwKjFZ6nyUijZAjfllBl7klhcHOTTpVor\nR6jwL4A/0jUBotGQMczvIu5CF+x2Tu5Jjosm7Sfg2TsVReSA1hBvn4Md+tI7\nUwwUZMk8xQUiaoG4lnVYpg==\n=plac\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "610d0a62",
+      "expectedNativeHex": "610a62",
+      "openpgpUtf8Output": "a\nb",
+      "crlfToLfApplied": true
+    },
+    {
+      "id": "LT-3",
+      "literalFormat": "u",
+      "note": "单独的 CR（应保留）",
+      "plaintextInput": "\"x\\ry\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdAPetj4zaveemYYIozg+3RVOXEP0cyQCJcPiEttwC4\nUzQw55UsRqVRo1GA8t/yQyFxCen3M1OsMz66vB+ox5IKvHZrk9nqKP/py9ne\nGQXY9Fua0jQBMx7vXt7isfL0odO5jdk7n73qn2usfSLoS1VwSWUAFE7z24ij\nUE94wQY16qQw8K0iDGw2\n=KMZr\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "780d79",
+      "expectedNativeHex": "780d79",
+      "openpgpUtf8Output": "x\ry",
+      "crlfToLfApplied": false
+    },
+    {
+      "id": "LT-4",
+      "literalFormat": "u",
+      "note": "UTF-8 中文，CRLF 结尾",
+      "plaintextInput": "\"第一行\\r\\n第二行\\r\\n\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdA8QZNfZBBKQ0/VTGlWXo9NU+1NFuJkY14qB9SQQn+\nA3Iwa/vxSFYfmF/QpwozcPFxm54JbHqBpJIwdXqdlDb/Ehe8YRl2Js9VZVZG\n8ATJBeKv0kcBl9dfxDMW8n9Od4qGY99ZFC41zV7LRpsmgQJ7x/D5sgsgRpjd\nX6LSXhxbuvEdYHGaLj8WHrBLQyyx//PWHjoRXJ7MCnDuhQ==\n=uYl7\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "e7acace4b880e8a18c0d0ae7acace4ba8ce8a18c0d0a",
+      "expectedNativeHex": "e7acace4b880e8a18c0ae7acace4ba8ce8a18c0a",
+      "openpgpUtf8Output": "第一行\n第二行\n",
+      "crlfToLfApplied": true
+    },
+    {
+      "id": "BN-1",
+      "literalFormat": "b",
+      "note": "二进制字面量（应不变）",
+      "plaintextInput": "\"a\\r\\nb\\n\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdA/NmOmT71tVmq/gx2wNYpA/Qtywl9hHM9X+2S0uY/\nfiAwxB4amJHJheVKgJQ/lGG9SOsygAfasr9ULEHkXNOOMqbpSm9GrL25VSsB\nm87dbDZE0jYBVlLY2HHYhY23ppvANYEh8viywM4L5C7wIP5zz30bM+clICsz\n4764Jnv3PPLtrCTm/B+n2fU=\n=DHSZ\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "610d0a620a",
+      "expectedNativeHex": "610d0a620a",
+      "openpgpUtf8Output": null,
+      "crlfToLfApplied": false
+    },
+    {
+      "id": "BN-2",
+      "literalFormat": "b",
+      "note": "二进制：单独 CR 与 CRLF（应不变）",
+      "plaintextInput": "\"x\\ry\\r\\n\"",
+      "armoredCiphertext": "-----BEGIN PGP MESSAGE-----\n\nwV4DZine1XuAaGESAQdATawswJv4zwiL/k63ncRyUdUB1cDg/cgcGC5qJEy6\nUWsw2Lb7MU7ohqO0cTbOF8lDgKbVs061KlKrZHLFwGQWqLU5rcNSABnFZwz9\nlBzcLGQB0jYBU62+nqMFbRXfjfkNF+SNTs2jO15VE8tH0cvvkzqop6XaTM79\no+b0uApD6pnONQ9DD0Zher0=\n=1yCE\n-----END PGP MESSAGE-----\n",
+      "rawLiteralHex": "780d790d0a",
+      "expectedNativeHex": "780d790d0a",
+      "openpgpUtf8Output": null,
+      "crlfToLfApplied": false
+    }
+  ],
+  "notFromThisVector": [
+    "格式 t（legacy text）：openpgp.js 不生成 t 格式。待 gopenpgp 或 bcpg 生成后补充。",
+    "cleartext 签名的 dash-escaping 与以 \"-\" 开头的行（RFC 4880 规范化）：不在本规则内。",
+    "分离签名的规范化字节：本向量只覆盖字面量数据。"
+  ],
+  "counts": {
+    "cases": 6,
+    "text": 4,
+    "binary": 2
+  }
+}
