@@ -8,9 +8,10 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The synthetic old-account migration chain, on the JVM (the same steps as `NativeOldAccountChainDeviceTest`, which runs on
- * a device with the Keystore):
- *   native import → address and PGP identity match → read back → sign and decrypt → cold start → interrupted, then retried.
+ * The synthetic old-account migration chain on the JVM, through [PgpRestoreMachine] (the same steps as the device fixture
+ * `PgpRestoreAcceptanceDeviceTest`, which runs on a device with the Keystore):
+ *   native import → address match → read back → restore from the on-chain backup → sign and decrypt → cold start →
+ *   refusals leave the record → interrupted write, then retry; and a failed local write, then retry.
  * Synthetic material only: the public test mnemonic of P-1 and the P-1 backup from `pgp-backup-compat-vectors.v1.json`.
  */
 class NativeOldAccountChainTest {
@@ -19,95 +20,106 @@ class NativeOldAccountChainTest {
     )
     private val p1 = vectors.getJSONArray("positives").getJSONObject(0)
     private val eoa = p1.getString("eoa")
-    private val fingerprint = p1.getJSONObject("expect").getString("primaryFingerprint")
+    private val account = eoa.lowercase()
+    private val expect = p1.getJSONObject("expect")
+    private val fingerprint = expect.getString("primaryFingerprint").uppercase()
+    private val subkeyKeyId = expect.getString("subkeyKeyID")
     private val backup = p1.getJSONObject("backup").getString("base64")
     private val test = p1.getJSONObject("testMessage")
     private val mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
     private val signPurpose = "syntheticvector"
+
+    private fun onChain(): PgpIdentity = PgpIdentity(fingerprint, subkeyKeyId)
 
     @Test
     fun theChainRunsEndToEndAndSurvivesARestartAndAnInterruptedRetry() {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files, eoa.lowercase())
+        val chain = StaticChain(onChain(), backup)
+        val m = restoreMachineForOneDevice(chain, wallet, wrap, files, account)
+        val dev = m.devices.getValue("A")
 
         // 1. Native import from the mnemonic; the derived address must be the account's address.
         val imported = NativeImport.submitMnemonic(mnemonic, eoa, wallet)
         assertEquals("import", NativeImport.Code.OK, imported.code)
-        assertEquals(eoa.lowercase(), imported.eoa!!.lowercase())
+        assertEquals(account, imported.eoa!!.lowercase())
 
-        // 2. Read back: the vault holds the account, and its key gives the PWA's password string.
-        assertEquals(eoa.lowercase(), (wallet.state() as NativeWalletVault.State.Ready).eoa.lowercase())
-        assertTrue("PGP not yet restored", pgp.state() is NativePgpVault.State.NoKey)
+        // 2. Read back: the wallet holds the account, and no PGP key is restored yet.
+        assertEquals(account, (wallet.state() as NativeWalletVault.State.Ready).eoa.lowercase())
+        assertTrue("PGP not yet restored", dev.active.state() is NativePgpVault.State.NoKey)
 
-        // 3. Restore the PGP key from the backup; the identity must be the expected primary fingerprint.
-        val restored = NativePgpBackup.restore(wallet, pgp, backup, fingerprint)
-        assertEquals("restore", NativePgpBackup.Code.OK, restored.code)
-        assertEquals(fingerprint.lowercase(), restored.fingerprint)
-
-        // 4. Read back the PGP record.
-        val state = pgp.state()
+        // 3. Restore from the on-chain backup: the identity matches the chain, and the armor is written and read back.
+        assertEquals("restore", "ok", m.restore("A").result)
+        val state = dev.active.state()
         assertTrue("PGP record read back: $state", state is NativePgpVault.State.Ready)
         assertEquals(fingerprint.lowercase(), (state as NativePgpVault.State.Ready).fingerprint)
 
-        // 5. Sign (the purpose registry is empty by design, so the test passes its own synthetic purpose) and decrypt.
+        // 4. Sign (the purpose registry is empty by design, so the test passes its own synthetic purpose) and decrypt.
         val message = "chain message".toByteArray(Charsets.UTF_8)
-        val signed = pgp.sign(signPurpose, NativePgp.SIG_BINARY_DOCUMENT, message, setOf(signPurpose))
+        val signed = dev.active.sign(signPurpose, NativePgp.SIG_BINARY_DOCUMENT, message, setOf(signPurpose))
         assertEquals("sign", "ok", signed.code)
-        assertTrue(pgp.verifySignature(signPurpose, message, signed.value!!))
-        val decrypted = pgp.decryptInbound(test.getString("armored"))
+        assertTrue(dev.active.verifySignature(signPurpose, message, signed.value!!))
+        val decrypted = dev.active.decryptInbound(test.getString("armored"))
         assertEquals("decrypt", "ok", decrypted.code)
         assertEquals(test.getString("plaintext"), decrypted.value)
 
-        // 6. Cold start: new vault objects on the same records and the same wrapping key.
+        // 5. Cold start: new vault objects on the same records and the same wrapping key.
         val wallet2 = NativeWalletVault(wrap, files)
-        val pgp2 = NativePgpVault(wrap, files, eoa.lowercase())
+        val pgp2 = NativePgpVault(wrap, files, account)
         assertTrue("wallet after restart", wallet2.state() is NativeWalletVault.State.Ready)
         assertTrue("PGP after restart", pgp2.state() is NativePgpVault.State.Ready)
         assertEquals("decrypt after restart", "ok", pgp2.decryptInbound(test.getString("armored")).code)
 
-        // 7. Refusals leave the record as it is: a different expected identity, and a tampered backup.
-        assertEquals(NativePgpBackup.Code.IDENTITY_MISMATCH, NativePgpBackup.restore(wallet2, pgp2, backup, "0".repeat(40)).code)
+        // 6. Refusals leave the record as it is: a different on-chain identity, then a tampered on-chain backup.
+        chain.storedIdentity = PgpIdentity("0".repeat(40), subkeyKeyId)
+        assertEquals("identity mismatch", "failed:fingerprint_mismatch", m.restore("A").result)
+        chain.storedIdentity = onChain()
         val tampered = backup.substring(0, 20) + (if (backup[20] == 'A') "B" else "A") + backup.substring(21)
-        assertEquals(NativePgpBackup.Code.DECRYPT_FAILED, NativePgpBackup.restore(wallet2, pgp2, tampered, fingerprint).code)
-        assertEquals("record unchanged", fingerprint.lowercase(), (pgp2.state() as NativePgpVault.State.Ready).fingerprint)
+        chain.storedBackup = tampered
+        assertEquals("tampered backup", "failed:decrypt_failed", m.restore("A").result)
+        chain.storedBackup = backup
+        assertEquals(
+            "record unchanged",
+            fingerprint.lowercase(),
+            (dev.active.state() as NativePgpVault.State.Ready).fingerprint,
+        )
 
-        // 8. Interrupted, then retried: the process dies after the record is written and before the marker (a crash, not an
+        // 7. Interrupted, then retried: the process dies after the record is written and before the marker (a crash, not an
         // ordinary error, so the vault does not roll back). A record without its marker is not confirmed: the next state read
-        // removes it, so the account has no PGP key until the restore is run again.
-        pgp2.forget()
-        files.crashAfterWrite = NativePgpVault.recName(eoa.lowercase())
+        // removes it, so the account has no PGP key until the restore runs again.
+        dev.active.forget()
+        files.crashAfterWrite = NativePgpVault.recName(account)
         try {
-            NativePgpBackup.restore(wallet2, pgp2, backup, fingerprint)
+            m.restore("A")
             error("the simulated crash did not happen")
         } catch (_: NativeTestCrash) {
         }
         files.crashAfterWrite = null
-        assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.recName(eoa.lowercase())))
-        assertEquals("unconfirmed record is not a key", "no_pgp_key", pgp2.decryptInbound(test.getString("armored")).code)
-        assertFalse("and it is removed", files.map.containsKey(NativePgpVault.recName(eoa.lowercase())))
+        assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.recName(account)))
+        assertEquals("unconfirmed record is not a key", "no_pgp_key", dev.active.decryptInbound(test.getString("armored")).code)
+        assertFalse("and it is removed", files.map.containsKey(NativePgpVault.recName(account)))
 
-        // 9. Retry: the same restore completes, and the key works.
-        val retry = NativePgpBackup.restore(wallet2, pgp2, backup, fingerprint)
-        assertEquals("retry", NativePgpBackup.Code.OK, retry.code)
-        assertEquals("decrypt after retry", "ok", pgp2.decryptInbound(test.getString("armored")).code)
+        // 8. Retry: the same restore completes, and the key works.
+        assertEquals("retry", "ok", m.restore("A").result)
+        assertEquals("decrypt after retry", "ok", dev.active.decryptInbound(test.getString("armored")).code)
     }
 
     @Test
-    fun aFailedWriteRollsBackAndTheRetryWorks() {
+    fun aFailedLocalWriteLeavesNothingBehindAndTheRetryWorks() {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files, eoa.lowercase())
+        val m = restoreMachineForOneDevice(StaticChain(onChain(), backup), wallet, wrap, files, account)
+        val dev = m.devices.getValue("A")
         assertEquals(NativeImport.Code.OK, NativeImport.submitMnemonic(mnemonic, eoa, wallet).code)
 
-        files.failWrite = NativePgpVault.markName(eoa.lowercase())
-        assertEquals(NativePgpBackup.Code.WRITE_FAILED, NativePgpBackup.restore(wallet, pgp, backup, fingerprint).code)
-        assertTrue("nothing is left behind", pgp.state() is NativePgpVault.State.NoKey)
+        files.failWrite = NativePgpVault.markName(account)
+        assertEquals("a failed local write is undetermined, not ok", "undetermined", m.restore("A").result)
+        assertTrue("nothing is left behind", dev.active.state() is NativePgpVault.State.NoKey)
 
         files.failWrite = null
-        assertEquals(NativePgpBackup.Code.OK, NativePgpBackup.restore(wallet, pgp, backup, fingerprint).code)
-        assertEquals("ok", pgp.decryptInbound(test.getString("armored")).code)
+        assertEquals("retry", "ok", m.restore("A").result)
+        assertEquals("decrypt after retry", "ok", dev.active.decryptInbound(test.getString("armored")).code)
     }
 }

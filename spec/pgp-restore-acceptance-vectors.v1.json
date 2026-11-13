@@ -1,0 +1,3636 @@
+{
+  "file": "pgp-restore-acceptance-vectors.v1.json",
+  "purpose": "P-IMP-PGP 方案 A 验收向量（spec r3l §25.30）。合成数据，只用于本地测试，不得用于生产。",
+  "generator": "gen-pgp-restore-acceptance-vectors.mjs",
+  "generatorNote": "参考模拟器（纯本地，无网络、无链访问、无合约调用）。各端实现须与本模拟的 stepResults 与 final 逐项一致。",
+  "sourceVector": {
+    "file": "pgp-backup-compat-vectors.v1.json",
+    "sha256": "7c1515fc8f7468386db8195348f5e784caa77d1462dd33f997b865c2d3b8850c"
+  },
+  "toolVersions": {
+    "openpgp": "6.3.0",
+    "ethers": "6.17.0",
+    "node": "v22.23.3"
+  },
+  "syntheticAccount": {
+    "address": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+    "mnemonicNote": "BIP-39 公开测试助记词（12 个 abandon 加 about），路径 m/44'/60'/0'/0/0"
+  },
+  "syntheticKeys": {
+    "P1": {
+      "keyID": "SYN-PGPKEYID-A-0001",
+      "privateArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZT1RYJKwYBBAHaRw8BAQdAmPNLRZx+DcNRPEVsgU8v4kM7yO+AFTqd\nAutkgQVRw48AAQDf9JV8Cg5vVoJCNrL15512Uq4fpq5BUT3ZV+y4Lt4LJQ+v\nzRNTWU4tUEdQS0VZSUQtQS0wMDAxwsATBBMWCgCFBYJq9lPVAwsJBwkQIgUT\n/EzM7IJFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ9cO\n58KNlBBWZwRpfb6GSAzUOtiPDcgEL667ESanxHo5BRUKCA4MBBYAAgECGQEC\nmwMCHgEWIQRIiMelsE2LGNO2NuwiBRP8TMzsggAAwM4A/0/cmO2fs79Gubqo\nc/b3snfQ8uePRVIF3uBEjT+tlU2SAPwM5sI3JxJ5FY4sEhxKUBGmaVRihARZ\nJPKUmmwKAWZ3AcddBGr2U9USCisGAQQBl1UBBQEBB0D/k8yWcmyyeyxhvXC5\nfqBOuyqXFwzt+e7Yrgg7VuCPBAMBCAcAAP9HH27QfWMBTdhdayBNx6+mwx01\nuqa+S0bcEQWd2hJBuA8ywr4EGBYKAHAFgmr2U9UJECIFE/xMzOyCRRQAAAAA\nABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmckMhWzPzlgRMs8FxPk\nItTLWa4PPupMRg3bftdA2KzXsAKbDBYhBEiIx6WwTYsY07Y27CIFE/xMzOyC\nAACO2AD+JudoOwqQUnwOJRjWM37M0LqYZzYsMzrGrbNLZ/r50uYBAMjWEbF0\nRxH2rpgdbGmay6wdtpNZjM5vo5jDsNnHUsMO\n=G1Qy\n-----END PGP PRIVATE KEY BLOCK-----\n",
+      "primaryFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+      "subkeyKeyID": "6629DED57B806861",
+      "source": "pgp-backup-compat-vectors P-1"
+    },
+    "P2": {
+      "keyID": "SYN-PGPKEYID-B-0002",
+      "privateArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZT1RYJKwYBBAHaRw8BAQdAPS08rMgFiAYzWFWcfGzjYyZlTXLtkiMl\ngLNCBcQpt7wAAQCKFFXL2XC/zOlWHc7zVWBA3Tcn7AWbp3k2714PFMqi5hCE\nzRNTWU4tUEdQS0VZSUQtQi0wMDAywsATBBMWCgCFBYJq9lPVAwsJBwkQu+dc\nz3rjkU9FFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZzZ4\nt2HyA+k8jNBIshmx9GZJJ/cyFxmtfYnrADFEpf1HBRUKCA4MBBYAAgECGQEC\nmwMCHgEWIQTwrhKWY9gPyUkpvNK751zPeuORTwAAKycA/2u+6/PjEg0g/8gQ\nnvfdUoX1f3VZwazJPEHQJIt9yVylAQC07mIzR8KXNdi+j7/48WNIcC6SXfSm\nesxQ7/xs9Ye1DcddBGr2U9USCisGAQQBl1UBBQEBB0BFpxkyK2mtSom+M1ua\n9PxdTtx+m57T4IWF028Vq0yTMAMBCAcAAP9uAt/JMw4YAJqXWNaSNjOSy7U+\nNVhI1Nhc9mjRlbdnaBBBwr4EGBYKAHAFgmr2U9UJELvnXM9645FPRRQAAAAA\nABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmfblE6bQi7HNnu2lI59\niRJTgcJX0gvI7R3KVItSTFRyXwKbDBYhBPCuEpZj2A/JSSm80rvnXM9645FP\nAABHTwEA7YMMgVhD4P3pajFQxVSffppxTpC5adIruk4mjccXEfwA/1rm/v7O\n9fUXzggxFnZyglsbDiEaxvJRww4i/cIt0moM\n=bQEK\n-----END PGP PRIVATE KEY BLOCK-----\n",
+      "primaryFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+      "subkeyKeyID": "D3DA8B2FD8DF408F",
+      "source": "pgp-backup-compat-vectors P-2"
+    },
+    "P3": {
+      "keyID": "SYN-PGPKEYID-C-0003",
+      "privateArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZ1cBYJKwYBBAHaRw8BAQdAZI4T6jIpFexDBupMU2tJLuo6cQCKOEsn\n/nMy0qzZUkMAAP4trW0LNgYknu7gWnNkBV1US9m9gFkMsqdCnHb8pqKYfQ/P\nzRNTWU4tUEdQS0VZSUQtQy0wMDAzwsATBBMWCgCFBYJq9nVwAwsJBwkQeXDU\neiSk1DdFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ0KS\nDP4KH9lfegGDMp283+M3cDidZ/9kyh4MtQBtSMSFBRUKCA4MBBYAAgECGQEC\nmwMCHgEWIQTfy1qmlTk6Zc10XMl5cNR6JKTUNwAAJgMA/R8h7h0V5UTKHzSE\nRHSA30DvTwI2CpLxhECeaskebZVJAP4szettr6RLXcoANxKNu5KEU24rdW/N\n825v23K2VsRfCsddBGr2dXASCisGAQQBl1UBBQEBB0A3SX6RKFZ0iPVON9XV\n8ZQZO4F4wfvMttZlAs01dmkGAwMBCAcAAP9Y3s/uWUBHo8oRF2/rS9321RwM\nY/Kuwn2XCUyoLW6XiBFswr4EGBYKAHAFgmr2dXAJEHlw1HokpNQ3RRQAAAAA\nABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmck5R4fUlAsT+UJXxQb\nWfHgqH2RKKVQorcRP7YsOaV9IAKbDBYhBN/LWqaVOTplzXRcyXlw1HokpNQ3\nAACYXgEAnJrxToHbLn/XCbzR/91x8F9ylLN2keq3rOpkPHsc8fAA/jQugp6/\nHNer3aj9L1GFkls13tx9ZOH8g1R4VReqM5AE\n=reJg\n-----END PGP PRIVATE KEY BLOCK-----\n",
+      "primaryFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+      "subkeyKeyID": "07A7F6826BD2CDB6",
+      "source": "generated (synthetic)"
+    },
+    "P4": {
+      "keyID": "SYN-PGPKEYID-D-0004",
+      "privateArmor": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZ1cBYJKwYBBAHaRw8BAQdABIydd2AEKeromg1Hwd2f4ahQTgHt9eev\nm3hnWI5MQbIAAP42tvFJ43mrvXDsUxEmNDNsLOkYODAIeASJObXEC1rHqg7L\nzRNTWU4tUEdQS0VZSUQtRC0wMDA0wsATBBMWCgCFBYJq9nVwAwsJBwkQStEo\nMDpaAEJFFAAAAAAAHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ20O\n1l7LmZob2oLGCM4lWRA9dJSjwO1KKoucCjQ5u4XIBRUKCA4MBBYAAgECGQEC\nmwMCHgEWIQQ0qEXcxcvZoy0Oal5K0SgwOloAQgAAmPQBAMwY4l2pvBtvWFAY\nHZdMmfNM/04E3ih9TNdjMS/pq4LXAQDwnjh4cDhRgS6nERYwQEMhYhREJ3Es\nwHIPizqg2UCkBcddBGr2dXASCisGAQQBl1UBBQEBB0D5vKlDNECEM/yHM1Nk\n0m0v5M6x9q39HRa6n7Awh7U+CAMBCAcAAP9ph8ts3qjbPBojFO02TNwZ82Im\nkZevb4lWg+wMZ28BcA/awr4EGBYKAHAFgmr2dXAJEErRKDA6WgBCRRQAAAAA\nABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmdIk+jHThNvYWQGSUdj\nnDVS1THxv8D4MkPafJbpF90ztAKbDBYhBDSoRdzFy9mjLQ5qXkrRKDA6WgBC\nAADpoQD/TZCwP6MGyGZKyH9ly95YuDuVognOP8tj9vOGB3B+rzIBALrmO+yz\nhNeNNQh09WizTpnRFbJJJ0YBLYRUiM6vkzEI\n=vvGV\n-----END PGP PRIVATE KEY BLOCK-----\n",
+      "primaryFingerprint": "34A845DCC5CBD9A32D0E6A5E4AD128303A5A0042",
+      "subkeyKeyID": "54A238123AE421EB",
+      "source": "generated (synthetic)"
+    }
+  },
+  "identities": {
+    "P1": {
+      "fingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+      "subkeyKeyID": "6629DED57B806861"
+    },
+    "P2": {
+      "fingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+      "subkeyKeyID": "D3DA8B2FD8DF408F"
+    },
+    "P3": {
+      "fingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+      "subkeyKeyID": "07A7F6826BD2CDB6"
+    },
+    "P4": {
+      "fingerprint": "34A845DCC5CBD9A32D0E6A5E4AD128303A5A0042",
+      "subkeyKeyID": "54A238123AE421EB"
+    },
+    "P1_SUBKEY_P2": {
+      "fingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+      "subkeyKeyID": "D3DA8B2FD8DF408F"
+    }
+  },
+  "backups": {
+    "B_EMPTY": {
+      "base64": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "B_P1_OK": {
+      "base64": "E3gQviKwNw31pw/sjomTKX/VsklaQ7ymjTyRgcC/1RrxVT9XkMtK/ZHiTGhvHo28bI5Z64ZwscIW1LQDpL3YkjC312Q11kOsfNTn7stDlic6Re23tbxeBWnGmMMkgWavt5g1pMIoxzuY/WXAFTMkiw+hW9hZjduB0H5FLdI8BA9Za2CRp/RyPJprbdqkSwR/8IPn/ucBxrI6YSZECC7Ti0qM5FeG4PgrHWSO1NmdYks00RrJ/4AvhH0CllvaMYQAbKO7hVRmtQy2zlf7+xmK2LS37+7aKBdXCgl3SM6+goW7AmlVpqAT5weeHA7DzxbTh20z7YhpUECsfIfa5SZ8Zr2/+ZgXwgLxJ0rZ9mGTmeloAPaGo3FFZ5SessuFmiF+qoGFytS9+WL9iSNgZ/rc75epKMJT1T7WgX7qpyttcvjuuMQybFDkPz3n6TlvOyzaynGtwABPT2nRJNW3JI6f6oK3IYZ3p3yHydw4jWa4apAwlfQMiVe3wSYf2JQYp2JjLAtMZNtGd49TBmxy0K0V5kp4HBoO14nIvfvVggJ3IYgF6MM+7iv3g+bR6PZUOHpcXkLhiYpZOWjHYyQZRDQlyAA2PxXNmzaFW7zNSIswP1EWquEuWHxj+Hzj3wEqc8fpADBACx9DlRAb0G5EuORsPi6kjScjy4f+vOsVu8GqN6xxh1lamBshvoW2IKTHIwY84KPwll5sxMZ7AxVOhiXZP33xFqRfI7OB7DgWkchZGfjQ6Z6xloSq887N+dYUe+3lJYM9AAv/1oCOwBLszfP9sAKjRUSZq6buk3TYX4OvinEPaequQVTpkFRtrguBOjjKXChsbJZDSSthwJaEKxmZu0yuAG3lGetgNqbpvqcUEOxChXOHOXeshMGeMOovHi9Z9X5TUne0/HxM8ZmRudciBGqCfmv1NDu1vkHGhk6eOYG4t+zrIvKea18Wdxoggpzxy7Al/qAwinIvYWV0tqHmTpey6scr1BRPLR1N9W1TPMOHQL2mO2KE6nvTLgxp+tA+kwua1t8TUtB0CsMYv4rJhBUd3x1QGXk8xH8M8e0WBm3TOzg+v7xp6xPdRJFdAsbfsXlsqo4c/gwHbGm4tXnJIVQjs8RPgbYTW9oOfS2nhEiW7Q9ool/ZMjSVCmHIC4G0CWj8Z9CaCry0N9JVYGvBVMIpWvtMSxPKb6xxQPFcY/LyPmSojZ+R/C2UxfkMN9pFclR4ja6hP27oYdT0PwT+Sc7PDQ2PpMjaAF7v",
+      "sha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+    },
+    "B_P2_UNDER_A": {
+      "base64": "WQc2tZHqCeVdIWFjIRN+UOk8F3kFjNN7e4eGqI9P6vYbqdd+GPnCz1ciIUHH5vvivTC+3gSJgFh50qEYI/rjuAgOQ+KZOTv0NE2rinvJBe5zLydxIYIeP17vH6D3pctxoav5vkToM48NsnvH/zuRRwTdNmYzHufZrmWXIP/g65aiNLV4R4KkRXwWCdyNOEy3XK5dMhIdOM9JK65SfmV83u9z+JxGj2/3uxTs0ZV83F40vGgjB4GFj2+9HzxXlYxVhXvZQW7/z3dCsm3FfWcU/MhVWai2WuihdflnScttQ3jeAQ1r4XmhV8JvyVrJIh2cvhuw0yL6/x/1/ZYbO1Fn7j7k1abEcMlo+zxs0JqWiguypsZDtla5Vpz7q9gaZF6fnK7HkfomV7aSSI66C1GVk26UskPazoQbw2FnGD14xRyi2WBsFeUXZtwpk2mK5+CSlPrK+eLzRO1SkyT5t1Y+aW3z8XosKOWRt7WeRQgl++Qkpj4mgM6Cro7hQDLkFTQyhYQVlpwIorkgsLrJehHBG7vnyzS68K1I0qKtaWJHxasYv3tKammr/K1RdSht5qrWhSJ3cX9MTfgpYErHhF+NHwJ5f1C4y8Wjsl/lQtH459403K6Le+V9aWgcsJ6f/YLVIRUNRvZ2VrPIsWjSwMqKKkYe9y1CQkEp6wSFP3w4Q+rBCLGm8mwWtFCziNIWHnq2A/cK2pC4hz5K3N1Mx8hgiSrQnzo7EytS+y0kv0SRVrN2cLgeU/MVAbNylwUj9y+bqq6MyCwmcoW2TRhEgSE/NNODAZNdJ3fyEgpMTvU0fqTHamR/0rQie5gh+KpTbz++iTGI2EPZgT7+YwA8I99H9PLWRC+ryPGAL217/XYvnHOL4V+UjPOFXjdiMj0ZR07r7JnD9CWk+iFxIxM5uz/B1z+3+gqFP+m+7mBr2YwP+Wv9otXUuIwuZj8Eu0yXCvODPrB/PvHtvnhYa7fxk/fdMSMZ86avWfh1m9EUFlcrJqRifQLjZ0Z4gdHv8FMbiE0kR7r84lOEbTQXWApuBTIgafPOxvnWX0QdWK0++tYqIZCaVQ1eChchEgHvEDJ0+qKMRuNdnlP3Fo6Ct6w+h6pe3OSUtEA1k5adwo7rjNqrlACVCBvZZ+DeS2QxiarLgVkQHaWliJs03rwO/0N6DWW3VTtGjsiHncZLBHwbmPFiHW+6gQDpx60/cMJ0UVhUPB+G2qeWU0Z9G4Cht1UG6gxDGtttK1sw8zjeWIFh",
+      "sha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+    },
+    "B_P3_UNDER_A": {
+      "base64": "mZUlBDqtKjsmhK6ta0GwNfshdm8VkBUylUvepv+aqGs7S1muYwVRw6iDR59S4Sbb03gFDzTWQZu/Cthr59az1iFsy9OYY3CuIUxQqRqAzp7W9FLsAx+djzCi461E1otmX05AjdqI5ayoQHUQxsMA3Tcqirlhpf20Z96OziB2VC7vXWTkaqMVbPtVhBTgHCewJxwBHOzdLLH+Wl/gJGAWUsd6fIm1sFMud+iSp7Qq7yd8442Fy7mLpLhyUUlsUwvJdJcZ/o8m79+VD+10VQNcy6ddjD+d0jRks5IGTTgKHY1zO3j7lccUy4dmTmKmBhJkaLpsU8CEf3RTBfHDpK+aMTFvQzyGqODED5W4zNibc2RUZV0ellyWUxMvGM/IzYgOXEXZwUPL0wrPLMAunzt4kVq3N+6rwadZIEYG8lozt3aEOlGdtp1sTp9jDa4wBV6kbOgU29DILKhqDhpELAvYWpdKfPsbPamj14wDDGsfuDk9Xe6xOf2Vl1zQRYjddfBnG8AFP91YeHHdMMipU7EK6r1s6GU5elSgqHUn73kCcRy1uo4cghOvKcy0HNiVoEfVuoCXvXVZmBoZvy6GicY7I+M72wt0ocRNeDFElRXws/dGvagT4MVeRvFxdaSqmxOmkEyHvdGu1C5KPHPYD132BbW9V7xtu/66nwfVToAnlmCvnBr0Zwj5jtKV4cqTR+WTny4+qWHcbME8WKdejGg+xe8WrhG/REyqUhISkU91iqk4jFS+DunEVifGJwxNq6JPsuHR5CQqzaP6Ur7QeJTyU60oR4eKNenju1hnwgiTjJekGlutJJL292BRAUaVQSkiSXP+0g9pupHCYdRmwkRPQlzdNo4yXF8dD6iUuTbx9xA3PFaULxvvI41hp05mLdnbeGBq7eAgTyIaMwLrfwTVKDG5MYzkXz4U2rt5l281O7IqvU3BK04fByggxw3dzlYt4M9elMiA4OoVx042AM6XX8vGvkrMxmsBLJLHv6hIooCt2sssSHH+rzmCG6qabUahforYrJS62f39ZoBopdOQE2e5+kOUHFVdUgoRrapgVSLuk/pXe1Te25B4zl+vvQFLUecfGQs+ZfKfjVlBkJGE5ultA5X+iAWOVXFQxAeOq2zT0sFl5GsUvY4a2Ic+WPNDjSFG9xlkrL5jdMmtuIiKKMD1rqLPgXOqrI7Svl2v2/E5ip2/9uS5ieehC8IblMod43Dk2sOWlaCEVv8qnpd1pyjhD0LogfauQASz",
+      "sha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+    },
+    "B_P4_UNDER_A": {
+      "base64": "dDU7bplRS+JP6dY4XeITOtjOE52q8tUfvwyU3f5BcLv+GX14c6CedlnujD1rcSohw7hXHNKXA4i/pG/Okn3m2oKLP91HE+3mEl3E80kAK3B91xGaRRGR0t9+1cQZp7yZPg+6bBqwMPIdr76ibbJUAPEhSMzHF0OjGf9dDCmXqdfxMgeSKyFfD3s1MeqCdFgymtVB9gA2LjpkGZgOl2vaoe6zxQR51/Sk9oPui7/WWPl4oAhJVGSeLQljseaKppVEs++OWohgZjMIDugLNoV8+zActnaJsP8FjWrCRn85amoWtAqdXRJb75PkbiEN+FDgRaSLmrC6s54zXAz2/Q16+DlSGhD+lzFTkKuHEajTYAPxUrT4DDlYsvEnSGsPPfTFXIM8Upcek3eRyTeHDMzMQxvTnoxgXpxNC5T4WG7+pb/I7OO7QUZ9zhgD3PUENXISrfmneveHHz+2Umnqvi9OiVrAoDNfXHMQno6gEtFpVrcSgRWMu18iYIUG9ueRjWpquLVdbPmbSAfLmmn9kq2mLtb17raAZnO25mM0sEsQwHdHkN0A9JLoRjGE4Z8MfkvlhdSBUZEjMqln5skVVlVL1tWyUrAvKMW/4WkK8Wgraq88eDEvm7NdgwWU25vEKtqp2hiaWG4Eo5SR3Wj7tbmiQmAzH3mmrxYJxCtp47qouh7BSB8ju6/S3vjt/FYx5SvhL4aDdUn4ESiw8nNQeDce9HoCUghy6u9lKjTak3daBlf/vpDXaLoemP3+bVqawHIAnzsNcpz+ZkUPQYt0AangDTutJf4EIbaCG/X2QYndNFQ/AeOmhk3rUYhx+MFNB2cz84h2bktIuJfvN6gG6j28BASQNihyWFRJdz7ZxAkqdrmj9MuF4inpN6X644vov9+8YQlDvSyDlqARrG7HLUhFj12FbWKBv+XLvTDwvR11goCwZrgzEyf5KmPGfYqgW1lb8bS5dxggWbvKdyoaB+eUGJRE6KfOPybG55/MCgHazayDW9vaP2EY5GVbOsVx+0Iff6/j5KnY8ktEdSs2k5LsAJZmmtKj63xAdVnlVLzekkM/tSfcO8vaQwm7se+IX3eDcUigAv4Mq5v73Z7xHnGQQVVWsPB+hiM5r1ABJjqgpw9ecgCeIEOq1/7HJZopUXFC2zwwwHAx7uASrNAcqKT/vqqqggX9XB9oP+dHn0A/1txJcclf/29vF3QjkB5+pajUBpjiKLrwd47E7sFk1GGDpdgrrj9/f/6+hhEl",
+      "sha256": "5f9c2d6d7b490bdfe5e9586fc245b4fef89cfb7fc81dc8bee12f8fb5733f489d"
+    },
+    "B_WRONG_PW": {
+      "base64": "lkXphFVGruIf8GO6T6Xez0p2JSx9z3E0l0i/yrPNX7cVUUAbQaYCFuTaewq7zCBVj9luNAEOe2ChnSLsKaOq77XIc5of2vn3l+ebKhlD5lafY0UVL5chXh+Os+NaVyAJuj8qyrzaKOEUlxhzbUlpzP4QZKXsmF+cMKbZQtj8F1v7zTGhbKxfNDJUUQH3cNjbufwtOxmtxQo+CAcpU5MzIiMYIcgcAjj+zcSg/U0/njfvptBdOLlgsyXmM1yMyjGewUvQ0E3ny2YnrLzehgt25e74uNlFGGBKH8joISYe2J4+nbuZN2VClsc9M5NDD2ddCHSANOay5rISKLRCsUrT+W93Ly1Li8cuhvUS/Ik85i4Z4HO4xAe5RsLhrM6HWHEWoggwaspgrGYhoV1gS+uyFDmq+LdTsOrtaEtUsSL4fxY7ksiDkhIzDxj5gajSvMSoOAe+RRrKxjOkmBPqHANcpCPTsTBZ2JWHx/8oXxvPf6+YS3izI71bmXFCBxym/dwCop7MzDC49zPbaMyFK8QWDTXlV38enthkP8agA9RTvvAwOWOM/DnjHFMAljBVKrD3gJWfeiXxAkmm1pfzu4pCWDcKWBqmIajObyOksYLoATjfMvIhoEEG+QIMP6Z/drMHLcvwixNVFkrsydKi2isSRF5tNquFghHNMP33W/mk7UJnrGhbcBMPNzXMoxHGfrLQdyRaWfqu9+qxnaBS4MCJ9nzDDxUedPmwR4gWJlF/h24scwHhKdRwj8ASCoQ6azPnvqK2rDptmVYvxRVE/adLrRDmmLr0dZP9WeEw22dRNxPzuJxT8XSYMUSVH0NFeBDA3Dmu4V+lICYkoWniNuhE2hwStAU48Som75S767VDXIXKLQBS2f5gd6YGLWjdvYx0KyjrjWBOV/6alHdoPn8ViRaopZAJrw+VPJ9Yuc/t5pIV8eSDNifKCzNAN0S07/PpRVV9Yys5hMBuor5Z8TLhnPhPplwdc+W3aI5f+fTbUTqAK4HQHnjWdfUnmn5HkU6X6yGf7vPV0mRwxKahrhwe+mXo/jJ5syjnF5K6P/tWstiQCby9b7EYImE7XJoJJfYufeVB8cENbqiEuv9McEwUxMqc5yb2GZn+0YxKm8sX5UQGnIs78kKVYw78tOmkappg0Wpmkv7LVksAPFXEimR82qJrnubYNqApi/ffjrtEgdi3tDEr5miovhSyRD1V4cvKEEU3ekIIaJf/nXw5QzZ6T6uomd+I4gS5lgBh",
+      "sha256": "80d89ea68e82aeeded87c56cac4e3d1056002edcec7580b574674931c04220d2"
+    },
+    "B_NOT_ARMOR": {
+      "base64": "EBAUWZO4PajYdQPBmr9FU5TGNKDC4K/h7YVYaUxTNK/lc1pZFOBg3tKy+OBXvrA+IkpibBn8XGxU9jyeXWGihOknI/oKEXF3",
+      "sha256": "80fda431b82cb8106294b52517c9493781843fdd21686be498b743a84b3bd60a"
+    },
+    "B_GCM_FAIL": {
+      "base64": "E3gQviKwNw31pw/sjomTKX/UsklaQ7ymjTyRgcC/1RrxVT9XkMtK/ZHiTGhvHo28bI5Z64ZwscIW1LQDpL3YkjC312Q11kOsfNTn7stDlic6Re23tbxeBWnGmMMkgWavt5g1pMIoxzuY/WXAFTMkiw+hW9hZjduB0H5FLdI8BA9Za2CRp/RyPJprbdqkSwR/8IPn/ucBxrI6YSZECC7Ti0qM5FeG4PgrHWSO1NmdYks00RrJ/4AvhH0CllvaMYQAbKO7hVRmtQy2zlf7+xmK2LS37+7aKBdXCgl3SM6+goW7AmlVpqAT5weeHA7DzxbTh20z7YhpUECsfIfa5SZ8Zr2/+ZgXwgLxJ0rZ9mGTmeloAPaGo3FFZ5SessuFmiF+qoGFytS9+WL9iSNgZ/rc75epKMJT1T7WgX7qpyttcvjuuMQybFDkPz3n6TlvOyzaynGtwABPT2nRJNW3JI6f6oK3IYZ3p3yHydw4jWa4apAwlfQMiVe3wSYf2JQYp2JjLAtMZNtGd49TBmxy0K0V5kp4HBoO14nIvfvVggJ3IYgF6MM+7iv3g+bR6PZUOHpcXkLhiYpZOWjHYyQZRDQlyAA2PxXNmzaFW7zNSIswP1EWquEuWHxj+Hzj3wEqc8fpADBACx9DlRAb0G5EuORsPi6kjScjy4f+vOsVu8GqN6xxh1lamBshvoW2IKTHIwY84KPwll5sxMZ7AxVOhiXZP33xFqRfI7OB7DgWkchZGfjQ6Z6xloSq887N+dYUe+3lJYM9AAv/1oCOwBLszfP9sAKjRUSZq6buk3TYX4OvinEPaequQVTpkFRtrguBOjjKXChsbJZDSSthwJaEKxmZu0yuAG3lGetgNqbpvqcUEOxChXOHOXeshMGeMOovHi9Z9X5TUne0/HxM8ZmRudciBGqCfmv1NDu1vkHGhk6eOYG4t+zrIvKea18Wdxoggpzxy7Al/qAwinIvYWV0tqHmTpey6scr1BRPLR1N9W1TPMOHQL2mO2KE6nvTLgxp+tA+kwua1t8TUtB0CsMYv4rJhBUd3x1QGXk8xH8M8e0WBm3TOzg+v7xp6xPdRJFdAsbfsXlsqo4c/gwHbGm4tXnJIVQjs8RPgbYTW9oOfS2nhEiW7Q9ool/ZMjSVCmHIC4G0CWj8Z9CaCry0N9JVYGvBVMIpWvtMSxPKb6xxQPFcY/LyPmSojZ+R/C2UxfkMN9pFclR4ja6hP27oYdT0PwT+Sc7PDQ2PpMjaAF7v",
+      "sha256": "d95e771b034406e882e0e30fa74870bd09633e7fd2acd4bd7fc5e6c426a04da0"
+    },
+    "B_WS_NEWLINE": {
+      "base64": "E3gQviKwNw31pw/sjomTKX/VsklaQ7ymjTyRgcC/\n1RrxVT9XkMtK/ZHiTGhvHo28bI5Z64ZwscIW1LQDpL3YkjC312Q11kOsfNTn7stDlic6Re23tbxeBWnGmMMkgWavt5g1pMIoxzuY/WXAFTMkiw+hW9hZjduB0H5FLdI8BA9Za2CRp/RyPJprbdqkSwR/8IPn/ucBxrI6YSZECC7Ti0qM5FeG4PgrHWSO1NmdYks00RrJ/4AvhH0CllvaMYQAbKO7hVRmtQy2zlf7+xmK2LS37+7aKBdXCgl3SM6+goW7AmlVpqAT5weeHA7DzxbTh20z7YhpUECsfIfa5SZ8Zr2/+ZgXwgLxJ0rZ9mGTmeloAPaGo3FFZ5SessuFmiF+qoGFytS9+WL9iSNgZ/rc75epKMJT1T7WgX7qpyttcvjuuMQybFDkPz3n6TlvOyzaynGtwABPT2nRJNW3JI6f6oK3IYZ3p3yHydw4jWa4apAwlfQMiVe3wSYf2JQYp2JjLAtMZNtGd49TBmxy0K0V5kp4HBoO14nIvfvVggJ3IYgF6MM+7iv3g+bR6PZUOHpcXkLhiYpZOWjHYyQZRDQlyAA2PxXNmzaFW7zNSIswP1EWquEuWHxj+Hzj3wEqc8fpADBACx9DlRAb0G5EuORsPi6kjScjy4f+vOsVu8GqN6xxh1lamBshvoW2IKTHIwY84KPwll5sxMZ7AxVOhiXZP33xFqRfI7OB7DgWkchZGfjQ6Z6xloSq887N+dYUe+3lJYM9AAv/1oCOwBLszfP9sAKjRUSZq6buk3TYX4OvinEPaequQVTpkFRtrguBOjjKXChsbJZDSSthwJaEKxmZu0yuAG3lGetgNqbpvqcUEOxChXOHOXeshMGeMOovHi9Z9X5TUne0/HxM8ZmRudciBGqCfmv1NDu1vkHGhk6eOYG4t+zrIvKea18Wdxoggpzxy7Al/qAwinIvYWV0tqHmTpey6scr1BRPLR1N9W1TPMOHQL2mO2KE6nvTLgxp+tA+kwua1t8TUtB0CsMYv4rJhBUd3x1QGXk8xH8M8e0WBm3TOzg+v7xp6xPdRJFdAsbfsXlsqo4c/gwHbGm4tXnJIVQjs8RPgbYTW9oOfS2nhEiW7Q9ool/ZMjSVCmHIC4G0CWj8Z9CaCry0N9JVYGvBVMIpWvtMSxPKb6xxQPFcY/LyPmSojZ+R/C2UxfkMN9pFclR4ja6hP27oYdT0PwT+Sc7PDQ2PpMjaAF7v",
+      "sha256": "929645d4e018ddfd91e6d32ecf5f3df91d57f2de4573026d2bbb89209977b152"
+    },
+    "B_P1_PADDED": {
+      "base64": "QOjaHLyzJeNup8XmnI0+DbwThzukDmlcUOeYb73Cl90ZSlENxmoinfYBlF/JakYgoRzigj2LwDmZ0mQB07IYVXT3DLbKJ2HQ3t2Nqg2QDcu/C7cZuw+1UCMGKAWHkonUCOQgi+I4CZW7GaXWtP4TiCzQpNm1Dq+U2fZd07NtAGd3aKWf4i6gNrAW+35kDlDloUSFpIGZQF9CKVAhxlloYji8zFSO85XeGo4Oh0wY9GetjQlVfabrUtBdIp+Sr9ahMmn/RbWrTDQFD6LaHpqHDppO6Zclgnhk6LtV9MpeLRoprYK+XhxgD3k/TzQgRW17vwgVC51Og+Ee7BV6zf5W1+SafuKqBnxjIh6recUzxfgdYh6rUnOP5jHhmKzSdkT7MEWhniDJNwRk6BofkH7Yw4INW7aIyk++Q9MgYjpTdMZ+r/0yNGimRzq7HDQEGID7644NfnfQ9ASmsKG5KrtjjiBQhcsh5rQFBl7UOxJrIhC/hWzNLXlJhkviCQPt9Eglb2TwaAnpEp0VYPQvWzCA18TN4eQFSXKoykBKGl01vyBg6kbnj8sw53gJMqFTY59EasAuHRJWkHp6G+zQ6YhhV9gP4I/N5PRee8togJQnmtGllVjNQmth2NEPGNm3hp2BEbnGmVAeS1hwH+vYgX1LYUZSWISY1ZxwT2JBoxnOmT0/DQAF/JC3TZ8UAvA7s7IKpoNrFwFkP2BP+T9QhsyQT2yGQ8ybuzrlhU5lWfTZNqwHmybuvMfbUNBEeYofHQvqtcUnuHulEj07hTiQNvxyezve/Kz1b9kmx7GcZVIrRXZD8MKyT/LKglIoKelQUfT2eUSShUzoj+VC2uI4oK4IXikv4QfQkjgG4JMN3YVeaBfx6h3xWqckmBmHYW81bxgGzIbowCiSOx9MPkkdBoERYjIOxmX6t27nRUi21GfQGTaxqArBSgoZAaIYlmmBXyI21y0EHP3EmtXYe6EQb0+WX7WJc4XsNi1a3AdUgm1fdkXnj5HlHFMYdAl3oKY4nITVvRM5MRPs+sPffugzXiqZv23zVUQ+8rwyeGFF8PbD0C+6Ul7q4rCSfblTftspDf6oF5Ld53dyUlQnm9qiiCWW4J3H1FK69QXWERlgHf3GCyfTYS+u/Nu9V7aicM0uTK/Cyo+TB3BO844SA/QP9h5aBskaJuvHgb/ceth2OxGKrXuLzD7HQjQYmX1Qg9CZ5p4LH/MZvU2vUg7CR8L1aq4yvml0dbOh1W3y14j1aw==",
+      "sha256": "05624d53d4af6648501a7dee3656086f7137fcda168fc2bf0a6ef8780bef3e8e"
+    },
+    "B_NOPAD": {
+      "base64": "QOjaHLyzJeNup8XmnI0+DbwThzukDmlcUOeYb73Cl90ZSlENxmoinfYBlF/JakYgoRzigj2LwDmZ0mQB07IYVXT3DLbKJ2HQ3t2Nqg2QDcu/C7cZuw+1UCMGKAWHkonUCOQgi+I4CZW7GaXWtP4TiCzQpNm1Dq+U2fZd07NtAGd3aKWf4i6gNrAW+35kDlDloUSFpIGZQF9CKVAhxlloYji8zFSO85XeGo4Oh0wY9GetjQlVfabrUtBdIp+Sr9ahMmn/RbWrTDQFD6LaHpqHDppO6Zclgnhk6LtV9MpeLRoprYK+XhxgD3k/TzQgRW17vwgVC51Og+Ee7BV6zf5W1+SafuKqBnxjIh6recUzxfgdYh6rUnOP5jHhmKzSdkT7MEWhniDJNwRk6BofkH7Yw4INW7aIyk++Q9MgYjpTdMZ+r/0yNGimRzq7HDQEGID7644NfnfQ9ASmsKG5KrtjjiBQhcsh5rQFBl7UOxJrIhC/hWzNLXlJhkviCQPt9Eglb2TwaAnpEp0VYPQvWzCA18TN4eQFSXKoykBKGl01vyBg6kbnj8sw53gJMqFTY59EasAuHRJWkHp6G+zQ6YhhV9gP4I/N5PRee8togJQnmtGllVjNQmth2NEPGNm3hp2BEbnGmVAeS1hwH+vYgX1LYUZSWISY1ZxwT2JBoxnOmT0/DQAF/JC3TZ8UAvA7s7IKpoNrFwFkP2BP+T9QhsyQT2yGQ8ybuzrlhU5lWfTZNqwHmybuvMfbUNBEeYofHQvqtcUnuHulEj07hTiQNvxyezve/Kz1b9kmx7GcZVIrRXZD8MKyT/LKglIoKelQUfT2eUSShUzoj+VC2uI4oK4IXikv4QfQkjgG4JMN3YVeaBfx6h3xWqckmBmHYW81bxgGzIbowCiSOx9MPkkdBoERYjIOxmX6t27nRUi21GfQGTaxqArBSgoZAaIYlmmBXyI21y0EHP3EmtXYe6EQb0+WX7WJc4XsNi1a3AdUgm1fdkXnj5HlHFMYdAl3oKY4nITVvRM5MRPs+sPffugzXiqZv23zVUQ+8rwyeGFF8PbD0C+6Ul7q4rCSfblTftspDf6oF5Ld53dyUlQnm9qiiCWW4J3H1FK69QXWERlgHf3GCyfTYS+u/Nu9V7aicM0uTK/Cyo+TB3BO844SA/QP9h5aBskaJuvHgb/ceth2OxGKrXuLzD7HQjQYmX1Qg9CZ5p4LH/MZvU2vUg7CR8L1aq4yvml0dbOh1W3y14j1aw",
+      "sha256": "bd339e4b4d566312b8e7e222adaff8b744c9fff7897842e18be75a9133885d5e"
+    }
+  },
+  "model": {
+    "chainVersion": "uint，初始 0；每次成功写入 +1；externalWrite 同样 +1",
+    "counters": [
+      "keygen",
+      "onchainWrites",
+      "backupWrites",
+      "registrations",
+      "localWrites",
+      "pendingDiscarded",
+      "externalWrites",
+      "walletWrites"
+    ],
+    "uiStates": [
+      "not_evaluated",
+      "no_identity_yet",
+      "ok",
+      "failed(failureClass)",
+      "undetermined",
+      "awaiting_confirm",
+      "retry_write",
+      "blocked"
+    ],
+    "rejectCodes": [
+      "native_confirmation_missing",
+      "precondition_failed",
+      "not_available",
+      "not_awaiting_confirm",
+      "pending_exists",
+      "no_pending",
+      "write_reverted"
+    ],
+    "noopCodes": [
+      "already_registered_same_key",
+      "idempotent"
+    ],
+    "resultCodes": [
+      "ok",
+      "external",
+      "crashed",
+      "blocked",
+      "undetermined",
+      "no_identity_yet",
+      "failed:backup_missing",
+      "failed:decrypt_failed",
+      "failed:fingerprint_mismatch",
+      "reconciled_complete",
+      "reconciled_write",
+      "reconciled_discarded",
+      "noop"
+    ]
+  },
+  "copy": {
+    "status": "draft-for-review",
+    "keys": {
+      "chat.restore_failed.body": {
+        "zh": "初始化失败，你的旧数据丢失",
+        "en": "Chat setup failed. Your old data is lost.",
+        "enAlternative": "Chat setup failed. Your previous Chat identity could not be restored. Your wallet and assets are not affected.",
+        "note": "项目方原文为中文。英文直译保留\"旧数据丢失\"。备选文案更准确：本地历史不依赖 PGP 私钥，未收取密文可能丢失。二者由项目方裁定。"
+      },
+      "chat.restore_failed.entry": {
+        "zh": "生成新的聊天身份",
+        "en": "Create a new Chat identity"
+      },
+      "chat.restore_retry.body": {
+        "zh": "暂时无法读取聊天身份，请稍后重试",
+        "en": "Can't read your Chat identity right now. Try again later."
+      },
+      "chat.new_identity.confirm.title": {
+        "zh": "生成新的聊天身份？",
+        "en": "Create a new Chat identity?"
+      },
+      "chat.new_identity.confirm.body": {
+        "zh": "这会替换此钱包在链上登记的聊天公钥。原聊天身份将不能再用于此钱包。钱包与资产不受影响。",
+        "en": "This replaces the Chat public key registered on-chain for this wallet. The previous Chat identity can no longer be used with this wallet. Your wallet and assets are not affected."
+      },
+      "chat.new_identity.confirm.action": {
+        "zh": "确认生成",
+        "en": "Create identity"
+      },
+      "chat.new_identity.confirm.cancel": {
+        "zh": "取消",
+        "en": "Cancel"
+      },
+      "chat.new_identity.retry.body": {
+        "zh": "写入失败，链上未改变。可以重试。",
+        "en": "The update failed and nothing on-chain changed. You can try again."
+      }
+    },
+    "rules": [
+      "文案键由 PWA 集成负责人定稿（§25.29.4）；原生确认界面使用同一键，不自造文案。",
+      "任何文案不得包含私钥、助记词、口令或 armor。"
+    ]
+  },
+  "rules": [
+    "三类失败（备份缺失、解不开、指纹不符）：禁止自动生成新钥、禁止自动注册、禁止覆盖链上公钥和备份。",
+    "显式替换只能在用户点击入口、原生确认、版本号一致（CAS）时发生；替换前先把可解的旧备份包裹保存在本地（R3）。",
+    "读取失败（链上或备份）不等于无记录或备份缺失，只能重试（R2）。",
+    "钱包地址与链上资产不受 Chat 初始化失败影响（walletWrites 恒为 0）。",
+    "冷启动只做对账与只读评估，不得生成新钥。",
+    "本向量不含真实私钥。P-1、P-2 来自兼容向量；P-3、P-4 为合成测试钥，口令为空。"
+  ],
+  "cases": [
+    {
+      "id": "R-01",
+      "group": "R",
+      "title": "备份可解且指纹一致：恢复原身份",
+      "testIds": [
+        "T-189"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+              "localSubkeyKeyID": "6629DED57B806861",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-02",
+      "group": "R",
+      "title": "链上无记录：不进入三类失败，不生成新钥",
+      "testIds": [
+        "T-195"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": null,
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "no_identity_yet"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 0,
+            "identityFingerprint": null,
+            "subkeyKeyID": null,
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "no_identity_yet",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-03",
+      "group": "R",
+      "title": "链上读取失败：不等于无记录，可重试，不生成新钥",
+      "testIds": [
+        "T-195"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setReadable",
+            "value": {
+              "chain": false
+            }
+          },
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setReadable",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "undetermined"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "undetermined",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": "chat.restore_retry.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-04",
+      "group": "R",
+      "title": "备份读取失败：不等于备份缺失，可重试",
+      "testIds": [
+        "T-195"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setReadable",
+            "value": {
+              "backup": false
+            }
+          },
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setReadable",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "undetermined"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "undetermined",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": "chat.restore_retry.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-05",
+      "group": "R",
+      "title": "恢复写入本地后中断：冷启动后对账完成，不重复写入",
+      "testIds": [
+        "T-191",
+        "T-192"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "crashAt": "after_store"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "crashed"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+              "localSubkeyKeyID": "6629DED57B806861",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-06",
+      "group": "R",
+      "title": "重复恢复：结果相同，本地只写一次",
+      "testIds": [
+        "T-189"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+              "localSubkeyKeyID": "6629DED57B806861",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "R-07",
+      "group": "R",
+      "title": "钱包未就绪：阻塞，不属于三类失败",
+      "testIds": [
+        "T-190"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setWalletReady",
+            "value": false
+          },
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setWalletReady",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "blocked"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "blocked",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": "wallet.not_ready"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "M-01",
+      "group": "M",
+      "title": "备份缺失：失败提示与入口，禁止自动生成与注册",
+      "testIds": [
+        "T-182",
+        "T-183"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "backup_missing",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "M-02",
+      "group": "M",
+      "title": "备份缺失后冷启动：状态不变，无自动动作",
+      "testIds": [
+        "T-183",
+        "T-191"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "backup_missing",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "M-03",
+      "group": "M",
+      "title": "备份缺失：点击入口仅进入确认，不生成新钥",
+      "testIds": [
+        "T-184"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "awaiting_confirm",
+                "failureClass": "backup_missing",
+                "offerEntry": true,
+                "uiKey": "chat.new_identity.confirm.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "M-04",
+      "group": "M",
+      "title": "备份缺失：无原生确认不得生成新钥",
+      "testIds": [
+        "T-184",
+        "T-196"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_EMPTY"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-m4",
+            "nativeConfirmed": false
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:backup_missing"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "native_confirmation_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "empty"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "awaiting_confirm",
+                "failureClass": "backup_missing",
+                "offerEntry": true,
+                "uiKey": "chat.new_identity.confirm.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "D-01",
+      "group": "D",
+      "title": "解不开（GCM 标签失败）：失败提示，禁止自动动作",
+      "testIds": [
+        "T-185"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "d95e771b034406e882e0e30fa74870bd09633e7fd2acd4bd7fc5e6c426a04da0"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "D-02",
+      "group": "D",
+      "title": "解不开（口令不符）：失败提示，禁止自动动作",
+      "testIds": [
+        "T-185"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_WRONG_PW"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "80d89ea68e82aeeded87c56cac4e3d1056002edcec7580b574674931c04220d2"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "D-03",
+      "group": "D",
+      "title": "解开但不是 PGP armor：按解不开处理",
+      "testIds": [
+        "T-185"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_NOT_ARMOR"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "80fda431b82cb8106294b52517c9493781843fdd21686be498b743a84b3bd60a"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "D-04",
+      "group": "D",
+      "title": "D-2：备份文本含换行：严格拒绝，按解不开处理",
+      "testIds": [
+        "T-186",
+        "T-199"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_WS_NEWLINE"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "929645d4e018ddfd91e6d32ecf5f3df91d57f2de4573026d2bbb89209977b152"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "D-05",
+      "group": "D",
+      "title": "D-1：去掉末尾 \"=\"：严格拒绝，按解不开处理（不适用则为空）",
+      "testIds": [
+        "T-186",
+        "T-199"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_NOPAD"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "bd339e4b4d566312b8e7e222adaff8b744c9fff7897842e18be75a9133885d5e"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "F-01",
+      "group": "F",
+      "title": "指纹不符（主指纹）：禁止覆盖，禁止自动生成",
+      "testIds": [
+        "T-187"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "fingerprint_mismatch",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "F-02",
+      "group": "F",
+      "title": "指纹不符（子密钥 keyID）：同样按指纹不符处理",
+      "testIds": [
+        "T-187"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1_SUBKEY_P2",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "fingerprint_mismatch",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "F-03",
+      "group": "F",
+      "title": "指纹不符后重复评估：链上与本地无变化",
+      "testIds": [
+        "T-188"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "fingerprint_mismatch",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-01",
+      "group": "E",
+      "title": "备份解不开，用户确认后替换：CAS 通过，写入一次",
+      "testIds": [
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e1",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-02",
+      "group": "E",
+      "title": "指纹不符，用户确认后替换：先包裹旧备份（R3），再写入",
+      "testIds": [
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e2",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": true,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 3,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-03",
+      "group": "E",
+      "title": "确认后链上被他人更新：CAS 失败，丢弃待用钥，重新读取",
+      "testIds": [
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e3",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "rejected",
+            "code": "precondition_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-04",
+      "group": "E",
+      "title": "并发：两台设备同时确认，只成功一次，另一台丢弃待用钥",
+      "testIds": [
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "restore",
+            "dev": "B"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "B"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-eA",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "keygen",
+            "dev": "B",
+            "expectedVersion": 1,
+            "idemKey": "k-eB",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "commit",
+            "dev": "B"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "restore",
+            "dev": "B",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "B",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "B",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "B",
+            "result": "rejected",
+            "code": "precondition_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 2,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 4,
+            "pendingDiscarded": 1,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-05",
+      "group": "E",
+      "title": "重复点击确认：同一幂等键只生成一次；不同幂等键被拒",
+      "testIds": [
+        "T-194"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e5",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e5",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e5-other",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok",
+            "note": "idempotent"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "rejected",
+            "code": "pending_exists"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-06",
+      "group": "E",
+      "title": "替换成功后重复注册同一钥：无操作",
+      "testIds": [
+        "T-194"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e6",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "registerDirect",
+            "identity": "P3",
+            "expectedVersion": 2,
+            "nativeConfirmed": true
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "registerDirect",
+            "dev": null,
+            "result": "noop",
+            "code": "already_registered_same_key"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-07",
+      "group": "E",
+      "title": "替换成功后用过期版本号注册另一把钥：拒绝，不覆盖",
+      "testIds": [
+        "T-193",
+        "T-194"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e7",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "registerDirect",
+            "identity": "P4",
+            "expectedVersion": 1,
+            "nativeConfirmed": true
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "registerDirect",
+            "dev": null,
+            "result": "rejected",
+            "code": "precondition_failed"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-08",
+      "group": "E",
+      "title": "生成新钥后中断：冷启动后按版本号继续写入",
+      "testIds": [
+        "T-192"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e8",
+            "nativeConfirmed": true,
+            "crashAt": "after_keygen"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "crashed"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "reconciled_write"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-09",
+      "group": "E",
+      "title": "链上写入后、本地确认前中断：冷启动后对账，不重复写入",
+      "testIds": [
+        "T-192"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e9",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "crashAt": "after_write"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "crashed"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "reconciled_complete"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-10",
+      "group": "E",
+      "title": "链上写入回滚：待用钥保留，可重试，链上不变",
+      "testIds": [
+        "T-192"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e10",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "writeRevert": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "rejected",
+            "code": "write_reverted"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-11",
+      "group": "E",
+      "title": "确认后他人写入，冷启动对账：待用钥被丢弃，恢复他人写入的身份",
+      "testIds": [
+        "T-192",
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-e11",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "externalWrite",
+            "identity": "P2",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "externalWrite",
+            "dev": null,
+            "result": "external"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "reconciled_discarded"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+            "subkeyKeyID": "D3DA8B2FD8DF408F",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "F0AE129663D80FC94929BCD2BBE75CCF7AE3914F",
+              "localSubkeyKeyID": "D3DA8B2FD8DF408F",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 2,
+            "pendingDiscarded": 1,
+            "externalWrites": 1,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "E-12",
+      "group": "E",
+      "title": "注册通道无原生确认：拒绝（PWA 不得直接注册）",
+      "testIds": [
+        "T-196"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "registerDirect",
+            "identity": "P3",
+            "expectedVersion": 1,
+            "nativeConfirmed": false
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "registerDirect",
+            "dev": null,
+            "result": "rejected",
+            "code": "native_confirmation_missing"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "d95e771b034406e882e0e30fa74870bd09633e7fd2acd4bd7fc5e6c426a04da0"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "decrypt_failed",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S-01",
+      "group": "S",
+      "title": "指纹不符后冷启动：状态不变，无自动生成",
+      "testIds": [
+        "T-191"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P2_UNDER_A"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "failed:fingerprint_mismatch"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "6c3324eb0ab84a7a96d2fb84686d17eb5daddbb8d27d8554ff8a6a6ab6fee58b"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "failed",
+                "failureClass": "fingerprint_mismatch",
+                "offerEntry": true,
+                "uiKey": "chat.restore_failed.body"
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 0,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S-02",
+      "group": "S",
+      "title": "恢复成功后冷启动：从原生本地身份启用，无需页面持钥",
+      "testIds": [
+        "T-191",
+        "T-189"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_P1_OK"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 1,
+            "identityFingerprint": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+            "subkeyKeyID": "6629DED57B806861",
+            "backupSha256": "5b8f8d83a5a820943280e11873b758e849d57286fd44abc3a178c75d5b23a5b5"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "4888C7A5B04D8B18D3B636EC220513FC4CCCEC82",
+              "localSubkeyKeyID": "6629DED57B806861",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 0,
+            "onchainWrites": 0,
+            "backupWrites": 0,
+            "registrations": 0,
+            "localWrites": 1,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S-03",
+      "group": "S",
+      "title": "替换成功后冷启动：启用新身份，无写入",
+      "testIds": [
+        "T-191",
+        "T-193"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "setChain",
+            "identity": "P1",
+            "blob": "B_GCM_FAIL"
+          },
+          {
+            "op": "restore",
+            "dev": "A"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "expectedVersion": 1,
+            "idemKey": "k-s3",
+            "nativeConfirmed": true
+          },
+          {
+            "op": "commit",
+            "dev": "A"
+          },
+          {
+            "op": "resume",
+            "dev": "A"
+          }
+        ]
+      },
+      "expect": {
+        "stepResults": [
+          {
+            "op": "setChain",
+            "dev": null,
+            "result": "ok"
+          },
+          {
+            "op": "restore",
+            "dev": "A",
+            "result": "failed:decrypt_failed"
+          },
+          {
+            "op": "tapEntry",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "keygen",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "commit",
+            "dev": "A",
+            "result": "ok"
+          },
+          {
+            "op": "resume",
+            "dev": "A",
+            "result": "ok"
+          }
+        ],
+        "final": {
+          "chain": {
+            "version": 2,
+            "identityFingerprint": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+            "subkeyKeyID": "07A7F6826BD2CDB6",
+            "backupSha256": "e8eced3c2451c6d9485d80d4d8bc8e621555606d61a3d43cfbcd1908dd9be9dd"
+          },
+          "devices": {
+            "A": {
+              "localIdentity": "DFCB5AA695393A65CD745CC97970D47A24A4D437",
+              "localSubkeyKeyID": "07A7F6826BD2CDB6",
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "ok",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            },
+            "B": {
+              "localIdentity": null,
+              "localSubkeyKeyID": null,
+              "pending": null,
+              "oldArmorWrapped": false,
+              "crashed": false,
+              "ui": {
+                "state": "not_evaluated",
+                "failureClass": null,
+                "offerEntry": false,
+                "uiKey": null
+              }
+            }
+          },
+          "counters": {
+            "keygen": 1,
+            "onchainWrites": 1,
+            "backupWrites": 1,
+            "registrations": 1,
+            "localWrites": 2,
+            "pendingDiscarded": 0,
+            "externalWrites": 0,
+            "walletWrites": 0
+          }
+        }
+      }
+    }
+  ],
+  "counts": {
+    "cases": 34,
+    "groups": [
+      "R",
+      "M",
+      "D",
+      "F",
+      "E",
+      "S"
+    ]
+  }
+}

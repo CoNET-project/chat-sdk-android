@@ -40,7 +40,7 @@ class PgpBackupCompatVectorsTest {
 
     @Test
     fun theVectorFileIsTheCurrentCopy() {
-        assertEquals("6a6e38018133d0af8d51f3d8aa5ae85747b8e65c51a620c3f70d4aa81373cb78", sha256Hex(raw))
+        assertEquals("7c1515fc8f7468386db8195348f5e784caa77d1462dd33f997b865c2d3b8850c", sha256Hex(raw))  // r3l: D-1, D-2 strict
     }
 
     @Test
@@ -85,27 +85,6 @@ class PgpBackupCompatVectorsTest {
             val result = NativePgpBackup.decryptArmor(n.getString("passwordString"), n.getJSONObject("backup").getString("base64"))
             assertNull("$id must fail", result)
         }
-    }
-
-    /** Restores P-1 into a vault and checks the signature and decryption path with the same key the PWA would use. */
-    @Test
-    fun aPositiveRestoresIntoTheVaultAndTheKeyWorks() {
-        val p = positive("P-1")
-        val wrap = NativeTestWrap()
-        val files = NativeTestFiles()
-        val wallet = NativeWalletVault(wrap, files)
-        val pgp = NativePgpVault(wrap, files, p.getString("eoa").lowercase())
-        val key = MnemonicDerivation.deriveKey(mnemonicFor("P-1"))!!
-        // The vault stores canonical (lower-case) addresses; the vector's checksummed form is not a stored form.
-        assertEquals(NativeWalletVault.Import.OK, wallet.importKey(p.getString("eoa").lowercase(), key))
-        key.fill(0)
-        val r = NativePgpBackup.restore(wallet, pgp, p.getJSONObject("backup").getString("base64"), p.getJSONObject("expect").getString("primaryFingerprint"))
-        assertEquals("restore", NativePgpBackup.Code.OK, r.code)
-        assertEquals(p.getJSONObject("expect").getString("primaryFingerprint"), r.fingerprint!!.uppercase())
-        val test = p.getJSONObject("testMessage")
-        val out = pgp.decryptInbound(test.getString("armored"))
-        assertEquals("decrypt", "ok", out.code)
-        assertEquals(test.getString("plaintext"), out.value)
     }
 
     /**

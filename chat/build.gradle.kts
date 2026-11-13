@@ -26,6 +26,9 @@ android {
     sourceSets {
         getByName("test").resources.srcDir(rootProject.file("spec"))
         getByName("androidTest").assets.srcDir(rootProject.file("spec"))
+        // P-IMP-PGP option A acceptance harness and adapters (spec r3l §25.30.8): one copy for the JVM and the device tests.
+        getByName("test").kotlin.srcDir("src/sharedAcceptance/java")
+        getByName("androidTest").kotlin.srcDir("src/sharedAcceptance/java")
     }
 
     compileOptions {

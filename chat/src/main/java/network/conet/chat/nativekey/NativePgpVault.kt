@@ -31,6 +31,9 @@ internal class NativePgpVault(
 
         /** A generated key awaiting its registration. Never the active identity. */
         PENDING("pending.", "|pending"),
+
+        /** The pre-replacement backup, wrapped on this device before an explicit replacement (R3, §25.30.5). */
+        OLD("old.", "|old"),
     }
 
     sealed class State {
@@ -165,6 +168,19 @@ internal class NativePgpVault(
         runCatching { files.delete(rec) }
     }
 
+    /** The identity of the record in this slot: uppercase master fingerprint and first subkey key ID. Null if none. */
+    @Synchronized
+    internal fun identity(): PgpIdentity? {
+        val unlocked = unlock() ?: return null
+        val secret = NativePgp.parseSecret(unlocked.privateArmor) ?: return null
+        val sub = NativePgpBackup.subkeyKeyId(secret) ?: return null
+        return PgpIdentity(secret.fingerprint.uppercase(), sub)
+    }
+
+    /** The armor of the record in this slot, for native-only moves between slots. Never leaves the native layer. */
+    @Synchronized
+    internal fun armorForMove(): String? = unlock()?.privateArmor
+
     /** True for the pending slot. Used to refuse a call that mixes the two slots. */
     fun isPendingSlot(): Boolean = slot == Slot.PENDING
 
@@ -280,6 +296,9 @@ internal class NativePgpVault(
 
         /** File name of the record of [account] in [slot]. */
         fun recName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.rec"
+
+        /** File name of the pending key's metadata (idempotency key and expected chain version; no key material). */
+        fun pendingMetaName(account: String): String = "pgp.v1.pending.${bare(account)}.meta"
 
         /** File name of the marker of [account] in [slot]. */
         fun markName(account: String, slot: Slot = Slot.ACTIVE): String = "pgp.v1.${slot.fileTag}${bare(account)}.ok"

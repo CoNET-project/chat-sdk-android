@@ -286,7 +286,7 @@
       "id": "D-2",
       "kind": "base64_whitespace",
       "source": "P-1",
-      "note": "文本中插入换行。PWA 的 atob 忽略 ASCII 空白，接受；严格解码器（如 Java Base64.getDecoder、iOS Data(base64Encoded:) 无选项）拒绝。",
+      "note": "文本中插入换行。PWA 写入端 aesGcmEncrypt（btoa）不产生空白；PWA 读取端 atob 忽略 ASCII 空白。三端统一为严格拒绝（spec r3l §25.30.2）。",
       "backup": {
         "base64": "GR+uIMnC/Fo8cPkDv4tXHOehB75qFtxRKr3z/v6o\ns25QVNHXoLGAI849/SH7IV9WN4uknDk88VQcDWJ+OnHsVEmykUt/jfVuZn1BDkwzhy+SZU1wTxYRtF9lldFPIks13x4Iyn5UjgdSMfl1ZjdaLMQjyMIBZ5qx73bRlrM8K6bhO+dr5wfmr/3WLbeGACXtWFEvYAzBvDg2EZuhVl442VZ+5CY46+z8P8rtd/jAfX3MxXHJopzZr7C1m/bX89aOo9mCl3KyiQZ/XzRuB714Vfx60htkOe26+xZ2EleTiGX+xgerqDcWdg+qT+b8ZYfDKgyB2p9W+Hl9zVh8eHRmaeUWiUpLH7faUkTOfWYh3pwS1IkjacW3Aed7BlkmRzd3DX6uF/km9F/3LcJL+KlnuDvFiighS0F8W7uRfewpYqlk1Pvch8m1m76bMC0D6W9aurG0T2FJd/8gmnkstQUt/+EOTA6SszRV9pYsHScqIgAkgDLsCYKFgIGDZ04T0B5gI9z9+MgNuAsjX44M+CKwxmk0e4cXct3Y3wENH+OIKvA4Y5sOrmvZiehz/a6lANPUhnvFATYe/rzPVZdMppBVMICoo2ffV7Nm8gH01CsWeC01SEMNT5u68nCjYzBFsG8+dg74JkyPPJo8x4jW2Le2EtxN687GHnM04TqQzxBf9VDYjdpDo3IYMUq3X7x0dLLQbm068oyIUXWbwYixlaRa5Dl3UFqyQUSaguugo1ZM8jR/VrXdrkQuVQLNEcr6+L5aMFgdnfQcFBDVg+AQaTQneqmPk87uEmwvOGjULLKJO0KSCSFkf63rAwRQkbfTldK6VeVhu1/xCTinEVToXf4ApGZgIv4IM3PaPyf3ltEEnzOUOgTzIouOShCz30CJa2lyjYD+RirzlP/zkqYgvHk3BxZeZ7QjoF87XZEMo1SPQ3juJRFKQUpusxvqroB9IcvyFTec2rQz/spTFQAUPrb0BNMeM0uOVzTNvLHCboafbiVfa3nvFWmBQ6u3ErnF0tsWjk9r7leu9c2lM4jzY14F0IrBfV8iKDD/gcTJ+aQuv0S680aPdYdM02xa4iL4flJwDOdPN4frKs76AJrbp6lLwO26yCEB15PlUCL7ElEqGiOsb+r9j/iONWdDg0U4ZOA1xv3uzqOyTHyV7rp7uqGGrWzpreGznRVAEoXjXF6jf5ArPrFYVZ5RYeXbelkpi1UNOHctWhOWHGeXN+5bnUIeeigHDm4Ie5MRROuj",
         "binaryBytes": 939,
@@ -297,9 +297,10 @@
       },
       "passwordString": "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
       "expect": {
-        "pwa": "ok_lenient",
+        "pwa": "decrypt_failed",
+        "pwaCurrent": "ok_lenient",
         "native": "decrypt_failed",
-        "note": "PWA 结果以 PWA 实际运行为准（P-IMP-PGP 待 PM 裁定）"
+        "note": "严格口径（spec r3l §25.30.2，PM 裁定）：PWA 读取端改造后须拒绝；pwaCurrent 为 2026-11-13 现行 PWA 实测（atob 宽容解析）"
       }
     }
   ],
@@ -327,7 +328,7 @@
   },
   "rules": [
     "解出的私钥只用于本地比对，不得交给 WebView，不得写入日志。",
-    "负例必须失败；D-1、D-2 为差异记录，结果须如实报告，不得改写期望。",
+    "负例必须失败。D-1、D-2 的期望已按 spec r3l §25.30.2（PM 裁定）改为严格拒绝；PWA 现行结果记入 pwaCurrent，改造前的 PWA 检查显示为已记录差异，属预期。",
     "不得修改向量以迁就实现。"
   ]
 }

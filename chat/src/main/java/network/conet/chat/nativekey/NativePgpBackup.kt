@@ -1,5 +1,6 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.ConetChatCryptoUtil
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import javax.crypto.Cipher
@@ -16,20 +17,6 @@ import javax.crypto.spec.SecretKeySpec
  * never returned to a caller. The decode is strict on purpose: divergence D-2 (the PWA accepts whitespace, this does not).
  */
 internal object NativePgpBackup {
-    enum class Code(val wire: String) {
-        OK("ok"),
-        NO_KEY("no_key"),
-        LOCKED("locked"),
-        DECRYPT_FAILED("decrypt_failed"),
-        BAD_PGP_KEY("bad_pgp_key"),
-        IDENTITY_MISMATCH("identity_mismatch"),
-        BAD_EOA("bad_eoa"),
-        WRITE_FAILED("write_failed"),
-        READBACK_FAILED("readback_failed"),
-    }
-
-    class Result(val code: Code, val fingerprint: String? = null)
-
     private const val IV_BYTES = 12
     private const val TAG_BYTES = 16
 
@@ -75,6 +62,24 @@ internal object NativePgpBackup {
     }
 
     /**
+     * Encrypts [armor] (UTF-8 bytes) under the key derived from [passwordString], with the given 12-byte [iv]. Returns the
+     * backup text base64(iv ‖ ct ‖ tag), standard alphabet, padded, no whitespace: the format [decryptArmor] reads. The IV
+     * must be random in production; the acceptance vectors pass a fixed one.
+     */
+    fun encryptArmor(passwordString: String, armor: ByteArray, iv: ByteArray): String {
+        require(iv.size == IV_BYTES) { "iv must be 12 bytes" }
+        val key = MessageDigest.getInstance("SHA-256").digest(passwordString.toByteArray(Charsets.UTF_8))
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+            val sealed = cipher.doFinal(armor)
+            return ConetChatCryptoUtil.base64Encode(iv + sealed)
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    /**
      * Decrypts [backupBase64] with the key derived from [passwordString]. Returns the armor bytes (UTF-8), or null when
      * the input is malformed, truncated, or the tag does not verify. Pure: no vault access.
      */
@@ -90,40 +95,6 @@ internal object NativePgpBackup {
             null
         } finally {
             key.fill(0)
-        }
-    }
-
-    /**
-     * Restores the PGP key of the wallet's account. The account is the one the vault holds; the armor must be a single
-     * private key block. [expectedFingerprint] is the primary fingerprint the caller expects for this account (case-
-     * insensitive). A different key is refused before anything is written, so an old record is not replaced by a key the
-     * caller did not expect. Writes through [NativePgpVault.put], which reads back and rolls back on failure.
-     */
-    fun restore(wallet: NativeWalletVault, pgp: NativePgpVault, backupBase64: String, expectedFingerprint: String?): Result {
-        val eoa = when (val st = wallet.state()) {
-            is NativeWalletVault.State.NoKey -> return Result(Code.NO_KEY)
-            is NativeWalletVault.State.Locked -> return Result(Code.LOCKED)
-            is NativeWalletVault.State.Ready -> st.eoa
-        }
-        val key = wallet.unlock() ?: return Result(Code.LOCKED)
-        val password = try {
-            passwordString(key)
-        } finally {
-            key.fill(0)
-        }
-        val armorBytes = decryptArmor(password, backupBase64) ?: return Result(Code.DECRYPT_FAILED)
-        val armor = String(armorBytes, Charsets.UTF_8)
-        armorBytes.fill(0)
-        val secret = NativePgp.parseSecret(armor) ?: return Result(Code.BAD_PGP_KEY)
-        if (expectedFingerprint != null && !secret.fingerprint.equals(expectedFingerprint, ignoreCase = true)) {
-            return Result(Code.IDENTITY_MISMATCH)
-        }
-        return when (pgp.put(eoa, armor, "")) {
-            NativePgpVault.Put.OK -> Result(Code.OK, secret.fingerprint)
-            NativePgpVault.Put.BAD_EOA -> Result(Code.BAD_EOA)
-            NativePgpVault.Put.BAD_KEY -> Result(Code.BAD_PGP_KEY)
-            NativePgpVault.Put.STORE_FAILED -> Result(Code.WRITE_FAILED)
-            NativePgpVault.Put.READBACK_FAILED -> Result(Code.READBACK_FAILED)
         }
     }
 
