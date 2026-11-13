@@ -143,6 +143,14 @@ object IdentityProvisionContract {
             val pgpRaw = rawPgp as? String ?: return Result.Reject("bad_identity")
             if (!isPublicArmor(pgpRaw)) return Result.Reject("bad_identity")
         }
+        // The route public key is optional too (r3aj, §25.30.2, §25.48.10): an omitted key is absent, never an empty string.
+        // When present, it must be PGP public armor, under the name the PWA sends and under the legacy alias.
+        for (name in listOf("ownRouteArmoredPublicKey", "routePublicKeyArmored")) {
+            identity.opt(name)?.let { rawRoute ->
+                val routeRaw = rawRoute as? String ?: return Result.Reject("bad_identity")
+                if (!isPublicArmor(routeRaw)) return Result.Reject("bad_identity")
+            }
+        }
         return Result.Accept(eoa)
     }
 

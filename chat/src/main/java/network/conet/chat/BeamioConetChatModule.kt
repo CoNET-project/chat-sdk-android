@@ -394,13 +394,12 @@ object BeamioConetChatModule {
 
         // Keep the killed-app voice path working: it reads the route / roster from here (public material only).
         try {
-            BeamioChatPgpStore.upsertFromWeb(
-                ctx,
-                JSONObject()
-                    .put("publicKeyArmor", s.pgpPublicKeyArmored)
-                    .put("routePublicKeyArmor", s.ownRouteArmoredPublicKey)
-                    .put("eoa", s.eoa),
-            )
+            val upsert = JSONObject()
+                .put("publicKeyArmor", s.pgpPublicKeyArmored)
+                .put("eoa", s.eoa)
+            // An omitted route key stays omitted (r3aj): no empty string stands in for it.
+            if (s.ownRouteArmoredPublicKey.isNotEmpty()) upsert.put("routePublicKeyArmor", s.ownRouteArmoredPublicKey)
+            BeamioChatPgpStore.upsertFromWeb(ctx, upsert)
             // A payload roster that carries PGP keys replaces the stored one: background listen starts from the stored keys.
             if (nodesRaw != null && s.nodes.any { it.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY") }) {
                 BeamioChatPgpStore.storeChainRoster(ctx, s.nodes.map { it.asStoreNode() }, s.mailboxIp.ifBlank { null })
