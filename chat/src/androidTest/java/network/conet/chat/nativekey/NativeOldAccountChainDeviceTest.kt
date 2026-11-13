@@ -77,6 +77,8 @@ class NativeOldAccountChainDeviceTest {
     private fun wipe() {
         val (wallet, pgp) = vaults()
         pgp.forget()
+        NativePgpVault(AndroidKeyWrap(), AndroidVaultFiles(dir), eoa.lowercase(), NativePgpVault.Slot.PENDING).forget()
+        NativePgpVault(AndroidKeyWrap(), AndroidVaultFiles(dir), account2.lowercase()).forget()
         wallet.forget()
     }
 
@@ -143,5 +145,96 @@ class NativeOldAccountChainDeviceTest {
         val (wallet5, pgp5) = vaults()
         assertFalse("wallet still present", wallet5.state() is NativeWalletVault.State.NoKey)
         assertEquals("decrypt after retry and restart", "ok", pgp5.decryptInbound(testMessage.getString("armored")).code)
+    }
+
+    // ---------- §42: the three failure classes, the anti-overwrite rules, generation and multi-account ----------
+
+    /** A synthetic identity source (the chain read is the host's; this fixture plays the chain). */
+    private class ChainFake(private val backup: String?, private val registered: String?) : PgpIdentitySource {
+        override fun read(eoa: String): PgpIdentitySource.Read = PgpIdentitySource.Read.Found(backup, registered)
+    }
+
+    private object OfflineSource : PgpIdentitySource {
+        override fun read(eoa: String): PgpIdentitySource.Read = PgpIdentitySource.Read.Unavailable
+    }
+
+    private val account2: String by lazy { vectors.getJSONArray("positives").getJSONObject(1).getString("eoa") }
+    private val fingerprint2: String by lazy {
+        vectors.getJSONArray("positives").getJSONObject(1).getJSONObject("expect").getString("primaryFingerprint")
+    }
+
+    private fun pendingVault(): NativePgpVault = NativePgpVault(AndroidKeyWrap(), AndroidVaultFiles(dir), eoa.lowercase(), NativePgpVault.Slot.PENDING)
+
+    /** Writes the account's wallet key (the wallet is the synthetic test key) so the PGP steps have an account. */
+    private fun importWallet(): Pair<NativeWalletVault, NativePgpVault> {
+        val (wallet, pgp) = vaults()
+        assertEquals(NativeImport.Code.OK, NativeImport.submitMnemonic(mnemonic, eoa, wallet).code)
+        return wallet to pgp
+    }
+
+    @Test
+    fun deviceMissingBackupIsTheMissingClassAndNothingIsWritten() {
+        val (wallet, pgp) = importWallet()
+        val r = NativePgpRecovery.restore(wallet, pgp, ChainFake(null, fingerprint))
+        assertEquals(NativePgpRecovery.Code.BACKUP_MISSING, r.code)
+        assertTrue("no PGP record", pgp.state() is NativePgpVault.State.NoKey)
+        assertTrue("no pending key", pendingVault().state() is NativePgpVault.State.NoKey)
+    }
+
+    @Test
+    fun deviceFingerprintMismatchChangesNothing() {
+        val (wallet, pgp) = importWallet()
+        assertEquals(NativePgpRecovery.Code.FINGERPRINT_MISMATCH, NativePgpRecovery.restore(wallet, pgp, ChainFake(backup, fingerprint2)).code)
+        assertTrue(pgp.state() is NativePgpVault.State.NoKey)
+    }
+
+    @Test
+    fun deviceUndecryptableBackupChangesNothing() {
+        val (wallet, pgp) = importWallet()
+        val tampered = backup.substring(0, 20) + (if (backup[20] == 'A') "B" else "A") + backup.substring(21)
+        assertEquals(NativePgpRecovery.Code.BACKUP_UNDECRYPTABLE, NativePgpRecovery.restore(wallet, pgp, ChainFake(tampered, fingerprint)).code)
+        assertTrue(pgp.state() is NativePgpVault.State.NoKey)
+    }
+
+    @Test
+    fun deviceAnActiveKeyOfAnotherIdentityIsNotOverwritten() {
+        val (wallet, pgp) = importWallet()
+        assertEquals(NativePgpVault.Put.OK, pgp.put(eoa.lowercase(), vectors.getJSONArray("positives").getJSONObject(1).getJSONObject("pgp").getString("privateArmor"), ""))
+        assertEquals(NativePgpRecovery.Code.ALREADY_EXISTS, NativePgpRecovery.restore(wallet, pgp, ChainFake(backup, fingerprint)).code)
+        val st = pgp.state()
+        assertTrue("unchanged: $st", st is NativePgpVault.State.Ready && st.fingerprint.equals(fingerprint2, ignoreCase = true))
+    }
+
+    @Test
+    fun deviceGenerationIsConfirmedGuardedAndActivatedAfterRegistration() {
+        val (wallet, pgp) = importWallet()
+        val pending = pendingVault()
+        assertEquals(NativePgpRecovery.Code.CANCELLED, NativePgpRecovery.generate(wallet, pgp, pending, ChainFake(null, null), false).code)
+        assertEquals(NativePgpRecovery.Code.SOURCE_UNAVAILABLE, NativePgpRecovery.generate(wallet, pgp, pending, OfflineSource, true).code)
+        assertEquals(NativePgpRecovery.Code.IDENTITY_EXISTS, NativePgpRecovery.generate(wallet, pgp, pending, ChainFake(backup, fingerprint), true).code)
+        val g = NativePgpRecovery.generate(wallet, pgp, pending, ChainFake(null, null), true)
+        assertEquals(NativePgpRecovery.Code.OK, g.code)
+        assertFalse("public only", g.publicArmor!!.contains("PRIVATE KEY"))
+        assertTrue("active untouched", pgp.state() is NativePgpVault.State.NoKey)
+        assertEquals(NativePgpRecovery.Code.OVERWRITE_REFUSED, NativePgpRecovery.registrationGuard(ChainFake(backup, null), eoa.lowercase(), g.fingerprint!!))
+        assertEquals(NativePgpRecovery.Code.OK, NativePgpRecovery.registrationGuard(ChainFake(null, null), eoa.lowercase(), g.fingerprint!!))
+        assertEquals(NativePgpRecovery.Code.OK, NativePgpRecovery.activate(wallet, pgp, pending, g.fingerprint!!).code)
+        // Cold start: new objects; the activated identity is ready, the pending slot is gone.
+        val (_, pgp2) = vaults()
+        assertTrue(pgp2.state() is NativePgpVault.State.Ready)
+        assertTrue(NativePgpVault(AndroidKeyWrap(), AndroidVaultFiles(dir), eoa.lowercase(), NativePgpVault.Slot.PENDING).state() is NativePgpVault.State.NoKey)
+    }
+
+    @Test
+    fun deviceAccountsKeepSeparateRecords() {
+        val (_, pgp1) = importWallet()
+        val p1Key = p1.getJSONObject("pgp").getString("privateArmor")
+        val p2Key = vectors.getJSONArray("positives").getJSONObject(1).getJSONObject("pgp").getString("privateArmor")
+        val pgp2 = NativePgpVault(AndroidKeyWrap(), AndroidVaultFiles(dir), account2.lowercase())
+        assertEquals(NativePgpVault.Put.OK, pgp1.put(eoa.lowercase(), p1Key, ""))
+        assertEquals(NativePgpVault.Put.OK, pgp2.put(account2.lowercase(), p2Key, ""))
+        pgp2.forget()
+        assertTrue("account 1 survives account 2's removal", pgp1.state() is NativePgpVault.State.Ready)
+        assertTrue(pgp2.state() is NativePgpVault.State.NoKey)
     }
 }
