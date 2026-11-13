@@ -1,0 +1,1175 @@
+{
+  "file": "native-recovery-vectors.v1.json",
+  "purpose": "原生恢复页与恢复引擎（spec r3u §25.42）：路径 A（恢复码）与路径 B（账号名加密码）的步骤、错误码、退避，以及记录的解密兼容性。合成数据：恢复码、口令、账号名、注册表记录均为生成器构造，助记词为 BIP-39 公开测试助记词。",
+  "spec": "v1.1-r3u §25.42（测试 T-228 至 T-232）",
+  "generator": "gen-native-recovery-vectors.mjs",
+  "sourceAlgorithm": {
+    "file": "src/SilentPassUI（PWA SilentPassUI-v2 工作树 services/beamio.ts）",
+    "functions": [
+      "createRecover",
+      "restoreWithRedeem",
+      "restoreWithUserPin",
+      "aesGcmEncryptWithStored",
+      "aesGcmDecryptWithStored",
+      "deriveAesKeyFromPassword",
+      "generateCODE"
+    ]
+  },
+  "kdf": {
+    "algo": "argon2id",
+    "version": 19,
+    "defaultParams": {
+      "m": 32768,
+      "t": 3,
+      "p": 1
+    },
+    "dkLen": 32,
+    "passwordEncoding": "UTF-8",
+    "salt": "base64",
+    "cipher": "AES-256-GCM",
+    "ivBytes": 12,
+    "tagBytes": 16,
+    "layout": "base64(iv || ciphertext || tag)"
+  },
+  "record": {
+    "format": "base64(JSON({stored, img}))",
+    "storedFields": [
+      "algo",
+      "v",
+      "m",
+      "t",
+      "p",
+      "salt",
+      "hash"
+    ]
+  },
+  "registryKeys": {
+    "pathA": "keccak256(solidityPacked(string, [recoveryCode]))，读取 getBase64ByNameHash(bytes32)",
+    "pathB": "账号名字符串，读取 getBase64ByAccountName(string)"
+  },
+  "recoveryCodeFormat": {
+    "regex": "^[0-9A-Za-z]{22}$",
+    "source": "uuid62.v4()（20000 个样本全部符合）"
+  },
+  "backoff": {
+    "table": {
+      "5": 30,
+      "6": 60,
+      "7": 300,
+      "8": 900,
+      ">=9": 3600
+    },
+    "counted": "bad_pin only (path B)",
+    "reset": "on ok"
+  },
+  "fixtures": {
+    "registry": {
+      "nameHash:0xc994c0e53eb8fa2986fd8ef845c5cf46067a6440b22e0fb2e3554a421b6ef173": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXh4VVpZbnl5a0RsSm84eHI1L1g5OFArQVRBK3dFeW10WEZDZVlmZThjTlYvTnE2QVI4U3BBc2pWUUIxRDNtckd1Y1NNRlhTVG1qcGxHczYvbk5xRVBXLzdaWDkrQitsODBpbk0vamhWREpoS0hMRlBGUU9KTHkwVlNlSUFJZ2xOSENvMzViMFU3MFNHeVRnbEpnRG1ibmdmWmlhYlprTFlLYmNMbzE2VTUwdStiWVdkZ2VpUFU0blZxWE53PSJ9",
+      "nameHash:0x93b4445c85cd2870edc3313600259d551efe29dc3bc71b681fc9395aba500c56": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhRZzBoS1hwSEhBeTR0ZGRoaFh1Q1FVOUE3MmVTUzhsbnNWR2tGS2lhbnI5bURPSUQvcCtrbFJsRm9JYWxhL3FOYUV3YjZOZFFyWlM4TWZVK1M2V3h4cnhQSWZKVWRNaWg0S0tQV3FlUkRQYVVwbVV3TkIra0h0bFl5Tld5Ym5uQW9wYkE3dXVVZFFOdEFsNHlKMytqWkhZQWhPeml6dWRSZG9QdHF2eEJtNWFqTGwxdHpHMUlxNVhHOEhBPSJ9",
+      "nameHash:0xb9a03d1bf6adc79ed017cb2e1c7e30b976b479b0253d5e1427f3d9e9dfa31767": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXhvd3pUQ3FtUjk3c1FYVWJhTDBvK1VYdmVnM1pzYy9YZStJbGtaUEpIbFBwendRKzlqbWRrR1JDbFBiSEtkb3o3S3hRM1ArMndqVHlveG1kQzcwUEltQT09In0=",
+      "name:syn_recover_0001": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXgvOFBHRUR1b1FPK0FBVEo0MWRwZC9EL2pZbU5WOTNYNnpqeHBUM0g0QTlibTRzTE1UL1dyL2RzUXYzNnlQR3QvTmxtbDB2Zk1senhRWXg3d0p4MjdwdXZ2QzNrZDBsZHBkQXJQNk9WQzV1QmlSTWdHNVI5UFVaNThnN21DZUU5WndrMnN0N0FYNDUzd1M3UnpxQlVYeDR0T2xDOHpBZlFKallrQ21LRnlyOXd4N2xjZEtGQ0JpdHUya3FvPSJ9"
+    },
+    "legacyRegistry": {
+      "name:syn_legacy_0002": "eyJzdG9yZWQiOnsiYWxnbyI6ImFyZ29uMmlkIiwidiI6MTksIm0iOjMyNzY4LCJ0IjozLCJwIjoxLCJzYWx0IjoiVTFsT0xWTkJURlF0TURBd01EQXdNUT09IiwiaGFzaCI6Ik41Sm5zRFJVRUppQmxmWlVYaENRK09EV2ZzaVJCOVE0MXpCb0l6SG1xZ2M9In0sImltZyI6IlUxbE9TVll0TURBd01EQXgvOFBHRUR1b1FPK0FBVEo0MWRwZC9EL2pZbU5WOTNYNnpqeHBUM0g0QTlibTRzTE1UL1dyL2RzUXYzNnlQR3QvTmxtbDB2Zk1senhRWXg3d0p4MjdwdXZ2QzNrZDBsZHBkQXJQNk9WQzV1QmlSTWdHNVI5UFVaNThnN21DZUU5WndrMnN0N0FYNDUzd1M3UnpxQlVYeDR0T2xDOHpBZlFKallrQ21LRnlyOXd4N2xjZEtGQ0JpdHUya3FvPSJ9"
+    },
+    "syntheticNote": "注册表记录为合成数据，由上述算法生成；口令与恢复码为合成值；助记词为 BIP-39 公开测试助记词，派生地址 0x9858effd232b4033e47d90003d41ec34ecaeda94。"
+  },
+  "errorCodes": [
+    "ok",
+    "cancelled",
+    "invalid_format",
+    "bad_pin",
+    "backoff",
+    "not_found",
+    "network_error",
+    "already_exists",
+    "record_invalid",
+    "write_failed",
+    "readback_failed",
+    "legacy_record"
+  ],
+  "cases": [
+    {
+      "id": "R-01",
+      "group": "A",
+      "title": "路径 A：恢复码正确，恢复成功，写入一次",
+      "testIds": [
+        "T-228",
+        "T-231"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-01",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-01",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-02",
+      "group": "A",
+      "title": "路径 A：去首尾空白后有效",
+      "testIds": [
+        "T-228"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-02",
+            "code": "  3kRz8mQ2vLpN7wXy1sTcFh "
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-02",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-03",
+      "group": "A",
+      "title": "路径 A：长度 21：invalid_format，不发起读取",
+      "testIds": [
+        "T-228"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-03",
+            "code": "3kRz8mQ2vLpN7wXy1sTcF"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-03",
+            "code": "invalid_format"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-04",
+      "group": "A",
+      "title": "路径 A：含非字母数字字符（-）：invalid_format",
+      "testIds": [
+        "T-228"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-04",
+            "code": "abcd-mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-04",
+            "code": "invalid_format"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-05",
+      "group": "A",
+      "title": "路径 A：格式有效但注册表无记录：not_found",
+      "testIds": [
+        "T-228"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-05",
+            "code": "7sDfG2hJk9LzQx4WcVb6Tn"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-05",
+            "code": "not_found"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-06",
+      "group": "A",
+      "title": "路径 A：读取失败（RPC 两端都不可用）：network_error，不改变设备状态",
+      "testIds": [
+        "T-228"
+      ],
+      "env": {
+        "rpc": "fail"
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-06",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-06",
+            "code": "network_error"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-07",
+      "group": "A",
+      "title": "路径 A：记录密文被改动：record_invalid",
+      "testIds": [
+        "T-230"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-07",
+            "code": "9qWmT4vYp2NcLx8RbHs3Ge"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-07",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-08",
+      "group": "A",
+      "title": "路径 A：解开后不是有效助记词：record_invalid",
+      "testIds": [
+        "T-230"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-08",
+            "code": "Lw5KbZ2pRq8TmXc3VhNs4D"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-08",
+            "code": "record_invalid"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-09",
+      "group": "A",
+      "title": "路径 A：设备已有钥（G2）：already_exists，不读取，不覆盖",
+      "testIds": [
+        "T-231"
+      ],
+      "env": {
+        "device": {
+          "hasKey": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-09",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-09",
+            "code": "already_exists"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-10",
+      "group": "A",
+      "title": "路径 A：设备有记录未就绪（G1）：already_exists",
+      "testIds": [
+        "T-231"
+      ],
+      "env": {
+        "device": {
+          "hasKey": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-10",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-10",
+            "code": "already_exists"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-11",
+      "group": "A",
+      "title": "路径 A：写入失败：write_failed，设备无钥",
+      "testIds": [
+        "T-231"
+      ],
+      "env": {
+        "device": {
+          "writeFail": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-11",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-11",
+            "code": "write_failed"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-12",
+      "group": "A",
+      "title": "路径 A：读回不一致：readback_failed，回滚，设备无钥",
+      "testIds": [
+        "T-231"
+      ],
+      "env": {
+        "device": {
+          "readbackFail": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-12",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-12",
+            "code": "readback_failed"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "R-13",
+      "group": "A",
+      "title": "用户在提交前取消：cancelled，不读取",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "A",
+            "reqId": "R-13",
+            "code": "3kRz8mQ2vLpN7wXy1sTcFh",
+            "cancel": true
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "R-13",
+            "code": "cancelled"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-01",
+      "group": "B",
+      "title": "路径 B：账号名与密码正确，恢复成功",
+      "testIds": [
+        "T-229",
+        "T-231"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-01",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-01",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-02",
+      "group": "B",
+      "title": "路径 B：密码错误：bad_pin，错误次数加一，不回显输入",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-02",
+            "name": "syn_recover_0001",
+            "password": "SYN-wrong-1"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-02",
+            "code": "bad_pin"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 1,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-03",
+      "group": "B",
+      "title": "路径 B：账号名不存在（当前与迁移前注册表都无）：not_found",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-03",
+            "name": "syn_nobody_9999",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-03",
+            "code": "not_found"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-04",
+      "group": "B",
+      "title": "路径 B：密码为空：invalid_format",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-04",
+            "name": "syn_recover_0001",
+            "password": ""
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-04",
+            "code": "invalid_format"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-05",
+      "group": "B",
+      "title": "路径 B：账号名首尾空白被去除后有效（大小写与 @ 不改写）",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-05",
+            "name": "  syn_recover_0001  ",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-05",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-06",
+      "group": "B",
+      "title": "路径 B：只在迁移前注册表有记录：legacy_record（v1 不迁移，§25.42.6 RC-3）",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-06",
+            "name": "syn_legacy_0002",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-06",
+            "code": "legacy_record"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-07",
+      "group": "B",
+      "title": "路径 B：连续 5 次错误后，第 6 次在冷却中：backoff，cooldownSec 30，不读取不解密",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07a",
+            "name": "syn_recover_0001",
+            "password": "x1"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07b",
+            "name": "syn_recover_0001",
+            "password": "x2"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07c",
+            "name": "syn_recover_0001",
+            "password": "x3"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07d",
+            "name": "syn_recover_0001",
+            "password": "x4"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07e",
+            "name": "syn_recover_0001",
+            "password": "x5"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-07f",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07a",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07b",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07c",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07d",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07e",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-07f",
+            "code": "backoff",
+            "cooldownSec": 30
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 5,
+          "cooldownActive": true
+        }
+      }
+    },
+    {
+      "id": "B-08",
+      "group": "B",
+      "title": "路径 B：冷却结束后密码正确：恢复成功，错误次数清零",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08a",
+            "name": "syn_recover_0001",
+            "password": "x1"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08b",
+            "name": "syn_recover_0001",
+            "password": "x2"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08c",
+            "name": "syn_recover_0001",
+            "password": "x3"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08d",
+            "name": "syn_recover_0001",
+            "password": "x4"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08e",
+            "name": "syn_recover_0001",
+            "password": "x5"
+          }
+        },
+        {
+          "op": "elapse"
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-08f",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08a",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08b",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08c",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08d",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08e",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-08f",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-09",
+      "group": "B",
+      "title": "路径 B：第 6 次错误后冷却为 60 秒",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {},
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09a",
+            "name": "syn_recover_0001",
+            "password": "x1"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09b",
+            "name": "syn_recover_0001",
+            "password": "x2"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09c",
+            "name": "syn_recover_0001",
+            "password": "x3"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09d",
+            "name": "syn_recover_0001",
+            "password": "x4"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09e",
+            "name": "syn_recover_0001",
+            "password": "x5"
+          }
+        },
+        {
+          "op": "elapse"
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09f",
+            "name": "syn_recover_0001",
+            "password": "x6"
+          }
+        },
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-09g",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09a",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09b",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09c",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09d",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09e",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09f",
+            "code": "bad_pin"
+          },
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-09g",
+            "code": "backoff",
+            "cooldownSec": 60
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 6,
+          "cooldownActive": true
+        }
+      }
+    },
+    {
+      "id": "B-10",
+      "group": "B",
+      "title": "路径 B：读取失败不计入错误次数",
+      "testIds": [
+        "T-229"
+      ],
+      "env": {
+        "rpc": "fail"
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-10",
+            "name": "syn_recover_0001",
+            "password": "SYN-pin-2026"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-10",
+            "code": "network_error"
+          }
+        ],
+        "state": {
+          "hasKey": false,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    },
+    {
+      "id": "B-11",
+      "group": "B",
+      "title": "路径 B：设备已有钥：already_exists，不计入错误次数",
+      "testIds": [
+        "T-231"
+      ],
+      "env": {
+        "device": {
+          "hasKey": true
+        }
+      },
+      "steps": [
+        {
+          "op": "attempt",
+          "a": {
+            "path": "B",
+            "reqId": "B-11",
+            "name": "syn_recover_0001",
+            "password": "x1"
+          }
+        }
+      ],
+      "expect": {
+        "results": [
+          {
+            "type": "nativeRecoveryResult",
+            "reqId": "B-11",
+            "code": "already_exists"
+          }
+        ],
+        "state": {
+          "hasKey": true,
+          "failures": 0,
+          "cooldownActive": false
+        }
+      }
+    }
+  ],
+  "counts": {
+    "cases": 24,
+    "A": 13,
+    "B": 11
+  },
+  "toolVersions": {
+    "ethers": "6.16.0",
+    "node": "v22.23.3"
+  },
+  "notCovered": [
+    "迁移前注册表的读取与迁移写入（RC-3）：v1 只返回 legacy_record，不迁移。",
+    "恢复后 PWA 的 init 与 provisionIdentity 流程（§25.26.4c）：由 PWA 与 SDK 的既有用例覆盖。",
+    "原生页的输入、剪贴板、屏幕保护与界面文案：由原生页验收覆盖。",
+    "真实注册表的可用性与延迟：不访问链，由 mock 的 rpc 状态覆盖。"
+  ]
+}

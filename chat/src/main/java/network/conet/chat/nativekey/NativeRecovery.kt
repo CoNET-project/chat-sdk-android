@@ -6,80 +6,164 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 
 /**
- * The native recovery screen and the PWA's result event (spec 25.26.4e.2). The shell registers [launcher] to show its
- * screen. The PWA gets `nativeRecoveryResult {reqId, code, eoa?}` and nothing else: no code, phrase, PIN or key.
+ * The native recovery page and its result events (§25.41.3, §25.42.8). The shell registers [launcher] to show its page.
+ * One page has one `reqId`. Each submission sends exactly one `nativeRecoveryResult`. A failure keeps the page open for a
+ * retry. `ok` ends the page. Closing the page with no result sent yet sends `cancelled`.
  */
 object NativeRecoveryHost {
-    /** The shell opens its native recovery screen here. Returns `false` when there is no screen. */
+    /** The shell opens its native recovery page here. Returns `true` when the page is open. */
     @Volatile
     var launcher: (() -> Boolean)? = null
 
-    /** Set by the module, so the result goes out as an event. */
+    /** Set by the module, so the results go out through the chat module event envelope. */
     @Volatile
     internal var events: ((JSONObject) -> Unit)? = null
 
     @Volatile
-    private var pendingReqId: Any? = null
+    private var pageReqId: Any? = null
 
-    /** Opens the screen for a `nativeRecoveryOpen` with this [reqId]. The result is then sent for this reqId. */
-    internal fun open(reqId: Any): Boolean {
-        val show = launcher ?: return false
-        pendingReqId = reqId
+    @Volatile
+    private var resultSent = false
+
+    internal enum class OpenAnswer { NOT_SUPPORTED, NOT_AVAILABLE, OPENED }
+
+    /** `nativeRecoveryOpen` (§25.41.3): not registered is `not_supported`; registered but refused is `not_available`. */
+    internal fun open(reqId: Any): OpenAnswer {
+        val show = launcher ?: return OpenAnswer.NOT_SUPPORTED
+        pageReqId = reqId
+        resultSent = false
         val opened = try {
             show()
         } catch (_: Exception) {
             false
         }
-        if (!opened) pendingReqId = null
-        return opened
+        if (!opened) {
+            pageReqId = null
+            return OpenAnswer.NOT_AVAILABLE
+        }
+        return OpenAnswer.OPENED
     }
 
-    /** The user dismissed the native screen. */
+    /** The `reqId` of the open page, if any. */
+    internal fun currentReqId(): Any? = pageReqId
+
+    /** The page was closed by the user or the system. Sends `cancelled` when no result was sent for this page. */
+    fun pageClosed() {
+        val id = pageReqId ?: return
+        if (!resultSent) emit(id, RecoveryOutcome.fail("cancelled"))
+        pageReqId = null
+        resultSent = false
+    }
+
+    /** Same as [pageClosed]. */
     fun cancel() {
-        finish(RecoveryOutcome.fail("cancelled"))
+        pageClosed()
     }
 
-    /** Sends the result to the PWA for the pending `nativeRecoveryOpen`, if there is one. */
+    /** One submission's result, for the open page. `ok` ends the page; any other result keeps it open. */
     internal fun finish(outcome: RecoveryOutcome) {
-        val id = pendingReqId ?: return
-        pendingReqId = null
+        val id = pageReqId ?: return
+        emit(id, outcome)
+        resultSent = true
+        if (outcome.code == "ok") {
+            pageReqId = null
+            resultSent = false
+        }
+    }
+
+    private fun emit(id: Any, outcome: RecoveryOutcome) {
         val payload = JSONObject()
             .put("type", "nativeRecoveryResult")
             .put("reqId", id)
             .put("code", outcome.code)
         outcome.eoa?.let { payload.put("eoa", it) }
+        outcome.cooldownSec?.let { payload.put("cooldownSec", it) }
         events?.invoke(payload)
     }
 }
 
-/** Path A, restore by recovery code (spec 25.26.4e.3). Native to native: the code never reaches a WebView. */
+/**
+ * Path A (recovery code) and path B (account name and password), §25.42. Native to native: the secrets are read only in the
+ * native layer and never reach a WebView. Submissions run one at a time on a worker thread. The logs hold the result code only.
+ */
 object NativeRecovery {
     private const val TAG = "NativeRecovery"
     private val worker = Executors.newSingleThreadExecutor()
 
-    /**
-     * Runs the restore off the main thread. [recoveryCode] is copied and the copy is zeroed after use; the caller should
-     * zero its own array. [onResult] runs on the worker thread: switch to the main thread before touching UI. The
-     * outcome is also sent to the PWA when a `nativeRecoveryOpen` is pending. Only the result code is logged.
-     */
+    /** Path A. [recoveryCode] is copied and the copy is cleared after use; the caller clears its own array. */
     fun restoreWithRecoveryCode(context: Context, recoveryCode: ByteArray, onResult: (RecoveryOutcome) -> Unit) {
         val app = context.applicationContext
         val code = recoveryCode.copyOf()
         worker.execute {
             val outcome = try {
-                val cfg = AccountRegistryRead.config
-                val rpc = AddressPgpRead.HttpRpc(cfg.rpcUrl)
-                RecoveryRestore.run(code, NativeWallet.vault(app)) { index ->
-                    AccountRegistryRead.getBase64ByNameHash(rpc, cfg, index)
-                }
-            } catch (_: Exception) {
+                engine(app).restoreWithCode(code)
+            } catch (e: Exception) {
+                Log.w(TAG, "native recovery failed: ${e.javaClass.simpleName}")
                 RecoveryOutcome.fail("network_error")
             } finally {
                 code.fill(0)
             }
-            Log.i(TAG, "native recovery result=${outcome.code}")
-            NativeRecoveryHost.finish(outcome)
-            onResult(outcome)
+            deliver(outcome, onResult)
         }
+    }
+
+    /**
+     * Path B. [password] is copied and the copy is cleared after use; the caller clears its own array. The account name is
+     * trimmed by the engine and is not logged.
+     */
+    fun restoreWithAccountPassword(
+        context: Context,
+        accountName: String,
+        password: CharArray,
+        onResult: (RecoveryOutcome) -> Unit,
+    ) {
+        val app = context.applicationContext
+        val pw = password.copyOf()
+        worker.execute {
+            val outcome = try {
+                engine(app).restoreWithAccountPassword(accountName, pw)
+            } catch (e: Exception) {
+                Log.w(TAG, "native recovery failed: ${e.javaClass.simpleName}")
+                RecoveryOutcome.fail("network_error")
+            } finally {
+                pw.fill('\u0000')
+            }
+            deliver(outcome, onResult)
+        }
+    }
+
+    private fun deliver(outcome: RecoveryOutcome, onResult: (RecoveryOutcome) -> Unit) {
+        Log.i(TAG, "native recovery result=${outcome.code}")
+        NativeRecoveryHost.finish(outcome)
+        onResult(outcome)
+    }
+
+    private fun engine(app: Context): RecoveryEngine = RecoveryEngine(
+        vault = NativeWallet.vault(app),
+        registry = EndpointRegistryReader { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) },
+        failures = SharedPreferencesFailureStore(app),
+        clock = RecoveryClock { System.currentTimeMillis() },
+    )
+}
+
+/** Path B's failure count and last-failure time, on the device (§25.42.7). Counts and times only. */
+internal class SharedPreferencesFailureStore(context: Context) : RecoveryFailureStore {
+    private val prefs = context.getSharedPreferences("beamio_native_recovery", Context.MODE_PRIVATE)
+
+    override fun failures(): Int = prefs.getInt(KEY_FAILURES, 0)
+
+    override fun lastFailureAtMs(): Long = prefs.getLong(KEY_LAST_AT, 0L)
+
+    override fun save(failures: Int, atMs: Long) {
+        prefs.edit().putInt(KEY_FAILURES, failures).putLong(KEY_LAST_AT, atMs).commit()
+    }
+
+    override fun clear() {
+        prefs.edit().remove(KEY_FAILURES).remove(KEY_LAST_AT).commit()
+    }
+
+    private companion object {
+        const val KEY_FAILURES = "path_b_failures"
+        const val KEY_LAST_AT = "path_b_last_failure_ms"
     }
 }

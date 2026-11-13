@@ -828,15 +828,38 @@ object BeamioConetChatModule {
     }
 
     /**
-     * `nativeRecoveryOpen` (spec 25.26.4e.2): only opens the native recovery screen. The ack carries no data. The result
-     * follows as the event `nativeRecoveryResult` for this reqId: code and public address, never the code or the phrase.
+     * `nativeRecoveryOpen` (spec §25.41.3, §25.42.3). The only fields are `type` and `reqId`. A credential or key field is
+     * `key_over_bridge_refused`, and only its name is logged. Any other field is `bad_request`. The host answers: not
+     * registered is `not_supported`; registered but refused is `not_available`; opened is `ok`. The result follows as
+     * `nativeRecoveryResult` for this reqId. Neither the code nor the phrase ever passes through here.
      */
     private fun nativeRecoveryOpenCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
-        if (reqId < 0) return
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        fun answer(ok: Boolean, error: String? = null) {
+            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
+            if (!ok) payload.put("error", error ?: "error")
+            emitEvent(payload)
+        }
+        val keys = body.keys().asSequence().map { it.toString() }.toList()
+        keys.firstOrNull { it in RECOVERY_OPEN_REFUSED }?.let { field ->
+            Log.w(TAG, "nativeRecoveryOpen refused field: $field")
+            return answer(false, "key_over_bridge_refused")
+        }
+        if (keys.any { it !in RECOVERY_OPEN_FIELDS }) return answer(false, "bad_request")
+        if (reqId == null) return answer(false, "bad_request")
         NativeRecoveryHost.events = { payload -> emitEvent(payload) }
-        if (NativeRecoveryHost.open(reqId)) ack(reqId, true) else ack(reqId, false, error = "not_available")
+        when (NativeRecoveryHost.open(reqId)) {
+            NativeRecoveryHost.OpenAnswer.NOT_SUPPORTED -> answer(false, "not_supported")
+            NativeRecoveryHost.OpenAnswer.NOT_AVAILABLE -> answer(false, "not_available")
+            NativeRecoveryHost.OpenAnswer.OPENED -> answer(true)
+        }
     }
+
+    private val RECOVERY_OPEN_FIELDS = setOf("type", "reqId")
+    private val RECOVERY_OPEN_REFUSED = setOf(
+        "privateKeyHex", "privateKeyArmored", "pgpPrivateKeyArmored", "pgpPassphrase", "walletPrivateKey", "mnemonic",
+        "recoveryCode", "pin", "password", "accountPassword",
+    )
 
     /**
      * `provisionIdentity` (spec 25.19.2): public material only. Any wallet or PGP private field is refused.
