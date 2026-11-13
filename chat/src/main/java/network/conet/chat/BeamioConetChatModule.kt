@@ -6,8 +6,8 @@ import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
 import network.conet.chat.identity.IdentityProvisionContract
-import network.conet.chat.nativekey.NativeImportHost
 import network.conet.chat.nativekey.NativeMessageSigner
+import network.conet.chat.nativekey.NativeOpenRules
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgp
@@ -245,6 +245,7 @@ object BeamioConetChatModule {
             "pgpSign" -> pgpSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
+            "nativeAccountCreateOpen" -> nativeAccountCreateOpenCommand(body)
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
             "pgpIdentityCreate" -> pgpIdentityCreateNotSupported(body)
@@ -825,37 +826,50 @@ object BeamioConetChatModule {
         }
     }
 
-    /** `nativeImportOpen` (spec 25.25.1): only opens the native import page. No data in the reply. */
+    /**
+     * The shared shape of the three page-open commands (spec r3t §25.41.3, r3x §25.46.10). The decision is
+     * [NativeOpenRules]; this sends its ack. A refused field is logged by name only. The reqId is echoed as sent, or null.
+     */
+    private fun nativeOpenAck(body: JSONObject, type: String, decide: (List<String>, Any?) -> NativeOpenRules.Reply) {
+        val fields = body.keys().asSequence().map { it.toString() }.toList()
+        NativeOpenRules.firstCredentialField(fields)?.let { Log.w(TAG, "$type refused field: $it") }
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        emitEvent(NativeOpenRules.ackPayload(reqId, decide(fields, reqId)))
+    }
+
+    /** `nativeImportOpen` (spec 25.25.1, r3x N-01 to N-07, N-11, N-12, N-15): only opens the native import page. */
     private fun nativeImportOpenCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
-        if (NativeImportHost.open()) ack(reqId, true) else ack(reqId, false, error = "not_available")
+        nativeOpenAck(body, "nativeImportOpen") { fields, reqId ->
+            NativeOpenRules.importOpen(fields, reqId, NativeOpenRules.importHost)
+        }
     }
 
     /**
-     * `nativeRecoveryOpen` (spec §25.41.3, §25.42.3). The only fields are `type` and `reqId`. A credential or key field is
-     * `key_over_bridge_refused`, and only its name is logged. Any other field is `bad_request`. The host answers: not
-     * registered is `not_supported`; registered but refused is `not_available`; opened is `ok`. The result follows as
-     * `nativeRecoveryResult` for this reqId. Neither the code nor the phrase ever passes through here.
+     * `nativeRecoveryOpen` (spec §25.41.3, §25.42.3). The result follows as `nativeRecoveryResult` for this reqId. Neither
+     * the code nor the phrase ever passes through here.
      */
     private fun nativeRecoveryOpenCommand(body: JSONObject) {
-        val reqId = PgpDecryptInbound.reqIdOf(body)
-        fun answer(ok: Boolean, error: String? = null) {
-            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
-            if (!ok) payload.put("error", error ?: "error")
-            emitEvent(payload)
-        }
-        val keys = body.keys().asSequence().map { it.toString() }.toList()
-        keys.firstOrNull { it in RECOVERY_OPEN_REFUSED }?.let { field ->
-            Log.w(TAG, "nativeRecoveryOpen refused field: $field")
-            return answer(false, "key_over_bridge_refused")
-        }
-        if (keys.any { it !in RECOVERY_OPEN_FIELDS }) return answer(false, "bad_request")
-        if (reqId == null) return answer(false, "bad_request")
         NativeRecoveryHost.events = { payload -> emitEvent(payload) }
-        when (NativeRecoveryHost.open(reqId)) {
-            NativeRecoveryHost.OpenAnswer.NOT_SUPPORTED -> answer(false, "not_supported")
-            NativeRecoveryHost.OpenAnswer.NOT_AVAILABLE -> answer(false, "not_available")
-            NativeRecoveryHost.OpenAnswer.OPENED -> answer(true)
+        nativeOpenAck(body, "nativeRecoveryOpen") { fields, reqId ->
+            NativeOpenRules.recoveryOpen(fields, reqId, NativeOpenRules.recoveryHost)
+        }
+    }
+
+    /**
+     * `nativeAccountCreateOpen` (spec r3x §25.46, §25.46.10). The gate is read here and decided in [NativeOpenRules]: G0
+     * opens the shell's account page; G1 and G2 answer `not_available` without calling the host; an unregistered page is
+     * `not_supported` in every state. It is never `no_key` or `not_ready`.
+     */
+    private fun nativeAccountCreateOpenCommand(body: JSONObject) {
+        val ctx = appContext
+        nativeOpenAck(body, "nativeAccountCreateOpen") { fields, reqId ->
+            // handleCommand sets appContext before dispatch. Without it the gate cannot be read, so the page is not opened.
+            val gate = ctx?.let { NoKeyGate.gateOf(NativeWallet.vault(it).state(), NativeSessionState.isReady()) }
+            if (gate == null) {
+                NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
+            } else {
+                NativeOpenRules.accountCreateOpen(fields, reqId, gate, NativeOpenRules.accountHost)
+            }
         }
     }
 
@@ -921,12 +935,6 @@ object BeamioConetChatModule {
                 .put("error", "not_supported"),
         )
     }
-
-    private val RECOVERY_OPEN_FIELDS = setOf("type", "reqId")
-    private val RECOVERY_OPEN_REFUSED = setOf(
-        "privateKeyHex", "privateKeyArmored", "pgpPrivateKeyArmored", "pgpPassphrase", "walletPrivateKey", "mnemonic",
-        "recoveryCode", "pin", "password", "accountPassword",
-    )
 
     /**
      * `provisionIdentity` (spec 25.19.2): public material only. Any wallet or PGP private field is refused.

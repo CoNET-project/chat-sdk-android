@@ -1,6 +1,7 @@
 {
   "file": "gate-state-vectors.v1.json",
-  "spec": "spec §25.26.4c（门控状态）与 §25.26.4b（壳层入口），r3g",
+  "spec": "spec §25.26.4c（门控状态）与 §25.26.4b（壳层入口），r3g；G1 允许命令新增 nativeAccountCreateOpen（r3x，§25.46.10）",
+  "revision": "spec r3x（G1 允许命令 67 个，102 项）；r3g 为原始登记",
   "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")；记录 EOA 由此派生。不是真实钱包，禁止用于生产。",
   "recordEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
@@ -724,6 +725,16 @@
       }
     },
     {
+      "id": "G1-AL-7",
+      "state": "G1",
+      "command": "nativeAccountCreateOpen",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
       "id": "G1-INIT-OK",
       "state": "G1",
       "command": "init",
@@ -1116,8 +1127,8 @@
     }
   ],
   "counts": {
-    "cases": 101,
-    "g1Commands": 66,
+    "cases": 102,
+    "g1Commands": 67,
     "g1Init": 3,
     "shellGated": 16,
     "shellNotGated": 13

@@ -8,12 +8,13 @@
   "derivationPath": "m/44'/60'/0'/0/0",
   "passphrase": "",
   "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
-  "revision": "spec r3f（第二十八批：三端分派名映射、清单补遗 8 条）；r3e 的哈希作废",
+  "revision": "spec r3x（允许项新增 nativeAccountCreateOpen，AL-7，§25.46.10）；spec r3f（第二十八批：三端分派名映射、清单补遗 8 条）；r3e 的哈希作废",
   "state": "no_key（原生无钱包记录）",
   "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）",
   "allowedUnderNoKey": [
     "destroy",
     "hello",
+    "nativeAccountCreateOpen",
     "nativeImportOpen",
     "nativeRecoveryOpen",
     "passcodeStatus",
@@ -1469,6 +1470,17 @@
       "android": null,
       "pwa": null,
       "expect": "allowed（ack ok；恢复页，25.26.4e；三端待实现）"
+    },
+    {
+      "id": "AL-7",
+      "spec": "nativeAccountCreateOpen",
+      "bridgeName": "nativeAccountCreateOpen",
+      "mode": null,
+      "kind": null,
+      "ios": null,
+      "android": null,
+      "pwa": null,
+      "expect": "allowed（G0 建号入口，25.46.2；宿主未注册 not_supported，G1、G2 由处理器应答 not_available，不返回 no_key）"
     }
   ],
   "shellLayerIos": [

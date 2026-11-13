@@ -48,7 +48,13 @@ class KeyPathGuardTest {
     fun walletCommandsAnswerFromTheNativeVaultOnly() {
         assertTrue(module.contains("NativeWalletCommands.walletAddress("))
         assertTrue(module.contains("NativeMessageSigner.sign("))
-        assertTrue(module.contains("NativeImportHost.open()"))
+        // The page-open decision (r3x) is shared with the vector harness: the module calls it, and the rules call the host.
+        assertTrue(module.contains("NativeOpenRules.importOpen("))
+        assertTrue(module.contains("NativeOpenRules.accountCreateOpen("))
+        val rules = File("src/main/java/network/conet/chat/nativekey/NativeOpenRules.kt").readText()
+        assertTrue(rules.contains("NativeImportHost.open()"))
+        assertTrue(rules.contains("NativeAccountCreateHost.open()"))
+        assertTrue(module.contains("\"nativeAccountCreateOpen\" -> nativeAccountCreateOpenCommand(body)"))
         // The old reply codes are gone: no_key and locked are the answers.
         assertFalse(module.contains("native_key_missing"))
         assertFalse(module.contains("native_key_locked"))
@@ -135,7 +141,7 @@ class KeyPathGuardTest {
     @Test
     fun mnemonicAndGateCodeNeverLog() {
         // The phrase and the derived key must not reach the log (25.26.3, 25.22.5).
-        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt", "NativePgp.kt", "NativePgpVault.kt")) {
+        for (name in listOf("Bip39English.kt", "MnemonicDerivation.kt", "NativeImport.kt", "NoKeyGate.kt", "Eip712.kt", "Eip191Signer.kt", "NativePgp.kt", "NativePgpVault.kt", "NativeOpenRules.kt", "NativeAccountCreate.kt")) {
             val src = File("src/main/java/network/conet/chat/nativekey/$name").readText()
             assertFalse("$name logs", src.contains("Log."))
             assertFalse("$name prints", src.contains("println"))

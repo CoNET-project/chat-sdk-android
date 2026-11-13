@@ -27,9 +27,12 @@ object NoKeyGate {
     /** Table C (§25.24): retired X-21 commands. They answer `not_supported` in every state. */
     val RETIRED: Set<String> = setOf("walletTransferOnce", "walletTransferStatus", "walletTransferSwitched")
 
-    /** Allowed names keep their normal semantics in every gate (25.26.4, 25.26.4c item 2). */
+    /**
+     * Allowed names keep their normal semantics in every gate (25.26.4, 25.26.4c item 2). The three page-open names
+     * pass the gate and are decided by their own handler (`NativeOpenRules`): G0 `nativeAccountCreateOpen` is never `no_key`.
+     */
     private val PASS_THROUGH: Set<String> =
-        setOf("hello", "pause", "resume", "destroy", "nativeImportOpen", "nativeRecoveryOpen")
+        setOf("hello", "pause", "resume", "destroy", "nativeImportOpen", "nativeRecoveryOpen", "nativeAccountCreateOpen")
 
     /** Where a name goes before the gate is applied. The name is the only input. */
     fun route(command: String): Route = when {

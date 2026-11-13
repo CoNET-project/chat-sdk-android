@@ -45,14 +45,18 @@ object NativeWalletCommands {
 
 /**
  * The host shows the native import page when the PWA sends `nativeImportOpen`. The page belongs to the
- * app shell. Until the shell sets [launcher], the command is answered `not_available`.
+ * app shell. Until the shell sets [launcher], the command is answered `not_supported` (spec r3x, N-06).
  */
 object NativeImportHost {
     @Volatile
     var launcher: (() -> Boolean)? = null
 
-    /** `true` when the page was opened. */
-    fun open(): Boolean = launcher?.invoke() == true
+    /** `true` when the page was opened. A launcher that throws counts as refused. */
+    fun open(): Boolean = try {
+        launcher?.invoke() == true
+    } catch (_: Exception) {
+        false
+    }
 }
 
 /**

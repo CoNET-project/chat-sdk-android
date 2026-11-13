@@ -7,7 +7,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-160 and T-161 (spec 25.26.4c) against `spec/gate-state-vectors.v1.json` (r3h, sha256 e789d901…3a27, 101 cases).
+ * T-160 and T-161 (spec 25.26.4c) against `spec/gate-state-vectors.v1.json` (r3x, sha256 d1318556…da66, 102 cases).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  * Each case is decided by name and gate only; the payload is read solely by the G1 `init` check.
  */
@@ -21,13 +21,14 @@ class GateStateVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("e789d90175db53035397ddb1dbdb729b1df92b7d855d234dc006abf4906e3a27", sha256Hex(bytes))
+        assertEquals("d1318556b8aaecbff5d35f6be72062f0da9d9398feb6abcac281a5c6ac1bda66", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        assertEquals(101, cases.length())
-        assertEquals(66, v.getJSONObject("counts").getInt("g1Commands"))
+        // r3x: 102 cases; G1 allowed commands 67 (nativeAccountCreateOpen added, AL-7).
+        assertEquals(102, cases.length())
+        assertEquals(67, v.getJSONObject("counts").getInt("g1Commands"))
         assertEquals(3, v.getJSONObject("counts").getInt("g1Init"))
     }
 

@@ -1,0 +1,1114 @@
+{
+  "file": "native-open-vectors.v1.json",
+  "purpose": "原生导入页与恢复页的打开命令（spec r3t §25.41）：正式命令名、无别名、入参、应答码、宿主三态、结果事件的字段边界。合成数据，不含任何凭据或密钥。",
+  "spec": "v1.1-r3t §25.41（测试 T-224 至 T-227）；r3x §25.46.10 新增 N-20 至 N-28（建号入口，测试 T-237 至 T-238）",
+  "generator": "gen-native-open-vectors.mjs",
+  "names": {
+    "importPage": "nativeImportOpen（私钥或助记词）",
+    "recoveryPage": "nativeRecoveryOpen（恢复码，路径 A；账号名加密码，路径 B）",
+    "accountPage": "nativeAccountCreateOpen（G0 建号，§25.46）",
+    "aliases": "无（recoveryCreateOpen 不是其别名，§25.46.2）"
+  },
+  "accountGate": "nativeAccountCreateOpen：宿主未注册先判，任何状态为 not_supported；已注册时 G1、G2 为 not_available（不调用宿主）；G0 调用宿主（ok 或 not_available）。不返回 no_key 或 not_ready。",
+  "hostStates": {
+    "absent": "宿主未注册：not_supported，不返回 ok",
+    "refuse": "宿主已注册但此刻不能打开：not_available",
+    "open": "宿主已打开：ack ok"
+  },
+  "ackErrorCodes": [
+    "bad_request",
+    "key_over_bridge_refused",
+    "not_supported",
+    "not_available"
+  ],
+  "credentialFields": [
+    "privateKeyHex",
+    "privateKeyArmored",
+    "pgpPrivateKeyArmored",
+    "pgpPassphrase",
+    "walletPrivateKey",
+    "mnemonic",
+    "recoveryCode",
+    "pin",
+    "password",
+    "accountPassword"
+  ],
+  "cases": [
+    {
+      "id": "N-01",
+      "group": "A",
+      "title": "导入页：宿主打开页面，ack ok；导入结果不经事件回传",
+      "testIds": [
+        "T-224",
+        "T-226"
+      ],
+      "env": {
+        "importHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-01"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-01",
+              "ok": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-02",
+      "group": "A",
+      "title": "恢复页：宿主打开页面，ack ok，结果随后经 nativeRecoveryResult 送达",
+      "testIds": [
+        "T-224",
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-02"
+          }
+        },
+        {
+          "op": "recoveryResult",
+          "reqId": "N-02",
+          "code": "ok",
+          "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-02",
+              "ok": true
+            }
+          }
+        },
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "nativeRecoveryResult",
+              "reqId": "N-02",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-03",
+      "group": "A",
+      "title": "别名负例：导入页宿主已打开时，nativeRecoveryOpen 不得打开导入页（恢复页未实现：not_supported）",
+      "testIds": [
+        "T-224"
+      ],
+      "env": {
+        "importHost": "open",
+        "recoveryHost": "absent"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-03"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-03",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-04",
+      "group": "A",
+      "title": "别名负例：恢复页宿主已打开时，nativeImportOpen 不得打开恢复页（导入宿主未注册：not_supported）",
+      "testIds": [
+        "T-224"
+      ],
+      "env": {
+        "importHost": "absent",
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-04"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-04",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-05",
+      "group": "B",
+      "title": "导入页：已有钥，宿主不打开（refuse）：not_available",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "importHost": "refuse"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-05"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-05",
+              "ok": false,
+              "error": "not_available"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-06",
+      "group": "B",
+      "title": "导入页：宿主未注册（absent）：not_supported，不返回 ok（修正 iOS 现行静默 ok）",
+      "testIds": [
+        "T-227"
+      ],
+      "env": {
+        "importHost": "absent"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-06"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-06",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-07",
+      "group": "B",
+      "title": "恢复页：宿主未注册（absent）：not_supported（修正 Android 现行 unknown_command、iOS 现行静默 ok）",
+      "testIds": [
+        "T-227"
+      ],
+      "env": {
+        "recoveryHost": "absent"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-07"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-07",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-08",
+      "group": "B",
+      "title": "恢复页：宿主不打开（refuse）：not_available",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "recoveryHost": "refuse"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-08"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-08",
+              "ok": false,
+              "error": "not_available"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-09",
+      "group": "B",
+      "title": "Android 壳：恢复页宿主未注册时，应答 not_supported（不是 unknown_command）",
+      "testIds": [
+        "T-227"
+      ],
+      "env": {
+        "platform": "android",
+        "recoveryHost": "absent"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-09"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesandroid",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-09",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-10",
+      "group": "B",
+      "title": "G0（无钥）下两个命令都不返回 no_key 或 not_ready",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "importHost": "open",
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-10a"
+          }
+        },
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-10b"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-10a",
+              "ok": true
+            }
+          }
+        },
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-10b",
+              "ok": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-11",
+      "group": "C",
+      "title": "携带 mode 字段：bad_request（模式由原生页决定，不由 PWA 发送）",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "importHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-11",
+            "mode": "mnemonic"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-11",
+              "ok": false,
+              "error": "bad_request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-12",
+      "group": "C",
+      "title": "导入页携带 privateKeyHex：key_over_bridge_refused，不回显值",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "importHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-12",
+            "privateKeyHex": "0x1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-12",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-13",
+      "group": "C",
+      "title": "恢复页携带 recoveryCode：key_over_bridge_refused（凭据不经 WebView）",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-13",
+            "recoveryCode": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-13",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-14",
+      "group": "C",
+      "title": "恢复页携带 password（路径 B 的口令）：key_over_bridge_refused",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-14",
+            "password": "x"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-14",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-15",
+      "group": "C",
+      "title": "reqId 为对象：bad_request，reqId 为 null",
+      "testIds": [
+        "T-225"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": {
+              "x": 1
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": null,
+              "ok": false,
+              "error": "bad_request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-16",
+      "group": "D",
+      "title": "恢复页取消：结果 cancelled，不带 eoa",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-16"
+          }
+        },
+        {
+          "op": "recoveryResult",
+          "reqId": "N-16",
+          "code": "cancelled"
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-16",
+              "ok": true
+            }
+          }
+        },
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "nativeRecoveryResult",
+              "reqId": "N-16",
+              "code": "cancelled"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-17",
+      "group": "D",
+      "title": "恢复页退避：结果 backoff，带 cooldownSec，不带 eoa",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-17"
+          }
+        },
+        {
+          "op": "recoveryResult",
+          "reqId": "N-17",
+          "code": "backoff",
+          "cooldownSec": 60
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-17",
+              "ok": true
+            }
+          }
+        },
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "nativeRecoveryResult",
+              "reqId": "N-17",
+              "code": "backoff",
+              "cooldownSec": 60
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-18",
+      "group": "D",
+      "title": "导入页：无结果事件（页面关闭后由 walletStatus 判定）",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "importHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeImportOpen",
+            "reqId": "N-18"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-18",
+              "ok": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-19",
+      "group": "D",
+      "title": "恢复页结果不含凭据字段（逐项检查）",
+      "testIds": [
+        "T-226"
+      ],
+      "env": {
+        "recoveryHost": "open"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeRecoveryOpen",
+            "reqId": "N-19"
+          }
+        },
+        {
+          "op": "recoveryResult",
+          "reqId": "N-19",
+          "code": "ok",
+          "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-19",
+              "ok": true
+            }
+          }
+        },
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "nativeRecoveryResult",
+              "reqId": "N-19",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            }
+          }
+        }
+      ],
+      "forbiddenKeys": [
+        "recoveryCode",
+        "pin",
+        "password",
+        "accountPassword",
+        "mnemonic",
+        "privateKey",
+        "privateKeyHex",
+        "hash",
+        "ciphertext",
+        "encrypto"
+      ]
+    },
+    {
+      "id": "N-20",
+      "group": "E",
+      "title": "G0 建号：宿主打开页面，ack ok（不返回 no_key）",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "open",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-20"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-20",
+              "ok": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-21",
+      "group": "E",
+      "title": "G0 建号：宿主未注册：not_supported，不返回 no_key（修正 Android 现行 no_key）",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "absent",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-21"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-21",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-22",
+      "group": "E",
+      "title": "G0 建号：宿主不打开（refuse）：not_available",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "refuse",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-22"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-22",
+              "ok": false,
+              "error": "not_available"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-23",
+      "group": "E",
+      "title": "G1（有钥未 init）建号：not_available，不打开页面，不返回 not_ready",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "open",
+        "keyState": "G1"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-23"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-23",
+              "ok": false,
+              "error": "not_available"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-24",
+      "group": "E",
+      "title": "G2（已 init）建号：not_available，不打开页面",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "open",
+        "keyState": "G2"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-24"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-24",
+              "ok": false,
+              "error": "not_available"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-25",
+      "group": "E",
+      "title": "G1 建号且宿主未注册：not_supported（宿主判定先于门控）",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "accountHost": "absent",
+        "keyState": "G1"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-25"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-25",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-26",
+      "group": "E",
+      "title": "Android 壳 G0 建号宿主未注册：not_supported（通道为 cashtreesandroid）",
+      "testIds": [
+        "T-237"
+      ],
+      "env": {
+        "platform": "android",
+        "accountHost": "absent",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-26"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesandroid",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-26",
+              "ok": false,
+              "error": "not_supported"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-27",
+      "group": "E",
+      "title": "G0 建号携带 mode 字段：bad_request（建号页不接受入参以外的字段）",
+      "testIds": [
+        "T-238"
+      ],
+      "env": {
+        "accountHost": "open",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-27",
+            "mode": "create"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-27",
+              "ok": false,
+              "error": "bad_request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "N-28",
+      "group": "E",
+      "title": "G0 建号携带 password 字段：key_over_bridge_refused，只记字段名",
+      "testIds": [
+        "T-238"
+      ],
+      "env": {
+        "accountHost": "open",
+        "keyState": "G0"
+      },
+      "steps": [
+        {
+          "op": "open",
+          "req": {
+            "type": "nativeAccountCreateOpen",
+            "reqId": "N-28",
+            "password": "x"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "channel": "cashtreesios",
+          "detail": {
+            "action": "chatModuleEvent",
+            "event": {
+              "type": "ack",
+              "reqId": "N-28",
+              "ok": false,
+              "error": "key_over_bridge_refused"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "cases": 28
+  },
+  "notCovered": [
+    "原生页内的凭据输入与校验（§25.25.2、§25.26.4e.3）：由原生页的测试覆盖，本向量只覆盖应答与事件。",
+    "恢复页与导入页的界面文案与布局：由 PWA 集成负责人与原生页的验收覆盖。",
+    "Passcode 锁定时的行为：本向量未覆盖，按 §25.41.3 照常执行。"
+  ]
+}

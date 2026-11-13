@@ -9,11 +9,11 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (sha256 4da5836e…6362).
+ * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3x, sha256 bc0bf236…6cd91).
  *
  * The routing decision is [NoKeyGate.route], which is what the module calls before any dispatch. The vectors list
- * 27 wallet names and 21 chat names that must answer `no_key` (48 cases), and 3 retired X-21 names that must answer
- * `not_supported` (the 51 entries). Each entry is checked by its name only: the gate never reads a payload.
+ * 27 wallet names and 29 chat names that must answer `no_key` (56 entries), and 3 retired X-21 names that must answer
+ * `not_supported` (59 entries in all). Each entry is checked by its name only: the gate never reads a payload.
  */
 class NoKeyRejectVectorsTest {
     private val bytes = File(System.getenv("NO_KEY_VECTORS") ?: "../spec/no-key-reject-vectors.v1.json").readBytes()
@@ -31,8 +31,8 @@ class NoKeyRejectVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        // r3h (spec §25.26.4, r3h). The r3f file (69ab42e4…6866) and the r3e file (4da5836e…6362) are withdrawn.
-        assertEquals("b3bda74a5f126700bdc81fe9822e16bba1c7703ed67978bbf1e5b70448d4a597", sha256Hex(bytes))
+        // r3x (spec §25.46.10, AL-7): nativeAccountCreateOpen joins the allowed list. The r3h file (b3bda74a…8a597) is withdrawn.
+        assertEquals("bc0bf236f9c514f6bfe330ccb92f28f850f34824bb8efb916b63d44efda6cd91", sha256Hex(bytes))
     }
 
     @Test
@@ -133,10 +133,23 @@ class NoKeyRejectVectorsTest {
     }
 
     @Test
-    fun lifecycleAndImportOpenKeepTheirSemantics() {
-        for (name in listOf("hello", "pause", "resume", "destroy", "nativeImportOpen", "nativeRecoveryOpen")) {
+    fun lifecycleAndPageOpenKeepTheirSemantics() {
+        for (name in listOf("hello", "pause", "resume", "destroy", "nativeImportOpen", "nativeRecoveryOpen", "nativeAccountCreateOpen")) {
             assertEquals(name, NoKeyGate.Route.PASS, NoKeyGate.route(name))
         }
+    }
+
+    @Test
+    fun theAllowedListIsTheManifestList() {
+        // allowedUnderNoKey (r3x): the lifecycle names, the three page-open names and the two status queries.
+        val list = v.getJSONArray("allowedUnderNoKey")
+        val names = (0 until list.length()).map { list.getString(it) }.toSet()
+        assertEquals(
+            setOf("destroy", "hello", "nativeAccountCreateOpen", "nativeImportOpen", "nativeRecoveryOpen", "passcodeStatus", "pause", "resume", "walletStatus"),
+            names,
+        )
+        val pass = names.filter { NoKeyGate.route(it) == NoKeyGate.Route.PASS }.toSet()
+        assertEquals(setOf("destroy", "hello", "nativeAccountCreateOpen", "nativeImportOpen", "nativeRecoveryOpen", "pause", "resume"), pass)
     }
 
     @Test
