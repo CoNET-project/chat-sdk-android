@@ -1,5 +1,6 @@
 package network.conet.chat.nativekey
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,8 +19,12 @@ class KeyPathGuardTest {
         for (src in listOf(module, broker)) {
             assertFalse(src.contains("setLocalSigner"))
             assertFalse(src.contains("clearLocalSigner"))
-            assertFalse(src.contains("hasLocalSigner"))
         }
+        // `hasLocalSigner` is the one alias the PM approved for the application (§38): a @Deprecated delegate to
+        // hasNativeSigner, in the broker only. The module never names it.
+        assertFalse(module.contains("hasLocalSigner"))
+        assertEquals(1, Regex("hasLocalSigner").findAll(broker).count())
+        assertTrue(broker.contains("fun hasLocalSigner(): Boolean = hasNativeSigner()"))
     }
 
     @Test

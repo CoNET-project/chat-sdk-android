@@ -50,6 +50,16 @@ object BeamioConetChatSignBroker {
 
     fun hasNativeSigner(): Boolean = localKey.isNotEmpty()
 
+    /**
+     * Compatibility alias for the application's voice path (PM decision, §38). It answers the same question as
+     * [hasNativeSigner]: whether the native vault key is held in this session. It does not mean that a page holds a key.
+     */
+    @Deprecated(
+        message = "Use hasNativeSigner(). The answer is about the native vault key, not a page key.",
+        replaceWith = ReplaceWith("hasNativeSigner()"),
+    )
+    fun hasLocalSigner(): Boolean = hasNativeSigner()
+
     /** Retired: the module no longer sends a page-signing request. Kept so existing call sites compile. */
     fun setEmit(emit: ((JSONObject) -> Unit)?) = Unit
 
@@ -70,6 +80,19 @@ object BeamioConetChatSignBroker {
             p?.fill(0)
         }
         completion(sig?.let { Result.success(it) } ?: Result.failure(IllegalStateException("sign_failed")))
+    }
+
+    /**
+     * Compatibility shim for the application's voice path (PM decision, §38). It takes no key and opens no key path:
+     * [timeoutMs] is ignored, because native signing answers at once, and the call delegates to [requestEip191].
+     */
+    @Suppress("UNUSED_PARAMETER")
+    @Deprecated(
+        message = "Native signing answers at once, so the timeout is ignored. Use requestEip191(message, completion).",
+        replaceWith = ReplaceWith("requestEip191(message, completion)"),
+    )
+    fun requestEip191(message: String, timeoutMs: Long, completion: (Result<String>) -> Unit) {
+        requestEip191(message, completion)
     }
 
     /**
