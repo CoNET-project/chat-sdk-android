@@ -97,9 +97,24 @@ object BeamioChatPgpStore {
     fun legacyPrivateArmor(context: Context): String =
         prefs(context).getString(KEY_PRIVATE, "").orEmpty()
 
-    /** Removes the legacy private copy once the vault holds the key. */
+    /** Removes the legacy private copy. Not called by the PGP migration (r3as §25.52.3: L is kept in this version). */
     fun clearLegacyPrivateArmor(context: Context): Boolean =
         prefs(context).edit().remove(KEY_PRIVATE).commit()
+
+    /** The legacy account record as stored: the account, the private armor and the public armor. Read only, no write path. */
+    data class LegacyCopy(val eoa: String, val privateArmor: String, val publicArmor: String)
+
+    /** The legacy record L (r3as §25.52.3), or `null` when no private armor is stored. Never writes and never clears. */
+    fun legacyCopy(context: Context): LegacyCopy? {
+        val p = prefs(context)
+        val privateArmor = p.getString(KEY_PRIVATE, "").orEmpty()
+        if (privateArmor.isEmpty()) return null
+        return LegacyCopy(
+            eoa = p.getString(KEY_EOA, "").orEmpty().trim().lowercase(),
+            privateArmor = privateArmor,
+            publicArmor = p.getString(KEY_PUBLIC, "").orEmpty(),
+        )
+    }
 
     fun load(context: Context): Secrets? {
         val p = prefs(context)

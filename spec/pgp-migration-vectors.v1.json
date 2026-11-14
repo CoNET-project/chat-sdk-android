@@ -1,0 +1,1539 @@
+{
+  "meta": {
+    "file": "pgp-migration-vectors.v1.json",
+    "spec": "interface/spec.md §25.52A（r3at；§25.52 与 §25.51 中有差异处以 §25.52A 为准）",
+    "status": "final-pending-PM-gates",
+    "generator": "gen-pgp-migration-vectors.mjs（r3at）",
+    "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
+    "invariants": [
+      "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
+      "bridgeKeyFields = 0：请求与事件都不含密钥字段；迁移入口不接收私钥参数",
+      "每个请求最多一个结果事件（中断的运行不产生事件）",
+      "L 在任何路径都不被删除、覆盖或修改（本版不清理 L）",
+      "已有 N 且指纹 != F0：不覆盖、不删除，报 fingerprint_mismatch（failed）；N 指纹 == F0：幂等，不重写（r3at）",
+      "已核验的 N（有 M）不被覆盖；与 L 不符时报 fingerprint_mismatch",
+      "verify_unavailable 时不写入 N 或 M"
+    ],
+    "fp": "fp 为合成指纹标签（A、B），不是真实指纹",
+    "gates": {
+      "G0": "no_key",
+      "G1": "not_ready",
+      "G2locked": "locked"
+    },
+    "eventFields": [
+      "type",
+      "reqId",
+      "code",
+      "fp"
+    ],
+    "eventCodes": [
+      "ok",
+      "already_verified",
+      "none",
+      "store_missing",
+      "legacy_unreadable",
+      "account_mismatch",
+      "fingerprint_mismatch",
+      "chain_unavailable",
+      "write_failed",
+      "reread_failed",
+      "challenge_failed",
+      "verify_unavailable"
+    ],
+    "requestFields": [
+      "type",
+      "reqId"
+    ],
+    "forbiddenKeys": [
+      "privateKeyArmor",
+      "pgpPrivateKeyArmored",
+      "pgpPassphrase",
+      "privateKeyHex",
+      "walletPrivateKey",
+      "mnemonic",
+      "recoveryCode"
+    ],
+    "stateNotation": "L：SDK 账户记录是否存在（只读）；N：迁移目标指纹标签；M：成功标记指纹标签"
+  },
+  "cases": [
+    {
+      "id": "M-01",
+      "title": "G0 无钥：返回 no_key，不读取",
+      "group": "T-251",
+      "given": {
+        "gate": "G0",
+        "L": null,
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "no_key",
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-02",
+      "title": "G1 有记录未 init：返回 not_ready，L 不变",
+      "group": "T-251",
+      "given": {
+        "gate": "G1",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "not_ready",
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-03",
+      "title": "G2 锁定：返回 locked，L 不变",
+      "group": "T-251",
+      "given": {
+        "gate": "G2locked",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "locked",
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-04",
+      "title": "运行中再次请求：返回 busy，不产生事件",
+      "group": "T-251",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": true
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "busy",
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-01",
+      "title": "请求含未知字段：bad_request，状态不变",
+      "group": "T-251",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1",
+            "note": "x"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "bad_request",
+            "fields": [
+              "note"
+            ],
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "R-02",
+      "title": "请求携带 PGP 私钥字段：key_over_bridge_refused，只记字段名（G0 下亦先于门控）",
+      "group": "T-251",
+      "given": {
+        "gate": "G0",
+        "L": null,
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1",
+            "pgpPrivateKeyArmored": "x"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "key_over_bridge_refused",
+            "fields": [
+              "pgpPrivateKeyArmored"
+            ],
+            "event": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-05",
+      "title": "无任何来源：none",
+      "group": "T-252",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "none",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-20",
+      "title": "无 L，仅有未标记的 N：校验后补写 M，不删除 N",
+      "group": "T-252",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-21",
+      "title": "有 M，但 N 与 L 都缺失：store_missing，M 保留",
+      "group": "T-252",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": null,
+        "M": {
+          "fp": "A"
+        },
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "store_missing",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-22",
+      "title": "无 L，N 与已核验的 M 指纹不一致：fingerprint_mismatch，全部保留",
+      "group": "T-252",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "B"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "B",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-06",
+      "title": "成功路径：校验、写 N、重读、挑战、写 M；L 保留不改",
+      "group": "T-253",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-16",
+      "title": "成功后重跑：already_verified，L 仍保留",
+      "group": "T-253",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "already_verified",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-25",
+      "title": "M 存在但 N 缺失且 L 存在：清除 M，重新迁移",
+      "group": "T-253",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": {
+          "fp": "A"
+        },
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-17",
+      "title": "已核验且 L 不存在：already_verified",
+      "group": "T-253",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "already_verified",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-31",
+      "title": "未核验的 N 与 L 不符（指纹 != F0）：不覆盖，不删除，fingerprint_mismatch（r3at）",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "B",
+          "pubFp": "B",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-32",
+      "title": "未核验的 N 与 L 同指纹（F0）：幂等，不重写 N，继续核验并写 M（r3at）",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-30",
+      "title": "已核验的 N 与 L 不符：fingerprint_mismatch，N、M、L 全部保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "B",
+          "pubFp": "B",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-07",
+      "title": "本地指纹与原公钥不符：fingerprint_mismatch，L 保留，不写 N",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "B",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-08",
+      "title": "链上登记指纹不符：fingerprint_mismatch，L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "mismatch"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-09",
+      "title": "链上不可达：chain_unavailable，L 保留，可重试",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "unavailable"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "chain_unavailable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-10",
+      "title": "写入 N 失败：write_failed，N 保持原样（无），L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "writeN": true
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "write_failed",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-11",
+      "title": "重读 N 不一致：reread_failed，N 删除，L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "rereadN": true
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "reread_failed",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-12",
+      "title": "挑战签名验签失败：challenge_failed，N 删除，L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "challenge": true
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "challenge_failed",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-13",
+      "title": "写 M 失败：write_failed，N 与 L 保留；重试成功",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "writeM": true
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "write_failed",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": null
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-14",
+      "title": "写 N 后中断：不产生事件；重启后重走并完成",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "interrupt": "afterN"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": null,
+            "fp": null,
+            "interrupted": true,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": null
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-15",
+      "title": "写 M 后中断：不产生事件；重启后报 already_verified",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "interrupt": "afterM"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": null,
+            "fp": null,
+            "interrupted": true,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "already_verified",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-23",
+      "title": "挑战失败后重试成功（不自动换钥，不传入私钥）",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "challenge": true
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "challenge_failed",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-29",
+      "title": "未核验的 N 残留（中断后），续作时链上不可达：chain_unavailable，N 与 L 保留",
+      "group": "T-255",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "unavailable"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "chain_unavailable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-26",
+      "title": "X-19 签名或验签未明示批准：verify_unavailable，不写入；批准后续作成功",
+      "group": "T-259",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "x19Approved": false
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "verify_unavailable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        },
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "ok",
+            "fp": "A",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-28",
+      "title": "无 L，仅有 N，X-19 未批准：verify_unavailable，N 保留",
+      "group": "T-259",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "x19Approved": false
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "verify_unavailable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-27",
+      "title": "旧记录带口令（不可签名）：legacy_unreadable，不写入，L 保留",
+      "group": "T-260",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "encrypted"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "legacy_unreadable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-18",
+      "title": "L 无法解析：legacy_unreadable，L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "bad"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "legacy_unreadable",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-19",
+      "title": "L 的 EOA 与当前账户不符：account_mismatch，L 保留",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "other",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {},
+          "expect": {
+            "ack": "ok",
+            "event": "account_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-24",
+      "title": "无 L，未标记的 N 与链上不符：fingerprint_mismatch，N 保留（不删除唯一副本）",
+      "group": "T-254",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "mismatch"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pwaEventCases": [
+    {
+      "id": "P-01",
+      "title": "成功事件：ok",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r1",
+        "code": "ok",
+        "fp": "A"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "success",
+        "reason": null,
+        "fields": []
+      }
+    },
+    {
+      "id": "P-02",
+      "title": "成功事件：already_verified",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r1",
+        "code": "already_verified",
+        "fp": "A"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "success",
+        "reason": null,
+        "fields": []
+      }
+    },
+    {
+      "id": "P-03",
+      "title": "白名单外字段：整条丢弃，只记字段名",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r1",
+        "code": "ok",
+        "fp": "A",
+        "privateKeyArmor": "x"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "drop",
+        "reason": "field_not_allowed",
+        "fields": [
+          "privateKeyArmor"
+        ]
+      }
+    },
+    {
+      "id": "P-04",
+      "title": "reqId 不一致：丢弃",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r9",
+        "code": "ok"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "drop",
+        "reason": "reqid_mismatch",
+        "fields": []
+      }
+    },
+    {
+      "id": "P-05",
+      "title": "未知结果码：按失败处理，不当作成功",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r1",
+        "code": "done"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "failure",
+        "reason": "unknown_code",
+        "fields": []
+      }
+    },
+    {
+      "id": "P-06",
+      "title": "已知失败码：按失败处理，页面保持可重试",
+      "evt": {
+        "type": "pgpMigrateResult",
+        "reqId": "r1",
+        "code": "write_failed"
+      },
+      "pending": "r1",
+      "expect": {
+        "action": "failure",
+        "reason": "reported_failure",
+        "fields": []
+      }
+    }
+  ],
+  "selfCheck": {
+    "runs": 46,
+    "result": "pass"
+  }
+}

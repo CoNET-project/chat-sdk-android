@@ -115,6 +115,10 @@ object NativeWallet {
     @Volatile
     private var instance: NativeWalletVault? = null
 
+    /** The directory the vault and the PGP migration store their sealed files in (same wrap key). */
+    internal fun migrationFiles(context: Context): VaultFiles =
+        AndroidVaultFiles(File(context.applicationContext.filesDir, DIR))
+
     fun vault(context: Context): NativeWalletVault =
         instance ?: synchronized(this) {
             instance ?: NativeWalletVault(
@@ -190,9 +194,9 @@ object NativeWallet {
 
     /**
      * Upgrade path for the PGP key. When the EOA record is present and the PGP record is not, and the pre-upgrade PGP
-     * store holds a private key for the same account, the key is copied into the vault. The legacy copy is removed
-     * only after the vault has confirmed it. The legacy store never held a passphrase; the passphrase arrives with
-     * `init`. Returns `true` when a key was adopted.
+     * store holds a private key for the same account, the key is copied into the vault. The legacy copy is kept: this
+     * version never clears L (r3as §25.52.3, PGP migration U5), and the migration reads it. The legacy store never held a
+     * passphrase; the passphrase arrives with `init`. Returns `true` when a key was adopted.
      */
     @Synchronized
     fun migrateLegacyPgp(context: Context): Boolean {
@@ -204,8 +208,6 @@ object NativeWallet {
         if (!armor.contains("BEGIN PGP PRIVATE KEY")) return false
         val legacyEoa = BeamioChatPgpStore.load(app)?.eoa?.trim()?.lowercase().orEmpty()
         if (legacyEoa.isNotEmpty() && legacyEoa != eoa) return false
-        val adopted = pgpVault.put(eoa, armor, "") == NativePgpVault.Put.OK
-        if (adopted) BeamioChatPgpStore.clearLegacyPrivateArmor(app)
-        return adopted
+        return pgpVault.put(eoa, armor, "") == NativePgpVault.Put.OK
     }
 }

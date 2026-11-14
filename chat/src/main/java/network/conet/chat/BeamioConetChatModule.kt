@@ -19,6 +19,9 @@ import network.conet.chat.nativekey.NativeAccountCreateHost
 import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
+import network.conet.chat.nativekey.BeamioPgpMigration
+import network.conet.chat.nativekey.PgpMigrationBridge
+import network.conet.chat.nativekey.PgpMigrationInterrupted
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
@@ -33,6 +36,7 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Native Conet Chat module — WorkerCommand / WorkerOutbound parity with
@@ -163,6 +167,11 @@ object BeamioConetChatModule {
         // identityPublic (25.48): G2 only, read-only. Like pgpDecryptInbound it is decided in its handler, gate first.
         if (type == "identityPublic") {
             identityPublicCommand(body)
+            return
+        }
+        // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).
+        if (type == "pgpMigrate") {
+            pgpMigrateCommand(body)
             return
         }
         val route = NoKeyGate.route(type)
@@ -426,10 +435,8 @@ object BeamioConetChatModule {
     private fun storeInitPgp(ctx: Context, reqId: Int, eoa: String, armor: String, passphrase: String): Boolean {
         if (armor.isEmpty()) return true
         return when (NativeWallet.pgpFor(ctx, eoa).put(eoa, armor, passphrase)) {
-            NativePgpVault.Put.OK -> {
-                BeamioChatPgpStore.clearLegacyPrivateArmor(ctx)
-                true
-            }
+            // The legacy copy L is kept (r3as §25.52.3): this version never clears it.
+            NativePgpVault.Put.OK -> true
             else -> {
                 ack(reqId, false, error = "pgp_key_rejected")
                 false
@@ -941,6 +948,50 @@ object BeamioConetChatModule {
             val event = PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa))
             emitEvent(event.put("type", "pgpRestoreResult").put("reqId", reqId))
             Log.i(TAG, "pgpRestore result=${event.optString("code")}")
+        }
+    }
+
+    private val pgpMigrateWorker = Executors.newSingleThreadExecutor()
+    private val pgpMigrateRunning = AtomicBoolean(false)
+
+    /**
+     * `pgpMigrate` (r3at §25.52.4, §25.52.5, §25.52.12): moves the legacy PGP key into the SDK's secure store and verifies it.
+     * The request carries no key. The ack is sent at once; the run happens on a worker, and its result is sent as
+     * `pgpMigrateResult` with the code and the first 16 characters of the fingerprint. An interrupted run sends nothing; the next
+     * `pgpMigrate` resumes it. A second request while a run is in progress is `busy`. Nothing here logs a key or a passphrase.
+     */
+    private fun pgpMigrateCommand(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        fun answer(ok: Boolean, error: String? = null, fields: List<String>? = null) {
+            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
+            if (!ok) payload.put("error", error ?: "error")
+            if (fields != null && fields.isNotEmpty()) payload.put("fields", JSONArray(fields))
+            emitEvent(payload)
+        }
+        val ctx = appContext
+        val state = ctx?.let { NativeWallet.vault(it).state() }
+        val gate = if (state == null) NoKeyGate.Gate.G1 else NoKeyGate.gateOf(state, NativeSessionState.isReady())
+        when (val ack = PgpMigrationBridge.ackFor(body, gate, state is NativeWalletVault.State.Locked, pgpMigrateRunning.get())) {
+            is PgpMigrationBridge.Ack.Refused -> return answer(false, ack.code, ack.fields)
+            is PgpMigrationBridge.Ack.Busy -> return answer(false, "busy")
+            is PgpMigrationBridge.Ack.Accepted -> Unit
+        }
+        val c = ctx ?: return answer(false, "not_ready")
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return answer(false, "locked")
+        val id = reqId ?: return answer(false, "bad_request")
+        if (!pgpMigrateRunning.compareAndSet(false, true)) return answer(false, "busy")
+        answer(true)
+        pgpMigrateWorker.execute {
+            try {
+                val result = BeamioPgpMigration.run(c, eoa)
+                emitEvent(PgpMigrationBridge.eventFor(id, result))
+                Log.i(TAG, "pgpMigrate result=${result.code.wire}")
+            } catch (_: PgpMigrationInterrupted) {
+                // Interrupted: no event (§25.52.12). The stored state is resumed by the next request.
+                Log.i(TAG, "pgpMigrate interrupted")
+            } finally {
+                pgpMigrateRunning.set(false)
+            }
         }
     }
 

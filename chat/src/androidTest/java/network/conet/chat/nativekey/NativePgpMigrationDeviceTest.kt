@@ -104,7 +104,8 @@ class NativePgpMigrationDeviceTest {
         assertTrue("after: vault holds the key, state=$state", state is NativePgpVault.State.Ready)
         val fingerprint = (state as NativePgpVault.State.Ready).fingerprint
         assertTrue("fingerprint", fingerprint.equals(nopassKey.getString("fingerprint"), ignoreCase = true))
-        assertEquals("the old copy is removed", "", BeamioChatPgpStore.legacyPrivateArmor(context))
+        // r3as §25.52.3: the legacy copy L is kept in this version, never cleared.
+        assertTrue("the old copy is kept", BeamioChatPgpStore.legacyPrivateArmor(context).contains("BEGIN PGP PRIVATE KEY"))
 
         // The migrated key decrypts a message made for it (vector D-2, no passphrase).
         val d2 = decryptCase("D-2")
