@@ -218,12 +218,11 @@ internal object ShellRecordPolicy {
 
     private val PROFILE_RULE: Rule = Exact(
         PROFILE_LEAVES.associateWith { LEAF } + PROFILE_SUBTREES.associateWith { SUBTREE } +
-            mapOf("chatManager" to Exact(mapOf("keyID" to LEAF, "router" to LEAF, "routes" to SUBTREE))),
+            mapOf("chatManager" to Exact(mapOf("router" to LEAF))),
     )
     private val ROOT_RULE: Rule = Exact(
         ROOT_LEAVES.associateWith { LEAF } + ROOT_SUBTREES.associateWith { SUBTREE } + mapOf(
             "beamio" to Exact(BEAMIO_KEYS.associateWith { LEAF }),
-            "passcode" to Exact(mapOf("status" to LEAF)),
             "profiles" to Each(PROFILE_RULE),
         ),
     )
@@ -563,42 +562,76 @@ internal fun <T> markingMigration(flag: AtomicBoolean, block: () -> T): T {
 }
 
 /**
- * The device-level marker of an unreadable legacy store (R431, item 3). Set when the import finds the legacy store unreadable; cleared only
- * by a successful import (or by a copy that already exists). While it is set, a read or a first write without a copy answers
- * `legacy_store_unreadable`, never `absent`. It holds no key material; the file is one byte in the no-backup directory.
+ * The device-level flags of the page-record bridge (§25.52T.4, §25.52T.5, R436): the account pointer, which says that this device has
+ * established an account, and the marker of an unreadable legacy store. Both are non-secret and kept apart from the sealed copies.
  */
-internal class LegacyUnreadableMarker(private val files: VaultFiles) {
-    fun present(): Boolean = try {
-        files.read(NAME) != null
+internal interface DeviceFlags {
+    /** §25.52T.4: set by the first successful native write (the import or the native creation). Read and write never clear it. */
+    fun accountPointer(): Boolean
+
+    fun setAccountPointer()
+
+    /** §25.52T.5: set when the legacy store is unreadable while no pointer and no record exist. */
+    fun legacyUnreadable(): Boolean
+
+    fun setLegacyUnreadable()
+
+    fun clearLegacyUnreadable()
+}
+
+/** No flags: the pure bridge and the vectors' defaults. */
+internal object NoDeviceFlags : DeviceFlags {
+    override fun accountPointer(): Boolean = false
+
+    override fun setAccountPointer() = Unit
+
+    override fun legacyUnreadable(): Boolean = false
+
+    override fun setLegacyUnreadable() = Unit
+
+    override fun clearLegacyUnreadable() = Unit
+}
+
+/**
+ * The flags as one file each in the no-backup directory. A flag that cannot be read counts as set: the pointer then fails closed to
+ * `account_record_missing`, and the marker to `legacy_store_unreadable`. The files hold one byte and no key material.
+ */
+internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
+    override fun accountPointer(): Boolean = flag(POINTER)
+
+    override fun setAccountPointer() = files.write(POINTER, byteArrayOf(1))
+
+    override fun legacyUnreadable(): Boolean = flag(LEGACY)
+
+    override fun setLegacyUnreadable() = files.write(LEGACY, byteArrayOf(1))
+
+    override fun clearLegacyUnreadable() = files.delete(LEGACY)
+
+    private fun flag(name: String): Boolean = try {
+        files.read(name) != null
     } catch (_: Exception) {
         true
     }
 
-    fun set() = files.write(NAME, byteArrayOf(1))
-
-    fun clear() = files.delete(NAME)
-
     companion object {
-        const val NAME = "legacy_store_unreadable.v1"
+        const val POINTER = "account_pointer.v1"
+        const val LEGACY = "legacy_store_unreadable.v1"
     }
 }
 
 /**
- * The marker after a first-run import (R431, item 3): set when the legacy store is unreadable; cleared by a successful import or an existing
- * copy. A confirmed absence leaves the marker as it is, so a device that was once unreadable does not answer `absent`.
+ * The flags after a first-run import (§25.52T.4, §25.52T.5, §25.52T.6): an unreadable legacy store sets the marker while no pointer exists;
+ * a confirmed absence clears it; a successful import sets the pointer and clears the marker; an existing copy clears the marker.
  */
-internal fun applyImportMarker(marker: LegacyUnreadableMarker, code: ShellImportCode) {
+internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode) {
     when (code) {
-        ShellImportCode.LEGACY_UNREADABLE -> try {
-            marker.set()
-        } catch (_: IOException) {
-            // Not set: the bridge still answers no absence, because the outcome is LEGACY_UNREADABLE for this process.
+        ShellImportCode.LEGACY_UNREADABLE -> if (!flags.accountPointer()) flags.setLegacyUnreadable()
+        ShellImportCode.ABSENT -> flags.clearLegacyUnreadable()
+        ShellImportCode.IMPORT_OK -> {
+            flags.setAccountPointer()
+            flags.clearLegacyUnreadable()
         }
-        ShellImportCode.IMPORT_OK, ShellImportCode.EXISTS -> try {
-            marker.clear()
-        } catch (_: IOException) {
-            // A copy exists, so the bridge answers from the copy.
-        }
+        ShellImportCode.EXISTS -> flags.clearLegacyUnreadable()
         else -> Unit
     }
 }
@@ -787,42 +820,34 @@ internal class ShellImportFlow(
     }
 }
 
-/** The codes that refuse a request before it is processed: the ack has `ok: false` and an `error` (§25.28.3). */
-private val REFUSAL_CODES = setOf("origin_refused", "too_large", "migrating", "write_failed")
+/** The codes that the ack refuses at the envelope level (§25.52T.2): the request is not processed, so the ack has `ok: false` and an `error`. */
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large")
 
 /**
- * The ack envelope of a page-record answer (§25.28.3, R431): `{type: "ack", reqId, ok: true, result: {code, ...}}` for an answer that was
- * processed, `{type: "ack", reqId, ok: false, error}` for a refusal or an error. A `bad_request` with path names is processed (it carries the
- * names in `result`); one without names is a refusal. `error` answers carry their sub-code as the `error` value. No separate event is sent.
+ * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
+ * that the bridge reached, with the outcome in `result.code` (errors carry `sub` in `result`). Only an envelope-level refusal is `ok: false`:
+ * `origin_refused`, `too_large`, and a `bad_request` without path names (a bad reqId, a missing record, a non-integer rev). A `bad_request`
+ * with path names is a content refusal and goes in `result`. No separate event is sent.
  */
 internal fun shellAck(reqId: Any, code: String, fields: ShellReplyFields): JSONObject {
     val out = JSONObject().put("type", "ack").put("reqId", reqId)
-    val sub = fields.firstOrNull { it.first == "sub" }?.second as? String
-    val refused = when (code) {
-        "error" -> true
-        in REFUSAL_CODES -> true
-        "bad_request" -> fields.none { it.first == "names" }
-        else -> false
-    }
-    if (refused) {
-        val error = if (code == "error") sub ?: "error" else code
-        return out.put("ok", false).put("error", error)
-    }
+    val envelopeRefusal = code in ENVELOPE_CODES || (code == "bad_request" && fields.none { it.first == "names" })
+    if (envelopeRefusal) return out.put("ok", false).put("error", code)
     val result = JSONObject().put("code", code)
-    for ((k, v) in fields) if (k != "sub") result.put(k, v ?: JSONObject.NULL)
+    for ((k, v) in fields) result.put(k, v ?: JSONObject.NULL)
     return out.put("ok", true).put("result", result)
 }
 
 /**
  * The bridge logic of the page's `shellRecordRead` and `shellRecordWrite` (§25.52D.6, §25.52D.7, §25.52E, §25.52K.4, §25.52L, §25.52O.5,
- * §25.52S). The checks run in the order §25.52O.5 gives. Each request gets exactly one ack. `shellRecordMigrationState` is not a page command
- * (§25.52L.6): any other type is `bad_request`.
+ * §25.52S, §25.52T). The checks run in the order §25.52O.5 gives. Each request gets exactly one ack. `shellRecordMigrationState` is not a
+ * page command (§25.52L.6): any other type is `bad_request`.
  */
 internal class ShellRecordBridge(
     private val account: () -> ShellRecordAccount,
     private val migrating: () -> Boolean,
     private val outcome: () -> ImportOutcome?,
-    private val legacyMarker: () -> Boolean = { false },
+    private val flags: DeviceFlags = NoDeviceFlags,
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -859,32 +884,46 @@ internal class ShellRecordBridge(
             } catch (_: IOException) {
                 return reply("error", listOf("sub" to "record_unreadable"))
             }
-            if (current == null) return absentOrError(reply)
-            val rev = current.opt("rev") as? Int ?: return reply("error", listOf("sub" to "record_unreadable"))
-            ShellRecordPolicy.stripPgpForRead(current)
-            val out = reply(
-                "ok",
-                listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
-            )
-            if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
-            // §25.52S.3: a schema 2 copy without the EOA private key is answered as needs_native_recovery; the page stops there.
-            if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN &&
-                !ShellRecordPolicy.anyProfileHoldsEoaKey(current)
-            ) {
-                return reply("error", listOf("sub" to "needs_native_recovery"))
+            if (current != null) {
+                val rev = current.opt("rev") as? Int ?: return reply("error", listOf("sub" to "record_unreadable"))
+                ShellRecordPolicy.stripPgpForRead(current)
+                val out = reply(
+                    "ok",
+                    listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
+                )
+                if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
+                // §25.52S.3: a schema 2 copy without the EOA private key is answered as needs_native_recovery; the page stops there.
+                if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN &&
+                    !ShellRecordPolicy.anyProfileHoldsEoaKey(current)
+                ) {
+                    return reply("error", listOf("sub" to "needs_native_recovery"))
+                }
+                return out
             }
-            return out
         }
-        return absentOrError(reply)
+        return noRecord(reply)
     }
 
-    /** No copy. `absent` only when the legacy store is confirmed absent and no device marker says it was unreadable (§25.52K.4, R431). */
-    private fun absentOrError(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
-        if (legacyMarker()) return reply("error", listOf("sub" to "legacy_store_unreadable"))
+    /**
+     * No native record (§25.52T.3, §25.52T.6). The pointer comes first: a device that has established an account never answers absent.
+     * `absent` needs the legacy store confirmed absent, which also clears the marker. An unreadable legacy store sets the marker.
+     */
+    private fun noRecord(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
+        if (flags.accountPointer()) return reply("error", listOf("sub" to "account_record_missing"))
         return when (outcome()) {
-            null -> reply("migrating", emptyList())
-            ImportOutcome.ABSENT -> reply("absent", emptyList())
-            ImportOutcome.LEGACY_UNREADABLE -> reply("error", listOf("sub" to "legacy_store_unreadable"))
+            null -> if (flags.legacyUnreadable()) {
+                reply("error", listOf("sub" to "legacy_store_unreadable"))
+            } else {
+                reply("migrating", emptyList())
+            }
+            ImportOutcome.ABSENT -> {
+                flags.clearLegacyUnreadable()
+                reply("absent", emptyList())
+            }
+            ImportOutcome.LEGACY_UNREADABLE -> {
+                flags.setLegacyUnreadable()
+                reply("error", listOf("sub" to "legacy_store_unreadable"))
+            }
             ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
         }
     }
@@ -925,7 +964,8 @@ internal class ShellRecordBridge(
         if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(storedWallet)))
         }
-        if (schema !is Int) return reply("bad_request", emptyList())
+        // A missing or non-integer schemaVersion is a content refusal (§25.52T.2): ok, with the path named.
+        if (schema !is Int) return reply("bad_request", listOf("names" to JSONArray(listOf("schemaVersion"))))
         val wallet = ShellRecordPolicy.walletIn(record)
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
@@ -940,12 +980,19 @@ internal class ShellRecordBridge(
         // Step 6: migrating. Step 7: the revision. The first write carries rev 0 (§25.52E.3).
         if (migrating()) return reply("migrating", emptyList())
         if (current == null) {
-            // No copy yet: the first write only once the import has settled the state (§25.52K.4). Never a new wallet on a failure.
-            if (legacyMarker()) return reply("error", listOf("sub" to "legacy_store_unreadable"))
+            // No native record (§25.52T.3, §25.52T.5, AK-15): the first write only once the legacy store is confirmed absent, and never
+            // on a device that has an account pointer. Never a new wallet on a failure.
+            if (flags.accountPointer()) return reply("error", listOf("sub" to "account_record_missing"))
             when (outcome()) {
                 null -> return reply("migrating", emptyList())
-                ImportOutcome.ABSENT -> if (store == null) return reply("error", listOf("sub" to "no_key"))
-                ImportOutcome.LEGACY_UNREADABLE -> return reply("error", listOf("sub" to "legacy_store_unreadable"))
+                ImportOutcome.ABSENT -> {
+                    if (store == null) return reply("error", listOf("sub" to "no_key"))
+                    flags.clearLegacyUnreadable()
+                }
+                ImportOutcome.LEGACY_UNREADABLE -> {
+                    flags.setLegacyUnreadable()
+                    return reply("migrating", emptyList())
+                }
                 ImportOutcome.NOT_DONE, ImportOutcome.DONE -> return reply("error", listOf("sub" to "import_not_done"))
             }
         }
@@ -967,12 +1014,19 @@ internal class ShellRecordBridge(
         }
         val next = currentRev + 1
         val toStore = merge.record.put("rev", next)
-        return try {
+        try {
             target.write(toStore)
-            reply("ok", listOf("rev" to next))
         } catch (_: IOException) {
-            reply("write_failed", emptyList())
+            return reply("write_failed", emptyList())
         }
+        // §25.52T.4: the first successful native write establishes the account pointer. The record is already stored, so a failure here
+        // only leaves the pointer unset.
+        try {
+            flags.setAccountPointer()
+        } catch (_: IOException) {
+            // Read later from the record; the pointer is set by the next successful write.
+        }
+        return reply("ok", listOf("rev" to next))
     }
 }
 
@@ -1026,7 +1080,7 @@ object BeamioShellRecordImport {
             outcome = ShellRecordState.outcome,
         )
         val code = flow.run(eoa, wallet, pgp)
-        applyImportMarker(markerOf(app), code)
+        applyImportMarker(flagsOf(app), code)
         if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) ShellRecordState.bound.set(eoa)
         return code
     }
@@ -1035,12 +1089,11 @@ object BeamioShellRecordImport {
         account = { accountOf(context) },
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
-        legacyMarker = { markerOf(context.applicationContext).present() },
+        flags = flagsOf(context.applicationContext),
     )
 
-    /** The device-level marker, in the same no-backup directory as the page copies (R431). */
-    internal fun markerOf(app: Context): LegacyUnreadableMarker =
-        LegacyUnreadableMarker(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))
+    /** The device-level flags, in the same no-backup directory as the page copies (§25.52T). */
+    internal fun flagsOf(app: Context): DeviceFlags = DeviceFlagFiles(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))
 
     private fun accountOf(context: Context): ShellRecordAccount {
         val app = context.applicationContext

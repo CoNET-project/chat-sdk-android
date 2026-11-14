@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bo (§25.52K to §25.52S) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `87880d8dbf844d626bbc1958d869eb4b3d6c7935507a3f2473fc36f6148748c3`).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bp (§25.52K to §25.52T) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `6af8167da1a025779d445fe8f3b245f13db4259a2304dca93a5b02dc56a01ae1`).
 
 ## Public entries
 
@@ -18,17 +18,17 @@ This note is the SDK-side reference for the native page-record bridge. It follow
 
 `context` is the Android `Context`; the spec's signatures omit it.
 
-## Ack envelope (§25.28.3, R431)
+## Ack envelope (§25.28.3, §25.52T.2)
 
 Every answer to `shellRecordRead` and `shellRecordWrite` is an ack. No separate event is sent.
 
-- Processed: `{type: "ack", reqId, ok: true, result: {code, ...}}`. `result.code` is the outcome, with its fields in `result`
-  (`rev`, `schemaVersion`, `record`, `currentRev`, `reason`, `names`).
-- Refused or failed: `{type: "ack", reqId, ok: false, error}`. `error` is the code (`origin_refused`, `too_large`, `migrating`,
-  `write_failed`, a `bad_request` without names), or the sub-code of an error answer (`needs_native_recovery`,
-  `legacy_store_unreadable`, `import_not_done`, `record_unreadable`, `storage_locked`, `locked`, `no_key`).
+- Reached by the bridge: `{type: "ack", reqId, ok: true, result: {code, ...}}`. The outcome is `result.code`: `ok`, `absent`, `error`
+  (with `sub` in `result`), `migrating`, `conflict` (with `currentRev`), `wallet_copy_not_approved`, `pgp_private_in_payload`,
+  `key_shaped_content`, `bad_request` (with `names`), `wallet_fields_missing`, `write_failed`.
+- Envelope-level refusal: `{type: "ack", reqId, ok: false, error}` with no `result`. `error` is `origin_refused`, `too_large`, or a
+  `bad_request` without names (an invalid reqId, a missing record, a non-integer `rev`).
 - `reqId` is echoed as sent (a string or an integer), or `null` when it is invalid.
-- A `bad_request` that names paths is processed: it has `ok: true` and `result.code: "bad_request"` with `names`.
+- The response never contains the internal `store`.
 
 Unverified origins through the generic bridge get the same refusal (`origin_refused`) with the reqId echoed.
 
@@ -52,14 +52,30 @@ Unverified origins through the generic bridge get the same refusal (`origin_refu
 
 On success the copy is written with `schemaVersion: 2` and `rev: 1`. An existing copy gives `exists` and is never overwritten.
 
-## Fresh install and the device marker (§25.52K.4, R431)
+## Absence, the account pointer and the device marker (§25.52T.3 to §25.52T.6)
 
-- `absent` is answered only when the import has confirmed the legacy store absent (`importFirstRun` with `Absent`), no copy exists, and
-  the device marker is not set. A fresh install reaches `absent` through that confirmation; before the import runs, a read answers `migrating`.
-- The device marker is the file `legacy_store_unreadable.v1` in the no-backup directory. The import sets it on `legacy_unreadable`. It is
-  cleared by a successful import (`import_ok`) or an existing copy (`exists`). A confirmed `absent` does not clear it.
-- While the marker is set, a read with no copy answers `error` with `legacy_store_unreadable`, never `absent`. A first write with no copy
-  answers the same error and creates no wallet.
+- `absent` needs all three: the legacy store is confirmed absent or empty, the account pointer is empty, and there is no native record.
+- The account pointer (`account_pointer.v1`, no-backup directory, non-secret) is set by the first successful native write (the import or
+  the native creation). Reads and writes never clear it. While it is set and no record exists, a read answers `error` with
+  `account_record_missing`, never `absent`; a write answers the same error.
+- The device marker (`legacy_store_unreadable.v1`) is set when the legacy store is unreadable while no pointer and no record exist. It is
+  cleared by a confirmed absence (the next read answers `absent`), by a successful import, or by an existing copy.
+- Read with no record, by the import outcome:
+
+| Pointer | Legacy outcome | Marker | Answer |
+|---|---|---|---|
+| set | any | any | `error`, `account_record_missing` |
+| not set | found, import not done | any | `error`, `import_not_done` |
+| not set | unreadable | any | `error`, `legacy_store_unreadable`; marker set |
+| not set | confirmed absent or empty | any | `absent`; marker cleared |
+| not set | not read again | set | `error`, `legacy_store_unreadable` |
+| not set | not read again | not set | `migrating` |
+
+- Write with no record: `migrating` while the marker is set or the legacy store is unreadable (no first write); the first write goes ahead
+  only after a confirmed absence.
+
+A fresh install reaches `absent` through the import's confirmation (`importFirstRun` with `Absent`); before the import runs, a read answers
+`migrating`.
 
 ## Page record: file format (§25.52L.2)
 
@@ -110,13 +126,14 @@ verified on a device in this build.
 
 ## Whitelist (§25.52N.4, §25.52O.2, §25.52Q.3)
 
+- The whitelist is capped at the 108 measured paths (§25.52T.7): every entry must be one of them.
 - Top level: `schemaVersion`, `rev`, `isReady`, `ver`, `nonce`, `upgradev2`, `webFilter`, `mnemonicPhrase`, `recoveryWords`; containers
   `preferences`, `fx168Order`, `cardRedeems`, `ChannelPartners`, `referrals`, `fragmentClass`, `search`; `beamio` with 15 exact keys;
-  `passcode` with `status` only; `profiles`.
+  `profiles`. `passcode` is not whitelisted at all (`passcode.status` is refused, §25.52T.7).
 - Profile: scalars `isPrimary`, `emailAddr`, `hdPath`, `index`, `isNode`, `referrer`, `nodeID`, `nodeIP_address`, `nodeRegion`,
   `vpnTimeUsedInMin`, `webFilter`, `aaAccount`, `keyID`, `type`, `publicKeyArmor`, `privateKeyArmor`; containers `tokens`, `spClub`,
   `SpClubPoints`, `spChannel`, `airdropEvent`, `data`, `activePassport`, `silentPassPassports`, `chats`, `phoneCalls`, `issuedCards`;
-  `chatManager` with `keyID`, `router`, and the container `routes`.
+  `chatManager` with `router` only (`chatManager.keyID` and `routes` are not whitelisted, §25.52T.7).
 - Containers take any subtree; the subtree still goes through the key-shape scan.
 - Not whitelisted: `encryptedString`, `keyObj` (whole), `duplicateAccount`, `walletVault`, the non-status keys of `passcode`, and every PGP
   public path.
@@ -152,8 +169,14 @@ it is `too_large`, checked before the schema-specific answers.
   placeholder phrase, so the check is left for PM.
 - The first-run import has no whitelist for legacy fields beyond PGP (`legacy_fields_unknown` is not decided, §25.52N.6).
 - `accountSlot` keeps the conditional profile-0 fallback for records with no keyID (PM R424); Android measurement must confirm the keyID match.
+- Not decided by the spec (r3bp,待 PM): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only);
+  a marker set with a write answers `migrating` (§25.52T.5, pending PM confirmation).
+- The 108-path cap was checked against the measured manifest (page-record-paths-measured, 108 listed paths): all 62 whitelist paths
+  (containers included) are among them. The tests do not read that manifest.
 
 ## Tests
+
+`ShellRecordAckVectorsTest` runs AK-01 to AK-16 (the ack group, §25.52T.8).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
 (`ShellRecordFormatTest`), the review-item tests (`ShellRecordR424Test`), and the R431 tests (`ShellRecordR431Test`: ack envelope, fresh install,

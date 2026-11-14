@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bo）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bp）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -2210,9 +2210,7 @@
             {
               "aaAccount": "x",
               "chatManager": {
-                "keyID": "k",
-                "router": "r",
-                "routes": []
+                "router": "r"
               },
               "hdPath": "h",
               "index": 0,
@@ -2248,9 +2246,7 @@
               {
                 "aaAccount": "x",
                 "chatManager": {
-                  "keyID": "k",
-                  "router": "r",
-                  "routes": []
+                  "router": "r"
                 },
                 "hdPath": "h",
                 "index": 0,
@@ -2378,9 +2374,6 @@
           "nonce": 3,
           "upgradev2": true,
           "webFilter": false,
-          "passcode": {
-            "status": "none"
-          },
           "preferences": {
             "theme": "x"
           },
@@ -2399,9 +2392,7 @@
               "privateKeyArmor": "EOA",
               "publicKeyArmor": "PUB",
               "chatManager": {
-                "keyID": "k",
-                "router": "r",
-                "routes": []
+                "router": "r"
               }
             }
           ]
@@ -2421,9 +2412,6 @@
             "nonce": 3,
             "upgradev2": true,
             "webFilter": false,
-            "passcode": {
-              "status": "none"
-            },
             "preferences": {
               "theme": "x"
             },
@@ -2442,9 +2430,7 @@
                 "privateKeyArmor": "EOA",
                 "publicKeyArmor": "PUB",
                 "chatManager": {
-                  "keyID": "k",
-                  "router": "r",
-                  "routes": []
+                  "router": "r"
                 }
               }
             ]
@@ -2995,7 +2981,7 @@
     },
     {
       "id": "TR-40",
-      "title": "passcode 的非 status 子键：bad_request，只记路径名（r3bm）",
+      "title": "passcode（整体不在白名单，清单仅列顶层 passcode）：bad_request，路径名按 UTF-8 字节序（r3bp，撤销 r3bm 的 passcode.status）",
       "kind": "write",
       "ctx": {
         "origin": "allowed"
@@ -3015,6 +3001,7 @@
       "expect": {
         "code": "bad_request",
         "names": [
+          "passcode.status",
           "passcode.verifier"
         ],
         "reqId": "w40",
@@ -4859,6 +4846,396 @@
       ]
     }
   ],
+  "ackCases": [
+    {
+      "id": "AK-01",
+      "title": "读回 ok：ack 信封，数据在 result 中（r3bp，R431 第 1 条）",
+      "kind": "read",
+      "reqId": "r1",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r1",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-02",
+      "title": "全新安装：旧存储确认不存在，指针为空：absent（唯一条件，r3bp，R431 第 2 条）",
+      "kind": "read",
+      "reqId": "r2",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r2",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "AK-03",
+      "title": "全新安装：旧存储确认为空，指针为空：absent（r3bp）",
+      "kind": "read",
+      "reqId": "r3",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "empty",
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r3",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "AK-04",
+      "title": "旧存储读不到，指针为空：error（legacy_store_unreadable），不得 absent，设备标记置位（r3bp，R431 第 3 条）",
+      "kind": "read",
+      "reqId": "r4",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "unreadable",
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r4",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "legacy_store_unreadable"
+        }
+      }
+    },
+    {
+      "id": "AK-05",
+      "title": "标记存在，之后旧存储确认不存在：absent，标记清除（r3bp）",
+      "kind": "read",
+      "reqId": "r5",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "marker": true,
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r5",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "AK-06",
+      "title": "标记存在，旧存储仍读不到：error，不得 absent（r3bp）",
+      "kind": "read",
+      "reqId": "r6",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "unreadable",
+        "marker": true,
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r6",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "legacy_store_unreadable"
+        }
+      }
+    },
+    {
+      "id": "AK-07",
+      "title": "标记存在，未重新读取旧存储：error，不得 absent（r3bp）",
+      "kind": "read",
+      "reqId": "r7",
+      "ctx": {
+        "origin": "allowed",
+        "marker": true,
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r7",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "legacy_store_unreadable"
+        }
+      }
+    },
+    {
+      "id": "AK-08",
+      "title": "指针存在而记录缺失，旧存储确认不存在：error（account_record_missing），不得 absent（r3bp）",
+      "kind": "read",
+      "reqId": "r8",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r8",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_record_missing"
+        }
+      }
+    },
+    {
+      "id": "AK-09",
+      "title": "旧记录存在但导入未完成：error（import_not_done），不得 absent（r3bp）",
+      "kind": "read",
+      "reqId": "r9",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "found",
+        "pointer": false
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r9",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "import_not_done"
+        }
+      }
+    },
+    {
+      "id": "AK-10",
+      "title": "写入 ok：ack，结果含 rev（r3bp）",
+      "kind": "write",
+      "reqId": "w1",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w1",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w1",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 1
+        }
+      }
+    },
+    {
+      "id": "AK-11",
+      "title": "写入 rev 不一致：ack 结果 conflict，含 currentRev（r3bp）",
+      "kind": "write",
+      "reqId": "w2",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 3,
+        "record": {
+          "rev": 3,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w2",
+        "record": {
+          "rev": 2,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w2",
+        "ok": true,
+        "result": {
+          "code": "conflict",
+          "currentRev": 3
+        }
+      }
+    },
+    {
+      "id": "AK-12",
+      "title": "写入内容拒绝（W 在 schemaVersion 1）：ack 结果含路径名（r3bp）",
+      "kind": "write",
+      "reqId": "w3",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w3",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w3",
+        "ok": true,
+        "result": {
+          "code": "wallet_copy_not_approved",
+          "names": [
+            "profiles[*].privateKeyArmor"
+          ]
+        }
+      }
+    },
+    {
+      "id": "AK-13",
+      "title": "reqId 缺失（信封级）：ok:false，reqId 为 null，error 为 bad_request（r3bp）",
+      "kind": "write",
+      "reqId": "x13",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": null,
+        "ok": false,
+        "error": "bad_request"
+      }
+    },
+    {
+      "id": "AK-14",
+      "title": "超过 2 MB（信封级）：ok:false，error 为 too_large（r3bp）",
+      "kind": "write",
+      "reqId": "w4",
+      "ctx": {
+        "origin": "allowed",
+        "sizeBytes": 2097153
+      },
+      "store": null,
+      "req": {
+        "reqId": "w4",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w4",
+        "ok": false,
+        "error": "too_large"
+      }
+    },
+    {
+      "id": "AK-15",
+      "title": "标记存在且无记录（旧存储未确认不存在）：写入拒绝为 migrating，不首次写入（r3bp）",
+      "kind": "write",
+      "reqId": "w5",
+      "ctx": {
+        "origin": "allowed",
+        "marker": true,
+        "legacy": "unreadable"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w5",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w5",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-16",
+      "title": "来源拒绝（信封级）：ok:false，error 为 origin_refused（r3bp）",
+      "kind": "read",
+      "reqId": "r16",
+      "ctx": {
+        "origin": "refused"
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r16",
+        "ok": false,
+        "error": "origin_refused"
+      }
+    }
+  ],
   "unregisterCases": [
     {
       "id": "UG-01",
@@ -5247,7 +5624,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 162,
+    "runs": 178,
     "result": "pass"
   }
 }

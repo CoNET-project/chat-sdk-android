@@ -11,27 +11,36 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The R431 items on the page-record bridge (spec r3bo): the ack envelope (§25.28.3), the absence of a fresh install and the device-level marker
- * of an unreadable legacy store (§25.52K.4), and the canonical JSON of the stored copy (§25.52M.4, CJ-01, CJ-02).
+ * The R431 and R436 items on the page-record bridge (spec r3bp): the ack envelope (§25.52T.2), the absence of a fresh install and the account
+ * pointer (§25.52T.3, §25.52T.4), the device-level marker (§25.52T.5, §25.52T.6), and the canonical JSON of the stored copy (§25.52M.4).
+ * The ack vectors (AK-01 to AK-16) run in ShellRecordAckVectorsTest.
  */
 class ShellRecordR431Test {
-    private fun bridge(outcome: ImportOutcome?, store: SealedPageRecordStore? = null, marker: Boolean = false) = ShellRecordBridge(
-        account = { if (store == null) ShellRecordAccount.Unknown else ShellRecordAccount.Ready(store, ACCOUNT) },
+    private fun store(files: NativeTestFiles = NativeTestFiles()) = SealedPageRecordStore(NativeTestWrap(), files, "$ACCOUNT:default")
+
+    private fun bridge(outcome: ImportOutcome?, store: SealedPageRecordStore, flags: DeviceFlags = NoDeviceFlags) = ShellRecordBridge(
+        account = { ShellRecordAccount.Ready(store, ACCOUNT) },
         migrating = { false },
         outcome = { outcome },
-        legacyMarker = { marker },
+        flags = flags,
     )
 
     private fun read(reqId: String, b: ShellRecordBridge): JSONObject =
         b.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", reqId), 40)
 
-    // ---- the ack envelope ----
+    private fun walletRecord(rev: Int) = JSONObject()
+        .put("rev", rev)
+        .put("schemaVersion", 2)
+        .put("mnemonicPhrase", "M")
+        .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA")))
+
+    // ---- the ack envelope (§25.52T.2) ----
 
     @Test
     fun aProcessedAnswerIsAnAckWithItsResultCode() {
-        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
-        store.write(JSONObject().put("rev", 1).put("schemaVersion", 2).put("mnemonicPhrase", "M").put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA"))))
-        val ok = read("ack1", bridge(ImportOutcome.DONE, store))
+        val s = store()
+        s.write(walletRecord(1))
+        val ok = read("ack1", bridge(ImportOutcome.DONE, s))
         assertEquals("ack", ok.getString("type"))
         assertEquals("ack1", ok.getString("reqId"))
         assertTrue(ok.getBoolean("ok"))
@@ -41,11 +50,11 @@ class ShellRecordR431Test {
 
     @Test
     fun aConflictIsAProcessedAckWithCurrentRev() {
-        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
-        store.write(JSONObject().put("rev", 3).put("schemaVersion", 2).put("mnemonicPhrase", "M").put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA"))))
-        val resp = bridge(ImportOutcome.DONE, store).handle(
+        val s = store()
+        s.write(walletRecord(3))
+        val resp = bridge(ImportOutcome.DONE, s).handle(
             ShellOrigin.EMBEDDED_PAGE,
-            JSONObject().put("type", "shellRecordWrite").put("reqId", "ack2").put("record", JSONObject().put("rev", 2).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA")))),
+            JSONObject().put("type", "shellRecordWrite").put("reqId", "ack2").put("record", walletRecord(2)),
             200,
         )
         assertTrue(resp.getBoolean("ok"))
@@ -54,13 +63,8 @@ class ShellRecordR431Test {
     }
 
     @Test
-    fun aRefusalIsAnAckWithAnErrorAndNoResult() {
-        val resp = bridge(ImportOutcome.ABSENT).handle(
-            ShellOrigin.OTHER,
-            JSONObject().put("type", "shellRecordRead").put("reqId", "ack3"),
-            40,
-        )
-        assertEquals("ack", resp.getString("type"))
+    fun anEnvelopeRefusalIsAnAckWithAnErrorAndNoResult() {
+        val resp = bridge(ImportOutcome.ABSENT, store()).handle(ShellOrigin.OTHER, JSONObject().put("type", "shellRecordRead").put("reqId", "ack3"), 40)
         assertFalse(resp.getBoolean("ok"))
         assertEquals("origin_refused", resp.getString("error"))
         assertFalse(resp.has("result"))
@@ -68,60 +72,101 @@ class ShellRecordR431Test {
 
     @Test
     fun anInvalidReqIdIsEchoedAsNull() {
-        val resp = bridge(ImportOutcome.ABSENT).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", ""), 40)
+        val resp = bridge(ImportOutcome.ABSENT, store()).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", ""), 40)
         assertFalse(resp.getBoolean("ok"))
         assertEquals("bad_request", resp.getString("error"))
         assertTrue(resp.isNull("reqId"))
     }
 
     @Test
-    fun aMissingNeedsNativeRecoveryIsAnErrorAck() {
-        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
-        store.write(JSONObject().put("rev", 1).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT))))
-        val resp = read("ack4", bridge(ImportOutcome.DONE, store))
-        assertFalse(resp.getBoolean("ok"))
-        assertEquals("needs_native_recovery", resp.getString("error"))
+    fun aMissingEoaKeyIsAnAckResultWithNeedsNativeRecovery() {
+        val s = store()
+        s.write(JSONObject().put("rev", 1).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT))))
+        val resp = read("ack4", bridge(ImportOutcome.DONE, s))
+        assertTrue(resp.getBoolean("ok"))
+        assertEquals("error", resp.getJSONObject("result").getString("code"))
+        assertEquals("needs_native_recovery", resp.getJSONObject("result").getString("sub"))
     }
 
-    // ---- fresh install and the device marker (§25.52K.4) ----
+    // ---- absence, the pointer and the marker (§25.52T.3 to §25.52T.6) ----
 
     @Test
     fun aFreshInstallWithNoLegacyStoreAnswersAbsent() {
-        // The shell reports the legacy store as absent (importFirstRun with Absent): no copy, no marker, the bridge answers absent.
-        val resp = read("fresh1", bridge(ImportOutcome.ABSENT))
+        val resp = read("fresh1", bridge(ImportOutcome.ABSENT, store()))
         assertEquals("absent", resp.v().getString("code"))
     }
 
     @Test
-    fun aDeviceMarkerAnswersErrorNotAbsence() {
-        // Once the legacy store was unreadable, read answers error even when the process outcome says absent.
-        val resp = read("mark1", bridge(ImportOutcome.ABSENT, marker = true))
-        assertFalse(resp.getBoolean("ok"))
-        assertEquals("legacy_store_unreadable", resp.getString("error"))
-        val write = bridge(ImportOutcome.ABSENT, marker = true).handle(
-            ShellOrigin.EMBEDDED_PAGE,
-            JSONObject().put("type", "shellRecordWrite").put("reqId", "mark2").put("record", JSONObject().put("rev", 0).put("schemaVersion", 2).put("profiles", JSONArray())),
-            200,
-        )
-        assertEquals("legacy_store_unreadable", write.getString("error"))
+    fun anAccountPointerNeverAnswersAbsent() {
+        // §25.52T.4: the device has established an account, but the record is missing: error, never absent.
+        val files = NativeTestFiles()
+        DeviceFlagFiles(files).setAccountPointer()
+        val resp = read("ptr1", bridge(ImportOutcome.ABSENT, store(files), DeviceFlagFiles(files)))
+        assertEquals("error", resp.v().getString("code"))
+        assertEquals("account_record_missing", resp.v().getString("sub"))
     }
 
     @Test
-    fun theMarkerIsSetByAnUnreadableImportAndClearedByASuccessfulOne() {
+    fun aMarkerIsClearedByAConfirmedAbsenceAndThenTheReadIsAbsent() {
+        // §25.52T.5, §25.52T.6 (AK-05): the marker is set, the legacy store is confirmed absent: absent, and the marker is cleared.
         val files = NativeTestFiles()
-        val marker = LegacyUnreadableMarker(files)
-        assertFalse(marker.present())
-        applyImportMarker(marker, ShellImportCode.LEGACY_UNREADABLE)
-        assertTrue(marker.present())
-        applyImportMarker(marker, ShellImportCode.ABSENT)
-        assertTrue("a confirmed absence does not clear it", marker.present())
-        applyImportMarker(marker, ShellImportCode.IMPORT_FAILED)
-        assertTrue(marker.present())
-        applyImportMarker(marker, ShellImportCode.IMPORT_OK)
-        assertFalse(marker.present())
-        applyImportMarker(marker, ShellImportCode.LEGACY_UNREADABLE)
-        applyImportMarker(marker, ShellImportCode.EXISTS)
-        assertNull(files.read(LegacyUnreadableMarker.NAME))
+        val flags = DeviceFlagFiles(files)
+        flags.setLegacyUnreadable()
+        assertEquals("absent", read("mark1", bridge(ImportOutcome.ABSENT, store(files), flags)).v().getString("code"))
+        assertFalse(flags.legacyUnreadable())
+    }
+
+    @Test
+    fun aMarkerWithoutAReReadAnswersErrorNotAbsence() {
+        // §25.52T.6 (AK-07): the marker is set and the legacy store was not read again in this process: error, never absent.
+        val files = NativeTestFiles()
+        DeviceFlagFiles(files).setLegacyUnreadable()
+        val resp = read("mark2", bridge(null, store(files), DeviceFlagFiles(files)))
+        assertEquals("legacy_store_unreadable", resp.v().getString("sub"))
+    }
+
+    @Test
+    fun aWriteWithTheMarkerAndNoRecordIsMigratingNotAFirstWrite() {
+        // §25.52T.5 (AK-15): the first write does not happen while the marker is set and the record is missing.
+        val files = NativeTestFiles()
+        val flags = DeviceFlagFiles(files)
+        flags.setLegacyUnreadable()
+        val resp = bridge(ImportOutcome.LEGACY_UNREADABLE, store(files), flags).handle(
+            ShellOrigin.EMBEDDED_PAGE,
+            JSONObject().put("type", "shellRecordWrite").put("reqId", "mark3").put("record", JSONObject().put("rev", 0).put("schemaVersion", 1)),
+            200,
+        )
+        assertEquals("migrating", resp.getJSONObject("result").getString("code"))
+        assertNull(files.read("page.v1.${ACCOUNT.removePrefix("0x")}.default.rec"))
+    }
+
+    @Test
+    fun theImportSetsAndClearsTheFlagsAsTheTableSays() {
+        val files = NativeTestFiles()
+        val flags = DeviceFlagFiles(files)
+        assertFalse(flags.accountPointer())
+        applyImportMarker(flags, ShellImportCode.LEGACY_UNREADABLE)
+        assertTrue(flags.legacyUnreadable())
+        applyImportMarker(flags, ShellImportCode.IMPORT_FAILED)
+        assertTrue("a failed import keeps the marker", flags.legacyUnreadable())
+        applyImportMarker(flags, ShellImportCode.IMPORT_OK)
+        assertTrue(flags.accountPointer())
+        assertFalse("a successful import clears the marker", flags.legacyUnreadable())
+        applyImportMarker(flags, ShellImportCode.LEGACY_UNREADABLE)
+        assertFalse("an unreadable legacy store does not set the marker once the pointer exists", flags.legacyUnreadable())
+    }
+
+    @Test
+    fun aFirstSuccessfulNativeWriteSetsTheAccountPointer() {
+        val files = NativeTestFiles()
+        val flags = DeviceFlagFiles(files)
+        val resp = bridge(ImportOutcome.ABSENT, store(files), flags).handle(
+            ShellOrigin.EMBEDDED_PAGE,
+            JSONObject().put("type", "shellRecordWrite").put("reqId", "ptr2").put("record", walletRecord(0)),
+            200,
+        )
+        assertEquals("ok", resp.getJSONObject("result").getString("code"))
+        assertTrue(flags.accountPointer())
     }
 
     // ---- canonical JSON (§25.52M.4, CJ-01, CJ-02) ----
@@ -133,8 +178,7 @@ class ShellRecordR431Test {
         assertEquals(2, cases.length())
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
-            val got = CanonicalJson.encode(JSONObject(c.getJSONObject("input").toString()))
-            assertEquals(c.getString("id"), c.getString("expect"), got)
+            assertEquals(c.getString("id"), c.getString("expect"), CanonicalJson.encode(JSONObject(c.getJSONObject("input").toString())))
         }
     }
 }
