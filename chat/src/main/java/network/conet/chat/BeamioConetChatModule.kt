@@ -7,8 +7,7 @@ import android.util.Log
 import org.json.JSONArray
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
-import network.conet.chat.nativekey.ShellRecordPolicy
-import network.conet.chat.nativekey.shellAck
+import network.conet.chat.nativekey.shellRecordChatChannelReply
 import network.conet.chat.nativekey.IdentityPublic
 import network.conet.chat.nativekey.NativeDerivationCommands
 import network.conet.chat.nativekey.VoiceChannelKeys
@@ -173,13 +172,11 @@ object BeamioConetChatModule {
             identityPublicCommand(body)
             return
         }
-        // shellRecord* (r3az §25.52D.5, §25.52AA.3): on Android the page records come only through window.BeamioShellRecord, which the shell
-        // hands to BeamioShellRecordImport.handle with the verified origin. The chat-module channel is not accepted: not_supported.
+        // shellRecord* (r3az §25.52D.5, §25.52AA.3, §25.52AB.5): on Android the page records come only through window.BeamioShellRecord, which
+        // the shell hands to BeamioShellRecordImport.answerFromPage with the verified origin. The chat-module channel has no verified origin, so
+        // it is not processed and gets no reply: the shared rule below returns nothing.
         if (type.startsWith("shellRecord")) {
-            // The refusal is the ack envelope with the reqId as the page sent it (a string or an integer; null when invalid).
-            val raw = body.opt("reqId")
-            val echo: Any = if (ShellRecordPolicy.reqIdValid(raw)) raw!! else JSONObject.NULL
-            emitEvent(shellAck(echo, "not_supported", emptyList()))
+            shellRecordChatChannelReply(body)?.let { emitEvent(it) }
             return
         }
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).

@@ -857,7 +857,7 @@ internal class ShellImportFlow(
 }
 
 /** The codes that the ack refuses at the envelope level (§25.52T.2): the request is not processed, so the ack has `ok: false` and an `error`. */
-private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_supported")
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large")
 
 /**
  * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
@@ -1075,6 +1075,16 @@ internal class ShellRecordBridge(
         }
         return reply("ok", listOf("rev" to next))
     }
+}
+
+/**
+ * The chat-module channel for `shellRecord*` (§25.52AB.5, R476): the channel has no verified origin, so the request is not processed and gets
+ * no reply, whatever its reqId or type. Returns `null` for every body; the caller sends nothing.
+ */
+internal fun shellRecordChatChannelReply(body: JSONObject): JSONObject? {
+    @Suppress("UNUSED_VARIABLE")
+    val unverified = body
+    return null
 }
 
 /**

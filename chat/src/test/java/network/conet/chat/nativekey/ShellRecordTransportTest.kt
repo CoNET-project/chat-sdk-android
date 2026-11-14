@@ -2,6 +2,7 @@ package network.conet.chat.nativekey
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -60,9 +61,12 @@ class ShellRecordTransportTest {
     }
 
     @Test
-    fun theAndroidChatChannelIsRefusedWithNotSupportedAndNeverAnOriginError() {
-        // SA-02, TP-03: the module's shellRecord branch answers the ack refusal not_supported (the page must not fall back to the chat module).
+    fun theAndroidChatChannelIsNotAnsweredAtAll() {
+        // SA-02 (§25.52AB.5, R476): the chat-module channel is not processed and gets no reply; the module's shellRecord branch sends nothing.
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
-        assertTrue(module.contains("shellAck(echo, \"not_supported\", emptyList())"))
+        val branch = module.substringAfter("if (type.startsWith(\"shellRecord\")) {").substringBefore("return")
+        assertTrue(branch.contains("shellRecordChatChannelReply(body)"))
+        assertFalse(branch.contains("emitEvent(shellAck"))
+        assertFalse(module.contains("shellAck(echo, \"not_supported\""))
     }
 }

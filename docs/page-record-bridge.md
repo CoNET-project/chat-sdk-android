@@ -213,6 +213,12 @@ it is `too_large`, checked before the schema-specific answers.
 - `BeamioShellRecordImport.answerFromPage(context, sourceOrigin, isMainFrame, body, requestBytes)` is the window entry. It checks the
   origin (`ALLOWED_ORIGIN`) and the main frame at the native boundary. A source that is not allowed is not processed and gets no reply
   (`null`, OR-01). An allowed request gets exactly one ack, and a bad reqId is `bad_request` with `reqId: null` (OR-02, OR-03).
+- Shell wiring (required, not in this repository): the Android shell must call `answerFromPage` from its
+  `WebViewCompat.addWebMessageListener` listener (object name `BeamioShellRecord`, allowed origin `ALLOWED_ORIGIN`), and send a non-null
+  result through the listener's `JavaScriptReplyProxy.postMessage`. A null result is not sent. No other code path calls it.
+- The chat-module channel (`shellRecordRead` / `shellRecordWrite` / other `shellRecord*` commands sent through `BeamioConetChatModule`) has no
+  verified origin on Android. It is not processed and gets no reply, whatever the reqId or type (`shellRecordChatChannelReply` returns
+  `null`; R476, §25.52AB.5). The page must not use it on Android; this is also why `not_supported` is not sent.
 - The reply envelope is the ack envelope of §25.52T.2 (`ok:true` with `result`, or `ok:false` with `error`). No `store` or other internal field.
 - The page's reply rules (reqId keys, the 10 s timeout, late and duplicate replies, malformed replies, and the write hold after a timed-out
   write) are the page adapter's. `ShellRecordReplyTest` pins them as a reference against RP-01 to RP-08b.

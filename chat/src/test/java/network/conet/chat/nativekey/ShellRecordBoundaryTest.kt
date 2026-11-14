@@ -72,6 +72,32 @@ class ShellRecordBoundaryTest {
     }
 
     @Test
+    fun anUnverifiedChatChannelRequestGetsNoReplyWhateverItAsks() {
+        // R476, §25.52AB.5: the chat-module channel has no verified origin. Nothing is processed and nothing is sent, for any reqId or type.
+        val bodies = listOf(
+            request("r1"),
+            JSONObject().put("type", "shellRecordWrite").put("reqId", "w1").put("record", JSONObject().put("rev", 0).put("schemaVersion", 2)),
+            request(""),
+            request(null),
+            request(7),
+            JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
+            JSONObject().put("type", "shellRecordRead").put("reqId", "r2").put("extra", 1),
+        )
+        for (body in bodies) assertNull("no reply for ${body}", shellRecordChatChannelReply(body))
+    }
+
+    @Test
+    fun theChatChannelBranchSendsNothingAndTheWindowEntryIsTheOnlyReplyPath() {
+        val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
+        val branch = module.substringAfter("if (type.startsWith(\"shellRecord\")) {").substringBefore("return")
+        // The branch sends only what the shared rule returns, and that rule returns nothing (see anUnverifiedChatChannelRequest...).
+        assertTrue(branch.contains("shellRecordChatChannelReply(body)"))
+        assertFalse("the chat-module branch never builds an ack itself", branch.contains("shellAck"))
+        val shellRecord = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
+        assertTrue(shellRecord.contains("fun answerFromPage("))
+    }
+
+    @Test
     fun theWindowOriginIsTheAndroidAppAssetsOrigin() {
         // §25.52AA.4, §25.52AB.5: the one origin the window channel accepts.
         assertEquals("https://appassets.androidplatform.net", BeamioShellRecordImport.ALLOWED_ORIGIN)
