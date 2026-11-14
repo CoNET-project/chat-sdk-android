@@ -258,7 +258,7 @@ it is `too_large`, checked before the schema-specific answers.
   - GX-10b: the vector expects the chat channel to answer `absent`; R476 says it never replies, and the code follows R476.
     `gx10bChatChannelDeviatesFromTheVectorByR476` pins this, and checks the window judgement is `absent`.
   - DL-10a and DL-10b as written put `chats` at the root and omit `schemaVersion`; the bridge refuses them with `bad_request`
-    (`schemaVersion`) before the revision check. `PageRecordEntryDeleteTest` records that, and also checks the mapped form
+    (`schemaVersion`). The spec does not say what a write without `schemaVersion` gets; this is the SDK's rule, pending the ruling. `PageRecordEntryDeleteTest` records that, and also checks the mapped form
     (`chats` under `profiles[0]`) gives the vector's `conflict` and `ok` results. Where message bodies live (the page record's `chats[*].messages` or the native
   store) is open (§25.52AC.7). The DL vectors place `chats` at the root, while the whitelist places it under `profiles[*].chats`
   (§25.52Q.3); the DL-10 tests use the whitelist place.

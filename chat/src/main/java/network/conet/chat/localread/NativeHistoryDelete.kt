@@ -35,7 +35,9 @@ object NativeHistoryDelete {
         if (type == MESSAGE && (messageId == null || !isMessageId(messageId))) names += "messageId"
         if (names.isNotEmpty()) return shellAck(reqId, "bad_request", listOf("names" to JSONArray(names)))
 
-        val history = store ?: return JSONObject().put("type", "ack").put("reqId", reqId).put("ok", false).put("error", "not_ready")
+        // R565: a closed store (logged out: the handle is gone) is not ready. A locked store (the key is gone, the handle is still open) is busy.
+        val history = store ?: return notReady(reqId)
+        if (!history.isOpen) return notReady(reqId)
         if (!history.isUnlocked) return shellAck(reqId, "busy", emptyList())
         return try {
             val deleted = if (type == MESSAGE) {
@@ -58,8 +60,12 @@ object NativeHistoryDelete {
         if (e.message == "locked") {
             shellAck(reqId, "busy", emptyList())
         } else {
-            JSONObject().put("type", "ack").put("reqId", reqId).put("ok", false).put("error", "not_ready")
+            notReady(reqId)
         }
+
+    /** The envelope refusal for a store that cannot answer now (§25.52AC.5). */
+    private fun notReady(reqId: Any): JSONObject =
+        JSONObject().put("type", "ack").put("reqId", reqId).put("ok", false).put("error", "not_ready")
 
     /** `messageId` (the sendKey, §25.52AC.2): 1 to 128 visible ASCII characters. */
     fun isMessageId(value: String): Boolean = value.length in 1..128 && value.all { it.code in 0x21..0x7E }

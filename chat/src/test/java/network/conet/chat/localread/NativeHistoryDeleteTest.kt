@@ -65,22 +65,47 @@ class NativeHistoryDeleteTest {
     }
 
     @Test
-    fun aLockedStoreIsBusyAndChangesNothing() {
-        // A file store: lock() closes the database, and the rows must still be there after the unlock.
-        val file = File.createTempFile("native-delete", ".db").apply { deleteOnExit() }
+    fun aClosedStoreIsNotReadyThroughTheAckAndChangesNothing() {
+        // R565: lock() is logging out. It closes the handle, so the store is closed and answers not_ready (envelope), not busy.
+        val file = File.createTempFile("native-delete-closed", ".db").apply { deleteOnExit() }
         val store = seeded(mapOf(CONV_A to listOf("m1" to 0)), file)
         store.lock()
+        val ack = NativeHistoryDelete.ack(
+            "historyDeleteConversation",
+            JSONObject().put("type", "historyDeleteConversation").put("reqId", "c1").put("convKey", CONV_A),
+            null,
+            store,
+        )
+        assertEquals(
+            CanonicalJson.encode(JSONObject().put("type", "ack").put("reqId", "c1").put("ok", false).put("error", "not_ready")),
+            CanonicalJson.encode(ack),
+        )
+        // The handle was closed; a new store on the same file restores the rows.
+        val reopened = newFileStore("0xaaaa:default", file)
+        assertEquals(UnlockResult.OK, reopened.unlock(master, null))
+        assertEquals(0, reopened.stateOfSendKey(CONV_A, "m1"))
+    }
+
+    @Test
+    fun aLockedStoreWithAnOpenHandleIsBusyThroughTheAckAndChangesNothing() {
+        // R565: markLocked keeps the handle open and loses only the key: locked, not closed, so busy.
+        val file = File.createTempFile("native-delete-locked", ".db").apply { deleteOnExit() }
+        val store = seeded(mapOf(CONV_A to listOf("m1" to 0)), file)
+        store.markLocked("kcv_mismatch")
+        assertTrue("the handle stays open", store.isOpen)
+        assertEquals(false, store.isUnlocked)
         val ack = NativeHistoryDelete.ack(
             "historyDeleteConversation",
             JSONObject().put("type", "historyDeleteConversation").put("reqId", "b1").put("convKey", CONV_A),
             null,
             store,
         )
-        assertEquals(CanonicalJson.encode(JSONObject().put("type", "ack").put("reqId", "b1").put("ok", true).put("result", JSONObject().put("code", "busy"))), CanonicalJson.encode(ack))
-        // lock() closed the database handle; a new store on the same file restores the rows, as the existing lock test does.
-        val reopened = newFileStore("0xaaaa:default", file)
-        assertEquals(UnlockResult.OK, reopened.unlock(master, null))
-        assertEquals(0, reopened.stateOfSendKey(CONV_A, "m1"))
+        assertEquals(
+            CanonicalJson.encode(JSONObject().put("type", "ack").put("reqId", "b1").put("ok", true).put("result", JSONObject().put("code", "busy"))),
+            CanonicalJson.encode(ack),
+        )
+        assertEquals(UnlockResult.OK, store.unlock(master, null))
+        assertEquals(0, store.stateOfSendKey(CONV_A, "m1"))
     }
 
     @Test

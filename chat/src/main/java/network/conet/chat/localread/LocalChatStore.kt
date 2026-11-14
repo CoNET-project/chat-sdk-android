@@ -64,6 +64,12 @@ class LocalChatStore(
 
     val isUnlocked: Boolean get() = synchronized(lock) { dek != null }
 
+    /**
+     * True while the database handle is open. A logged-out store (lock) has no handle: it is closed. A locked store keeps its handle
+     * and loses only the key (markLocked, a failed unlock): it is open but not unlocked (R565).
+     */
+    val isOpen: Boolean get() = synchronized(lock) { db != null }
+
     // ---- unlock / lock ---------------------------------------------------------------
 
     /**

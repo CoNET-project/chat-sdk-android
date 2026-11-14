@@ -1048,7 +1048,8 @@ internal class ShellRecordBridge(
         if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(storedWallet)))
         }
-        // A missing or non-integer schemaVersion is a content refusal (§25.52T.2): ok, with the path named.
+        // A missing or non-integer schemaVersion is refused as bad_request naming the path. The spec does not say what this case gets (R553
+        // review §2.2): this is the SDK's rule, pending the interface owner's ruling.
         if (schema !is Int) return reply("bad_request", listOf("names" to JSONArray(listOf("schemaVersion"))))
         val wallet = ShellRecordPolicy.walletIn(record)
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
