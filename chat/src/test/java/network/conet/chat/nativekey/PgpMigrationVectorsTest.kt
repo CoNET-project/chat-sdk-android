@@ -56,9 +56,11 @@ class PgpMigrationVectorsTest {
         assertEquals(3, doc.getJSONArray("pageRefuseCases").length())
         assertEquals(6, doc.getJSONArray("walletMergeCases").length())
         assertEquals(7, sourceCases.length())
-        assertEquals(6, unregisterCases.length())
-        assertEquals(7, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
-        assertEquals(6, migrationStateCases.length())
+        // r3bg (§25.52I.10): 8 unregister cases (9 steps), 7 migration-state cases, and 8 import cases (in ShellRecordVectorsTest).
+        assertEquals(8, unregisterCases.length())
+        assertEquals(9, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
+        assertEquals(7, migrationStateCases.length())
+        assertEquals(8, doc.getJSONArray("importCases").length())
     }
 
     @Test
@@ -234,7 +236,12 @@ class PgpMigrationVectorsTest {
             val f = step.getJSONObject("faults")
             val faults = MigrationFaults(interrupt = f.optString("interrupt").ifEmpty { null })
             val recovery = FixedRecovery(p = f.optBoolean("pReadable"), chain = f.optBoolean("chainRegistered"))
-            val engine = migrationEngine(files, wrap, legacy, ChainAnswer.Unavailable, faults, recovery)
+            // UG-07: an invalid account is refused before anything is read. UG-08: another operation holds the account.
+            val eoa = if (f.optBoolean("invalidEoa")) "0xnot-an-address" else ACCOUNT
+            val engine = migrationEngine(
+                files, wrap, legacy, ChainAnswer.Unavailable, faults, recovery,
+                eoa = eoa, busy = f.optBoolean("busy"),
+            )
             var result: MigrationResult? = null
             var interrupted = false
             try {
@@ -268,7 +275,12 @@ class PgpMigrationVectorsTest {
             SealedMarkerStore(wrap, files, ACCOUNT, WORKSPACE).write(MarkerItem(k.fp, "legacyPwa", 1L))
         }
         if (!st.isNull("lastCode")) FileLastCodeStore(files, ACCOUNT, WORKSPACE).write(st.getString("lastCode"))
-        return migrationEngine(files, wrap, null, ChainAnswer.Unavailable).state()
+        // SS-07: L is present with its own fingerprint, which verified must agree with (§25.52I.6).
+        val legacy = st.optJSONObject("L")?.let { l ->
+            val k = PgpMigrationKeys.byLabel(l.getString("fp"))
+            legacyRecord(ACCOUNT, k.priv, k.pub)
+        }
+        return migrationEngine(files, wrap, legacy, ChainAnswer.Unavailable).state()
     }
 
     /**
@@ -356,7 +368,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bb (§25.52H.8). */
-        const val PINNED_SHA256 = "3f9cf260b3d01cc276ff6dbad43c0baa605b980cfbb4ae4b7e74fc0acf061138"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bg (§25.52K.8, `5d9f138d…a915`). */
+        const val PINNED_SHA256 = "5d9f138d0dacf91adc8c29048db4bec75c36dcb701a8150c11760da1a1ea915d"
     }
 }

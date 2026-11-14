@@ -14,9 +14,10 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The page-record bridge beyond the vectors: sealing and binding of the store (§25.52F.3), the read-side strip (§25.52F.4), the
- * wallet-field merge (§25.52H.2), the reqId rule (§25.28.3), the whitelist (§25.52D.8), the migration-state command, the origin, and
- * the source audits (no logging, no exportable key, no generic-bridge route).
+ * The page-record bridge beyond the vectors: sealing and binding of the store (§25.52F.3), the read-side PGP strip (§25.52I.2), the
+ * wallet-field merge (§25.52H.2), the reqId rule (§25.28.3), the whitelist (§25.52D.8, §25.52I.3, §25.52J.2), the answers that depend on
+ * the import state (§25.52K.4), the migration-state command, the origin, and the source audits (no logging, no exportable key, no
+ * generic-bridge route).
  */
 class ShellRecordTest {
     private val token = "PRIVKEY-TOKEN-7731"
@@ -72,21 +73,46 @@ class ShellRecordTest {
     }
 
     @Test
-    fun theReadCopyLosesEveryWalletFieldAndSaysSo() {
+    fun theReadCopyKeepsTheWalletFieldsAndLosesEveryPgpField() {
+        // §25.52I.2: W fields go to the page; PGP fields never do, and an emptied chatManager goes with them.
         val record = JSONObject()
             .put("rev", 1)
             .put("schemaVersion", 2)
             .put("mnemonic", "M")
-            .put("walletVault", JSONObject().put("mnemonic", "M2"))
-            .put("profiles", JSONArray().put(JSONObject().put("emailAddr", "a").put("privateKeyArmor", "EOA")))
-        assertTrue(ShellRecordPolicy.stripForRead(record))
-        assertFalse(record.has("mnemonic"))
-        assertFalse(record.has("walletVault"))
-        assertFalse(record.getJSONArray("profiles").getJSONObject(0).has("privateKeyArmor"))
-        assertEquals("a", record.getJSONArray("profiles").getJSONObject(0).getString("emailAddr"))
+            .put("pgpPassphrase", "")
+            .put(
+                "profiles",
+                JSONArray().put(
+                    JSONObject()
+                        .put("emailAddr", "a")
+                        .put("privateKeyArmor", "EOA")
+                        .put("pgpKey", JSONObject().put("privateKey", "PGPY"))
+                        .put("chatManager", JSONObject().put("pgpKey", JSONObject().put("privateKey", "PGPX").put("publicKey", "PUB"))),
+                ),
+            )
+        ShellRecordPolicy.stripPgpForRead(record)
+        assertEquals("M", record.getString("mnemonic"))
+        assertFalse(record.has("pgpPassphrase"))
+        val profile = record.getJSONArray("profiles").getJSONObject(0)
+        assertEquals("EOA", profile.getString("privateKeyArmor"))
+        assertFalse(profile.has("pgpKey"))
+        assertFalse("an emptied chatManager is removed", profile.has("chatManager"))
+    }
 
-        val plain = JSONObject().put("rev", 1).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("emailAddr", "a")))
-        assertFalse("nothing removed, so nothing to report", ShellRecordPolicy.stripForRead(plain))
+    @Test
+    fun aReadCarriesNoRedactionFlag() {
+        // §25.52I.2: walletFieldsRedacted is for the old compatible page only, which this build never produces.
+        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
+        store.write(JSONObject().put("rev", 1).put("schemaVersion", 1).put("profiles", JSONArray().put(JSONObject().put("emailAddr", "a"))))
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Ready(store) },
+            migrating = { false },
+            migrationState = { "none" },
+            outcome = { ImportOutcome.DONE },
+        )
+        val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r9"), 40)
+        assertEquals("ok", resp.getString("code"))
+        assertFalse(resp.has("walletFieldsRedacted"))
     }
 
     @Test
@@ -129,22 +155,25 @@ class ShellRecordTest {
     }
 
     @Test
-    fun theWhitelistNamesOnlyTheUnknownPaths() {
+    fun theWhitelistNamesOnlyTheUnknownPathsAndEveryPgpPublicField() {
+        // §25.52I.3: the PGP public fields are not whitelisted. The W paths are, and they pass the whitelist.
         val record = JSONObject()
             .put("rev", 0)
-            .put("schemaVersion", 1)
+            .put("schemaVersion", 2)
             .put("extra", 1)
+            .put("mnemonic", "M")
             .put(
                 "profiles",
                 JSONArray().put(
                     JSONObject()
                         .put("emailAddr", "a")
+                        .put("privateKeyArmor", "EOA")
                         .put("foo", 1)
                         .put("chatManager", JSONObject().put("router", "r").put("pgpKey", JSONObject().put("keyID", "K").put("x", 1))),
                 ),
             )
         assertEquals(
-            listOf("extra", "profiles[*].chatManager.pgpKey.x", "profiles[*].foo"),
+            listOf("extra", "profiles[*].chatManager.pgpKey.keyID", "profiles[*].chatManager.pgpKey.x", "profiles[*].foo"),
             ShellRecordPolicy.whitelistViolations(record),
         )
     }
@@ -161,9 +190,10 @@ class ShellRecordTest {
     @Test
     fun theMigrationStateCommandAnswersAndRefusesExtraFields() {
         val bridge = ShellRecordBridge(
-            account = { ShellRecordAccount.Refused("no_key") },
+            account = { ShellRecordAccount.Unknown },
             migrating = { false },
             migrationState = { "pending" },
+            outcome = { ImportOutcome.ABSENT },
         )
         val ok = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"), 40)
         assertEquals("ok", ok.getString("code"))
@@ -178,15 +208,45 @@ class ShellRecordTest {
     }
 
     @Test
-    fun aWalletWithoutAKeyAnswersAnErrorNotAnAbsence() {
-        val bridge = ShellRecordBridge(
-            account = { ShellRecordAccount.Refused("no_key") },
+    fun noCopyAnswersAbsentOnlyWhenTheLegacyStoreIsConfirmedAbsent() {
+        // §25.52K.4: before the import has run the answer is migrating; a confirmed absence answers absent; anything else is an error.
+        fun read(outcome: ImportOutcome?): String = ShellRecordBridge(
+            account = { ShellRecordAccount.Unknown },
             migrating = { false },
             migrationState = { "none" },
+            outcome = { outcome },
+        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40).getString("code")
+
+        assertEquals("migrating", read(null))
+        assertEquals("absent", read(ImportOutcome.ABSENT))
+        val unreadable = ShellRecordBridge(
+            account = { ShellRecordAccount.Unknown },
+            migrating = { false },
+            migrationState = { "none" },
+            outcome = { ImportOutcome.LEGACY_UNREADABLE },
+        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r2"), 40)
+        assertEquals("error", unreadable.getString("code"))
+        assertEquals("legacy_store_unreadable", unreadable.getString("sub"))
+        val notDone = ShellRecordBridge(
+            account = { ShellRecordAccount.Unknown },
+            migrating = { false },
+            migrationState = { "none" },
+            outcome = { ImportOutcome.NOT_DONE },
+        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r3"), 40)
+        assertEquals("import_not_done", notDone.getString("sub"))
+    }
+
+    @Test
+    fun aLockedVaultAnswersAnErrorNotAnAbsence() {
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Locked },
+            migrating = { false },
+            migrationState = { "none" },
+            outcome = { ImportOutcome.ABSENT },
         )
         val read = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40)
         assertEquals("error", read.getString("code"))
-        assertEquals("no_key", read.getString("sub"))
+        assertEquals("locked", read.getString("sub"))
     }
 
     @Test
@@ -195,7 +255,12 @@ class ShellRecordTest {
         val files = NativeTestFiles()
         val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
         store.write(JSONObject().put("rev", 1).put("schemaVersion", 2))
-        val bridge = ShellRecordBridge(account = { ShellRecordAccount.Ready(store) }, migrating = { true }, migrationState = { "none" })
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Ready(store) },
+            migrating = { true },
+            migrationState = { "none" },
+            outcome = { ImportOutcome.DONE },
+        )
         val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40)
         assertEquals("migrating", resp.getString("code"))
         assertFalse(resp.has("record"))
@@ -219,14 +284,15 @@ class ShellRecordTest {
     }
 
     @Test
-    fun everySuccessfulReadIsAnnotatedWalletFieldsRedacted() {
-        // §25.52F.4: the read answer is annotated, so the page never reads a missing W field as absent (RD-07).
-        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
-        store.write(JSONObject().put("rev", 1).put("schemaVersion", 1).put("profiles", JSONArray().put(JSONObject().put("emailAddr", "a"))))
-        val bridge = ShellRecordBridge(account = { ShellRecordAccount.Ready(store) }, migrating = { false }, migrationState = { "none" })
-        val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r9"), 40)
-        assertEquals("ok", resp.getString("code"))
-        assertTrue(resp.getBoolean("walletFieldsRedacted"))
+    fun theImportIsTheOnlyPathThatMakesAFirstCopyFromTheLegacyRecord() {
+        // §25.52K.5: no new wallet is made. The bridge never creates a copy by itself on a legacy failure, and the flow writes once, on success.
+        val text = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
+        val bridgeStart = text.indexOf("internal class ShellRecordBridge(")
+        val flowStart = text.indexOf("internal class ShellImportFlow(")
+        assertTrue(bridgeStart > 0 && flowStart > 0)
+        val bridgeText = text.substring(bridgeStart, text.indexOf("internal object ShellRecordState"))
+        assertFalse("the bridge never runs the import", bridgeText.contains("ShellImportFlow("))
+        assertTrue(text.substring(flowStart).contains("store.write(json)"))
     }
 
     private fun fileNameOf(accountKey: String): String {

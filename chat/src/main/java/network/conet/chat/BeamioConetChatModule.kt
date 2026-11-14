@@ -751,10 +751,11 @@ object BeamioConetChatModule {
             return
         }
         pgpMigrateWorker.execute {
+            // §25.52I.8: anything but `ok` (unregister_refused, bad_request, busy) removes nothing and keeps the session.
             val code = runCatching { BeamioPgpMigrationImport.unregister(ctx, eoa).code }
                 .getOrElse { MigrationCode.UNREGISTER_REFUSED }
-            if (code == MigrationCode.UNREGISTER_REFUSED) {
-                ack(reqId, false, error = MigrationCode.UNREGISTER_REFUSED.wire)
+            if (code != MigrationCode.OK) {
+                ack(reqId, false, error = code.wire)
                 return@execute
             }
             main.post { finishClearIdentity(ctx, reqId) }

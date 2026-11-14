@@ -43,6 +43,7 @@ class PgpMigrationTest {
             chain = FixedChain(ChainAnswer.Found(a.fp)),
             crypto = NativeMigrationCrypto(),
             recovery = FixedRecovery(p = false, chain = false),
+            lock = FixedLock(busy = false),
         )
         assertEquals(MigrationCode.VERIFY_UNAVAILABLE, engine.run().code)
         assertNull(files.read(stagedFileName()))

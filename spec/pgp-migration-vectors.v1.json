@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bb）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bf）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1902,11 +1902,7 @@
             {
               "emailAddr": "c",
               "chatManager": {
-                "router": "r",
-                "pgpKey": {
-                  "publicKey": "PUB",
-                  "keyID": "K"
-                }
+                "router": "r"
               }
             }
           ]
@@ -1925,11 +1921,7 @@
               {
                 "emailAddr": "c",
                 "chatManager": {
-                  "router": "r",
-                  "pgpKey": {
-                    "publicKey": "PUB",
-                    "keyID": "K"
-                  }
+                  "router": "r"
                 }
               }
             ]
@@ -1978,7 +1970,7 @@
     },
     {
       "id": "TR-12",
-      "title": "读回剥离 W 类字段（EOA 私钥、助记词不经 WebView 回传），标注 walletFieldsRedacted",
+      "title": "读回携带 W 字段（EOA 私钥、助记词），PGP 字段一律剥离（r3bc，R393）",
       "kind": "read",
       "ctx": {
         "origin": "allowed"
@@ -1992,7 +1984,18 @@
           "profiles": [
             {
               "emailAddr": "a",
-              "privateKeyArmor": "EOA"
+              "privateKeyArmor": "EOA",
+              "chatManager": {
+                "router": "r",
+                "pgpKey": {
+                  "privateKey": "PGPX",
+                  "publicKey": "PUB",
+                  "keyID": "K"
+                }
+              },
+              "pgpKey": {
+                "privateKey": "PGPY"
+              }
             }
           ]
         }
@@ -2000,13 +2003,17 @@
       "expect": {
         "code": "ok",
         "schemaVersion": 1,
-        "walletFieldsRedacted": true,
         "record": {
           "rev": 1,
           "schemaVersion": 2,
+          "mnemonic": "M",
           "profiles": [
             {
-              "emailAddr": "a"
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA",
+              "chatManager": {
+                "router": "r"
+              }
             }
           ]
         }
@@ -2095,6 +2102,23 @@
         },
         "M": null,
         "lastCode": "chain_unavailable"
+      },
+      "expect": "failed"
+    },
+    {
+      "id": "SS-07",
+      "title": "M 与 N 一致，但 L 存在且指纹不同：failed（verified 须与 L 一致）",
+      "st": {
+        "L": {
+          "fp": "B"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "lastCode": "ok"
       },
       "expect": "failed"
     }
@@ -2727,6 +2751,481 @@
       }
     }
   ],
+  "importCases": [
+    {
+      "id": "IM-01",
+      "title": "首次导入：旧记录可读，地址一致，首次写入（rev 0→1），W 字段加密保存，PGP 字段剥离",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA",
+                "chatManager": {
+                  "router": "r",
+                  "pgpKey": {
+                    "privateKey": "PGPX",
+                    "publicKey": "PUB",
+                    "keyID": "K"
+                  }
+                },
+                "pgpKey": {
+                  "privateKey": "PGPY"
+                }
+              }
+            ],
+            "mnemonic": "M",
+            "pgpPassphrase": ""
+          }
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "import_ok",
+            "store": {
+              "rev": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-02",
+      "title": "旧存储确认为空：不导入，读取为 absent（唯一可返回 absent 的条件）",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "absent"
+        },
+        "derivedAddr": null
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "absent",
+            "store": null,
+            "read": {
+              "code": "absent"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-03",
+      "title": "旧存储暂时不可读：不导入，读取为 error（不是 absent），不生成新钱包，旧存储不动",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "unreadable"
+        },
+        "derivedAddr": null
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "legacy_unreadable",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "legacy_store_unreadable"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-04",
+      "title": "导入写入失败：原生无数据，旧存储原样保留，读取为 error（import_not_done），不是 absent",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA",
+                "chatManager": {
+                  "router": "r",
+                  "pgpKey": {
+                    "privateKey": "PGPX",
+                    "publicKey": "PUB",
+                    "keyID": "K"
+                  }
+                },
+                "pgpKey": {
+                  "privateKey": "PGPY"
+                }
+              }
+            ],
+            "mnemonic": "M",
+            "pgpPassphrase": ""
+          }
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {
+            "writeFailed": true
+          },
+          "expect": {
+            "importCode": "import_failed",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "import_not_done"
+            },
+            "legacyKept": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-05",
+      "title": "导入失败后重试成功：旧存储在成功前保留；成功后读取为 ok",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA",
+                "chatManager": {
+                  "router": "r",
+                  "pgpKey": {
+                    "privateKey": "PGPX",
+                    "publicKey": "PUB",
+                    "keyID": "K"
+                  }
+                },
+                "pgpKey": {
+                  "privateKey": "PGPY"
+                }
+              }
+            ],
+            "mnemonic": "M",
+            "pgpPassphrase": ""
+          }
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {
+            "writeFailed": true
+          },
+          "expect": {
+            "importCode": "import_failed",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "import_not_done"
+            },
+            "legacyKept": true
+          }
+        },
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "import_ok",
+            "store": {
+              "rev": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            },
+            "legacyKept": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-06",
+      "title": "地址不一致：由私钥派生的地址 A2 不等于旧记录 A1，判失败，旧数据保留，不写入",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA",
+                "chatManager": {
+                  "router": "r",
+                  "pgpKey": {
+                    "privateKey": "PGPX",
+                    "publicKey": "PUB",
+                    "keyID": "K"
+                  }
+                },
+                "pgpKey": {
+                  "privateKey": "PGPY"
+                }
+              }
+            ],
+            "mnemonic": "M",
+            "pgpPassphrase": ""
+          }
+        },
+        "derivedAddr": "A2"
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "address_mismatch",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "import_not_done"
+            },
+            "legacyKept": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-07",
+      "title": "原生已有页面钱包副本：不再导入，旧存储不读取",
+      "init": {
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "A1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        },
+        "legacy": {
+          "state": "unreadable"
+        },
+        "derivedAddr": null
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "exists",
+            "store": {
+              "rev": 2,
+              "record": {
+                "rev": 2,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "privateKeyArmor": "EOA"
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 2,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "privateKeyArmor": "EOA"
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-08",
+      "title": "先不可读、后可读：不可读期间不得返回 absent；可读后导入成功",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "unreadable"
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {},
+          "legacyNext": "unreadable",
+          "expect": {
+            "importCode": "legacy_unreadable",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "legacy_store_unreadable"
+            }
+          }
+        },
+        {
+          "faults": {},
+          "legacyNext": {
+            "state": "found",
+            "recordAddr": "A1",
+            "record": {
+              "profiles": [
+                {
+                  "keyID": "A1",
+                  "emailAddr": "x",
+                  "privateKeyArmor": "EOA",
+                  "chatManager": {
+                    "router": "r",
+                    "pgpKey": {
+                      "privateKey": "PGPX",
+                      "publicKey": "PUB",
+                      "keyID": "K"
+                    }
+                  },
+                  "pgpKey": {
+                    "privateKey": "PGPY"
+                  }
+                }
+              ],
+              "mnemonic": "M",
+              "pgpPassphrase": ""
+            }
+          },
+          "expect": {
+            "importCode": "import_ok",
+            "store": {
+              "rev": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonic": "M"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
   "unregisterCases": [
     {
       "id": "UG-01",
@@ -2916,14 +3415,84 @@
           }
         }
       ]
+    },
+    {
+      "id": "UG-07",
+      "title": "注销：非法 EOA 或 workspace：bad_request，状态不变",
+      "given": {
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "invalidEoa": true
+          },
+          "expect": {
+            "code": "bad_request",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-08",
+      "title": "注销：同一账户运行中：busy，状态不变",
+      "given": {
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "busy": true
+          },
+          "expect": {
+            "code": "busy",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
     }
   ],
   "unregisterCodes": [
     "ok",
-    "unregister_refused"
+    "unregister_refused",
+    "bad_request",
+    "busy"
   ],
   "selfCheck": {
-    "runs": 100,
+    "runs": 113,
     "result": "pass"
   }
 }

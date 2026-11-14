@@ -58,6 +58,9 @@ internal class AddressPgpChain private constructor(
 ) : PgpRestoreChain {
     override fun chainReadable(): Boolean = chainOk
 
+    /** True when a record was read from an endpoint, even if it does not parse. False when no endpoint answered (§25.52I.7). */
+    fun recordKnown(): Boolean = record != null
+
     override fun backupReadable(): Boolean = backupOk
 
     override fun version(): Long = 0L

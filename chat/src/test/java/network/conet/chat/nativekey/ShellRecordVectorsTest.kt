@@ -1,12 +1,14 @@
 package network.conet.chat.nativekey
 
 import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
+import network.conet.chat.nativekey.PgpMigrationKeys.OTHER
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The SDK side of the page-record vectors (spec r3bb §25.52G.1, §25.52H.8; earlier §25.52D.14, §25.52E, §25.52F.9).
@@ -166,6 +168,103 @@ class ShellRecordVectorsTest {
         return out
     }
 
+    @Test
+    fun everyImportCaseMatchesItsExpectation() {
+        val failures = mutableListOf<String>()
+        val list = doc.getJSONArray("importCases")
+        for (i in 0 until list.length()) {
+            val c = list.getJSONObject(i)
+            failures += runImportCase(c).map { "${c.getString("id")}: $it" }
+        }
+        assertEquals(emptyList<String>(), failures)
+    }
+
+    /**
+     * IM-01 to IM-08 (§25.52K): the first-run import, its code, the store it leaves, and the read it leads to. The labels `A1` and `A2`
+     * stand for the account and another address, so the record's keyIDs and the derived addresses are mapped to hex accounts first.
+     */
+    private fun runImportCase(c: JSONObject): List<String> {
+        val init = c.getJSONObject("init")
+        val files = FailingFiles(NativeTestFiles())
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "$ACCOUNT:default")
+        val outcome = AtomicReference<ImportOutcome?>(null)
+        val derivedLabel = init.optString("derivedAddr", "")
+        val derived = if (derivedLabel.isEmpty()) null else mapLabel(derivedLabel)
+        init.optJSONObject("store")?.let { store.write(mapLabels(it.getJSONObject("record")) as JSONObject) }
+        var legacyState: Any = init.get("legacy")
+        val flow = ShellImportFlow(
+            storeFor = { store },
+            addressOf = { derived },
+            pgpStep = { _, _ -> },
+            outcome = outcome,
+        )
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Ready(store) },
+            migrating = { false },
+            migrationState = { "none" },
+            outcome = { outcome.get() },
+        )
+
+        val out = mutableListOf<String>()
+        val steps = c.getJSONArray("steps")
+        for (i in 0 until steps.length()) {
+            val step = steps.getJSONObject(i)
+            step.opt("legacyNext")?.takeIf { it != JSONObject.NULL }?.let { legacyState = it }
+            files.failWrites = step.getJSONObject("faults").optBoolean("writeFailed")
+            val code = flow.run(ACCOUNT, toWallet(legacyState), null)
+            val expect = step.getJSONObject("expect")
+            if (code.wire != expect.getString("importCode")) out += "importCode ${code.wire} != ${expect.getString("importCode")}"
+            if (expect.has("store")) {
+                val got = store.readOrNull()
+                val want = expect.opt("store")
+                if (want == JSONObject.NULL) {
+                    if (got != null) out += "store is present"
+                } else {
+                    want as JSONObject
+                    if (canon(got) != canon(mapLabels(want.getJSONObject("record")))) out += "store ${canon(got)}"
+                    if (got?.optInt("rev", -1) != want.getInt("rev")) out += "store rev"
+                }
+            }
+            val readWant = expect.getJSONObject("read")
+            val resp = bridge.handle(
+                ShellOrigin.EMBEDDED_PAGE,
+                JSONObject().put("type", "shellRecordRead").put("reqId", "i${i + 1}"),
+                40,
+            )
+            if (resp.getString("code") != readWant.getString("code")) out += "read ${resp.getString("code")} != ${readWant.getString("code")}"
+            if (readWant.has("sub") && resp.optString("sub") != readWant.getString("sub")) out += "read sub ${resp.opt("sub")}"
+            if (readWant.has("schemaVersion") && resp.optInt("schemaVersion", -1) != readWant.getInt("schemaVersion")) out += "read schema"
+            if (readWant.has("record") && canon(resp.opt("record")) != canon(mapLabels(readWant.get("record")))) {
+                out += "read record ${canon(resp.opt("record"))}"
+            }
+        }
+        return out
+    }
+
+    /** The legacy state of one import step: the reader's `unreadable` string, or the reader's JSON object (§25.52K.7). */
+    private fun toWallet(state: Any): LegacyWalletRecord = when (state) {
+        is String -> LegacyWalletRecord.Unreadable(state)
+        is JSONObject -> when (state.getString("state")) {
+            "absent", "empty" -> LegacyWalletRecord.Absent
+            "unreadable" -> LegacyWalletRecord.Unreadable("unreadable")
+            else -> LegacyWalletRecord.Found(mapLabels(state.getJSONObject("record")).toString().toByteArray(Charsets.UTF_8))
+        }
+        else -> throw IllegalArgumentException("unknown legacy state")
+    }
+
+    private fun mapLabel(label: String): String = when (label) {
+        "A1" -> ACCOUNT
+        "A2" -> OTHER
+        else -> label
+    }
+
+    private fun mapLabels(v: Any?): Any? = when (v) {
+        is String -> mapLabel(v)
+        is JSONObject -> JSONObject().also { o -> for (k in v.keys().asSequence().toList()) o.put(k.toString(), mapLabels(v.get(k.toString()))) }
+        is JSONArray -> JSONArray().also { a -> for (i in 0 until v.length()) a.put(mapLabels(v.get(i))) }
+        else -> v
+    }
+
     /** RD-01 to RD-07 as the page's reference: accept with the rev, accept absent, accept redacted, or fail closed. */
     private fun pageRead(resp: JSONObject): Pair<String, Int?> {
         val rec = resp.optJSONObject("record")
@@ -189,6 +288,8 @@ class ShellRecordVectorsTest {
             account = { ShellRecordAccount.Ready(store) },
             migrating = { migrating },
             migrationState = { "none" },
+            // The legacy store is confirmed absent for these cases, so a missing copy reads `absent` (§25.52K.4).
+            outcome = { ImportOutcome.ABSENT },
         )
     }
 

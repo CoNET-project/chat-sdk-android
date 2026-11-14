@@ -143,6 +143,11 @@ internal class FixedRecovery(private val p: Boolean, private val chain: Boolean)
     override fun chainRegistered(): Boolean = chain
 }
 
+/** An account lock that is either free, or held by another operation (`busy`, §25.52I.8). */
+internal class FixedLock(private val busy: Boolean) : MigrationLock {
+    override fun <T> tryRun(eoa: String, block: () -> T): T? = if (busy) null else block()
+}
+
 /** Builds the engine for one account over the given stores, with the given faults applied. */
 internal fun migrationEngine(
     files: VaultFiles,
@@ -153,6 +158,7 @@ internal fun migrationEngine(
     recovery: MigrationRecovery = FixedRecovery(p = false, chain = false),
     primary: LegacyRecord? = null,
     eoa: String = PgpMigrationKeys.ACCOUNT,
+    busy: Boolean = false,
 ): PgpMigrationEngine = PgpMigrationEngine(
     eoa = eoa,
     legacy = FixedLegacy(legacy),
@@ -163,6 +169,7 @@ internal fun migrationEngine(
     chain = FixedChain(chain),
     crypto = FaultyCrypto(NativeMigrationCrypto(approvedFlag = faults.approved), faults),
     recovery = recovery,
+    lock = FixedLock(busy),
     random = SecureRandom(),
     now = { 1L },
 )
