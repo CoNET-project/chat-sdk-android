@@ -609,9 +609,9 @@ internal class ShellImportFlow(
 }
 
 /**
- * The bridge logic of `shellRecordRead`, `shellRecordWrite` and `shellRecordMigrationState` (§25.52D.6, §25.52D.7, §25.52E, §25.52K.4). The
- * checks run in the order the spec gives: origin, reqId, fields, size, the record's own checks, the account, the migration state, and the
- * revision. Each request gets exactly one response.
+ * The bridge logic of the page's `shellRecordRead` and `shellRecordWrite` (§25.52D.6, §25.52D.7, §25.52E, §25.52K.4, §25.52L). Any other
+ * type, including `shellRecordMigrationState` (§25.52L.6), is `bad_request`. The checks run in the order the spec gives: origin, reqId,
+ * fields, size, the record's own checks, the account, the migration state, and the revision. Each request gets exactly one response.
  */
 internal class ShellRecordBridge(
     private val account: () -> ShellRecordAccount,
