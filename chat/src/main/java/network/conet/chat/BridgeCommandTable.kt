@@ -5,8 +5,9 @@ import network.conet.chat.nativekey.NoKeyGate
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The bridge command table (25.52AR.2, 25.52AN.5). A name outside it is rejected with `command_rejected` before the gate and before any payload is
- * read: no output, no state change, no event beyond that ack, and one count of `command_rejected`. The answer does not depend on the gate state.
+ * The bridge command table (25.52AS.3, 25.52AT.1 step 3, 25.52AT.2). A name outside it is answered `unknown_command` before the gate, in every
+ * state (G0, G1, G2, locked, busy): no output, no state change, no event beyond that ack, and one in-process count. `command_rejected` is not
+ * used for names outside the table: it is for a known command's own kind or field refusal (25.52AS.3).
  *
  * The table lists what [BeamioConetChatModule] answers: the names of its dispatch table, the names decided in `handleCommand` before it, the status
  * names the gate answers (`walletStatus`, `passcodeStatus`), and the retired X-21 names (`not_supported`, 25.24). `shellRecord*` is a prefix (25.52AA.3):
@@ -16,7 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * A name added to dispatch must be added here, and the reverse.
  */
 internal object BridgeCommandTable {
-    const val COMMAND_REJECTED = "command_rejected"
+    const val UNKNOWN_COMMAND = "unknown_command"
     const val SHELL_RECORD_PREFIX = "shellRecord"
 
     /** The `when (type)` table of [BeamioConetChatModule] (dispatch). */
@@ -38,7 +39,7 @@ internal object BridgeCommandTable {
     /** Answered by the gate (`NoKeyGate.route`) without dispatch (table D). */
     val GATE_STATUS: Set<String> = setOf("walletStatus", "passcodeStatus")
 
-    /** True when [name] is a name the module answers. A name that is not registered is rejected before the gate. */
+    /** True when [name] is a name the module answers. A name that is not registered is answered `unknown_command` before the gate. */
     fun isRegistered(name: String): Boolean =
         name in DISPATCH ||
             name in DECIDED_BEFORE_DISPATCH ||
@@ -48,10 +49,10 @@ internal object BridgeCommandTable {
 
     private val rejected = AtomicInteger(0)
 
-    /** Counts one `command_rejected` and returns its code. The count is in-process; the tests read it. */
-    fun countRejection(): String {
+    /** Counts one `unknown_command` and returns its code. The count is in-process; the tests read it. */
+    fun countUnknown(): String {
         rejected.incrementAndGet()
-        return COMMAND_REJECTED
+        return UNKNOWN_COMMAND
     }
 
     val rejectionCount: Int

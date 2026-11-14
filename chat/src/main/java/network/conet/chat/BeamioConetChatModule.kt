@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
+import network.conet.chat.identity.CredFields
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
 import network.conet.chat.nativekey.shellRecordChatChannelReply
@@ -202,11 +203,19 @@ object BeamioConetChatModule {
             historyDeleteCommand(context, type, body)
             return
         }
-        // 25.52AR.2, 25.52AN.5: a name outside the bridge command table is rejected before the gate and before any payload is read. The answer does
-        // not depend on the gate state (G0 no_key, G1 not_ready), so it is decided here and not in dispatch.
+        // 25.52AT.1 step 2 (25.52AQ.2): a credential field of a CRED command is refused before the gate, with the field names and no values.
+        if (type in CredFields.COMMANDS) {
+            val names = CredFields.refusalNames(type, body)
+            if (names.isNotEmpty()) {
+                refuseCredential(type, body, names)
+                return
+            }
+        }
+        // 25.52AT.1 step 3, 25.52AS.3, 25.52AT.2: a name outside the bridge command table is `unknown_command` before the gate, in every state
+        // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes.
         if (!BridgeCommandTable.isRegistered(type)) {
-            Log.w(TAG, "command_rejected name=${type.take(64)}")
-            val code = BridgeCommandTable.countRejection()
+            Log.w(TAG, "unknown_command name=${type.take(64)}")
+            val code = BridgeCommandTable.countUnknown()
             // Protocol v1: a command that expects an answer gets one.
             val reqId = body.optInt("reqId", 0)
             if (reqId > 0) ack(reqId, false, error = code)
@@ -317,8 +326,8 @@ object BeamioConetChatModule {
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             else -> {
                 // Unreachable while the table and this dispatch agree (BridgeCommandTableTest). Answered the same way if they ever diverge.
-                Log.w(TAG, "command_rejected name=${type.take(64)}")
-                val code = BridgeCommandTable.countRejection()
+                Log.w(TAG, "unknown_command name=${type.take(64)}")
+                val code = BridgeCommandTable.countUnknown()
                 // Protocol v1: a command that expects an answer gets one.
                 val reqId = body.optInt("reqId", 0)
                 if (reqId > 0) ack(reqId, false, error = code)
@@ -835,6 +844,19 @@ object BeamioConetChatModule {
      * `pgpDecryptInbound` (spec 25.34, A1). Order: `reqId`, then the gate (25.34.4), then the payload in
      * [PgpDecryptInbound.answer]. The plaintext goes only into the ack. The log holds the command name and result code.
      */
+    /**
+     * 25.52AT.1 steps 1 and 2 for a CRED command (25.52AQ.2): an invalid reqId is `bad_request`; otherwise a credential field is
+     * `key_over_bridge_refused`, with the field names and no values. Only the names are logged. The gate is not run, and no state changes.
+     */
+    private fun refuseCredential(command: String, body: JSONObject, names: List<String>) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        val code = if (reqId == null) "bad_request" else "key_over_bridge_refused"
+        Log.i(TAG, "$command result=$code fields=${names.joinToString(",")}")
+        val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code)
+        if (reqId != null) payload.put("names", JSONArray(names))
+        emitEvent(payload)
+    }
+
     private fun handlePgpDecryptInbound(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         fun refuse(code: String) {
@@ -844,6 +866,9 @@ object BeamioConetChatModule {
             Log.i(TAG, "pgpDecryptInbound result=$code")
         }
         if (reqId == null) return refuse("bad_request")
+        // 25.52AT.1 step 2: the credential fields come before the gate (25.52AQ.2).
+        val credNames = CredFields.refusalNames("pgpDecryptInbound", body)
+        if (credNames.isNotEmpty()) return refuseCredential("pgpDecryptInbound", body, credNames)
         val ctx = appContext ?: return refuse("not_ready")
         val vault = NativeWallet.vault(ctx)
         val state = vault.state()

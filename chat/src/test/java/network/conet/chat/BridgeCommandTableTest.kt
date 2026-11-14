@@ -78,17 +78,21 @@ class BridgeCommandTableTest {
     }
 
     @Test
-    fun aRejectionIsCountedAndAnswersCommandRejected() {
+    fun anUnknownNameIsCountedAndAnswersUnknownCommand() {
         val before = BridgeCommandTable.rejectionCount
-        assertEquals("command_rejected", BridgeCommandTable.countRejection())
+        assertEquals("unknown_command", BridgeCommandTable.countUnknown())
         assertEquals(before + 1, BridgeCommandTable.rejectionCount)
     }
 
     @Test
-    fun theModuleRejectsBeforeTheGateAndNeverAnswersUnknownCommand() {
-        val check = source.indexOf("BridgeCommandTable.isRegistered(type)")
+    fun theModuleJudgesInTheOrderOf25_52AT1() {
+        // Step 2 (CRED for the six commands), then step 3 (the name), then step 4 (the gate). Structure only; the answers are checked on a device.
+        val cred = source.indexOf("CredFields.COMMANDS")
+        val name = source.indexOf("BridgeCommandTable.isRegistered(type)")
         val gate = source.indexOf("val route = NoKeyGate.route(type)")
-        assertTrue("the table check comes before the gate", check in 0 until gate)
-        assertFalse("the code is command_rejected, not unknown_command (25.52AR.2)", source.contains("\"unknown_command\""))
+        assertTrue("CRED comes first", cred in 0 until name)
+        assertTrue("the name check comes before the gate", name in 0 until gate)
+        assertTrue("the unknown answer is unknown_command", source.contains("unknown_command name="))
+        assertFalse("command_rejected is not an answer to a name outside the table (25.52AS.3)", source.contains("\"command_rejected"))
     }
 }

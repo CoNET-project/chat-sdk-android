@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 /**
  * ChatDaemon protocol v1 conformance (Android, on a device): EIP-191 signing,
  * PGP envelopes and ACK hashes through the module's WebView crypto host, plus
- * the module's own `hello` / `command_rejected` answers (25.52AR.2). Same shared vectors as
+ * the module's own `hello` / `unknown_command` answers (25.52AS.3). Same shared vectors as
  * the JVM test (assets: `chat-daemon-vectors.v1.json`).
  *
  *   ./gradlew :chat:connectedDebugAndroidTest
@@ -109,7 +109,38 @@ class ChatDaemonCryptoConformanceTest {
         assertTrue(jsonEquals(hello.getJSONObject("result"), BeamioConetChatProtocol.helloResult()))
         val unknown = acks.getValue(42)
         assertEquals(false, unknown.getBoolean("ok"))
-        assertEquals("command_rejected", unknown.getString("error"))
+        assertEquals("unknown_command", unknown.getString("error"))
+    }
+
+    /**
+     * 25.52AT.1 and AT.2 (r3cr): a name outside the command table is `unknown_command` before the gate. This runs on a fresh install (G0, no key),
+     * where the gate used to answer `no_key`. The walletStatus answer records the state, and must show G0 for the run to count as G0.
+     */
+    @Test
+    fun unknownNamesAreUnknownCommandBeforeTheGateInG0() {
+        val acks = java.util.concurrent.ConcurrentHashMap<Int, JSONObject>()
+        val names = listOf("notACommand", "signMessage", "pgpDecrypt", "removeEOAPrivateKey")
+        val latch = CountDownLatch(names.size + 1)
+        val emit: (JSONObject) -> Unit = { payload ->
+            val event = payload.optJSONObject("event")
+            if (event?.optString("type") == "ack") {
+                acks[event.getInt("reqId")] = event
+                latch.countDown()
+            }
+        }
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        names.forEachIndexed { i, name ->
+            BeamioConetChatModule.handleCommand(context, JSONObject().put("type", name).put("reqId", 100 + i), emit)
+        }
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "walletStatus").put("reqId", 200), emit)
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        names.forEachIndexed { i, name ->
+            val ack = acks.getValue(100 + i)
+            assertEquals("$name ok", false, ack.getBoolean("ok"))
+            assertEquals("$name answer", "unknown_command", ack.getString("error"))
+        }
+        val status = acks.getValue(200).getJSONObject("result").getString("status")
+        assertEquals("precondition: a fresh install is G0 (no key)", "no_key", status)
     }
 }
 

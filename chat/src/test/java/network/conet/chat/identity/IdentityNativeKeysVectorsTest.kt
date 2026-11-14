@@ -41,10 +41,13 @@ class IdentityNativeKeysVectorsTest {
     }
 
     @Test
-    fun forbiddenKeysMatchTheVectorCaseInsensitively() {
+    fun forbiddenKeysContainTheVectorCaseInsensitively() {
+        // The vector lists the 25.19.2 names (six). The identity command's full forbidden set is CRED (25.52AQ.2 c, r3co), which
+        // contains them: the vector is unchanged, so the check is that the vector is a subset of CRED, and CRED itself is pinned in CredFieldsTest.
         val arr = v.getJSONArray("forbiddenKeysCaseInsensitive")
-        val vector = (0 until arr.length()).map { arr.getString(it) }
-        assertEquals(vector.toSet(), IdentityProvisionContract.FORBIDDEN_KEYS.map { it.lowercase() }.toSet())
+        val vector = (0 until arr.length()).map { arr.getString(it).lowercase() }.toSet()
+        val cred = IdentityProvisionContract.FORBIDDEN_KEYS.map { it.lowercase() }.toSet()
+        assertTrue("the vector is a subset of CRED", cred.containsAll(vector))
     }
 
     @Test

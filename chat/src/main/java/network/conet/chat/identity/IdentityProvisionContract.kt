@@ -37,14 +37,26 @@ import java.text.Normalizer
 object IdentityProvisionContract {
     enum class Command(val wire: String) { PROVISION_IDENTITY("provisionIdentity"), INIT("init") }
 
-    /** Forbidden key names as written in the spec; matched after normalization, case-insensitively. */
+    /**
+     * The forbidden key names of the identity commands, as written in the spec: the CRED list (25.52AQ.2 c, r3co; 25.52AR.4). The
+     * 25.19.2 list (T-103, the PWA payload audit) is a subset of it. Matched after normalization, case-insensitively.
+     */
     val FORBIDDEN_KEYS: List<String> = listOf(
         "privateKeyHex",
-        "walletPrivateKey",
-        "privateKeyArmor",
+        "privateKeyArmored",
         "pgpPrivateKeyArmored",
         "pgpPassphrase",
+        "walletPrivateKey",
         "mnemonic",
+        "recoveryCode",
+        "pin",
+        "password",
+        "accountPassword",
+        "privateKeyArmor",
+        "privateKeyArmorWrap",
+        "encrypKeyArmored",
+        "mnemonicPhrase",
+        "recoveryWords",
     )
 
     /** Only these keys may appear in the response body (the `result` object). `ok` belongs to the ack envelope. */

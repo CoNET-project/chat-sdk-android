@@ -140,13 +140,19 @@ class BridgeKeyAuditTest {
                 "\"walletPrivateKey\", \"mnemonic\", \"recoveryCode\", \"pin\", \"password\", \"accountPassword\",",
             ),
             "IdentityProvisionContract.kt" to listOf(
-                // The contract's own refusal list (FORBIDDEN_KEYS). Membership only.
+                // The contract's own refusal list (FORBIDDEN_KEYS = CRED, 25.52AQ.2 c). Membership only.
                 "\"mnemonic\",",
                 "\"pgpPassphrase\",",
                 "\"pgpPrivateKeyArmored\",",
                 "\"privateKeyArmor\",",
                 "\"privateKeyHex\",",
                 "\"walletPrivateKey\",",
+                "\"privateKeyArmored\",",
+                "\"recoveryCode\",",
+                "\"pin\",",
+                "\"password\",",
+                "\"accountPassword\",",
+                "\"encrypKeyArmored\",",
             ),
             "IdentityPublic.kt" to listOf(
                 // Refusal lists of identityPublic (CREDENTIAL_FIELDS, 25.48.3): a credential field is refused and not echoed.
