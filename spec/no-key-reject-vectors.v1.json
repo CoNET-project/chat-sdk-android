@@ -133,15 +133,6 @@
       "note": "W5 kind=gossip"
     },
     {
-      "id": "NK-W6b",
-      "command": "pgpDecrypt",
-      "layer": "wallet",
-      "expectCode": "no_key",
-      "dataReturned": false,
-      "signed": false,
-      "note": "W6 / C3"
-    },
-    {
       "id": "NK-W6c",
       "command": "pgpDecryptInbound",
       "layer": "wallet",
@@ -669,11 +660,11 @@
     }
   ],
   "counts": {
-    "noKeyWallet": 26,
+    "noKeyWallet": 25,
     "noKeyChat": 29,
-    "noKeyTotal": 55,
+    "noKeyTotal": 54,
     "notSupported": 3,
-    "total": 58
+    "total": 57
   },
   "dispatchEvidence": {
     "ios": {
@@ -830,17 +821,6 @@
       "bridgeName": "signMessage",
       "mode": null,
       "kind": "gossip",
-      "ios": null,
-      "android": null,
-      "pwa": null,
-      "expect": "no_key"
-    },
-    {
-      "id": "NK-W6b",
-      "spec": "pgpDecrypt",
-      "bridgeName": "pgpDecrypt",
-      "mode": null,
-      "kind": null,
       "ios": null,
       "android": null,
       "pwa": null,

@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3eg; sha256 340fb917…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3ek; sha256 08a2b3e4…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -57,7 +57,7 @@ class NegativeTestsVectorsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("340fb91794e7550ef31ed9eb5cbb09a824f4c3e7c43eab9a7b10756783c1faeb", sha)
+        assertEquals("08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461", sha)
         assertEquals(33, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
             cases("passcodeLocked").size + cases("logScan").size)
         assertEquals(1, v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").length())
@@ -79,7 +79,8 @@ class NegativeTestsVectorsTest {
                 body = JSONObject().put("type", "shellRecordRead").put("reqId", "neg"),
                 requestBytes = 40,
             ) { _, _ -> JSONObject().put("ok", true) }
-            assertEquals(id, c.getBoolean("expect"), answer != null)
+            // 25.52CJ.3 (r3ej): a source that is not allowed gets origin_refused, which is not processed; the expected result is the processed flag.
+            assertEquals(id, c.getBoolean("expect"), answer.optBoolean("ok", false))
         }
     }
 

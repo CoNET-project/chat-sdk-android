@@ -23,7 +23,8 @@ class LogScanPatternsHashTest {
         // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
         // r3dz (R721, R722): the protocol version is 273947fe…; c2df8584… is withdrawn.
         // r3eh (registry, 2026-11-14): the protocol version is 9803a2ba…; 62ae7afd… and 6e38a8ad… are withdrawn.
-        assertEquals("9803a2baca8e51e3ad8feaa4fd95171e20af9d070ebbf5fe5c9ac83b87adfca8", sha)
+        // r3ej (registry, 2026-11-14): the protocol version is 903ddc46…; 9803a2ba… is withdrawn.
+        assertEquals("714b96e2e00c5711b3777cd6e2b700f402563c983be6bec54deec7705d0966dc", sha)
     }
 
     @Test
@@ -38,12 +39,12 @@ class LogScanPatternsHashTest {
         // r3ch (25.52AJ.3): one literal exemption for the test directory file name digest (fceaf6c8…), listed by value. 12 entries.
         assertTrue(sums.contains("fceaf6c89021ad554dd855bd11d2cb71f69170a239b19c5cff7d844b071d5c9e"))
         // r3dm: the no-key and gate vector values are the current ones (R690 rule, 25.52BO and BP).
-        assertTrue(sums.contains("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd"))
-        assertTrue(sums.contains("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0"))
+        assertTrue(sums.contains("6ec280f7b1afe018cf608ca8f438dc83c6531620a6e650e086959559718f32d8"))
+        assertTrue(sums.contains("3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22"))
         // r3dp: the negative tests file (25.52BS) is listed too: 13 entries.
         // r3eg: the negative tests file is 340fb917… (was a7a2246d…); r3dy adds table-T (c5e54b94…): 14 entries.
-        assertTrue(sums.contains("340fb91794e7550ef31ed9eb5cbb09a824f4c3e7c43eab9a7b10756783c1faeb"))
-        assertTrue(sums.contains("c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569"))
+        assertTrue(sums.contains("08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461"))
+        assertTrue(sums.contains("b4085becedde13e91363bb5239be5552c80146603ebfc4fd0a167b44c349d983"))
         // r3ed: the domain tags vector file (86d6ece8…) is listed too: 15 entries.
         assertTrue(sums.contains("86d6ece8f3ff960b636fc1a8f0d757e3643f207ce0a3737d412d49caaaf67d12"))
         assertEquals(15, entries.length())

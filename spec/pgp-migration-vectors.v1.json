@@ -6664,15 +6664,20 @@
   "originBoundaryCases": [
     {
       "id": "OR-01",
-      "title": "原生边界：来源不允许：不处理，不回复（r3bx，§25.52AB.5）",
+      "title": "原生边界：来源不允许：不处理，回复 origin_refused，恰好一次（r3ei，§25.52CJ.3；取代 r3bx 的不回复）",
       "input": {
         "allowed": false,
         "reqIdValid": true
       },
       "expect": {
         "processed": false,
-        "replies": 0,
-        "reply": null
+        "replies": 1,
+        "reply": {
+          "type": "ack",
+          "reqId": "echo-if-valid",
+          "ok": false,
+          "error": "origin_refused"
+        }
       }
     },
     {

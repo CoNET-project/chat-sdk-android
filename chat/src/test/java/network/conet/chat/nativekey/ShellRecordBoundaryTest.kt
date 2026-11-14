@@ -48,29 +48,39 @@ class ShellRecordBoundaryTest {
                 calls++
                 b.handle(ShellOrigin.EMBEDDED_PAGE, bb, bytes)
             }
-            val replies = if (reply == null) 0 else 1
+            // Every request gets one answer: the handler's, or origin_refused for a source that is not allowed (25.52CJ.3, r3ej).
+            val replies = 1
             assertEquals(c.getString("id"), expect.getInt("replies"), replies)
-            assertEquals(c.getString("id"), expect.getBoolean("processed"), reply != null && reply.optBoolean("ok", false))
+            assertEquals(c.getString("id"), expect.getBoolean("processed"), reply.optBoolean("ok", false))
             assertEquals(c.getString("id"), if (input.getBoolean("allowed")) 1 else 0, calls)
             if (!expect.isNull("reply")) {
                 val want = expect.getJSONObject("reply")
-                assertEquals(c.getString("id"), want.getString("error"), reply!!.getString("error"))
-                assertTrue(reply.isNull("reqId"))
-                assertEquals("ack", reply.getString("type"))
+                assertEquals(c.getString("id"), "ack", reply.getString("type"))
+                assertEquals(c.getString("id"), false, reply.getBoolean("ok"))
+                assertEquals(c.getString("id"), want.getString("error"), reply.getString("error"))
+                // The reqId is echoed when valid, else null (25.52CJ.3).
+                if (input.getBoolean("reqIdValid")) assertEquals(c.getString("id"), body.get("reqId"), reply.get("reqId")) else assertTrue(reply.isNull("reqId"))
             }
         }
     }
 
     @Test
-    fun aSourceThatIsNotAllowedIsNotAnsweredAtAll() {
-        // OR-01 at the boundary: the answer is not called and nothing is replied.
+    fun aSourceThatIsNotAllowedIsRefusedOnceWithTheReqIdEchoed() {
+        // 25.52CJ.3 (r3ej), OR-01: the source is judged before the reqId. The request is not processed and gets origin_refused, once.
         var called = false
         val reply = answerAtBoundary(false, request("r1"), 40) { _, _ ->
             called = true
             JSONObject()
         }
-        assertNull(reply)
         assertFalse(called)
+        assertEquals("ack", reply.getString("type"))
+        assertEquals("origin_refused", reply.getString("error"))
+        assertEquals(false, reply.getBoolean("ok"))
+        assertEquals("r1", reply.getString("reqId"))
+        // An invalid reqId is echoed as null, and the source is still the first check.
+        val invalid = answerAtBoundary(false, request(""), 40) { _, _ -> JSONObject() }
+        assertEquals("origin_refused", invalid.getString("error"))
+        assertTrue(invalid.isNull("reqId"))
     }
 
     @Test

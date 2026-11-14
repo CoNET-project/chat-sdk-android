@@ -1181,7 +1181,8 @@ internal class ShellRecordBridge(
             try {
                 store.read()
             } catch (_: IOException) {
-                return reply("error", listOf("sub" to "record_unreadable"))
+                // 25.52CK.8 (r3ek): a read failure before a write is write_failed; record_unreadable is for reads only (25.52CH.1).
+                return reply("write_failed", emptyList())
             }
         }
 
@@ -1274,11 +1275,22 @@ internal class ShellRecordBridge(
 }
 
 /**
- * The boundary decision of the window channel (§25.52AB.5, OR-01 to OR-03): a request from a source that is not allowed is not processed and
- * gets no reply (`null`). An allowed request is answered once, by [answer], whether its reqId is valid or not.
+ * The boundary decision of the window channel (§25.52AB.5, OR-01 to OR-03, §25.52CJ.3 (r3ej)): a request from a source that is not allowed is
+ * not processed, and is answered `origin_refused`, once. The source is judged before the reqId. An allowed request is answered once, by [answer],
+ * whether its reqId is valid or not.
  */
-internal fun answerAtBoundary(originAllowed: Boolean, body: JSONObject, requestBytes: Int, answer: (JSONObject, Int) -> JSONObject): JSONObject? =
-    if (originAllowed) answer(body, requestBytes) else null
+internal fun answerAtBoundary(originAllowed: Boolean, body: JSONObject, requestBytes: Int, answer: (JSONObject, Int) -> JSONObject): JSONObject =
+    if (originAllowed) answer(body, requestBytes) else originRefused(body)
+
+/**
+ * `origin_refused` (§25.52CJ.3, r3ej): the ack for a request from a source that is not allowed. The reqId is echoed when it is valid, else null.
+ * Nothing of the request is read or logged, and nothing is processed.
+ */
+internal fun originRefused(body: JSONObject): JSONObject {
+    val rawId = body.opt("reqId")
+    val echo: Any = if (ShellRecordPolicy.reqIdValid(rawId)) rawId!! else JSONObject.NULL
+    return shellAck(echo, "origin_refused", emptyList())
+}
 
 /** The state the production bridge shares: the import outcome, the bound account and the startup flag. One process, one account. */
 internal object ShellRecordState {
@@ -1368,7 +1380,7 @@ object BeamioShellRecordImport {
     /**
      * The window channel on Android (§25.52AB.2, §25.52AB.5): the shell's `WebViewCompat.addWebMessageListener` hands over the message with the
      * source origin and the frame kind. The source is checked here at the native boundary (the platform filter is the first check). A source
-     * that is not [ALLOWED_ORIGIN], or a frame that is not the main frame, is not processed and gets no reply: the result is `null`. Otherwise
+     * that is not [ALLOWED_ORIGIN], or a frame that is not the main frame, is not processed and is answered origin_refused, once (25.52CJ.3). Otherwise
      * the answer is exactly one ack, which the shell sends through the reply proxy to the page's `onmessage` (`JavaScriptReplyProxy.postMessage`).
      */
     fun answerFromPage(

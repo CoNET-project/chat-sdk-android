@@ -8,16 +8,18 @@
     "T1": "§25.52AV.2 列出的 7 名",
     "excluded": {
       "pgpSign": "§25.52BP.1：已删除，不在 T 中",
+      "pgpDecrypt": "§25.52CK.1：已删除（iOS 与 Android 均无分派，R739）",
       "identity.provision": "§25.52BW.3：规格名，不是桥接名；桥接名为 provisionIdentity"
     }
   },
   "counts": {
-    "T0": 60,
-    "T1": 7,
+    "T0": 59,
+    "T1": 8,
     "total": 67
   },
   "names": [
     "ackInbound",
+    "chatRouteRegister",
     "clearIdentity",
     "deriveLocalKeys",
     "deriveSubkeys",
@@ -53,7 +55,6 @@
     "passcodeRun",
     "passcodeStatus",
     "pause",
-    "pgpDecrypt",
     "pgpDecryptInbound",
     "pgpIdentityCreate",
     "pgpMigrate",
@@ -89,6 +90,9 @@
     "ackInbound": [
       "chatCommands",
       "mapping.bridgeName"
+    ],
+    "chatRouteRegister": [
+      "spec §25.52AV.2 T1"
     ],
     "clearIdentity": [
       "chatCommands",
@@ -230,10 +234,6 @@
       "allowedUnderNoKey",
       "lifecycleExcluded",
       "mapping.bridgeName"
-    ],
-    "pgpDecrypt": [
-      "mapping.bridgeName",
-      "walletCommands"
     ],
     "pgpDecryptInbound": [
       "mapping.bridgeName",

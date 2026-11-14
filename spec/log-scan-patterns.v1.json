@@ -225,12 +225,12 @@
       },
       {
         "name": "interface/protocol/no-key-reject-vectors.v1.json",
-        "sha256": "947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd",
+        "sha256": "6ec280f7b1afe018cf608ca8f438dc83c6531620a6e650e086959559718f32d8",
         "source": "spec 25.26.4、25.26.6（r3f）"
       },
       {
         "name": "interface/protocol/gate-state-vectors.v1.json",
-        "sha256": "94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0",
+        "sha256": "3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22",
         "source": "spec 25.26.4c（r3g）"
       },
       {
@@ -255,12 +255,12 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "340fb91794e7550ef31ed9eb5cbb09a824f4c3e7c43eab9a7b10756783c1faeb",
+        "sha256": "08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461",
         "source": "spec §25.52BS（r3dp）"
       },
       {
         "name": "interface/protocol/table-T.v1.json",
-        "sha256": "c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569",
+        "sha256": "b4085becedde13e91363bb5239be5552c80146603ebfc4fd0a167b44c349d983",
         "source": "spec §25.52BY（r3dy）"
       },
       {

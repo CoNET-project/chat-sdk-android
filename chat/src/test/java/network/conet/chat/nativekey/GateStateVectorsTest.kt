@@ -11,7 +11,7 @@ import java.security.MessageDigest
 
 /**
  * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v1.json`
- * (r3dm, sha256 94792dc4…, 133 cases).
+ * (r3ei, sha256 d9c6b28d…, 133 cases).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  *
  * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an
@@ -22,22 +22,25 @@ class GateStateVectorsTest {
     private val bytes = File(System.getenv("GATE_STATE_VECTORS") ?: "../spec/gate-state-vectors.v1.json").readBytes()
     private val v = JSONObject(String(bytes, Charsets.UTF_8))
     private val cases = v.getJSONArray("cases")
+    /** 25.52CK.3 (r3ek): the names the inner layer answers unknown_command before the gate, in every state. */
+    private val innerUnknown: Set<String> =
+        v.getJSONObject("innerUnknown").getJSONArray("names").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
 
     private fun sha256Hex(b: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0", sha256Hex(bytes))
+        assertEquals("3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
         // r3dm: 133 cases (G0 32, G1 101). G1 allowed commands 66 (pgpSign removed, 25.52BP.1); init 3; shell-layer not gated 26; rejected names 8.
-        assertEquals(133, cases.length())
+        assertEquals(132, cases.length())
         val counts = v.getJSONObject("counts")
-        assertEquals(133, counts.getInt("cases"))
-        assertEquals(66, counts.getInt("g1Commands"))
+        assertEquals(132, counts.getInt("cases"))
+        assertEquals(65, counts.getInt("g1Commands"))
         assertEquals(3, counts.getInt("g1Init"))
         assertEquals(26, counts.getInt("shellNotGatedCases"))
         assertEquals(8, counts.getInt("shellRejectCases"))
@@ -45,7 +48,7 @@ class GateStateVectorsTest {
         var g1 = 0
         for (i in 0 until cases.length()) if (cases.getJSONObject(i).getString("state") == "G0") g0++ else g1++
         assertEquals(32, g0)
-        assertEquals(101, g1)
+        assertEquals(100, g1)
     }
 
     @Test
@@ -79,14 +82,23 @@ class GateStateVectorsTest {
                     NoKeyGate.passcodeStatusFor(gate).getBoolean("hasKey"),
                 )
                 else -> {
-                    val code = if (gate == NoKeyGate.Gate.G1 && command == "init") {
+                    // 25.52CK.3 (r3ek): the inner layer answers unknown_command for these names, before the gate, in every state. A shell row's
+                    // expect is the outer layer's (no_key, not_ready), so for those rows only the inner answer is checked.
+                    val code = if (command in innerUnknown) {
+                        assertFalse("$id: $command is not a bridge name", BridgeCommandTable.isRegistered(command))
+                        BridgeCommandTable.UNKNOWN_COMMAND
+                    } else if (gate == NoKeyGate.Gate.G1 && command == "init") {
                         NoKeyGate.initAnswer(recordEoa, payloadEoa)
                     } else {
                         NoKeyGate.answerFor(command, gate)
                     }
                     // The vector's `ok` is the G1 init success; `allowed` is the allowed-list answer.
                     val expected = expect.getString("code")
-                    assertEquals(id, expected, if (code == "init") "ok" else code)
+                    if (c.optBoolean("shell") && command in innerUnknown) {
+                        assertEquals(id, BridgeCommandTable.UNKNOWN_COMMAND, code)
+                    } else {
+                        assertEquals(id, expected, if (code == "init") "ok" else code)
+                    }
                     assertEquals(id, command == "init", expect.getBoolean("payloadRead"))
                 }
             }
@@ -104,6 +116,16 @@ class GateStateVectorsTest {
         val forbidden = expect.getJSONArray("forbiddenCodes")
         for (k in 0 until forbidden.length()) {
             assertTrue("$id: the answer $answer is not ${forbidden.getString(k)}", answer != forbidden.getString(k))
+        }
+    }
+
+    @Test
+    fun innerUnknownNamesAreNotBridgeNamesAndAnswerUnknownCommand() {
+        // 25.52CK.3 (r3ek): the 21 names of innerUnknown are outside the SDK's bridge table, so the inner layer answers unknown_command before the
+        // gate, in every state. The outer layer keeps its own answers (no_key, not_ready) for the shell rows.
+        assertEquals(21, innerUnknown.size)
+        for (name in innerUnknown) {
+            assertFalse("$name is not a bridge name", BridgeCommandTable.isRegistered(name))
         }
     }
 

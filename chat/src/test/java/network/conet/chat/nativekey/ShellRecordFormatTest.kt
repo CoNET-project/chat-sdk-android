@@ -93,8 +93,8 @@ class ShellRecordFormatTest {
                 .put("record", JSONObject().put("rev", 0).put("schemaVersion", 2).put("profiles", org.json.JSONArray())),
             200,
         )
-        assertEquals("error", write.v().getString("code"))
-        assertEquals("record_unreadable", write.v().getString("sub"))
+        // 25.52CK.8 (r3ek): a write whose pre-write read fails is write_failed, once; record_unreadable is for reads.
+        assertEquals("write_failed", write.v().getString("code"))
         assertTrue("the unreadable file is kept", before.contentEquals(files.map[name]!!))
     }
 

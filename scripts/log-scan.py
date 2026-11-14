@@ -87,14 +87,21 @@ def compile_patterns(spec, fixtures):
 
 
 def canonical_regexes(neg):
-    """25.52CG.3 (r3eh): the canonical pattern ids of the vector's logScan.patterns. Each value is SHA-256("hex:" + sha256Label), the
-    sampleRule of the vector. Each id is reported under its own name. LS-G1 is a separate check and is reported separately."""
+    """25.52CG.3, CJ.1 (r3ej): the canonical pattern ids of the vector's logScan.patterns. The hex value of each is
+    SHA-256("negtest:hex:" + label), where label is the pattern's sha256Label, except the control pattern, whose label is
+    controlPattern.label (wallet-private-key). Each id is reported under its own name. LS-G1 is a separate check."""
+    logscan = neg.get("logScan") or {}
+    control = logscan.get("controlPattern") or {}
     out = []
-    for p in (neg.get("logScan") or {}).get("patterns", []):
-        label = p.get("sha256Label")
-        if not label:
-            continue
-        value = hashlib.sha256(("hex:" + label).encode("utf-8")).hexdigest()
+    for p in logscan.get("patterns", []):
+        if p.get("id") == control.get("id") and control.get("label"):
+            label = control["label"]
+        else:
+            label = p.get("sha256Label") or p["id"]
+        input_string = control.get("inputString") if p.get("id") == control.get("id") else None
+        value = hashlib.sha256((input_string or ("negtest:hex:" + label)).encode("utf-8")).hexdigest()
+        if p.get("id") == control.get("id") and control.get("value") and value != control["value"]:
+            sys.exit("controlPattern value does not match its derivation: %s" % p["id"])
         out.append((p["id"], re.compile(re.escape(value), re.IGNORECASE), "hit"))
     return out
 
