@@ -27,7 +27,7 @@ class ShellRecordVectorsTest {
     @Test
     fun theShellRecordGroupsMatchTheSpec() {
         assertEquals(46, doc.getJSONArray("shellRecordCases").length())
-        assertEquals(8, doc.getJSONArray("pageReadCases").length())
+        assertEquals(12, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
         assertEquals(5, doc.getJSONArray("pageRefuseCases").length())
         assertEquals(8, doc.getJSONArray("walletMergeCases").length())

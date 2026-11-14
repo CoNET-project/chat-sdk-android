@@ -14,8 +14,8 @@ class ShellRecordAckVectorsTest {
     private val doc = JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8))
 
     @Test
-    fun theAckGroupHasSixteenCases() {
-        assertEquals(16, doc.getJSONArray("ackCases").length())
+    fun theAckGroupHasTwentyCases() {
+        assertEquals(20, doc.getJSONArray("ackCases").length())
     }
 
     @Test
@@ -38,13 +38,14 @@ class ShellRecordAckVectorsTest {
         if (ctx.optBoolean("pointer")) flags.setAccountPointer()
         if (ctx.optBoolean("marker")) flags.setLegacyUnreadable()
 
-        // The reader state of the case. Without a legacy state, a case with the marker has not re-read the legacy store (AK-07); a case
-        // without it has the import's confirmed absence (the default state of the other groups).
+        // The reader state of the case. A case with no legacy state has not read the legacy store (AK-07, AK-18) for a read. A write case
+        // without one keeps the confirmed absence of the other write groups: the first-write guard is not covered by these vectors (§25.52U.8).
+        val isRead = c.optString("kind") == "read"
         val outcome: ImportOutcome? = when (ctx.opt("legacy") as? String) {
             "absent", "empty" -> ImportOutcome.ABSENT
             "unreadable" -> ImportOutcome.LEGACY_UNREADABLE
             "found" -> ImportOutcome.NOT_DONE
-            null -> if (ctx.optBoolean("marker")) null else ImportOutcome.ABSENT
+            null -> if (isRead) null else ImportOutcome.ABSENT
             else -> throw IllegalArgumentException("unknown legacy state")
         }
         val origin = when (ctx.optString("origin")) {

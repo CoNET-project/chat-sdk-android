@@ -385,11 +385,33 @@ internal object ShellRecordPolicy {
         return matches.singleOrNull()
     }
 
-    /** True when some profile of [record] holds the EOA private key (§25.52P.4). */
-    fun anyProfileHoldsEoaKey(record: JSONObject): Boolean {
-        val profiles = record.optJSONArray("profiles") ?: return false
-        return (0 until profiles.length()).any { profiles.optJSONObject(it)?.has("privateKeyArmor") == true }
+    /** The profiles whose `keyID` equals [eoa], compared without case (§25.52U.4). Nothing falls back to an index here. */
+    fun matchingProfiles(record: JSONObject, eoa: String): List<JSONObject> {
+        val profiles = record.optJSONArray("profiles") ?: return emptyList()
+        return (0 until profiles.length()).mapNotNull { i ->
+            profiles.optJSONObject(i)?.takeIf { p ->
+                val id = p.optString("keyID", "")
+                id.isNotEmpty() && id.equals(eoa, ignoreCase = true)
+            }
+        }
     }
+
+    /**
+     * The read judgement of a schema 2 record (§25.52S.3, §25.52U.4, R432): `account_mismatch` when no profile, or more than one, matches the
+     * account (fail closed); `needs_native_recovery` when the matching profile has no `privateKeyArmor`; `null` when the record is usable.
+     * A missing `mnemonicPhrase` does not matter (§25.52R.5).
+     */
+    fun accountJudgement(record: JSONObject, eoa: String): String? {
+        val matches = matchingProfiles(record, eoa)
+        return when {
+            matches.size != 1 -> "account_mismatch"
+            !matches[0].has("privateKeyArmor") -> "needs_native_recovery"
+            else -> null
+        }
+    }
+
+    /** True when a profile matching the account holds the EOA private key (§25.52P.4, §25.52U.4): the write rule. */
+    fun accountHoldsEoaKey(record: JSONObject, eoa: String): Boolean = matchingProfiles(record, eoa).any { it.has("privateKeyArmor") }
 
     /** True when some profile of [record] holds [key]. */
     private fun hasProfileKey(record: JSONObject, key: String): Boolean {
@@ -886,22 +908,33 @@ internal class ShellRecordBridge(
             }
             if (current != null) {
                 val rev = current.opt("rev") as? Int ?: return reply("error", listOf("sub" to "record_unreadable"))
+                // §25.52U.5: a record is the source of truth. It clears the device marker, and repairs an empty account pointer when a
+                // profile matches the account. The marker has no say while a record exists.
+                repairFlags(current, acc.eoa)
                 ShellRecordPolicy.stripPgpForRead(current)
                 val out = reply(
                     "ok",
                     listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
                 )
                 if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
-                // §25.52S.3: a schema 2 copy without the EOA private key is answered as needs_native_recovery; the page stops there.
-                if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN &&
-                    !ShellRecordPolicy.anyProfileHoldsEoaKey(current)
-                ) {
-                    return reply("error", listOf("sub" to "needs_native_recovery"))
+                // §25.52S.3, §25.52U.4: a schema 2 copy is judged against the account's profile (needs_native_recovery, account_mismatch).
+                if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN) {
+                    ShellRecordPolicy.accountJudgement(current, acc.eoa)?.let { sub -> return reply("error", listOf("sub" to sub)) }
                 }
                 return out
             }
         }
         return noRecord(reply)
+    }
+
+    /** The flags a readable record sets: the marker is cleared, and an empty pointer is repaired when a profile matches (§25.52U.5). */
+    private fun repairFlags(record: JSONObject, eoa: String) {
+        try {
+            flags.clearLegacyUnreadable()
+            if (!flags.accountPointer() && ShellRecordPolicy.matchingProfiles(record, eoa).isNotEmpty()) flags.setAccountPointer()
+        } catch (_: IOException) {
+            // The flags are not critical for a readable record: the next read repairs them.
+        }
     }
 
     /**
@@ -1009,7 +1042,7 @@ internal class ShellRecordBridge(
             )
         }
         // §25.52P.4: a schema 2 copy must hold the EOA private key after the merge; otherwise the write is refused and nothing is stored.
-        if (schema >= ShellRecordPolicy.WALLET_SCHEMA_MIN && !ShellRecordPolicy.anyProfileHoldsEoaKey(merge.record)) {
+        if (schema >= ShellRecordPolicy.WALLET_SCHEMA_MIN && !ShellRecordPolicy.accountHoldsEoaKey(merge.record, ready?.eoa.orEmpty())) {
             return reply("wallet_fields_missing", listOf("names" to JSONArray(listOf(ShellRecordPolicy.W_PROFILE_PATH))))
         }
         val next = currentRev + 1

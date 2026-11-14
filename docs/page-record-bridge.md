@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bp (§25.52K to §25.52T) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `6af8167da1a025779d445fe8f3b245f13db4259a2304dca93a5b02dc56a01ae1`).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bq (§25.52K to §25.52U) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `e2effd9f5e9ef071baf85a0a38e34ac35745d80a4bf92a9254158b672063a491`, 186 self-checks).
 
 ## Public entries
 
@@ -65,11 +65,16 @@ On success the copy is written with `schemaVersion: 2` and `rev: 1`. An existing
 | Pointer | Legacy outcome | Marker | Answer |
 |---|---|---|---|
 | set | any | any | `error`, `account_record_missing` |
-| not set | found, import not done | any | `error`, `import_not_done` |
 | not set | unreadable | any | `error`, `legacy_store_unreadable`; marker set |
-| not set | confirmed absent or empty | any | `absent`; marker cleared |
 | not set | not read again | set | `error`, `legacy_store_unreadable` |
-| not set | not read again | not set | `migrating` |
+| not set | not read again | not set | `migrating` (§25.52U.3) |
+| not set | found, import not done | any | `error`, `import_not_done`; the marker has no effect |
+| not set | confirmed absent or empty | any | `absent`; marker cleared |
+
+- A readable record wins over the marker (§25.52U.5): reading it clears the marker, and repairs an empty pointer when a profile matches the
+  account. The table above applies only while no record exists.
+- `migrating` is the one answer for a legacy store not yet read (no pointer, no marker, no record); `import_not_done` only for a found,
+  not yet imported, legacy record.
 
 - Write with no record: `migrating` while the marker is set or the legacy store is unreadable (no first write); the first write goes ahead
   only after a confirmed absence.
@@ -102,9 +107,10 @@ verified on a device in this build.
   `mnemonicPhrase`, and top-level `recoveryWords`. They are encrypted, never sent by the page, and kept when the page omits them.
 - A different value, `null` included, gives `conflict` with `reason: "w_differs"`. A W field outside the account's record, or a stored one
   the page cannot place, gives `conflict` with `reason: "w_account_unmatched"`. Only native creation or recovery replaces them.
-- Missing EOA key: a schema 2 copy with no profile holding `privateKeyArmor` is answered `error` with `needs_native_recovery` on read; the
-  page stays unavailable and offers the native recovery entry (`nativeRecoveryOpen`). A write that leaves no `privateKeyArmor` is refused
-  with `wallet_fields_missing`, and nothing is stored. A missing `mnemonicPhrase` is allowed.
+- Read judgement of a schema 2 copy (§25.52U.4, R432), by the profile whose `keyID` equals the account (case-insensitive, no index fallback):
+  no matching profile, or more than one: `error`, `account_mismatch` (fail closed, no recovery entry); the matching profile has no
+  `privateKeyArmor`: `error`, `needs_native_recovery` (the page offers `nativeRecoveryOpen`). A missing `mnemonicPhrase` is allowed.
+- A write that leaves no profile matching the account with a `privateKeyArmor` is refused with `wallet_fields_missing`, and nothing is stored.
 - `privateKeyArmorWrap` is not a W field: it is never stored, and a write with it is `key_shaped_content`.
 - Non-W fields are replaced as a whole by the payload (§25.52S.5). Non-W fields in the store that the payload does not carry are removed.
 
@@ -169,14 +175,18 @@ it is `too_large`, checked before the schema-specific answers.
   placeholder phrase, so the check is left for PM.
 - The first-run import has no whitelist for legacy fields beyond PGP (`legacy_fields_unknown` is not decided, §25.52N.6).
 - `accountSlot` keeps the conditional profile-0 fallback for records with no keyID (PM R424); Android measurement must confirm the keyID match.
-- Not decided by the spec (r3bp,待 PM): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only);
-  a marker set with a write answers `migrating` (§25.52T.5, pending PM confirmation).
+- Pending PM (r3bq §25.52U.11): `account_mismatch` (new sub-code, fail closed); the pointer repair on a read.
+- Pending PM (earlier): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only); a marker set
+  with a write answers `migrating` (§25.52T.5).
+- The read judgement is strict by keyID (§25.52U.4), while the write placement keeps the conditional profile-0 fallback of R424. A schema 2
+  record written with no keyIDs at all would therefore read back as `account_mismatch`; measured records carry keyIDs.
 - The 108-path cap was checked against the measured manifest (page-record-paths-measured, 108 listed paths): all 62 whitelist paths
   (containers included) are among them. The tests do not read that manifest.
 
 ## Tests
 
-`ShellRecordAckVectorsTest` runs AK-01 to AK-16 (the ack group, §25.52T.8).
+`ShellRecordAckVectorsTest` runs AK-01 to AK-20 (the ack group, §25.52T.8, §25.52U.9). `ShellRecordR439Test` covers the r3bq rules
+that the vectors do not fix (the first-write guard, the marker and pointer repair, the case-insensitive keyID).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
 (`ShellRecordFormatTest`), the review-item tests (`ShellRecordR424Test`), and the R431 tests (`ShellRecordR431Test`: ack envelope, fresh install,

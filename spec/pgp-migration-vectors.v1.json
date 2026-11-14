@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bp）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bq）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1976,7 +1976,8 @@
       "title": "读回携带 W 字段（EOA 私钥、助记词），PGP 字段一律剥离（r3bc，R393）",
       "kind": "read",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -1986,6 +1987,7 @@
           "mnemonicPhrase": "M",
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA",
               "chatManager": {
@@ -2012,6 +2014,7 @@
           "mnemonicPhrase": "M",
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA",
               "chatManager": {
@@ -2024,10 +2027,11 @@
     },
     {
       "id": "TR-13",
-      "title": "无页面记录：absent",
+      "title": "无页面记录，旧存储已确认不存在，指针为空：absent（r3bq：须先确认旧存储）",
       "kind": "read",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "expect": {
@@ -2630,7 +2634,8 @@
       "title": "读回：schemaVersion 2 且无 privateKeyArmor：error（needs_native_recovery），页面不进页面口令恢复、不新建钱包（r3bl，R428；r3bo，R430）",
       "kind": "read",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2656,7 +2661,8 @@
       "title": "读回：PGP 公开字段（beamio 下）读回时删除，其余保留（r3bl，R428）",
       "kind": "read",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -3585,6 +3591,50 @@
       },
       "expect": {
         "action": "unavailable_native_recovery"
+      }
+    },
+    {
+      "id": "RD-09",
+      "title": "读回 error（import_not_done）：失败关闭，不进引导，稍后重试（r3bq，R439 第 1 条）",
+      "resp": {
+        "code": "error",
+        "sub": "import_not_done"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-10",
+      "title": "读回 error（legacy_store_unreadable）：失败关闭，不进引导，稍后重试（r3bq）",
+      "resp": {
+        "code": "error",
+        "sub": "legacy_store_unreadable"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-11",
+      "title": "读回 error（account_mismatch）：失败关闭，不进引导，不新建钱包（r3bq，R439 第 2 条）",
+      "resp": {
+        "code": "error",
+        "sub": "account_mismatch"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-12",
+      "title": "读回 error（account_record_missing）：失败关闭，不进引导，不新建钱包（r3bq）",
+      "resp": {
+        "code": "error",
+        "sub": "account_record_missing"
+      },
+      "expect": {
+        "action": "fail_closed"
       }
     }
   ],
@@ -4853,7 +4903,8 @@
       "kind": "read",
       "reqId": "r1",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -5233,6 +5284,136 @@
         "reqId": "r16",
         "ok": false,
         "error": "origin_refused"
+      }
+    },
+    {
+      "id": "AK-17",
+      "title": "记录存在、设备标记存在（旧存储不可读）：以记录为准，返回 ok（r3bq，R439 第 3 条）",
+      "kind": "read",
+      "reqId": "r17",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "unreadable",
+        "marker": true,
+        "pointer": false
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r17",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "mnemonicPhrase": "M",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-18",
+      "title": "未读取旧存储、指针为空、无标记、无记录：migrating，不进引导，稍后重试（r3bq，R439 第 1 条）",
+      "kind": "read",
+      "reqId": "r18",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r18",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-19",
+      "title": "记录存在但无与账户 EOA 匹配的档案：error（account_mismatch），不新建钱包（r3bq，R439 第 2 条）",
+      "kind": "read",
+      "reqId": "r19",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r19",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "AK-20",
+      "title": "记录存在，匹配档案缺 privateKeyArmor：error（needs_native_recovery）（r3bq，R432、R439 第 2 条）",
+      "kind": "read",
+      "reqId": "r20",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r20",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "needs_native_recovery"
+        }
       }
     }
   ],
@@ -5624,7 +5805,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 178,
+    "runs": 186,
     "result": "pass"
   }
 }
