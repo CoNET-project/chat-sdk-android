@@ -29,9 +29,10 @@ import java.text.Normalizer
  * Pure logic. The native side supplies a [NativeKeyState] from its own key store, and production
  * readback must be verified before it reports [NativeKeyState.HAS_KEY_READBACK_OK].
  *
- * NOT wired into `provisionIdentity` or `init` yet. The capability is not declared in hello until
- * both platforms pass the vectors and the native store exists (spec 12.3, 25.19.3). Until then the
- * legacy payload path is unchanged.
+ * Wired into `provisionIdentity`: its ready report comes from the native vault state, which is
+ * `Ready` only after readback (NativeWalletVault). The capability is NOT declared in hello yet: the
+ * declaration waits for the conditions of spec 25.37.4 (vectors on both platforms, commands, audit,
+ * device evidence), and until then the legacy payload path stays in place (spec 12.3, 25.19.3).
  */
 object IdentityProvisionContract {
     enum class Command(val wire: String) { PROVISION_IDENTITY("provisionIdentity"), INIT("init") }
