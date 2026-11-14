@@ -365,9 +365,9 @@ object BeamioConetChatModule {
             synchronized(seenArmor) { seenArmor.clear() }
         }
 
-        // TODO(P-IMP-PGP, §36-B): `identity.pgpPrivateKeyArmored` and `identity.pgpPassphrase` are still accepted here
-        // until the source of the PGP key is decided. They go straight into the native PGP record after the wallet
-        // check (storeInitPgp), and never into the session or the page. Remove them with P-IMP-PGP.
+        // A4 audit (F1): `identity.pgpPrivateKeyArmored` and `identity.pgpPassphrase` are refused before this point. validate(INIT) above is
+        // recursive and rejects every forbidden key name (key_over_bridge_refused), so these two reads only ever see empty values. They are kept
+        // until P-IMP-PGP removes them (spec 25.19.4 step 4); see BridgeKeyAuditTest.
         var pgpArmorInInit = ""
         var pgpPassphraseInInit = ""
         payload.optJSONObject("identity")?.let { id ->
