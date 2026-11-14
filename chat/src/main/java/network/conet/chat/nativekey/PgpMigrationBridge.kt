@@ -5,7 +5,7 @@ import org.json.JSONObject
 /**
  * The bridge side of `pgpMigrate` (spec r3at §25.52.4, §25.52.5, §25.52.14; T-261, R-01, R-02). The request carries `type` and
  * `reqId` and nothing else. The decision is a pure function of the request, the gate and the running flag, so the vectors can run
- * it without an Android context. The module does the I/O: it sends the ack, runs [BeamioPgpMigration.run] on a worker, and sends
+ * it without an Android context. The module does the I/O: it sends the ack, runs [BeamioPgpMigrationImport.run] on a worker, and sends
  * the result event.
  */
 internal object PgpMigrationBridge {

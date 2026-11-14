@@ -19,9 +19,11 @@ import network.conet.chat.nativekey.NativeAccountCreateHost
 import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
-import network.conet.chat.nativekey.BeamioPgpMigration
+import network.conet.chat.nativekey.BeamioPgpMigrationImport
+import network.conet.chat.nativekey.MigrationCode
 import network.conet.chat.nativekey.PgpMigrationBridge
 import network.conet.chat.nativekey.PgpMigrationInterrupted
+import network.conet.chat.nativekey.PgpMigrationPolicy
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
@@ -728,21 +730,50 @@ object BeamioConetChatModule {
         }
     }
 
-    /** Logout / wallet removed or switched: stop and forget the stored keys. */
+    /**
+     * Logout / wallet removed or switched: stop and forget the stored keys.
+     *
+     * The migration's M and N are removed only after the recovery check of r3av §25.52C.3. The check may read the chain, so it
+     * runs on the worker. A refusal (`unregister_refused`) removes nothing and keeps the session. L, the legacy PGP copy, is kept
+     * in every case: the migration never removes it, and PM R364 asks that clearIdentity not remove it before the check.
+     */
     private fun clearIdentity(reqId: Int) {
-        NativeSessionState.reset()
         val ctx = appContext
+        val eoa = ctx?.let { recoveryAccountOf(it) }
+        if (ctx == null || eoa == null) {
+            finishClearIdentity(ctx, reqId)
+            return
+        }
+        pgpMigrateWorker.execute {
+            val code = runCatching { BeamioPgpMigrationImport.unregister(ctx, eoa).code }
+                .getOrElse { MigrationCode.UNREGISTER_REFUSED }
+            if (code == MigrationCode.UNREGISTER_REFUSED) {
+                ack(reqId, false, error = MigrationCode.UNREGISTER_REFUSED.wire)
+                return@execute
+            }
+            main.post { finishClearIdentity(ctx, reqId) }
+        }
+    }
+
+    private fun finishClearIdentity(ctx: Context?, reqId: Int) {
+        NativeSessionState.reset()
         destroy()
         BeamioConetChatSignBroker.clearNativeSigner()
         if (ctx != null) {
             NativeWallet.vault(ctx).forget()
             NativeWallet.pgp(ctx).forget()
             BeamioChatWalletKeyStore.clear(ctx)
-            BeamioChatPgpStore.clear(ctx)
+            BeamioChatPgpStore.clearKeepingLegacy(ctx)
             BeamioConetChatInboxStore.clear(ctx)
         }
         Log.i(TAG, "identity cleared")
         ack(reqId, true, result = JSONObject().put("ok", true))
+    }
+
+    /** The account whose migration records logout must check: the wallet's, else the legacy copy's. Null when neither. */
+    private fun recoveryAccountOf(ctx: Context): String? {
+        (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.let { return it.eoa }
+        return BeamioChatPgpStore.legacyCopy(ctx)?.eoa?.takeIf { PgpMigrationPolicy.EOA_RE.matches(it) }
     }
 
     /**
@@ -983,7 +1014,7 @@ object BeamioConetChatModule {
         answer(true)
         pgpMigrateWorker.execute {
             try {
-                val result = BeamioPgpMigration.run(c, eoa)
+                val result = BeamioPgpMigrationImport.run(c, eoa)
                 emitEvent(PgpMigrationBridge.eventFor(id, result))
                 Log.i(TAG, "pgpMigrate result=${result.code.wire}")
             } catch (_: PgpMigrationInterrupted) {

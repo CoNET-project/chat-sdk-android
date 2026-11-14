@@ -47,24 +47,34 @@ internal object PgpMigrationKeys {
         b.fp -> "B"
         else -> "?$fp"
     }
-
-    /** The first 16 characters, as the page sees it. */
-    fun prefix16(fp: String): String = fp.take(16)
 }
 
-/** Faults for one step of a vector or one test. Each is applied only to the call it names. */
+/**
+ * Store, crypto and chain faults for one step of a vector or one test. Each is applied only to the call it names. Interruptions
+ * are not here: they go through the checkpoint closure ([checkpointFor]), as §25.52C.4 requires.
+ */
 internal data class MigrationFaults(
     val writeN: Boolean = false,
     val rereadN: Boolean = false,
     val challenge: Boolean = false,
     val writeM: Boolean = false,
-    val interruptAfterN: Boolean = false,
-    val interruptAfterM: Boolean = false,
     val chainMode: String? = null,
     val approved: Boolean = true,
+    val interrupt: String? = null,
 )
 
-/** A staged store that fails, interrupts or rereads differently, as the faults say. Delegates everything else. */
+/** The checkpoint closure for a fault set: throws [PgpMigrationInterrupted] at the named stage, and does nothing else. */
+internal fun checkpointFor(faults: MigrationFaults): (Stage) -> Unit = { stage ->
+    val stop = when (stage) {
+        Stage.AFTER_STAGED_WRITE -> faults.interrupt == "afterN"
+        Stage.AFTER_MARKER_WRITE -> faults.interrupt == "afterM"
+        Stage.AFTER_MARKER_DELETED -> faults.interrupt == "afterMarkerDeleted"
+        else -> false
+    }
+    if (stop) throw PgpMigrationInterrupted()
+}
+
+/** A staged store that fails or rereads differently, as the faults say. Delegates everything else. */
 internal class FaultyStaged(private val inner: MigrationStaged, private val faults: MigrationFaults) : MigrationStaged {
     private var wroteThisRun = false
 
@@ -77,7 +87,6 @@ internal class FaultyStaged(private val inner: MigrationStaged, private val faul
         if (faults.writeN) throw IOException("injected write failure for N")
         inner.write(item)
         wroteThisRun = true
-        if (faults.interruptAfterN) throw PgpMigrationInterrupted()
     }
 
     override fun delete() = inner.delete()
@@ -90,7 +99,6 @@ internal class FaultyMarker(private val inner: MigrationMarker, private val faul
     override fun write(item: MarkerItem) {
         if (faults.writeM) throw IOException("injected write failure for M")
         inner.write(item)
-        if (faults.interruptAfterM) throw PgpMigrationInterrupted()
     }
 
     override fun delete() = inner.delete()
@@ -119,9 +127,16 @@ internal class FixedLegacy(private val record: LegacyRecord?) : MigrationLegacy 
     override fun read(): LegacyRecord? = record
 }
 
-/** A chain source that answers as the mode says: a fixed registered fingerprint, a mismatch, or unreadable. */
+/** A chain source that answers with a fixed answer. */
 internal class FixedChain(private val answer: ChainAnswer) : MigrationChain {
     override fun registered(eoa: String): ChainAnswer = answer
+}
+
+/** Recovery sources with fixed answers (§25.52C.3). */
+internal class FixedRecovery(private val p: Boolean, private val chain: Boolean) : MigrationRecovery {
+    override fun pReadable(): Boolean = p
+
+    override fun chainRegistered(): Boolean = chain
 }
 
 /** Builds the engine for one account over the given stores, with the given faults applied. */
@@ -131,6 +146,7 @@ internal fun migrationEngine(
     legacy: LegacyRecord?,
     chain: ChainAnswer,
     faults: MigrationFaults = MigrationFaults(),
+    recovery: MigrationRecovery = FixedRecovery(p = false, chain = false),
     eoa: String = PgpMigrationKeys.ACCOUNT,
 ): PgpMigrationEngine = PgpMigrationEngine(
     eoa = eoa,
@@ -139,6 +155,7 @@ internal fun migrationEngine(
     marker = FaultyMarker(SealedMarkerStore(wrap, files, eoa, PgpMigrationKeys.WORKSPACE), faults),
     chain = FixedChain(chain),
     crypto = FaultyCrypto(NativeMigrationCrypto(approvedFlag = faults.approved), faults),
+    recovery = recovery,
     random = SecureRandom(),
     now = { 1L },
 )

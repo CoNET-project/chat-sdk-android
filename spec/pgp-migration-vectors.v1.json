@@ -1,9 +1,9 @@
 {
   "meta": {
     "file": "pgp-migration-vectors.v1.json",
-    "spec": "interface/spec.md §25.52A（r3at；§25.52 与 §25.51 中有差异处以 §25.52A 为准）",
+    "spec": "interface/spec.md §25.52C（r3av；§25.52B、§25.52A、§25.52 中有差异处以 §25.52C 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3at）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3av）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -12,7 +12,9 @@
       "L 在任何路径都不被删除、覆盖或修改（本版不清理 L）",
       "已有 N 且指纹 != F0：不覆盖、不删除，报 fingerprint_mismatch（failed）；N 指纹 == F0：幂等，不重写（r3at）",
       "已核验的 N（有 M）不被覆盖；与 L 不符时报 fingerprint_mismatch",
-      "verify_unavailable 时不写入 N 或 M"
+      "verify_unavailable 时不写入 N 或 M",
+      "未在链上登记（读取为空）报 fingerprint_mismatch；读取失败报 chain_unavailable（r3av）",
+      "注销：恢复源不满足时 unregister_refused 且不删除；通过后先删 M 后删 N，L 永不删除（r3av）"
     ],
     "fp": "fp 为合成指纹标签（A、B），不是真实指纹",
     "gates": {
@@ -1432,6 +1434,81 @@
           }
         }
       ]
+    },
+    {
+      "id": "M-33",
+      "title": "链上未登记（读取为空）：fingerprint_mismatch，L 保留，不写 N（r3av）",
+      "group": "T-269",
+      "given": {
+        "gate": "G2",
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": null,
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "unregistered"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-34",
+      "title": "无 L，未标记的 N，链上未登记：fingerprint_mismatch，N 保留（r3av）",
+      "group": "T-269",
+      "given": {
+        "gate": "G2",
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "busy": false
+      },
+      "steps": [
+        {
+          "req": {
+            "type": "pgpMigrate",
+            "reqId": "r1"
+          },
+          "faults": {
+            "chain": "unregistered"
+          },
+          "expect": {
+            "ack": "ok",
+            "event": "fingerprint_mismatch",
+            "fp": null,
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": null
+            }
+          }
+        }
+      ]
     }
   ],
   "pwaEventCases": [
@@ -1532,8 +1609,501 @@
       }
     }
   ],
+  "pageRecordCases": [
+    {
+      "id": "PR-01",
+      "title": "页面记录获取：不返回 pgpKey、chatManager.pgpKey、privateKeyArmor",
+      "given": {
+        "stored": {
+          "emailAddr": "a@example.test",
+          "keyID": "0xaaaa",
+          "index": 0,
+          "pgpKey": {
+            "privateKey": "SYNTH-PRIV",
+            "publicKey": "SYNTH-PUB",
+            "keyID": "K1"
+          },
+          "chatManager": {
+            "router": "r1",
+            "pgpKey": {
+              "privateKey": "SYNTH-PRIV",
+              "publicKey": "SYNTH-PUB",
+              "keyID": "K1"
+            }
+          },
+          "privateKeyArmor": "SYNTH-EOA-PRIV"
+        },
+        "gate": "G2"
+      },
+      "expect": {
+        "code": "ok",
+        "record": {
+          "emailAddr": "a@example.test",
+          "keyID": "0xaaaa",
+          "index": 0,
+          "chatManager": {
+            "router": "r1"
+          }
+        }
+      }
+    },
+    {
+      "id": "PR-02",
+      "title": "页面记录保存：携带 chatManager.pgpKey，key_over_bridge_refused，只记字段名",
+      "given": {
+        "stored": null,
+        "gate": "G2",
+        "req": {
+          "record": {
+            "chatManager": {
+              "pgpKey": {
+                "privateKey": "x"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "code": "key_over_bridge_refused",
+        "fields": [
+          "chatManager.pgpKey"
+        ],
+        "stored": null
+      }
+    },
+    {
+      "id": "PR-03",
+      "title": "页面记录保存：携带 privateKeyArmor（EOA 私钥），key_over_bridge_refused",
+      "given": {
+        "stored": null,
+        "gate": "G2",
+        "req": {
+          "record": {
+            "privateKeyArmor": "x"
+          }
+        }
+      },
+      "expect": {
+        "code": "key_over_bridge_refused",
+        "fields": [
+          "privateKeyArmor"
+        ],
+        "stored": null
+      }
+    },
+    {
+      "id": "PR-04",
+      "title": "页面记录保存：非白名单字段，bad_request",
+      "given": {
+        "stored": null,
+        "gate": "G2",
+        "req": {
+          "record": {
+            "foo": 1
+          }
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "fields": [
+          "foo"
+        ],
+        "stored": null
+      }
+    },
+    {
+      "id": "PR-05",
+      "title": "页面记录保存：白名单字段合并写入，不写 PGP 字段",
+      "given": {
+        "stored": {
+          "emailAddr": "old",
+          "keyID": "0xaaaa"
+        },
+        "gate": "G2",
+        "req": {
+          "record": {
+            "emailAddr": "b@example.test",
+            "chatManager": {
+              "router": "r2"
+            }
+          }
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "stored": {
+          "emailAddr": "b@example.test",
+          "keyID": "0xaaaa",
+          "chatManager": {
+            "router": "r2"
+          }
+        }
+      }
+    },
+    {
+      "id": "PR-06",
+      "title": "页面记录保存：G0 下 no_key（白名单字段）",
+      "given": {
+        "stored": null,
+        "gate": "G0",
+        "req": {
+          "record": {
+            "emailAddr": "b"
+          }
+        }
+      },
+      "expect": {
+        "code": "no_key",
+        "stored": null
+      }
+    },
+    {
+      "id": "PR-07",
+      "title": "页面记录保存：写入失败，存储保持原样",
+      "given": {
+        "stored": {
+          "emailAddr": "old"
+        },
+        "gate": "G2",
+        "req": {
+          "record": {
+            "emailAddr": "new"
+          }
+        },
+        "faults": {
+          "writeFailed": true
+        }
+      },
+      "expect": {
+        "code": "write_failed",
+        "stored": {
+          "emailAddr": "old"
+        }
+      }
+    },
+    {
+      "id": "PR-08",
+      "title": "页面记录获取：尚未初始化，not_found",
+      "given": {
+        "stored": null,
+        "gate": "G2"
+      },
+      "expect": {
+        "code": "not_found"
+      }
+    }
+  ],
+  "sourceCases": [
+    {
+      "id": "SR-01",
+      "title": "P 可读且与 L 一致：来源 P",
+      "input": {
+        "P": {
+          "layout": "measured",
+          "matched": true,
+          "fp": "A"
+        },
+        "L": {
+          "fp": "A"
+        }
+      },
+      "expect": {
+        "use": "P",
+        "code": null
+      }
+    },
+    {
+      "id": "SR-02",
+      "title": "P 可读，L 缺失：来源 P",
+      "input": {
+        "P": {
+          "layout": "measured",
+          "matched": true,
+          "fp": "A"
+        },
+        "L": null
+      },
+      "expect": {
+        "use": "P",
+        "code": null
+      }
+    },
+    {
+      "id": "SR-03",
+      "title": "P 与 L 指纹不一致：fingerprint_mismatch，不写入",
+      "input": {
+        "P": {
+          "layout": "measured",
+          "matched": true,
+          "fp": "A"
+        },
+        "L": {
+          "fp": "B"
+        }
+      },
+      "expect": {
+        "use": null,
+        "code": "fingerprint_mismatch"
+      }
+    },
+    {
+      "id": "SR-04",
+      "title": "P 中无与账户匹配的记录：account_mismatch",
+      "input": {
+        "P": {
+          "layout": "measured",
+          "matched": false,
+          "fp": "A"
+        },
+        "L": {
+          "fp": "A"
+        }
+      },
+      "expect": {
+        "use": null,
+        "code": "account_mismatch"
+      }
+    },
+    {
+      "id": "SR-05",
+      "title": "仅有 profiles[].pgpKey（未实测布局）：legacy_unreadable，不读取",
+      "input": {
+        "P": {
+          "layout": "profileLevelOnly"
+        },
+        "L": {
+          "fp": "A"
+        }
+      },
+      "expect": {
+        "use": null,
+        "code": "legacy_unreadable"
+      }
+    },
+    {
+      "id": "SR-06",
+      "title": "P 不可读，L 存在：来源 L",
+      "input": {
+        "P": null,
+        "L": {
+          "fp": "A"
+        }
+      },
+      "expect": {
+        "use": "L",
+        "code": null
+      }
+    },
+    {
+      "id": "SR-07",
+      "title": "P 与 L 均缺失：none",
+      "input": {
+        "P": null,
+        "L": null
+      },
+      "expect": {
+        "use": null,
+        "code": "none"
+      }
+    }
+  ],
+  "unregisterCases": [
+    {
+      "id": "UG-01",
+      "title": "注销：L 存在，删除 M 与 N，L 保留",
+      "given": {
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-02",
+      "title": "注销：无 L、P 不可读、链上未登记：unregister_refused，全部保留",
+      "given": {
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "pReadable": false,
+            "chainRegistered": false
+          },
+          "expect": {
+            "code": "unregister_refused",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": "A"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-03",
+      "title": "注销：无 L，但 P 可读：删除 M 与 N",
+      "given": {
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "pReadable": true
+          },
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-04",
+      "title": "注销：无 L，链上已登记：删除 M 与 N",
+      "given": {
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "chainRegistered": true
+          },
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-05",
+      "title": "注销中断于删除 M 之后：不产生事件，N 保留（pending）；再次注销完成",
+      "given": {
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        }
+      },
+      "steps": [
+        {
+          "faults": {
+            "interrupt": "afterMarkerDeleted"
+          },
+          "expect": {
+            "code": null,
+            "interrupted": true,
+            "state": {
+              "L": true,
+              "N": "A",
+              "M": null
+            }
+          }
+        },
+        {
+          "faults": {},
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-06",
+      "title": "注销：无 N、无 M：ok（幂等）",
+      "given": {
+        "L": null,
+        "N": null,
+        "M": null
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "unregisterCodes": [
+    "ok",
+    "unregister_refused"
+  ],
   "selfCheck": {
-    "runs": 46,
+    "runs": 70,
     "result": "pass"
   }
 }

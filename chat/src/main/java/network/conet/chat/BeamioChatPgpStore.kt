@@ -85,6 +85,21 @@ object BeamioChatPgpStore {
         context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
     }
 
+    /**
+     * Logout that keeps the legacy private copy L (r3av §25.52C.3): removes every other entry in both stores. L is the recovery
+     * source of the PGP migration, so logout never removes it here.
+     */
+    fun clearKeepingLegacy(context: Context) {
+        val stores = listOf(prefs(context), context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE))
+        for (store in stores) {
+            runCatching {
+                val editor = store.edit()
+                store.all.keys.filter { it != KEY_PRIVATE }.forEach { editor.remove(it) }
+                editor.commit()
+            }
+        }
+    }
+
     /** Logout / wallet switch: forget the PGP key, route key and wallet binding. */
     fun clear(context: Context) {
         runCatching { prefs(context).edit().clear().commit() }
