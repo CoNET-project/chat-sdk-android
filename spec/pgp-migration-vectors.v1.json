@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bw）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bx）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -6088,6 +6088,322 @@
       }
     }
   ],
+  "replyCases": [
+    {
+      "id": "RP-01",
+      "title": "回复经注入对象的 onmessage 到达，reqId 匹配，ack 信封 ok:true：resolve（r3bx，R471）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "rev": 1
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "reqId": "r1",
+          "action": "resolve",
+          "result": {
+            "code": "ok",
+            "rev": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "RP-02",
+      "title": "回复的 reqId 未知：忽略（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r9",
+            "ok": true,
+            "result": {
+              "code": "ok"
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "action": "ignore",
+          "why": "unknown_reqId"
+        }
+      ]
+    },
+    {
+      "id": "RP-03",
+      "title": "重复回复：首个生效，之后忽略（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "rev": 1
+            }
+          }
+        },
+        {
+          "t": 2,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "rev": 2
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "reqId": "r1",
+          "action": "resolve",
+          "result": {
+            "code": "ok",
+            "rev": 1
+          }
+        },
+        {
+          "action": "ignore",
+          "why": "unknown_reqId"
+        }
+      ]
+    },
+    {
+      "id": "RP-04",
+      "title": "超时 10 秒无回复：reject timeout；超时后的迟到回复忽略（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 10000,
+          "kind": "tick"
+        },
+        {
+          "t": 10500,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "rev": 1
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "reqId": "r1",
+          "action": "reject",
+          "error": "timeout"
+        },
+        {
+          "action": "ignore",
+          "why": "unknown_reqId"
+        }
+      ]
+    },
+    {
+      "id": "RP-05",
+      "title": "回复不是 ack 信封（如旧的 shellRecordResult 事件）：忽略（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "shellRecordResult",
+            "reqId": "r1",
+            "code": "ok"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "action": "ignore",
+          "why": "not_ack"
+        }
+      ]
+    },
+    {
+      "id": "RP-06",
+      "title": "ack 信封 ok:false：reject，error 为原生代码（如 origin_refused）（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": false,
+            "error": "origin_refused"
+          }
+        }
+      ],
+      "expect": [
+        {
+          "reqId": "r1",
+          "action": "reject",
+          "error": "origin_refused"
+        }
+      ]
+    },
+    {
+      "id": "RP-07",
+      "title": "畸形回复（ok:true 缺 result）：忽略，待定的请求仍可被后续有效回复完成（r3bx）",
+      "events": [
+        {
+          "t": 0,
+          "kind": "send",
+          "reqId": "r1"
+        },
+        {
+          "t": 1,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true
+          }
+        },
+        {
+          "t": 2,
+          "kind": "reply",
+          "msg": {
+            "type": "ack",
+            "reqId": "r1",
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "rev": 1
+            }
+          }
+        }
+      ],
+      "expect": [
+        {
+          "action": "ignore",
+          "why": "malformed"
+        },
+        {
+          "reqId": "r1",
+          "action": "resolve",
+          "result": {
+            "code": "ok",
+            "rev": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "RP-08a",
+      "title": "写入超时后、未完成读取：不得再次写入（blocked）（r3bx，§25.52AB.4）",
+      "expect": "blocked",
+      "kind": "mayWrite",
+      "readCompletedSinceTimeout": false
+    },
+    {
+      "id": "RP-08b",
+      "title": "写入超时后，已完成读取（ok 或 absent）：允许写入（allowed）（r3bx）",
+      "expect": "allowed",
+      "kind": "mayWrite",
+      "readCompletedSinceTimeout": true
+    }
+  ],
+  "originBoundaryCases": [
+    {
+      "id": "OR-01",
+      "title": "原生边界：来源不允许：不处理，不回复（r3bx，§25.52AB.5）",
+      "input": {
+        "allowed": false,
+        "reqIdValid": true
+      },
+      "expect": {
+        "processed": false,
+        "replies": 0,
+        "reply": null
+      }
+    },
+    {
+      "id": "OR-02",
+      "title": "原生边界：来源允许，reqId 有效：处理，恰好一次回复（r3bx）",
+      "input": {
+        "allowed": true,
+        "reqIdValid": true
+      },
+      "expect": {
+        "processed": true,
+        "replies": 1,
+        "reply": null
+      }
+    },
+    {
+      "id": "OR-03",
+      "title": "原生边界：来源允许，reqId 无效：bad_request，reqId 为 null，恰好一次回复（r3bx）",
+      "input": {
+        "allowed": true,
+        "reqIdValid": false
+      },
+      "expect": {
+        "processed": false,
+        "replies": 1,
+        "reply": {
+          "type": "ack",
+          "reqId": null,
+          "ok": false,
+          "error": "bad_request"
+        }
+      }
+    }
+  ],
   "unregisterCases": [
     {
       "id": "UG-01",
@@ -6476,7 +6792,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 220,
+    "runs": 232,
     "result": "pass"
   }
 }

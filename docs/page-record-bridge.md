@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bw (§25.52K to §25.52AA) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `b1d21769dd802495b73ecb513dac9206bee25bb7283373fbfbb708d757e60036`, 220 self-checks).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bx (§25.52K to §25.52AB) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `46be37560b953bd47c78ed019f76c6bad998b9afaf132e8f87f04368e3d21ba7`, 232 self-checks).
 
 ## Public entries
 
@@ -205,6 +205,18 @@ it is `too_large`, checked before the schema-specific answers.
 - The selection rule is pinned by `ShellRecordTransportTest` against TP-01 to TP-10 and SA-01 to SA-04. The iOS rows are the iOS SDK's; they
   are checked here only as the reference rule.
 
+## Reply path and the origin boundary (§25.52AB, r3bx)
+
+- The reply goes back through the injected object's `onmessage`. The shell's `WebViewCompat.addWebMessageListener` listener answers with
+  the `JavaScriptReplyProxy` it receives (`replyProxy.postMessage`), which the page reads as `onmessage` on `window.BeamioShellRecord`. The
+  API name is the androidx.webkit one; it is not verified on a device in this build.
+- `BeamioShellRecordImport.answerFromPage(context, sourceOrigin, isMainFrame, body, requestBytes)` is the window entry. It checks the
+  origin (`ALLOWED_ORIGIN`) and the main frame at the native boundary. A source that is not allowed is not processed and gets no reply
+  (`null`, OR-01). An allowed request gets exactly one ack, and a bad reqId is `bad_request` with `reqId: null` (OR-02, OR-03).
+- The reply envelope is the ack envelope of §25.52T.2 (`ok:true` with `result`, or `ok:false` with `error`). No `store` or other internal field.
+- The page's reply rules (reqId keys, the 10 s timeout, late and duplicate replies, malformed replies, and the write hold after a timed-out
+  write) are the page adapter's. `ShellRecordReplyTest` pins them as a reference against RP-01 to RP-08b.
+
 ## QA hook: the state without the EOA key (§25.52AA.5, HK-01 to HK-03)
 
 - `NativeQaHooks.dropEoaKeyOfAccount` removes `privateKeyArmor` from the account's profile and keeps the rest of the record, its revision,
@@ -218,7 +230,7 @@ it is `too_large`, checked before the schema-specific answers.
 ## Tests
 
 `ShellRecordAckVectorsTest` runs AK-01 to AK-28 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7, §25.52AA.7). `ShellRecordTransportTest`
-runs TP and SA; `QaHookPresenceTest` runs HK-01 to HK-03 (the QA configuration adds `NativeQaHooksTest`). `ShellRecordR439Test` covers the r3bq rules
+runs TP and SA; `ShellRecordReplyTest` runs RP-01 to RP-08b; `ShellRecordBoundaryTest` runs OR-01 to OR-03; `QaHookPresenceTest` runs HK-01 to HK-03 (the QA configuration adds `NativeQaHooksTest`). `ShellRecordR439Test` covers the r3bq rules
 that the vectors do not fix (the first-write guard, the marker and pointer repair, the case-insensitive keyID).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
