@@ -408,7 +408,8 @@ object BeamioSiCipherPost {
             val code = conn.responseCode
             val latency = (System.currentTimeMillis() - started).toInt()
             ProbeResult(reachable = code > 0, latencyMs = latency)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "http probe error ${e.javaClass.simpleName}: ${e.message?.take(160).orEmpty()}")
             ProbeResult(reachable = false, latencyMs = timeoutMs)
         } finally {
             conn?.disconnect()
@@ -448,7 +449,9 @@ object BeamioSiCipherPost {
                 BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
             }.orEmpty()
             code to text
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // R540 diagnostic: the cause is logged by class and message only (no body, no key). Status 0 means no HTTP answer.
+            Log.w(TAG, "http post error ${e.javaClass.simpleName}: ${e.message?.take(160).orEmpty()}")
             0 to ""
         } finally {
             conn?.disconnect()
