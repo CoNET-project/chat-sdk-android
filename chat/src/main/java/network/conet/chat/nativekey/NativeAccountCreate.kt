@@ -20,17 +20,27 @@ object NativeAccountCreateHost {
     @Volatile
     internal var events: ((JSONObject) -> Unit)? = null
 
+    /** The verdict on one reported result that the SDK did not forward (§25.50.3). Only [reason] and [fields] may be logged. */
+    class Drop(val reason: String, val fields: List<String> = emptyList())
+
+    /** The `reqId` of the open page, or `null` when no page is open. Set by [open], cleared by `ok` or by the page closing. */
     @Volatile
     private var pageReqId: Any? = null
 
+    /** A native result for this page has arrived, forwarded or dropped. Then a close sends nothing more (§25.50.5, NC-06, NC-16). */
     @Volatile
-    private var resultSent = false
+    private var resultSeen = false
+
+    private val ALLOWED_FIELDS = setOf("type", "reqId", "code", "eoa")
+    private val RESULT_CODES = setOf("ok", "cancelled", "already_exists", "write_failed", "readback_failed")
+    private val CANONICAL_EOA = Regex("^0x[0-9a-f]{40}$")
 
     /** `nativeAccountCreateOpen` (§25.46.2): `true` when the page is open. The `reqId` is kept for the result. */
+    @Synchronized
     internal fun open(reqId: Any): Boolean {
         val show = launcher ?: return false
         pageReqId = reqId
-        resultSent = false
+        resultSeen = false
         val opened = try {
             show()
         } catch (_: Exception) {
@@ -43,31 +53,66 @@ object NativeAccountCreateHost {
         return true
     }
 
-    /** The page was closed. Sends `cancelled` when no result was sent for this page (§25.46.6). */
+    /** `true` while a page is open and its result is still pending. */
+    @Synchronized
+    internal fun isPageOpen(): Boolean = pageReqId != null
+
+    /**
+     * A result reported by the shell's page (§25.50.3). Forwards `{type, reqId, code, eoa?}` built from the checked fields, or
+     * returns the [Drop]. Checks, in order: the page is open; `type` and `reqId` match the open page (a mismatch does not count
+     * as this page's result); the fields are on the whitelist; the code is one of the five; `eoa` is present only for `ok`, and
+     * is lowercase `0x` plus 40 hex digits. `ok` ends the page. Any other result keeps it open for a retry (§25.46.6).
+     */
+    @Synchronized
+    fun report(event: JSONObject): Drop? {
+        val id = pageReqId ?: return Drop("no_page")
+        if (event.optString("type", "") != "nativeAccountCreateResult") return Drop("type_mismatch")
+        val got = event.opt("reqId")
+        if (got == null || got != id) return Drop("reqid_mismatch")
+        resultSeen = true
+        val extra = event.keys().asSequence().map { it.toString() }.filter { it !in ALLOWED_FIELDS }.toList().sorted()
+        if (extra.isNotEmpty()) return Drop("field_not_allowed", extra)
+        val code = event.optString("code", "")
+        if (code !in RESULT_CODES) return Drop("unknown_code")
+        val hasEoa = event.has("eoa")
+        if (code == NativeAccountCreate.Code.OK.wire) {
+            if (!hasEoa) return Drop("eoa_invalid")
+            val eoa = event.optString("eoa", "")
+            if (!CANONICAL_EOA.matches(eoa)) return Drop("eoa_invalid")
+            forward(id, code, eoa)
+            pageReqId = null
+            resultSeen = false
+            return null
+        }
+        if (hasEoa) return Drop("eoa_not_allowed")
+        forward(id, code, null)
+        return null
+    }
+
+    /** The page was closed. Sends `cancelled` when no result was produced for this page (§25.46.6, §25.50.5). */
+    @Synchronized
     fun pageClosed() {
         val id = pageReqId ?: return
-        if (!resultSent) emit(id, NativeAccountCreate.Code.CANCELLED, null)
+        if (!resultSeen) forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
         pageReqId = null
-        resultSent = false
+        resultSeen = false
     }
 
-    /** One result for the open page. `ok` ends the page; any other result keeps it open for a retry (§25.46.6). */
+    /** The engine's own result for the open page. It goes through the same checks as a result from the shell. */
+    @Synchronized
     internal fun finish(code: NativeAccountCreate.Code, eoa: String?) {
         val id = pageReqId ?: return
-        emit(id, code, eoa)
-        resultSent = true
-        if (code == NativeAccountCreate.Code.OK) {
-            pageReqId = null
-            resultSent = false
-        }
+        val event = JSONObject().put("type", "nativeAccountCreateResult").put("reqId", id).put("code", code.wire)
+        if (eoa != null) event.put("eoa", eoa)
+        report(event)
     }
 
-    private fun emit(id: Any, code: NativeAccountCreate.Code, eoa: String?) {
+    private fun forward(id: Any, code: String, eoa: String?) {
         val payload = JSONObject()
             .put("type", "nativeAccountCreateResult")
             .put("reqId", id)
-            .put("code", code.wire)
-        if (code == NativeAccountCreate.Code.OK && eoa != null) payload.put("eoa", eoa)
+            .put("code", code)
+        if (eoa != null) payload.put("eoa", eoa)
         events?.invoke(payload)
     }
 }

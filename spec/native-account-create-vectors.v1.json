@@ -1,0 +1,872 @@
+{
+  "meta": {
+    "spec": "v1.1-r3ap §25.50（测试 T-249、T-250）；补充 §25.46.9 所指的 native-account-create-vectors",
+    "generator": "gen-native-account-create-vectors.mjs",
+    "synthetic": true,
+    "containsCredentials": false,
+    "eoaFixture": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+    "caseCount": 25,
+    "groups": {
+      "A": "原生结果事件的转发、丢弃与页面时序（SDK 侧，§25.46.6、§25.50.3、§25.50.5）",
+      "B": "PWA 能力门控、创建步骤命令、无回退与进入应用的依据（PWA 侧，§25.50.4、§25.46.10）"
+    },
+    "limits": "只覆盖结果事件与 PWA 门控的逻辑；不覆盖原生生成、写入、读回的实机行为（另由 T-239 与设备证据覆盖）。"
+  },
+  "cases": [
+    {
+      "id": "NC-01",
+      "group": "A",
+      "title": "ok 且 eoa 为小写 40 位十六进制：转发，页面结束，设备有钥",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-01"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-01",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-01",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": false,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-02",
+      "group": "A",
+      "title": "ok 的 eoa 为大写十六进制：不转发（只允许小写），页面保持开放，设备有钥",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-02"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-02",
+              "code": "ok",
+              "eoa": "0x9858EFFD232B4033E47D90003D41EC34ECAEDA94"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "eoa_invalid"
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-03",
+      "group": "A",
+      "title": "ok 缺少 eoa：不转发，不以 ok 处理",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-03"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-03",
+              "code": "ok"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "eoa_invalid"
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-04",
+      "group": "A",
+      "title": "cancelled 携带 eoa：不转发（eoa 只在 ok 时出现），设备无钥",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-04"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-04",
+              "code": "cancelled",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            },
+            "keyAfter": false
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "eoa_not_allowed"
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-05",
+      "group": "A",
+      "title": "用户未产生任何结果即关闭页面：送 cancelled，设备无钥",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-05"
+          },
+          {
+            "op": "close"
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-05",
+            "code": "cancelled"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": false,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-06",
+      "group": "A",
+      "title": "write_failed 后关闭页面：只送 write_failed，不再补发 cancelled；设备无钥（已回滚）",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-06"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-06",
+              "code": "write_failed"
+            },
+            "keyAfter": false
+          },
+          {
+            "op": "close"
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-06",
+            "code": "write_failed"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": false,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-07",
+      "group": "A",
+      "title": "readback_failed：转发，页面保持开放可重试，设备无钥（已回滚）",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-07"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-07",
+              "code": "readback_failed"
+            },
+            "keyAfter": false
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-07",
+            "code": "readback_failed"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": true,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-08",
+      "group": "A",
+      "title": "already_exists：转发，不覆盖，设备钥保持不变，页面保持开放",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-08"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-08",
+              "code": "already_exists"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-08",
+            "code": "already_exists"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-09",
+      "group": "A",
+      "title": "ok 之后关闭页面：只送 ok，不再补发 cancelled",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-09"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-09",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            },
+            "keyAfter": true
+          },
+          {
+            "op": "close"
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-09",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": false,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-10",
+      "group": "A",
+      "title": "reqId 与已打开页面不一致：丢弃，页面保持开放",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-10"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-99",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "reqid_mismatch"
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-11",
+      "group": "A",
+      "title": "未知码 pending：丢弃，不当作 ok，页面保持开放",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-11"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-11",
+              "code": "pending"
+            },
+            "keyAfter": false
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "unknown_code"
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-12",
+      "group": "A",
+      "title": "ok 事件夹带 mnemonic：整条丢弃，只记字段名，不转发 eoa",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-12"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-12",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+              "mnemonic": "SYNTHETIC-DO-NOT-LOG"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "field_not_allowed",
+            "fields": [
+              "mnemonic"
+            ]
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-13",
+      "group": "A",
+      "title": "write_failed 夹带 privateKeyHex：整条丢弃，只记字段名",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-13"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-13",
+              "code": "write_failed",
+              "privateKeyHex": "SYNTHETIC-DO-NOT-LOG"
+            },
+            "keyAfter": false
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "field_not_allowed",
+            "fields": [
+              "privateKeyHex"
+            ]
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": false
+      }
+    },
+    {
+      "id": "NC-14",
+      "group": "A",
+      "title": "ok 夹带 hash 与 img（恢复数据字段）：整条丢弃，只记字段名",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-14"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-14",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+              "hash": "SYNTHETIC-DO-NOT-LOG",
+              "img": "SYNTHETIC-DO-NOT-LOG"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "field_not_allowed",
+            "fields": [
+              "hash",
+              "img"
+            ]
+          }
+        ],
+        "pageOpenAfter": true,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-15",
+      "group": "A",
+      "title": "先 write_failed 后重试成功：依次转发两条，最后 ok 结束页面",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-15"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-15",
+              "code": "write_failed"
+            },
+            "keyAfter": false
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-15",
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            },
+            "keyAfter": true
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-15",
+            "code": "write_failed"
+          },
+          {
+            "type": "nativeAccountCreateResult",
+            "reqId": "NC-15",
+            "code": "ok",
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+          }
+        ],
+        "dropped": [],
+        "pageOpenAfter": false,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-16",
+      "group": "A",
+      "title": "原生已产生结果（被丢弃）后关闭页面：不送 cancelled（cancelled 只表示未生成任何钥）。实现缺陷路径，验收须使 NC-02、NC-03 不发生",
+      "testIds": [
+        "T-249"
+      ],
+      "input": {
+        "steps": [
+          {
+            "op": "open",
+            "reqId": "NC-16"
+          },
+          {
+            "op": "native",
+            "ev": {
+              "type": "nativeAccountCreateResult",
+              "reqId": "NC-16",
+              "code": "ok",
+              "eoa": "0x9858EFFD232B4033E47D90003D41EC34ECAEDA94"
+            },
+            "keyAfter": true
+          },
+          {
+            "op": "close"
+          }
+        ]
+      },
+      "expect": {
+        "forwarded": [],
+        "dropped": [
+          {
+            "reason": "eoa_invalid"
+          }
+        ],
+        "pageOpenAfter": false,
+        "keyPresentAfter": true
+      }
+    },
+    {
+      "id": "NC-17",
+      "group": "B",
+      "title": "hello 未声明 identity.native-keys.v1：不发送 nativeAccountCreateOpen，统一不可用，不回落页内建号",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": false,
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [],
+        "uiState": "unavailable",
+        "persistedKeys": [],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-18",
+      "group": "B",
+      "title": "已声明，宿主未注册（not_supported）：显示专用提示，不回落页内建号，不发送 recoveryCreateOpen",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": false,
+          "error": "not_supported"
+        },
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "not_supported_hint",
+        "persistedKeys": [],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-19",
+      "group": "B",
+      "title": "已声明，宿主应答 not_available：显示不可用提示，不回落页内建号",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": false,
+          "error": "not_available"
+        },
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "not_available_hint",
+        "persistedKeys": [],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-20",
+      "group": "B",
+      "title": "ack ok 后收到 ok（eoa）：只持久化 eoa，walletStatus 为 not_ready（G1）时不进入应用，进入 init",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": {
+          "code": "ok",
+          "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+        },
+        "walletStatus": "not_ready"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "g1_init",
+        "persistedKeys": [
+          "eoa"
+        ],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-21",
+      "group": "B",
+      "title": "收到 ok 且 walletStatus 为 locked（G2）：进入应用，依据为 walletStatus 而非 ok",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": {
+          "code": "ok",
+          "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+        },
+        "walletStatus": "locked"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "enter_app",
+        "persistedKeys": [
+          "eoa"
+        ],
+        "enteredApp": true,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-22",
+      "group": "B",
+      "title": "收到 ok 但 walletStatus 为 no_key（不一致）：不进入应用，显示错误提示",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": {
+          "code": "ok",
+          "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+        },
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "error_hint",
+        "persistedKeys": [
+          "eoa"
+        ],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-23",
+      "group": "B",
+      "title": "already_exists 且 walletStatus 为 locked：不新建，按 walletStatus 进入应用；创建步骤不发送 recoveryCreateOpen",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": {
+          "code": "already_exists"
+        },
+        "walletStatus": "locked"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "enter_app",
+        "persistedKeys": [],
+        "enteredApp": true,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-24",
+      "group": "B",
+      "title": "write_failed：显示重试提示，不持久化任何值，不进入应用",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": {
+          "code": "write_failed"
+        },
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "retry_hint",
+        "persistedKeys": [],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    },
+    {
+      "id": "NC-25",
+      "group": "B",
+      "title": "ack ok 但尚无结果：等待原生结果，不进入应用",
+      "testIds": [
+        "T-250"
+      ],
+      "input": {
+        "declares": true,
+        "ack": {
+          "ok": true
+        },
+        "result": null,
+        "walletStatus": "no_key"
+      },
+      "expect": {
+        "createStepSends": [
+          "nativeAccountCreateOpen"
+        ],
+        "uiState": "waiting_native",
+        "persistedKeys": [],
+        "enteredApp": false,
+        "fallbackInPage": false
+      }
+    }
+  ]
+}
