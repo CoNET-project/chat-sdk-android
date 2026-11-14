@@ -16,10 +16,10 @@ class LogScanPatternsHashTest {
 
     @Test
     fun logScanPatternsAreTheR3ccCanonicalCopy() {
-        // The canonical copy interface/protocol/log-scan-patterns.v1.json (spec r3ce, 25.52AG.3), byte for byte. Previously e5d2fa13… (r3cc, which still
+        // The canonical copy interface/protocol/log-scan-patterns.v1.json (spec r3cj, unchanged since r3ch), byte for byte. Previously 90ee2122… (r3ce) and e5d2fa13… (r3cc, which still
         // listed the spec's own hash) and d8cffc70… (r3i, without the chat-route sources).
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        assertEquals("90ee212220e0a58c5f7421845d3ceaa4b18cce8fc7a690ec90483ce140af7a4f", sha)
+        assertEquals("8169b1bb6389afdbccb92a42348a3a323aa99663c0e4d4d05f2e349bf34dae1b", sha)
     }
 
     @Test
@@ -31,6 +31,8 @@ class LogScanPatternsHashTest {
         assertTrue("the spec does not list its own hash", sums.none { it == "0cca7f89bb7a3e83ff9671e8299e538cf1b71c17a6913832923364cc6087dddf" })
         assertTrue(sums.contains("51719937ab141db04694412be9c8d7bcee69db0e1c3a506ada3714d25769f700"))
         assertTrue(sums.contains("a26a24cd0397c280295d7b86df8ea27b733682c5166f99c053f18276840d5bd9"))
-        assertEquals(11, entries.length())
+        // r3ch (25.52AJ.3): one literal exemption for the test directory file name digest (fceaf6c8…), listed by value. 12 entries.
+        assertTrue(sums.contains("fceaf6c89021ad554dd855bd11d2cb71f69170a239b19c5cff7d844b071d5c9e"))
+        assertEquals(12, entries.length())
     }
 }

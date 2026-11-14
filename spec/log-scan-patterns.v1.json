@@ -257,6 +257,11 @@
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
         "sha256": "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda",
         "source": "spec 25.26.1"
+      },
+      {
+        "name": "测试目录文件名中的账户标识摘要（shell-record-* 下 <摘要>.bin，R589 审计签字人裁定，R628）",
+        "sha256": "fceaf6c89021ad554dd855bd11d2cb71f69170a239b19c5cff7d844b071d5c9e",
+        "source": "spec §25.52AJ.3（R628）；仅此一值"
       }
     ],
     "specRecordCheck": [
