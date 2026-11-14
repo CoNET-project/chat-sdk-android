@@ -170,7 +170,7 @@
         "command": "walletTransferOnce",
         "carriesKey": true,
         "solicited": true,
-        "expect": "accepted"
+        "expect": "not_supported"
       },
       {
         "id": "T-127d",
@@ -178,7 +178,7 @@
         "command": "walletTransferOnce",
         "carriesKey": true,
         "solicited": false,
-        "expect": "refused"
+        "expect": "not_supported"
       }
     ]
   },
@@ -204,101 +204,140 @@
     "unknownCommandFamilies": [
       "pgpSign"
     ],
-    "note": "pgpSign 已删除（spec §25.52BP.1）：锁定态下按未知名应答 unknown_command（§25.52AT.3），不再应答 locked",
+    "notSupportedFamilies": [
+      "walletTransferOnce"
+    ],
+    "note": "pgpSign 已删除（spec §25.52BP.1）：锁定态下按未知名应答 unknown_command（§25.52AT.3）。walletTransferOnce 已退役：任何状态下 not_supported（§25.52BZ.3）。其余族在锁定时应答 locked，判定在门控步骤，先于参数校验（§25.52BZ.4）。commands 为 null 的族待映射（§25.52BZ.5）",
     "cases": [
       {
         "id": "T-130-01",
         "family": "C1",
+        "commands": [
+          "historySign"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-02",
         "family": "C2",
+        "commands": [
+          "gossipSign"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-03",
         "family": "C3",
+        "commands": [
+          "pgpDecryptInbound"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-04",
         "family": "C4",
+        "commands": [
+          "pgpSign"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-05",
         "family": "C5",
+        "commands": [
+          "deriveSubkeys"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-06",
         "family": "W5",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-07",
         "family": "W7",
+        "commands": [
+          "ephemeralSign"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-08",
         "family": "N0",
+        "commands": [
+          "walletAddress"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-09",
         "family": "N1",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-10",
         "family": "N2",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-11",
         "family": "N3",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-12",
         "family": "N4",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-13",
         "family": "pgpDecrypt",
+        "commands": [
+          "pgpDecryptInbound"
+        ],
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-14",
         "family": "pgpSign",
+        "commands": [
+          "pgpSign"
+        ],
         "locked": true,
         "expect": "unknown_command"
       },
       {
         "id": "T-130-15",
         "family": "walletTransferOnce",
+        "commands": [
+          "walletTransferOnce"
+        ],
         "locked": true,
-        "expect": "locked"
+        "expect": "not_supported"
       },
       {
         "id": "T-130-16",
         "family": "identityReady",
+        "commands": null,
         "locked": true,
         "expect": "locked"
       }

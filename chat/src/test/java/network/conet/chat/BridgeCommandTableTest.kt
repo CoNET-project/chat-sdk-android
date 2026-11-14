@@ -118,38 +118,45 @@ class BridgeCommandTableTest {
     }
 
     /**
-     * 25.52AU.4, AV.2, AW.3: the command table T is T0 (from the no-key vectors) plus T1 (the seven names of AV.2). The shell list H is the
-     * shellLayerIos list of the same file (§25.26.4b). Every registered name must be in T or in H.
+     * 25.52BY.1, BW.2 (r3dw, r3dy): the reference table T is protocol/table-T.v1.json (67 names, spec/table-T.v1.json). The audit of the dispatch
+     * table refers to it. Every registered name must be in it.
      */
-    private fun tAndH(): Pair<Set<String>, Set<String>> {
-        val doc = JSONObject(File("../spec/no-key-reject-vectors.v1.json").readText(Charsets.UTF_8))
-        val t0 = mutableSetOf<String>()
-        for (key in listOf("walletCommands", "chatCommands", "retiredCommands", "specialStatus")) {
-            val arr = doc.getJSONArray(key)
-            for (i in 0 until arr.length()) t0 += arr.getJSONObject(i).getString("command")
-        }
-        for (key in listOf("allowedUnderNoKey", "lifecycleExcluded")) {
-            val arr = doc.getJSONArray(key)
-            for (i in 0 until arr.length()) t0 += arr.getString(i)
-        }
-        val mapping = doc.getJSONArray("mapping")
-        for (i in 0 until mapping.length()) mapping.getJSONObject(i).optString("bridgeName", "").takeIf { it.isNotEmpty() }?.let { t0 += it }
-        t0 += listOf("shellRecordRead", "shellRecordWrite")
-        val t1 = setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")
-        val shell = doc.getJSONArray("shellLayerIos")
-        val h = (0 until shell.length()).map { shell.getJSONObject(it).getString("name") }.toSet()
-        return (t0 + t1) to h
+    private fun tableT(): Set<String> {
+        val doc = JSONObject(File("../spec/table-T.v1.json").readText(Charsets.UTF_8))
+        val names = doc.getJSONArray("names")
+        return (0 until names.length()).map { names.getString(it) }.toSet()
     }
 
     @Test
-    fun everyRegisteredNameIsInTOrH() {
-        val (t, h) = tAndH()
+    fun everyRegisteredNameIsInTheReferenceTable() {
+        val t = tableT()
+        assertEquals(67, t.size)
         val exact = BridgeCommandTable.DISPATCH + BridgeCommandTable.DECIDED_BEFORE_DISPATCH + BridgeCommandTable.GATE_STATUS + NoKeyGate.RETIRED
-        // 25.52AW.3, BG.4: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); the two page-record names are in T (AU.4).
+        // 25.52AW.3, BG.4, BP.1: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); the page-record names are in T too.
         assertEquals(53, exact.size)
-        val outside = (exact + BridgeCommandTable.CHAT_CHANNEL_SHELL_RECORD).filter { it !in t && it !in h }
-        assertTrue("registered names outside T and H: $outside", outside.isEmpty())
-        assertTrue("T1 names are in T", t.containsAll(setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")))
+        val outside = (exact + BridgeCommandTable.CHAT_CHANNEL_SHELL_RECORD).filter { it !in t }
+        assertTrue("registered names outside table-T: $outside", outside.isEmpty())
+        assertTrue("T1 names are in table-T", t.containsAll(setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")))
+        assertFalse("pgpSign is not in table-T (25.52BP.1)", "pgpSign" in t)
+    }
+
+    @Test
+    fun theLockedCheckComesAfterTheNameCheckAndBeforeTheParameters() {
+        // 25.52BZ.4: the locked check of the gate step is after the name check and before the no_key or not_ready answers and the handlers.
+        val name = source.indexOf("BridgeCommandTable.isRegistered(type)")
+        val locked = source.indexOf("NoKeyGate.lockedAnswer(type, state)")
+        val gateAnswer = source.indexOf("when (NoKeyGate.answerFor(type, gate))")
+        assertTrue("the locked check exists", locked > 0)
+        assertTrue("the name check comes before the locked check", name in 0 until locked)
+        assertTrue("the locked check comes before the no_key and not_ready answers", locked in 0 until gateAnswer)
+    }
+
+    @Test
+    fun theRetiredNamesAreAnsweredBeforeTheGateInEveryState() {
+        // 25.52BZ.3: the retired names answer not_supported in every state, locked included, before the gate and the locked check.
+        val retired = source.indexOf("if (route == NoKeyGate.Route.NOT_SUPPORTED) {")
+        val locked = source.indexOf("NoKeyGate.lockedAnswer(type, state)")
+        assertTrue("the retired answer comes before the locked check", retired in 0 until locked)
     }
 
     @Test

@@ -255,8 +255,13 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "57c6bbfcf51f0493188ca0bf6d792826c54585cc4f6acd3ebd237fa95ba790c0",
+        "sha256": "ccc445ec563b6b3fcbdecf0c891ede5caec289fc6ef6911db08dee5ebf266c5b",
         "source": "spec §25.52BS（r3dp）"
+      },
+      {
+        "name": "interface/protocol/table-T.v1.json",
+        "sha256": "c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569",
+        "source": "spec §25.52BY（r3dy）"
       },
       {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
@@ -312,6 +317,10 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/table-T.v1.json",
         "specRecorded": true
       }
     ],

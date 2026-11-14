@@ -1061,8 +1061,8 @@ internal class ShellRecordBridge(
         val allowed = when (type) {
             "shellRecordRead" -> ShellRecordPolicy.READ_FIELDS
             "shellRecordWrite" -> ShellRecordPolicy.WRITE_FIELDS
-            // 25.52AW.1: an unknown shellRecord* name on the window channel is unknown_command (§25.52AU.1). Other unknown types keep bad_request.
-            else -> return reply(if (type.startsWith("shellRecord")) "unknown_command" else "bad_request", emptyList())
+            // 25.52AU.1, BU.1 (r3dt): an unknown top-level action on the window channel is the envelope-level unknown_command, once.
+            else -> return reply("unknown_command", emptyList())
         }
         // §25.52AD.4 step 2: the gate answers before the payload is read. G1 is not_ready (§25.26.4c).
         val acc = account()

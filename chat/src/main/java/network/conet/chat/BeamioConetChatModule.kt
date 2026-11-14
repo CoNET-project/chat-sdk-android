@@ -169,7 +169,8 @@ object BeamioConetChatModule {
         }
         val type = body.optString("type", "")
         // Order (25.52AT.1, AU.2, AQ.2): the credential check, the command name, and the chat-channel shell-record answer come before the
-        // legacy adoption, so a refused or unknown request changes no state. The adoption belongs to the gate step; it runs before the gate handlers.
+        // legacy adoption, so a refused or unknown request changes no state. For a known command the adoption still runs before its gate
+        // (25.25.6 U-3, U-4).
         // 25.52AT.1 step 2 (25.52AQ.2, BG.3: pgpMigrate included): a credential field of a CRED command is refused before the gate, with the field names and no values.
         if (type in CredFields.COMMANDS) {
             val names = CredFields.refusalNames(type, body)
@@ -232,6 +233,12 @@ object BeamioConetChatModule {
             val reqId = echoId(body)
             val state = NativeWallet.vault(context).state()
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
+            // 25.52BZ.4 (r3dz): the locked check of the gate step, after the name check and before the parameters and the no_key or not_ready
+            // answers. No payload is read.
+            NoKeyGate.lockedAnswer(type, state)?.let { code ->
+                ack(reqId, false, error = code)
+                return
+            }
             when (route) {
                 NoKeyGate.Route.WALLET_STATUS -> {
                     ack(reqId, true, result = NoKeyGate.walletStatusFor(gate, state))

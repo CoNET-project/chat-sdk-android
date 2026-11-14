@@ -21,7 +21,8 @@ class LogScanPatternsHashTest {
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
         // r3dm (R700, R693): the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
         // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
-        assertEquals("c2df8584ac0e8f67832b5cecc6e8cf68816489b8c2fbb0cfff5bae29f08caa34", sha)
+        // r3dz (R721, R722): the protocol version is 273947fe…; c2df8584… is withdrawn.
+        assertEquals("273947fe89927dda35c6434d53fdb589712fe913933988f404e46b5e8ee2145f", sha)
     }
 
     @Test
@@ -39,7 +40,9 @@ class LogScanPatternsHashTest {
         assertTrue(sums.contains("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd"))
         assertTrue(sums.contains("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0"))
         // r3dp: the negative tests file (25.52BS) is listed too: 13 entries.
-        assertTrue(sums.contains("57c6bbfcf51f0493188ca0bf6d792826c54585cc4f6acd3ebd237fa95ba790c0"))
-        assertEquals(13, entries.length())
+        // r3dz: the negative tests file is ccc445ec…; r3dy adds table-T (c5e54b94…): 14 entries.
+        assertTrue(sums.contains("ccc445ec563b6b3fcbdecf0c891ede5caec289fc6ef6911db08dee5ebf266c5b"))
+        assertTrue(sums.contains("c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569"))
+        assertEquals(14, entries.length())
     }
 }

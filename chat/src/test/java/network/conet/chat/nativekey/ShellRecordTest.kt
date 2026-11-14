@@ -414,6 +414,24 @@ class ShellRecordTest {
     }
 
     @Test
+    fun anUnknownTopLevelActionOnTheWindowChannelIsTheEnvelopeLevelUnknownCommand() {
+        // 25.52AU.1, BU.1 (r3dt): any unknown top-level action is ok false, error unknown_command, once, with no result. A missing or invalid reqId is
+        // bad_request first (25.52AW.1, the envelope comes before the action).
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Unknown },
+            migrating = { false },
+            outcome = { ImportOutcome.ABSENT },
+        )
+        val named = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "zzUnknownAction").put("reqId", "u1"), 40)
+        assertEquals(false, named.getBoolean("ok"))
+        assertEquals("unknown_command", named.getString("error"))
+        assertFalse(named.has("result"))
+        val noId = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "zzUnknownAction"), 40)
+        assertTrue(noId.isNull("reqId"))
+        assertEquals("bad_request", noId.getString("error"))
+    }
+
+    @Test
     fun theMigrationStateIsNotAPageCommand() {
         // §25.52L.6 (D7): the page cannot ask for the migration state. The bridge refuses the command; the native query is separate.
         val bridge = ShellRecordBridge(
