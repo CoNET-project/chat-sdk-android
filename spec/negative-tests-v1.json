@@ -1,0 +1,376 @@
+{
+  "spec": "spec v1.1-r3b §25.22（负例规格），第二十五批",
+  "status": "合成数据。三端实现前以本文件为准。各端须运行同一组用例；X-19 未批准的 iOS PGP 用例标为阻塞，不得跳过。",
+  "shellOrigin": "https://shell.test.invalid",
+  "bridgeSource": {
+    "rule": "只接受 isMainFrame === true 且 origin 与 shellOrigin 完全一致的消息",
+    "cases": [
+      {
+        "id": "T-119",
+        "name": "iframe",
+        "src": {
+          "isMainFrame": false,
+          "origin": "https://shell.test.invalid",
+          "kind": "iframe"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-120",
+        "name": "subframe",
+        "src": {
+          "isMainFrame": false,
+          "origin": "https://shell.test.invalid",
+          "kind": "subframe"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-121",
+        "name": "forged-origin",
+        "src": {
+          "isMainFrame": true,
+          "origin": "https://shell.test.invalid.evil",
+          "kind": "main"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-121b",
+        "name": "other-site",
+        "src": {
+          "isMainFrame": true,
+          "origin": "https://other.test.invalid",
+          "kind": "main"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-122a",
+        "name": "null-origin",
+        "src": {
+          "isMainFrame": true,
+          "origin": "null",
+          "kind": "main"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-122b",
+        "name": "about-blank",
+        "src": {
+          "isMainFrame": true,
+          "origin": "about:blank",
+          "kind": "main"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-122c",
+        "name": "file-origin",
+        "src": {
+          "isMainFrame": true,
+          "origin": "file://",
+          "kind": "main"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-control",
+        "name": "main-frame-expected-origin",
+        "src": {
+          "isMainFrame": true,
+          "origin": "https://shell.test.invalid",
+          "kind": "main"
+        },
+        "expect": true
+      }
+    ]
+  },
+  "pgpFixedDomain": {
+    "purposes": [
+      "chatEnvelope",
+      "groupMessage",
+      "voiceSignal"
+    ],
+    "allowedSigTypes": [
+      "0x00",
+      "0x01"
+    ],
+    "domainTagRule": "beamio.pgp.<purposeId>.v1 加换行，由原生生成，调用方不得提供",
+    "cases": [
+      {
+        "id": "T-125",
+        "name": "unknown-purpose",
+        "req": {
+          "purposeId": "arbitraryDomain",
+          "sigType": "0x00"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-126",
+        "name": "certification-0x10",
+        "req": {
+          "purposeId": "chatEnvelope",
+          "sigType": "0x10"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-126b",
+        "name": "certification-0x13",
+        "req": {
+          "purposeId": "chatEnvelope",
+          "sigType": "0x13"
+        },
+        "expect": false
+      },
+      {
+        "id": "T-control-sign",
+        "name": "enumerated-document-sig",
+        "req": {
+          "purposeId": "chatEnvelope",
+          "sigType": "0x01"
+        },
+        "expect": true,
+        "domainTag": "beamio.pgp.chatEnvelope.v1\n"
+      }
+    ]
+  },
+  "importPolicy": {
+    "keyCarryingCommands": [
+      "walletTransferOnce"
+    ],
+    "forbiddenImportCommandNames": [
+      "importWallet",
+      "setPrivateKey",
+      "importPrivateKey",
+      "importMnemonic",
+      "setLocalSigner"
+    ],
+    "cases": [
+      {
+        "id": "T-127",
+        "name": "key-in-init",
+        "command": "init",
+        "carriesKey": true,
+        "expect": "key_over_bridge_refused"
+      },
+      {
+        "id": "T-127b",
+        "name": "key-in-provisionIdentity",
+        "command": "provisionIdentity",
+        "carriesKey": true,
+        "expect": "key_over_bridge_refused"
+      },
+      {
+        "id": "T-127c",
+        "name": "walletTransferOnce-solicited",
+        "command": "walletTransferOnce",
+        "carriesKey": true,
+        "solicited": true,
+        "expect": "accepted"
+      },
+      {
+        "id": "T-127d",
+        "name": "walletTransferOnce-unsolicited",
+        "command": "walletTransferOnce",
+        "carriesKey": true,
+        "solicited": false,
+        "expect": "refused"
+      }
+    ]
+  },
+  "passcodeLocked": {
+    "families": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "W5",
+      "W7",
+      "N0",
+      "N1",
+      "N2",
+      "N3",
+      "N4",
+      "pgpDecrypt",
+      "pgpSign",
+      "walletTransferOnce",
+      "identityReady"
+    ],
+    "unknownCommandFamilies": [
+      "pgpSign"
+    ],
+    "note": "pgpSign 已删除（spec §25.52BP.1）：锁定态下按未知名应答 unknown_command（§25.52AT.3），不再应答 locked",
+    "cases": [
+      {
+        "id": "T-130-01",
+        "family": "C1",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-02",
+        "family": "C2",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-03",
+        "family": "C3",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-04",
+        "family": "C4",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-05",
+        "family": "C5",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-06",
+        "family": "W5",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-07",
+        "family": "W7",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-08",
+        "family": "N0",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-09",
+        "family": "N1",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-10",
+        "family": "N2",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-11",
+        "family": "N3",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-12",
+        "family": "N4",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-13",
+        "family": "pgpDecrypt",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-14",
+        "family": "pgpSign",
+        "locked": true,
+        "expect": "unknown_command"
+      },
+      {
+        "id": "T-130-15",
+        "family": "walletTransferOnce",
+        "locked": true,
+        "expect": "locked"
+      },
+      {
+        "id": "T-130-16",
+        "family": "identityReady",
+        "locked": true,
+        "expect": "locked"
+      }
+    ]
+  },
+  "logScan": {
+    "patterns": [
+      {
+        "id": "wallet-private-key-hex",
+        "sha256Label": "wallet-private-key-hex",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "wallet-private-key-0x",
+        "sha256Label": "wallet-private-key-0x",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "wallet-private-key-base64",
+        "sha256Label": "wallet-private-key-base64",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "mnemonic-synthetic",
+        "sha256Label": "mnemonic-synthetic",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "pgp-private-header",
+        "sha256Label": "pgp-private-header",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "pgp-passphrase-synthetic",
+        "sha256Label": "pgp-passphrase-synthetic",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "dek-hex",
+        "sha256Label": "dek-hex",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "kidx-hex",
+        "sha256Label": "kidx-hex",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      },
+      {
+        "id": "rproto-hex",
+        "sha256Label": "rproto-hex",
+        "note": "合成值，不得出现在任何日志、控制台、存储或出站请求中"
+      }
+    ],
+    "cases": [
+      {
+        "id": "T-131",
+        "surface": "native-log",
+        "expect": []
+      },
+      {
+        "id": "T-132",
+        "surface": "webview-console-storage",
+        "expect": []
+      },
+      {
+        "id": "T-131-control",
+        "surface": "positive-control",
+        "expect": [
+          "wallet-private-key-hex"
+        ]
+      }
+    ],
+    "positiveControl": "T-131-control（扫描器必须命中一条注入的模式）"
+  }
+}

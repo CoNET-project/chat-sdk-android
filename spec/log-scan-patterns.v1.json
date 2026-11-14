@@ -254,6 +254,11 @@
         "source": "spec 25.29.7（r3k）"
       },
       {
+        "name": "interface/protocol/negative-tests-v1.json",
+        "sha256": "57c6bbfcf51f0493188ca0bf6d792826c54585cc4f6acd3ebd237fa95ba790c0",
+        "source": "spec §25.52BS（r3dp）"
+      },
+      {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
         "sha256": "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda",
         "source": "spec 25.26.1"
@@ -304,11 +309,14 @@
       {
         "name": "interface/protocol/chat-route-decision-vectors.v1.json",
         "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/negative-tests-v1.json",
+        "specRecorded": true
       }
     ],
     "notRegistered": [
       "interface/ui/passcode-vectors.v1.json（spec 未登记哈希）",
-      "interface/protocol/negative-tests-v1.json（spec 未登记哈希）",
       "interface/protocol/chat-daemon-vectors.v1.json（spec 未登记哈希）",
       "interface/protocol/media-manifest-vectors.v1.json（spec 未登记哈希）",
       "interface/protocol/import-digest-vectors.v1.json（spec 未登记哈希）",

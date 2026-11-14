@@ -46,10 +46,16 @@ internal object PgpRestoreBridge {
     }
 
     /** The production machine for [eoa]: the chain read from AddressPGP, the wallet's key, and the account's PGP vault. */
+    /**
+     * The chain transport of the restore (Android's counterpart of the iOS chain transport, R707, 25.52BT.1). The production value is the HTTP
+     * RPC. A test target may replace it to keep a command in flight; production code never sets it.
+     */
+    internal var chainRpc: (RegistryEndpoint) -> AddressPgpRead.Rpc = { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
+
     fun productionMachine(context: Context, eoa: String): PgpRestoreMachine {
         val vault = NativeWallet.vault(context)
         return PgpRestoreMachine(
-            chain = AddressPgpChain.read(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) },
+            chain = AddressPgpChain.read(eoa, rpcFor = chainRpc),
             wallet = VaultPgpWallet(vault),
             keys = RefusedKeys,
             ivFor = { throw IllegalStateException("key generation is not available in this build") },

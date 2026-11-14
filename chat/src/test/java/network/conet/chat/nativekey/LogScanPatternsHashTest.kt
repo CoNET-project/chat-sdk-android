@@ -20,7 +20,8 @@ class LogScanPatternsHashTest {
         // listed the spec's own hash) and d8cffc70… (r3i, without the chat-route sources).
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
         // r3dm (R700, R693): the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
-        assertEquals("884391e5cf81a138dd8b5653ef10dc9a09541d4aeed69f86d97bc9e1bf7e642b", sha)
+        // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
+        assertEquals("c2df8584ac0e8f67832b5cecc6e8cf68816489b8c2fbb0cfff5bae29f08caa34", sha)
     }
 
     @Test
@@ -37,6 +38,8 @@ class LogScanPatternsHashTest {
         // r3dm: the no-key and gate vector values are the current ones (R690 rule, 25.52BO and BP).
         assertTrue(sums.contains("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd"))
         assertTrue(sums.contains("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0"))
-        assertEquals(12, entries.length())
+        // r3dp: the negative tests file (25.52BS) is listed too: 13 entries.
+        assertTrue(sums.contains("57c6bbfcf51f0493188ca0bf6d792826c54585cc4f6acd3ebd237fa95ba790c0"))
+        assertEquals(13, entries.length())
     }
 }

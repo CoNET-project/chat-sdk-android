@@ -426,8 +426,20 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
             40,
         )
-        // 25.52AW.1, AU.1: an unknown shellRecord* name on the window channel is unknown_command (it was bad_request before r3cu).
-        assertEquals("unknown_command", refused.v().getString("code"))
+        // 25.52AW.1, AU.1, BU.1 (R709): an unknown shellRecord* name on the window channel is the envelope-level answer: ok false, error
+        // unknown_command, no result, the reqId echoed, once. (It was bad_request before r3cu; a result.code form before r3du.)
+        assertEquals(false, refused.getBoolean("ok"))
+        assertEquals("unknown_command", refused.getString("error"))
+        assertEquals("s1", refused.getString("reqId"))
+        assertTrue("no result on the envelope-level answer", !refused.has("result"))
+        val other = bridge.handle(
+            ShellOrigin.EMBEDDED_PAGE,
+            JSONObject().put("type", "shellRecordZzUnknown").put("reqId", 990000061),
+            40,
+        )
+        assertEquals("unknown_command", other.getString("error"))
+        assertEquals(990000061, other.getInt("reqId"))
+        assertTrue(!other.has("result"))
         val text = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
         assertTrue(text.contains("fun migrationState(context: Context): String"))
     }

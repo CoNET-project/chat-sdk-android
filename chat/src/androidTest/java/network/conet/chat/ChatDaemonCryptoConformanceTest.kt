@@ -3,6 +3,13 @@ package network.conet.chat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import network.conet.chat.ConetChatCryptoUtil
+import network.conet.chat.nativekey.AddressPgpRead
+import network.conet.chat.nativekey.NativeSessionState
+import network.conet.chat.nativekey.NativeWallet
+import network.conet.chat.nativekey.NativeWalletVault
+import network.conet.chat.nativekey.PgpRestoreBridge
+import network.conet.chat.nativekey.WalletAddress
+import java.util.concurrent.CopyOnWriteArrayList
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -205,6 +212,70 @@ class ChatDaemonCryptoConformanceTest {
             assertEquals("$cmd names the field (result.names)", "pin", names.getString(0))
         }
         assertEquals("the refusals change no state: still G0", "no_key", byId.getValue("ws").getJSONObject("result").getString("status"))
+    }
+
+    /**
+     * 25.52AT.3, BT.1, BT.2 (r3ds, R707): busy. A command is in flight: the chain transport of pgpRestoreEvaluate is blocked in this test target,
+     * so the worker stays inside the transport. While it is in flight, a name outside the table is answered unknown_command, once, before the gate.
+     * The block is released afterwards and the transport is restored. The state is G2: the test sets a native record for a synthetic test key,
+     * and marks the session ready (internal NativeSessionState.markReady). Only the test target sets these; production code is unchanged.
+     */
+    @Test
+    fun unknownNameIsUnknownCommandWhileACommandIsInFlight() {
+        val key = ByteArray(32) { 0x11 }
+        val eoa = requireNotNull(WalletAddress.fromPrivateKey(key)).lowercase()
+        val imported = NativeWallet.vault(context).importKey(eoa, key.copyOf())
+        assertTrue("a synthetic test record for the test account: ${imported.code}", imported == NativeWalletVault.Import.OK)
+        NativeSessionState.markReady()
+        val entered = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val blocking = AddressPgpRead.Rpc { _, _ ->
+            entered.countDown()
+            released.await(20, TimeUnit.SECONDS)
+            null
+        }
+        val saved = PgpRestoreBridge.chainRpc
+        PgpRestoreBridge.chainRpc = { _ -> blocking }
+        val acks = CopyOnWriteArrayList<JSONObject>()
+        val unknownAck = CountDownLatch(1)
+        val evaluateAck = CountDownLatch(1)
+        val emit: (JSONObject) -> Unit = { payload ->
+            val event = payload.optJSONObject("event")
+            if (event?.optString("type") == "ack") {
+                when (event.optString("reqId")) {
+                    "unk-1" -> {
+                        acks += event
+                        unknownAck.countDown()
+                    }
+                    "busy-1" -> {
+                        acks += event
+                        evaluateAck.countDown()
+                    }
+                }
+            }
+        }
+        try {
+            BeamioConetChatModule.handleCommand(
+                context,
+                JSONObject().put("type", "pgpRestoreEvaluate").put("reqId", "busy-1").put("accountKey", "$eoa:default"),
+                emit,
+            )
+            assertTrue("the command is in flight: the transport was entered", entered.await(15, TimeUnit.SECONDS))
+            BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "zzInFlightProbe").put("reqId", "unk-1"), emit)
+            assertTrue("the unknown name is answered while the command is in flight", unknownAck.await(5, TimeUnit.SECONDS))
+            val unknown = acks.single { it.optString("reqId") == "unk-1" }
+            assertEquals("ok false", false, unknown.getBoolean("ok"))
+            assertEquals("unknown_command while busy (BT.2)", "unknown_command", unknown.getString("error"))
+            assertEquals("the restore is still in flight", 1L, evaluateAck.count)
+        } finally {
+            released.countDown()
+            evaluateAck.await(15, TimeUnit.SECONDS)
+            PgpRestoreBridge.chainRpc = saved
+            NativeSessionState.reset()
+            // Remove the test record, so that the other tests of this class see a fresh install again (G0).
+            NativeWallet.vault(context).forget()
+        }
+        assertEquals("the unknown name was answered once", 1, acks.count { it.optString("reqId") == "unk-1" })
     }
 }
 

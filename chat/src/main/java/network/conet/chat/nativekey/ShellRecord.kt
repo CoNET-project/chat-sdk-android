@@ -1015,7 +1015,8 @@ internal class ShellImportFlow(
  * The codes that the ack refuses at the envelope level (§25.52T.2, §25.52AD.4): the request is not processed, so the ack has `ok: false` and an
  * `error`. `not_ready` is the G1 answer of the gate (§25.26.4c), given before the payload is read.
  */
-private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready")
+// unknown_command (25.52AU.1, BU.1, R709): an unknown shellRecord* name on the window channel is an envelope-level answer, with no result.
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready", "unknown_command")
 
 /**
  * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
