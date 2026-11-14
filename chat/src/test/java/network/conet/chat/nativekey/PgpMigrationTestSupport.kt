@@ -159,6 +159,7 @@ internal fun migrationEngine(
     primary: LegacyRecord? = null,
     eoa: String = PgpMigrationKeys.ACCOUNT,
     busy: Boolean = false,
+    wallet: MigrationWallet = NoPageWallet,
 ): PgpMigrationEngine = PgpMigrationEngine(
     eoa = eoa,
     legacy = FixedLegacy(legacy),
@@ -170,6 +171,7 @@ internal fun migrationEngine(
     crypto = FaultyCrypto(NativeMigrationCrypto(approvedFlag = faults.approved), faults),
     recovery = recovery,
     lock = FixedLock(busy),
+    wallet = wallet,
     random = SecureRandom(),
     now = { 1L },
 )
@@ -183,3 +185,17 @@ internal fun markerFileName(eoa: String = PgpMigrationKeys.ACCOUNT): String =
 
 internal fun lastCodeFileName(eoa: String = PgpMigrationKeys.ACCOUNT): String =
     "pgp.v1.mig.${eoa.removePrefix("0x")}.${PgpMigrationKeys.WORKSPACE}.last"
+
+/** The page copy's W fields for the unregister tests: present until removed, and a removal can be made to fail. */
+internal class FixedWallet(private var present: Boolean, private val failRemove: Boolean = false) : MigrationWallet {
+    var removeCalls = 0
+        private set
+
+    override fun present(): Boolean = present
+
+    override fun remove() {
+        removeCalls++
+        if (failRemove) throw IOException("injected wallet write failure")
+        present = false
+    }
+}

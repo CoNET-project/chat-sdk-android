@@ -256,6 +256,18 @@ internal object ShellRecordPolicy {
         }
     }
 
+    /** Removes the W fields (§25.52H.2 rule 5, §25.52J.2 paths): top-level `mnemonic`, `walletVault.mnemonic`, every `profiles[k].privateKeyArmor`. */
+    fun removeWallet(record: JSONObject) {
+        record.remove("mnemonic")
+        record.optJSONObject("walletVault")?.let { vault ->
+            vault.remove("mnemonic")
+            if (vault.length() == 0) record.remove("walletVault")
+        }
+        record.optJSONArray("profiles")?.let { profiles ->
+            for (i in 0 until profiles.length()) profiles.optJSONObject(i)?.remove("privateKeyArmor")
+        }
+    }
+
     /** Removes the value at a path. A segment ending in `[*]` is an array whose elements are each searched. */
     private fun removePath(node: JSONObject, segments: List<String>) {
         val head = segments[0]
@@ -278,14 +290,16 @@ internal object ShellRecordPolicy {
 
     /**
      * The account's record in `profiles` (§25.52B.6, §25.52L.5): the one whose `keyID` equals the account, compared without case. Several
-     * matches, and no match, give no slot. Nothing falls back to an index (§25.52L.5, "不按下标").
+     * matches give no slot, and nothing is guessed among profiles. Conditional fallback (PM R424, accepted with this documentation): while
+     * no profile of the record carries a `keyID` at all, `profiles[0]` is the account's record, as §25.52B.6 has it "until confirmed". This
+     * fallback is for the W placement only. The first-run import always matches by keyID (§25.52K.5). Android measurement must confirm the
+     * keyID match before release; see docs/page-record-bridge.md.
      */
     fun accountSlot(record: JSONObject, eoa: String): Int? {
         val profiles = record.optJSONArray("profiles") ?: return null
-        val matches = (0 until profiles.length()).filter { i ->
-            val id = profiles.optJSONObject(i)?.optString("keyID", "").orEmpty()
-            id.isNotEmpty() && id.equals(eoa, ignoreCase = true)
-        }
+        val ids = (0 until profiles.length()).map { profiles.optJSONObject(it)?.optString("keyID", "").orEmpty() }
+        if (ids.none { it.isNotEmpty() }) return if (profiles.length() >= 1) 0 else null
+        val matches = ids.indices.filter { ids[it].isNotEmpty() && ids[it].equals(eoa, ignoreCase = true) }
         return matches.singleOrNull()
     }
 
@@ -409,6 +423,9 @@ internal class SealedPageRecordStore(
         }
     }
 
+    /** Removes the sealed file of this account. Used when the copy cannot be read at the unregister (see [PageWalletRemoval]). */
+    fun erase() = files.delete(name)
+
     /** Replaces the whole record in one step. Throws [IOException] on any failure, and the earlier record is unchanged. */
     fun write(record: JSONObject) {
         val plain = record.toString().toByteArray(Charsets.UTF_8)
@@ -428,6 +445,45 @@ internal class SealedPageRecordStore(
         /** The version byte (1), the nonce (12) and the GCM tag (16): a file is at least 29 bytes (§25.52L.2). */
         const val MIN_FILE_BYTES = 29
         private val FORMAT_VERSION = byteArrayOf(1)
+    }
+}
+
+/**
+ * The page copy's W fields as the unregister removes them (§25.52H.2 rule 5, §25.52J.3). Only the W fields go: the rest of the copy stays,
+ * and the revision moves on, so a page that still holds an older copy gets `conflict` on its next write. A copy that cannot be read is
+ * erased whole, since its W fields cannot be told apart from the rest.
+ */
+internal class PageWalletRemoval(private val store: SealedPageRecordStore) : MigrationWallet {
+    override fun present(): Boolean = try {
+        store.read()?.let { ShellRecordPolicy.walletIn(it).isNotEmpty() } ?: false
+    } catch (_: IOException) {
+        true
+    }
+
+    override fun remove() {
+        val record: JSONObject = try {
+            store.read() ?: return
+        } catch (_: IOException) {
+            store.erase()
+            return
+        }
+        if (ShellRecordPolicy.walletIn(record).isEmpty()) return
+        ShellRecordPolicy.removeWallet(record)
+        record.put("rev", record.optInt("rev", 0) + 1)
+        store.write(record)
+    }
+}
+
+/**
+ * Runs [block] with [flag] set, and restores the flag's earlier value afterwards, whatever the outcome. A shell that set the flag before a
+ * call keeps it set after the call.
+ */
+internal fun <T> markingMigration(flag: AtomicBoolean, block: () -> T): T {
+    val previous = flag.getAndSet(true)
+    try {
+        return block()
+    } finally {
+        flag.set(previous)
     }
 }
 
@@ -802,7 +858,7 @@ object BeamioShellRecordImport {
     }
 
     /** The first-run import (§25.52K), called by [BeamioPgpMigrationImport.importFirstRun]. */
-    internal fun importFirstRun(
+    internal fun runFirstImport(
         context: Context,
         eoa: String,
         wallet: LegacyWalletRecord,
@@ -840,7 +896,8 @@ object BeamioShellRecordImport {
         }
     }
 
-    private fun storeFor(app: Context, eoa: String): SealedPageRecordStore {
+    /** The page store of [eoa] in the default workspace (§25.52F.3). */
+    internal fun storeFor(app: Context, eoa: String): SealedPageRecordStore {
         val files = AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1"))
         return SealedPageRecordStore(AndroidPageRecordKeyWrap(), files, eoa.lowercase() + ":" + PgpMigrationPolicy.WORKSPACE)
     }

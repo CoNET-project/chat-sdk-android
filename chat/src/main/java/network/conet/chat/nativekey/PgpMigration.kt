@@ -247,6 +247,25 @@ internal interface MigrationCrypto {
 }
 
 /**
+ * The page wallet copy of one account, as the unregister sees it (§25.52H.2 rule 5, §25.52J.3): the W fields (`profiles[*].privateKeyArmor`,
+ * `mnemonic`, `walletVault.mnemonic`) are removed only by the unregister, after the recovery check. [present] is true when a W field is
+ * there or the copy cannot be read. [remove] removes the W fields and keeps the rest of the copy.
+ */
+internal interface MigrationWallet {
+    fun present(): Boolean
+
+    /** Throws [IOException] when the copy cannot be written. */
+    fun remove()
+}
+
+/** No page copy: nothing to remove. The engine's default, used by the vectors. */
+internal object NoPageWallet : MigrationWallet {
+    override fun present(): Boolean = false
+
+    override fun remove() = Unit
+}
+
+/**
  * The migration pipeline for one account (§25.52.6, §25.52A.2, §25.52D.4, §25.52I) and the unregister (§25.52C.3, §25.52I.8). Each
  * call is one run; a run that is interrupted leaves the stored state as it was at that point, and the next call resumes from it. A
  * run returns exactly one [MigrationResult] or throws [PgpMigrationInterrupted].
@@ -265,6 +284,7 @@ internal class PgpMigrationEngine(
     private val crypto: MigrationCrypto,
     private val recovery: MigrationRecovery,
     private val lock: MigrationLock,
+    private val wallet: MigrationWallet = NoPageWallet,
     private val random: SecureRandom = SecureRandom(),
     private val now: () -> Long = { System.currentTimeMillis() },
 ) {
@@ -447,7 +467,8 @@ internal class PgpMigrationEngine(
     }
 
     /**
-     * Unregister (§25.52C.3, §25.52I.8, §25.52I.9): removes M, then N, then the last code. L is never removed. An invalid account is
+     * Unregister (§25.52C.3, §25.52I.8, §25.52I.9, §25.52H.2 rule 5): removes M, then N, then the last code, then the page copy's W fields.
+     * L is never removed. An invalid account is
      * `bad_request`; a running operation on the account is `busy`; both remove nothing. The recovery source is checked before any
      * removal: L exists, or P is readable, or a chain backup is registered and restorable. Without one, and with N or M present, the
      * result is `unregister_refused`. Nothing present is `ok` (idempotent).
@@ -475,10 +496,12 @@ internal class PgpMigrationEngine(
         } catch (_: IOException) {
             true
         }
-        if (!markerPresent && !stagedPresent) {
+        val walletPresent = wallet.present()
+        if (!markerPresent && !stagedPresent && !walletPresent) {
             lastCode.delete()
             return MigrationResult(MigrationCode.OK)
         }
+        // The recovery check comes before any removal, the W fields included (§25.52C.3, §25.52J.3).
         if (!hasRecoverySource()) return MigrationResult(MigrationCode.UNREGISTER_REFUSED)
         if (markerPresent) {
             marker.delete()
@@ -486,6 +509,13 @@ internal class PgpMigrationEngine(
         }
         if (stagedPresent) staged.delete()
         lastCode.delete()
+        if (walletPresent) {
+            try {
+                wallet.remove()
+            } catch (_: IOException) {
+                throw Stop(MigrationCode.WRITE_FAILED)
+            }
+        }
         return MigrationResult(MigrationCode.OK)
     }
 
@@ -759,7 +789,10 @@ object BeamioPgpMigrationImport {
         eoa: String,
         walletRecord: LegacyWalletRecord,
         pgpSource: LegacyPgpSource? = null,
-    ): ShellImportCode = BeamioShellRecordImport.importFirstRun(context, eoa.lowercase(), walletRecord, pgpSource)
+    ): ShellImportCode = markingMigration(ShellRecordState.migrationPending) {
+        // §25.52L.3: the entry itself marks the page's reads and writes as migrating while it runs.
+        BeamioShellRecordImport.runFirstImport(context, eoa.lowercase(), walletRecord, pgpSource)
+    }
 
     private fun refused(): MigrationResult = MigrationResult(MigrationCode.ACCOUNT_MISMATCH)
 
@@ -782,6 +815,7 @@ object BeamioPgpMigrationImport {
             crypto = NativeMigrationCrypto(),
             recovery = ProductionRecovery(app, account),
             lock = ProcessMigrationLock,
+            wallet = PageWalletRemoval(BeamioShellRecordImport.storeFor(app, account)),
         )
     }
 }
