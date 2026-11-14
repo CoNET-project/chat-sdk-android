@@ -257,11 +257,6 @@
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
         "sha256": "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda",
         "source": "spec 25.26.1"
-      },
-      {
-        "name": "interface/spec.md（本 spec，r3g 定稿）",
-        "sha256": "0cca7f89bb7a3e83ff9671e8299e538cf1b71c17a6913832923364cc6087dddf",
-        "source": "本 spec 自身（定稿后计算，不得再改 spec）"
       }
     ],
     "specRecordCheck": [
