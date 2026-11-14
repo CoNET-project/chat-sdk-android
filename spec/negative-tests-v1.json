@@ -436,20 +436,20 @@
         "id": "T-131-control",
         "surface": "positive-control",
         "executor": "test-harness（注入正控制样例）",
-        "sample": "leak test: 5e1c2d6840b2a54f911848b39b7de0372424e3029581e3fc0e3a1703bdd6cd6d",
+        "sample": "leak test: 88e524cac1fab707de9ece36898aec543889f912bfe357f761cfecbaa2eb73cc",
         "expect": [
           "wallet-private-key-hex"
         ]
       }
     ],
-    "sampleRule": "PATTERNS 的 hex 值为 hex(label) = SHA-256(\"negtest:hex:\" + label) 的十六进制；wallet-private-key-hex 的 label 为 wallet-private-key。样例为 \"leak test: \" 加该值。合成值，由标签派生，不是密钥，不得出现在任何真实日志中",
+    "sampleRule": "模式值 hexPattern(id) = SHA-256(\"hex:\" + id) 的十六进制（sha256Label 为模式编号）。wallet-private-key-hex 的值为 SHA-256(\"hex:wallet-private-key-hex\")。样例为 \"leak test: \" 加该值。合成值，由标签派生，不是密钥，不得出现在任何真实日志中",
     "positiveControl": "T-131-control（扫描器必须命中一条注入的模式）",
     "controlPattern": {
       "id": "wallet-private-key-hex",
-      "value": "5e1c2d6840b2a54f911848b39b7de0372424e3029581e3fc0e3a1703bdd6cd6d",
-      "label": "wallet-private-key",
-      "inputString": "negtest:hex:wallet-private-key",
-      "rule": "hex(label) with label wallet-private-key; hex = SHA-256 of (negtest:hex: + label), hex-encoded"
+      "value": "88e524cac1fab707de9ece36898aec543889f912bfe357f761cfecbaa2eb73cc",
+      "sha256Label": "wallet-private-key-hex",
+      "inputString": "hex:wallet-private-key-hex",
+      "rule": "value = SHA-256 of the UTF-8 bytes of inputString, hex-encoded; the scanner reports the canonical id when the value occurs"
     }
   }
 }

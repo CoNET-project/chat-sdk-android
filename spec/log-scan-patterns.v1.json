@@ -255,7 +255,7 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461",
+        "sha256": "f71ddd75b225b79d81716e0fc16fef88f8a783c4ea56221b6ca9c87fc61e4689",
         "source": "spec §25.52BS（r3dp）"
       },
       {
@@ -265,7 +265,7 @@
       },
       {
         "name": "interface/protocol/domain-tags-vectors.v1.json",
-        "sha256": "86d6ece8f3ff960b636fc1a8f0d757e3643f207ce0a3737d412d49caaaf67d12",
+        "sha256": "01a77f6514225aa4045bbefb08664ed325ab142e6faad14fb071c0511d9ff651",
         "source": "spec §25.27.9（r3ed）"
       },
       {

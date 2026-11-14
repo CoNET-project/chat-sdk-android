@@ -23,8 +23,8 @@ class LogScanPatternsHashTest {
         // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
         // r3dz (R721, R722): the protocol version is 273947fe…; c2df8584… is withdrawn.
         // r3eh (registry, 2026-11-14): the protocol version is 9803a2ba…; 62ae7afd… and 6e38a8ad… are withdrawn.
-        // r3ej (registry, 2026-11-14): the protocol version is 903ddc46…; 9803a2ba… is withdrawn.
-        assertEquals("714b96e2e00c5711b3777cd6e2b700f402563c983be6bec54deec7705d0966dc", sha)
+        // r3el (registry, 2026-11-14): the protocol version is 2b4f0f1d…; 714b96e2… is withdrawn.
+        assertEquals("2b4f0f1d34bac9d72c05012213b6c4ad9f95cfcb41a14e75be4fb8cf8f16dac5", sha)
     }
 
     @Test
@@ -43,10 +43,10 @@ class LogScanPatternsHashTest {
         assertTrue(sums.contains("3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22"))
         // r3dp: the negative tests file (25.52BS) is listed too: 13 entries.
         // r3eg: the negative tests file is 340fb917… (was a7a2246d…); r3dy adds table-T (c5e54b94…): 14 entries.
-        assertTrue(sums.contains("08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461"))
+        assertTrue(sums.contains("f71ddd75b225b79d81716e0fc16fef88f8a783c4ea56221b6ca9c87fc61e4689"))
         assertTrue(sums.contains("b4085becedde13e91363bb5239be5552c80146603ebfc4fd0a167b44c349d983"))
-        // r3ed: the domain tags vector file (86d6ece8…) is listed too: 15 entries.
-        assertTrue(sums.contains("86d6ece8f3ff960b636fc1a8f0d757e3643f207ce0a3737d412d49caaaf67d12"))
+        // r3ed, r3el: the domain tags vector file (01a77f65…) is listed too: 15 entries.
+        assertTrue(sums.contains("01a77f6514225aa4045bbefb08664ed325ab142e6faad14fb071c0511d9ff651"))
         assertEquals(15, entries.length())
     }
 }

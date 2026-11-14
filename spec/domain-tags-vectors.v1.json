@@ -3,6 +3,17 @@
   "spec": "spec §25.27.3、§25.27.6、§25.27.9（r3ed，PM R727）",
   "purpose": "PGP 域标签的非重叠与不可生成性。两端的 SDK 内部标签须与本文件逐字节相同，并通过 DT-T1 至 DT-T3。",
   "generator": "gen-domain-tags.mjs",
+  "signingConvention": {
+    "applies": [
+      "PRECHECK",
+      "CHALLENGE"
+    ],
+    "signedBytes": "label || message：标签字节（UTF-8，末尾为 LF）紧接消息字节，无分隔符",
+    "sigType": "0x01（文本签名；Android PgpMigrationPolicy.SIG_TYPE = 0x01，PgpMigration.kt:30）",
+    "textCanonicalisation": "0x01 的签名流做文本规范化：LF 视为 CRLF 参与哈希。标签末尾的 LF 因此按 CRLF 参与哈希",
+    "signerPassphrase": "空串（Android PgpMigration.kt:737 以 \"\" 调用 signDocument）",
+    "verification": "Android NativePgpCommandTest.signedBytesAreTheLabelThenTheMessageWithTextCanonicalisation"
+  },
   "labels": [
     {
       "id": "DT-01",

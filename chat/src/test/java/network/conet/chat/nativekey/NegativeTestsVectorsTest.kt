@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3ek; sha256 08a2b3e4…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3el; sha256 f71ddd75…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -57,7 +57,7 @@ class NegativeTestsVectorsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("08a2b3e436a232a54167239dbe7ea0c7fa86d22c4575671549b943eeec318461", sha)
+        assertEquals("f71ddd75b225b79d81716e0fc16fef88f8a783c4ea56221b6ca9c87fc61e4689", sha)
         assertEquals(33, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
             cases("passcodeLocked").size + cases("logScan").size)
         assertEquals(1, v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").length())
