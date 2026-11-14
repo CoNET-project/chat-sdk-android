@@ -44,10 +44,22 @@ object NativeHistoryDelete {
                 history.tombstoneConversation(convKey!!)
             }
             shellAck(reqId, "ok", listOf("deleted" to deleted))
-        } catch (_: IllegalStateException) {
-            shellAck(reqId, "busy", emptyList())
+        } catch (e: IllegalStateException) {
+            storeFailure(reqId, e)
         }
     }
+
+    /**
+     * The answer for a store that failed inside the call (§25.52AC.5). `locked` (the key is gone) is busy: nothing changed, and a retry can
+     * succeed. Anything else, `closed` included, is not busy, because the store cannot answer now and busy is defined only for a busy store.
+     * Those answer with the envelope `not_ready`.
+     */
+    internal fun storeFailure(reqId: Any, e: IllegalStateException): JSONObject =
+        if (e.message == "locked") {
+            shellAck(reqId, "busy", emptyList())
+        } else {
+            JSONObject().put("type", "ack").put("reqId", reqId).put("ok", false).put("error", "not_ready")
+        }
 
     /** `messageId` (the sendKey, §25.52AC.2): 1 to 128 visible ASCII characters. */
     fun isMessageId(value: String): Boolean = value.length in 1..128 && value.all { it.code in 0x21..0x7E }

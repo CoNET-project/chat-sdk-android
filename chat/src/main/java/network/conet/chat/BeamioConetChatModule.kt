@@ -1462,6 +1462,8 @@ object BeamioConetChatModule {
             .put("sortTs", item.sortTs)
             .put("dir", item.dir)
             .put("sendId", item.sendId ?: JSONObject.NULL)
+            // §25.52AC.2: the sendKey, which historyDeleteMessage takes as messageId.
+            .put("messageId", item.messageId ?: JSONObject.NULL)
             .put("kind", kindName(item.kind))
             .put("revision", item.revision)
             .put(

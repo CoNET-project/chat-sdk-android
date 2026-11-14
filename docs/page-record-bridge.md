@@ -252,8 +252,14 @@ it is `too_large`, checked before the schema-specific answers.
 - A locked store answers `busy` and changes nothing.
 - These commands never write the page record. The page removes its own conversation entry with `shellRecordWrite`, built from a fresh read
   with the same `rev` (DL-10a, DL-10b). A stale `rev` is `conflict`.
-- Open: the history read rows must carry `messageId` (= sendKey) for the page to call these (§25.52AC.2). That output is not added in this
-  build; it waits for integration confirmation (§25.52AC.9). Where message bodies live (the page record's `chats[*].messages` or the native
+- The history read rows carry `messageId` (= sendKey), which `historyDeleteMessage` takes (§25.52AC.2). A closed store answers `not_ready`,
+  not `busy` (§25.52AC.5).
+- Recorded deviations from the vectors (review r3bz-r3by-r488 §2.1, §2.2). Neither vector is edited; the interface owner decides.
+  - GX-10b: the vector expects the chat channel to answer `absent`; R476 says it never replies, and the code follows R476.
+    `gx10bChatChannelDeviatesFromTheVectorByR476` pins this, and checks the window judgement is `absent`.
+  - DL-10a and DL-10b as written put `chats` at the root and omit `schemaVersion`; the bridge refuses them with `bad_request`
+    (`schemaVersion`) before the revision check. `PageRecordEntryDeleteTest` records that, and also checks the mapped form
+    (`chats` under `profiles[0]`) gives the vector's `conflict` and `ok` results. Where message bodies live (the page record's `chats[*].messages` or the native
   store) is open (§25.52AC.7). The DL vectors place `chats` at the root, while the whitelist places it under `profiles[*].chats`
   (§25.52Q.3); the DL-10 tests use the whitelist place.
 

@@ -5,81 +5,127 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
- * DL-10a and DL-10b (spec r3by §25.52AC.4, T-368): a conversation entry of the page record is removed only through `shellRecordWrite`, and only
- * from a freshly read record (the same `rev`). A stale copy gets `conflict` and the store keeps its current record. The vectors place `chats` at
- * the root; the whitelist places it under `profiles[*].chats` (§25.52Q.3), so the cases run there. The copy carries `schemaVersion` 1, which
- * the write needs; the rule under test is the revision check, not the schema.
+ * DL-10a and DL-10b (spec r3by §25.52AC.4), run from the vector file's `pageRecordDeleteCases` (review r3bz-r3by-r488 §2.2).
+ *
+ * Two runs of every case:
+ *  - As written. The vector puts `chats` at the root and omits `schemaVersion`. The bridge checks `schemaVersion` (§25.52O.5 step 3) before the
+ *    revision (step 7), so the literal write is refused with `bad_request` naming `schemaVersion`. This is a recorded deviation, pending the
+ *    interface owner's ruling on the position of `chats` (§25.52Q.3 lists `profiles[*].chats`, and the table lists a root `chats`).
+ *  - Mapped. `chats` is moved under `profiles[0]` and `schemaVersion` 1 is added, the position the whitelist accepts. Under this run the case
+ *    must give the vector's own result: `conflict` with the current `currentRev` for a stale copy, `ok` with the next `rev` for a fresh one.
  */
 class PageRecordEntryDeleteTest {
-    private val files = NativeTestFiles()
-    private val wrap = NativeTestWrap()
-    private val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
-    private val bridge = ShellRecordBridge(
+    private val doc = JSONObject(
+        String(
+            File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readBytes(),
+            Charsets.UTF_8,
+        ),
+    )
+    private val cases: JSONArray = doc.getJSONArray("pageRecordDeleteCases")
+
+    @Test
+    fun everyCaseAsWrittenIsRefusedBySchemaVersionFirst() {
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val id = c.getString("id")
+            val files = NativeTestFiles()
+            val wrap = NativeTestWrap()
+            val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
+            store.write(JSONObject(c.getJSONObject("rec").toString()))
+            val before = CanonicalJson.encode(store.read())
+
+            val request = literalRemoval(c.getJSONObject("rec"), c.getString("convKey"), c.getInt("writeRev"))
+            val ack = bridge(store).handle(ShellOrigin.EMBEDDED_PAGE, writeOf(id, request), 0).v()
+
+            assertEquals("$id: as written", "bad_request", ack.getString("code"))
+            assertEquals("$id: as written names", listOf("schemaVersion"), namesOf(ack))
+            assertEquals("$id: store unchanged", before, CanonicalJson.encode(store.read()))
+        }
+    }
+
+    @Test
+    fun everyCaseMappedToTheWhitelistGivesTheVectorsResult() {
+        val failures = mutableListOf<String>()
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val id = c.getString("id")
+            val expect = c.getJSONObject("expect")
+            val files = NativeTestFiles()
+            val wrap = NativeTestWrap()
+            val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
+            store.write(mapped(c.getJSONObject("rec")))
+
+            val request = mappedRemoval(c.getJSONObject("rec"), c.getString("convKey"), c.getInt("writeRev"))
+            val ack = bridge(store).handle(ShellOrigin.EMBEDDED_PAGE, writeOf(id, request), 0).v()
+
+            when (expect.getString("code")) {
+                "conflict" -> {
+                    if (ack.getString("code") != "conflict") failures += "$id: code ${ack.getString("code")}"
+                    if (ack.optInt("currentRev", -1) != expect.getInt("currentRev")) failures += "$id: currentRev"
+                    if (addresses(store.read()) != addresses(mapped(c.getJSONObject("rec")))) failures += "$id: store changed"
+                }
+                "ok" -> {
+                    if (ack.getString("code") != "ok") failures += "$id: code ${ack.getString("code")}"
+                    if (ack.optInt("rev", -1) != expect.getInt("rev")) failures += "$id: rev"
+                    if (addresses(store.read()) != addresses(mapped(expect.getJSONObject("rec")))) failures += "$id: entries"
+                }
+                else -> failures += "$id: unknown expectation ${expect.getString("code")}"
+            }
+        }
+        assertEquals(emptyList<String>(), failures)
+    }
+
+    private fun bridge(store: SealedPageRecordStore): ShellRecordBridge = ShellRecordBridge(
         account = { ShellRecordAccount.Ready(store, ACCOUNT) },
         migrating = { false },
         outcome = { null },
         flags = NoDeviceFlags,
     )
 
-    private val convA = "0x" + "a".repeat(40)
-    private val convB = "0x" + "b".repeat(40)
-
-    @Test
-    fun dl10aAStaleCopyIsConflictAndTheCurrentRecordStays() {
-        val current = chatsRecord(3, listOf(convA to "a", convB to "b"))
-        store.write(current)
-        val stale = chatsRecord(2, listOf(convA to "a", convB to "b"))
-
-        val ack = bridge.handle(ShellOrigin.EMBEDDED_PAGE, writeOf("d10a", removeEntry(stale, convA)), 0).v()
-
-        assertEquals("conflict", ack.getString("code"))
-        assertEquals(3, ack.getInt("currentRev"))
-        assertEquals(CanonicalJson.encode(current), CanonicalJson.encode(store.read()))
-    }
-
-    @Test
-    fun dl10bAFreshReadRemovesOnlyTheEntryAndMovesTheRevision() {
-        store.write(chatsRecord(3, listOf(convA to "a", convB to "b")))
-        val fresh = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r10b"), 0)
-            .v().getJSONObject("record")
-        assertEquals(3, fresh.getInt("rev"))
-
-        val ack = bridge.handle(ShellOrigin.EMBEDDED_PAGE, writeOf("d10b", removeEntry(fresh, convA)), 0).v()
-
-        assertEquals("ok", ack.getString("code"))
-        assertEquals(4, ack.getInt("rev"))
-        assertEquals(CanonicalJson.encode(chatsRecord(4, listOf(convB to "b"))), CanonicalJson.encode(store.read()))
-    }
-
     private fun writeOf(reqId: String, record: JSONObject): JSONObject =
         JSONObject().put("type", "shellRecordWrite").put("reqId", reqId).put("record", record)
 
-    private fun chatsRecord(rev: Int, chats: List<Pair<String, String>>): JSONObject = JSONObject()
-        .put("rev", rev)
-        .put("schemaVersion", 1)
-        .put(
-            "profiles",
-            JSONArray().put(
-                JSONObject().put(
-                    "chats",
-                    JSONArray(chats.map { (address, mail) -> JSONObject().put("address", address).put("emailAddr", mail) }),
-                ),
-            ),
-        )
+    /** The vector's record as written: `chats` at the root, no schemaVersion. */
+    private fun literalRemoval(record: JSONObject, convKey: String, rev: Int): JSONObject {
+        val out = JSONObject(record.toString()).put("rev", rev)
+        out.put("chats", without(out.getJSONArray("chats"), convKey))
+        return out
+    }
 
-    /** The page's write: a copy of [record] without the entry for [convKey], at the copy's own `rev`. */
-    private fun removeEntry(record: JSONObject, convKey: String): JSONObject {
-        val out = JSONObject(record.toString())
-        val profile = out.getJSONArray("profiles").getJSONObject(0)
-        val chats = profile.getJSONArray("chats")
+    /** The mapped record: `chats` under `profiles[0]`, `schemaVersion` 1, no root `chats`. */
+    private fun mapped(record: JSONObject): JSONObject {
+        val chats = record.getJSONArray("chats")
+        return JSONObject()
+            .put("rev", record.getInt("rev"))
+            .put("schemaVersion", 1)
+            .put("profiles", JSONArray().put(JSONObject().put("chats", chats)))
+    }
+
+    private fun mappedRemoval(record: JSONObject, convKey: String, rev: Int): JSONObject {
+        val out = mapped(record).put("rev", rev)
+        out.getJSONArray("profiles").getJSONObject(0).put("chats", without(out.getJSONArray("profiles").getJSONObject(0).getJSONArray("chats"), convKey))
+        return out
+    }
+
+    /** The page's write: the entries of the copy without the one for [convKey]. */
+    private fun without(chats: JSONArray, convKey: String): JSONArray {
         val kept = JSONArray()
         for (i in 0 until chats.length()) {
             val chat = chats.getJSONObject(i)
             if (!chat.getString("address").equals(convKey, ignoreCase = true)) kept.put(chat)
         }
-        profile.put("chats", kept)
-        return out
+        return kept
     }
+
+    /** The addresses of the entries of a mapped record, in order. */
+    private fun addresses(record: JSONObject?): List<String> {
+        val chats = record?.optJSONArray("profiles")?.optJSONObject(0)?.optJSONArray("chats") ?: return emptyList()
+        return (0 until chats.length()).map { chats.getJSONObject(it).getString("address") }
+    }
+
+    private fun namesOf(ack: JSONObject): List<String> =
+        ack.optJSONArray("names")?.let { a -> (0 until a.length()).map { a.getString(it) }.sorted() } ?: emptyList()
 }

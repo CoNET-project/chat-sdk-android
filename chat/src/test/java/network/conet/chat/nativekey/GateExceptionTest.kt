@@ -130,14 +130,24 @@ class GateExceptionTest {
     }
 
     private fun runCase(c: JSONObject): List<String> {
-        val input = c.getJSONObject("input")
         val expect = c.getJSONObject("expect")
         if (c.getString("kind") == "other") {
             val gate = NoKeyGate.gateOf(NativeWalletVault.State.NoKey, sessionReady = false)
             val answer = NoKeyGate.answerFor("identityPublic", gate)
             return if (answer == expect.getString("error")) emptyList() else listOf("gate $answer != ${expect.getString("error")}")
         }
+        // GX-10b is a recorded deviation from the vector (R476), pinned by gx10bChatChannelDeviatesFromTheVectorByR476. Not compared here.
+        if (c.getJSONObject("input").optString("channel") == "chat") return emptyList()
+        val judged = judge(c)
+        // The vectors name the account a1; the expectation is mapped the same way as the input.
+        return compare(judged.window, withA1(expect))
+    }
 
+    /** The window channel's answer to the case's request, and the request itself. */
+    private class Judged(val window: JSONObject, val body: JSONObject)
+
+    private fun judge(c: JSONObject): Judged {
+        val input = c.getJSONObject("input")
         val files = NativeTestFiles()
         val wrap = NativeTestWrap()
         val storeFor = storeFactory(wrap, files)
@@ -162,12 +172,21 @@ class GateExceptionTest {
         for (k in req.keys()) body.put(k, if (k == "record") withA1(req.getJSONObject(k)) else req.get(k))
         val window = bridge.handle(origin, body, body.toString().toByteArray(Charsets.UTF_8).size)
 
-        val out = mutableListOf<String>()
-        // GX-10b: the chat channel is answered by no one; its judgement is the window's, checked above.
-        if (input.optString("channel") == "chat" && shellRecordChatChannelReply(body) != null) out += "chat channel replied"
-        // The vectors name the account a1; the expectation is mapped the same way as the input.
-        out += compare(window, withA1(expect))
-        return out
+        return Judged(window, body)
+    }
+
+    /**
+     * GX-10b (recorded deviation, R476, §25.52AB.5). The vector expects the chat channel to answer `absent`. The rule says the chat channel never
+     * replies, and the implementation follows the rule. This test pins the deviation without editing the vector: the chat channel gives no reply,
+     * and the judgement the window channel gives for the same request is the vector's `absent`. The decision belongs to the interface owner.
+     */
+    @Test
+    fun gx10bChatChannelDeviatesFromTheVectorByR476() {
+        val cases = doc.getJSONArray("gateExceptionCases")
+        val c = (0 until cases.length()).map { cases.getJSONObject(it) }.single { it.getString("id") == "GX-10b" }
+        val judged = judge(c)
+        assertNull("the chat channel must not reply (R476)", shellRecordChatChannelReply(judged.body))
+        assertEquals(emptyList<String>(), compare(judged.window, withA1(c.getJSONObject("expect"))))
     }
 
     /** The ack against the vector's expectation: the reqId and `ok`, then the error, or each field of the expected result. */

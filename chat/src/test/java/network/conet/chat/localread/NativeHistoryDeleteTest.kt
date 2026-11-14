@@ -108,6 +108,29 @@ class NativeHistoryDeleteTest {
         assertEquals(true, ack.getJSONObject("result").getBoolean("deleted"))
     }
 
+    @Test
+    fun aHistoryRowCarriesItsSendKeyAsMessageId() {
+        // §25.52AC.2: the history read rows carry messageId (= sendKey), which historyDeleteMessage takes.
+        val store = seeded(mapOf(CONV_A to listOf("m7" to 0)))
+        val page = store.openConversation(CONV_A, LocalViewport(390.0, 844.0, "portrait", 1.0, 1))
+        assertEquals(listOf<String?>("m7"), page.items.map { it.messageId })
+    }
+
+    @Test
+    fun aLockedStoreFailureIsBusyAndAClosedOneIsNotReady() {
+        // §25.52AC.5: busy is for a busy store (locked). A closed store is not busy; it answers the envelope not_ready.
+        val locked = NativeHistoryDelete.storeFailure("f1", IllegalStateException("locked"))
+        assertEquals(
+            CanonicalJson.encode(JSONObject().put("type", "ack").put("reqId", "f1").put("ok", true).put("result", JSONObject().put("code", "busy"))),
+            CanonicalJson.encode(locked),
+        )
+        val closed = NativeHistoryDelete.storeFailure("f2", IllegalStateException("closed"))
+        assertEquals(
+            CanonicalJson.encode(JSONObject().put("type", "ack").put("reqId", "f2").put("ok", false).put("error", "not_ready")),
+            CanonicalJson.encode(closed),
+        )
+    }
+
     private fun runCase(c: JSONObject): List<String> {
         val store = seeded(c.getJSONObject("before").getJSONObject("convs").let(::convsOf))
         val cmd = c.getJSONObject("cmd")

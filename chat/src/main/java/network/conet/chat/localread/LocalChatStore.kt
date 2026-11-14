@@ -749,6 +749,7 @@ class LocalChatStore(
             } else {
                 null
             },
+            messageId = meta.sendKey,
         )
     }
 
@@ -1122,6 +1123,8 @@ data class PageItem(
     val widthPx: Int?,
     val heightPx: Int?,
     val mediaState: String?,
+    /** The row's sendKey (§25.52AC.2): the `messageId` that `historyDeleteMessage` takes. Null for a row without one. */
+    val messageId: String? = null,
 )
 
 /** Items ascend by key. [olderCursor] points at the oldest row this page consumed (tombstones included). */
