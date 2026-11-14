@@ -264,12 +264,57 @@ internal object ShellRecordPolicy {
         return out
     }
 
-    /** True when any string value, at any depth, holds the PGP private key header (§25.52D.7 step 5). Values only. */
+    /**
+     * True when any string value, at any depth, holds the PGP private key header (§25.52D.7 step 5). Values only. The test is on a canonical
+     * form (letters and digits, upper case), so spacing, punctuation and letter case do not hide the header (F2 condition 3).
+     */
     fun hasPgpHeader(value: Any?): Boolean = when (value) {
-        is String -> value.contains(PGP_HEADER)
+        is String -> canonicalText(value).contains(CANONICAL_PGP_HEADER)
         is JSONObject -> keysOf(value).any { hasPgpHeader(value.opt(it)) }
         is JSONArray -> (0 until value.length()).any { hasPgpHeader(value.opt(it)) }
         else -> false
+    }
+
+    private fun canonicalText(value: String): String = value.filter { it.isLetterOrDigit() }.uppercase()
+
+    private val CANONICAL_PGP_HEADER: String = canonicalText(PGP_HEADER)
+
+    private val HEX_KEY = Regex("[0-9a-fA-F]{64}")
+
+    /**
+     * The EOA address of a private-key string (`0x` optional, then 64 hex digits), lower case, or `null`. Only hex digits are accepted, so a sign
+     * or other character cannot stand in for a digit. The key bytes are zero-filled after use.
+     */
+    fun addressOfArmor(armor: String): String? {
+        val hex = armor.removePrefix("0x")
+        if (!HEX_KEY.matches(hex)) return null
+        val key = ByteArray(32) { i -> hex.substring(2 * i, 2 * i + 2).toInt(16).toByte() }
+        try {
+            return WalletAddress.fromPrivateKey(key)
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    /**
+     * The W-class type check (§25.52O.3; iOS f8cf2bc): `mnemonicPhrase`, `recoveryWords` and a profile's `privateKeyArmor` are strings or null. A
+     * wrapper object (the 0.53.x device-key form) is not an approved form. A null is the page's deletion, judged by the merge (WM-05), not here.
+     * Returns the failing path names, sorted; empty when all pass. The form of a key and the address it derives are not checked here: that is
+     * open (§25.52N.9 Q1, A4 materials F2), pending the interface owner's ruling on the synthetic vector values.
+     */
+    fun walletTypeRefusal(record: JSONObject): List<String> {
+        fun stringOrNull(value: Any?): Boolean = value == null || value == JSONObject.NULL || value is String
+        val names = sortedSetOf<String>()
+        for (key in listOf("mnemonicPhrase", "recoveryWords")) {
+            if (!stringOrNull(record.opt(key))) names += key
+        }
+        record.optJSONArray("profiles")?.let { profiles ->
+            for (i in 0 until profiles.length()) {
+                val profile = profiles.optJSONObject(i) ?: continue
+                if (!stringOrNull(profile.opt("privateKeyArmor"))) names += W_PROFILE_PATH
+            }
+        }
+        return names.toList()
     }
 
     /** True for a key name of §25.52O.2: `privateKey*`, `mnemonic*`, `pgpPassphrase*`, `pgpPrivate*`, `duplicateCode*`, or an exact name. */
@@ -843,6 +888,12 @@ internal class ShellImportFlow(
         }
         // PGP never enters the page copy, even if the reader let a field through (§25.52I.2).
         ShellRecordPolicy.stripPgpForRead(json)
+        // F2 condition 1: a PGP header that survives the strip, at any path, fails the import closed. This is an SDK rule, pending the interface
+        // owner's ruling; the import is not done, so the legacy store is left untouched.
+        if (ShellRecordPolicy.hasPgpHeader(json)) {
+            outcome.set(ImportOutcome.NOT_DONE)
+            return ShellImportCode.IMPORT_FAILED
+        }
         // §25.52K.5: the account of the record is profiles[k].keyID, and the key of that profile must derive it.
         val profiles = json.optJSONArray("profiles")
         var index = -1
@@ -959,8 +1010,11 @@ internal class ShellRecordBridge(
                 } else {
                     null
                 }
-                repairFlags(current, acc.eoa, valid = judgement == null)
                 ShellRecordPolicy.stripPgpForRead(current)
+                // §25.52I.2: PGP fields never reach the page. A PGP header that survives the strip, at any path, fails the read closed
+                // (F2 condition 2). The error is an SDK choice pending the interface owner's ruling; the device flags are not touched.
+                if (ShellRecordPolicy.hasPgpHeader(current)) return reply("error", listOf("sub" to "record_unreadable"))
+                repairFlags(current, acc.eoa, valid = judgement == null)
                 val out = reply(
                     "ok",
                     listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
@@ -1055,6 +1109,10 @@ internal class ShellRecordBridge(
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
         }
+        // §25.52O.3 (iOS f8cf2bc): the W-class values are strings or null; a wrapper object is bad_request naming the path. It comes after the
+        // schema rules, and before the key-shaped and whitelist checks, so a wrapper is named by its path and not by its sub-paths.
+        val walletRefusal = ShellRecordPolicy.walletTypeRefusal(record)
+        if (walletRefusal.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(walletRefusal)))
 
         // §25.52O.5 steps 4 and 5: key-shaped content first, then the whitelist (§25.52N.4).
         val keyShaped = ShellRecordPolicy.keyShapedIn(record)
@@ -1304,18 +1362,5 @@ object BeamioShellRecordImport {
     }
 
     /** The EOA address of a private-key string (`0x` plus 64 hex digits), lower case, or `null`. The key bytes are zero-filled after use. */
-    private fun addressOfPrivateKey(armor: String): String? {
-        val hex = armor.removePrefix("0x")
-        if (hex.length != 64) return null
-        val key = try {
-            ByteArray(32) { i -> hex.substring(2 * i, 2 * i + 2).toInt(16).toByte() }
-        } catch (_: NumberFormatException) {
-            return null
-        }
-        try {
-            return WalletAddress.fromPrivateKey(key)
-        } finally {
-            key.fill(0)
-        }
-    }
+    private fun addressOfPrivateKey(armor: String): String? = ShellRecordPolicy.addressOfArmor(armor)
 }

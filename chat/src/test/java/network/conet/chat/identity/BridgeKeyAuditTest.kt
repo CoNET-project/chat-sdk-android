@@ -166,6 +166,9 @@ class BridgeKeyAuditTest {
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
                 "if (storedProfile != null && storedProfile.has(\"privateKeyArmor\")) {",
                 "val armor = profile?.optString(\"privateKeyArmor\", \"\").orEmpty()",
+                // The W-class type check on write (walletTypeRefusal, §25.52O.3): it tests that the value is a string or null, and never
+                // returns the value.
+                "if (!stringOrNull(profile.opt(\"privateKeyArmor\"))) names += W_PROFILE_PATH",
                 // The W-field merge: the stored EOA key is copied into the record by mergeKey (argument form, 25.52H.2). It is written to the
                 // record, not to a reply of its own.
                 "\"privateKeyArmor\",",
