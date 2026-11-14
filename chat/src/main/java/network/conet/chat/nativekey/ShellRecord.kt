@@ -390,9 +390,19 @@ internal object ShellRecordPolicy {
      */
     fun preWriteRefusal(record: JSONObject): Pair<String, List<String>>? {
         if (hasPgpHeader(record)) return "pgp_private_in_payload" to emptyList()
-        val names = forbiddenIn(record)
+        val names = (forbiddenIn(record) + profilePgpKeyIn(record)).distinct().sortedWith(UTF8_ORDER)
         return if (names.isEmpty()) null else "pgp_private_in_payload" to names
     }
+
+    /**
+     * §25.52N.5 and §25.52B.5: a profile-level `pgpKey` is a private path, `profiles[*].pgpKey.*`, except the listed PGP public paths. The name is the
+     * forbidden prefix, `profiles[*].pgpKey` (vector PR-04, r3cq §25.52AS.4). The chatManager form is not changed here (its leaf names are pinned).
+     */
+    fun profilePgpKeyIn(record: JSONObject): List<String> =
+        pathsOf(record)
+            .filter { it == "profiles[*].pgpKey" || (it.startsWith("profiles[*].pgpKey.") && it !in PGP_PUBLIC_PATHS) }
+            .map { "profiles[*].pgpKey" }
+            .distinct()
 
     /**
      * The whitelist violations of [record] (§25.52O.5, §25.52Q.3), sorted in UTF-8 byte order: the leaf paths outside the whitelist (an empty
