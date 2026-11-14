@@ -199,7 +199,7 @@ class ShellRecordVectorsTest {
             outcome = outcome,
         )
         val bridge = ShellRecordBridge(
-            account = { ShellRecordAccount.Ready(store) },
+            account = { ShellRecordAccount.Ready(store, ACCOUNT) },
             migrating = { false },
             migrationState = { "none" },
             outcome = { outcome.get() },
@@ -285,7 +285,7 @@ class ShellRecordVectorsTest {
         val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
 
         fun bridge(): ShellRecordBridge = ShellRecordBridge(
-            account = { ShellRecordAccount.Ready(store) },
+            account = { ShellRecordAccount.Ready(store, ACCOUNT) },
             migrating = { migrating },
             migrationState = { "none" },
             // The legacy store is confirmed absent for these cases, so a missing copy reads `absent` (§25.52K.4).

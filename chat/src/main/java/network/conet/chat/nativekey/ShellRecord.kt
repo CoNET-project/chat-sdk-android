@@ -257,12 +257,33 @@ internal object ShellRecordPolicy {
     fun keysOf(obj: JSONObject): List<String> = obj.keys().asSequence().map { it.toString() }.toList()
 
     /**
-     * The page's record merged with the stored W fields (§25.52H.2). An omitted W field keeps the stored value. The same value is
-     * accepted. A different value, including `null`, is a conflict, and nothing is overwritten. The W slot of a profile is the same index
-     * (the measured layout puts the account at `profiles[0]`, §25.52H.3). A stored W field that the page does not carry at all (no such
-     * profile) is a conflict too, so an omission never deletes it. Returns the merged record and the conflicting paths.
+     * The index of the account's record in `profiles` (§25.52B.6, §25.52H.3): the profile whose keyID is the account, compared without case.
+     * While no profile carries a keyID, the measured layout's `profiles[0]` is the account (§25.52B.6, "until confirmed"). Several matches, or
+     * a keyID that belongs to another account only, give no slot. Nothing is guessed among profiles.
      */
-    fun mergeWallet(page: JSONObject, stored: JSONObject): Pair<JSONObject, List<String>> {
+    fun accountSlot(record: JSONObject, eoa: String): Int? {
+        val profiles = record.optJSONArray("profiles") ?: return null
+        val ids: List<String> = (0 until profiles.length()).map { profiles.optJSONObject(it)?.optString("keyID", "").orEmpty() }
+        val matches = ids.indices.filter { ids[it].isNotEmpty() && ids[it].equals(eoa, ignoreCase = true) }
+        if (matches.size == 1) return matches[0]
+        if (matches.size > 1) return null
+        if (ids.none { it.isNotEmpty() } && profiles.length() >= 1) return 0
+        return null
+    }
+
+    /** True when some profile of [record] holds [key]. */
+    private fun hasProfileKey(record: JSONObject, key: String): Boolean {
+        val profiles = record.optJSONArray("profiles") ?: return false
+        return (0 until profiles.length()).any { profiles.optJSONObject(it)?.has(key) == true }
+    }
+
+    /**
+     * The page's record merged with the stored W fields (§25.52H.2, §25.52H.3). An omitted W field keeps the stored value. The same value is
+     * accepted. A different value, including `null`, is a conflict, and nothing is overwritten. The W slot is the account's record (see
+     * [accountSlot]). The page must carry the account's record too, or an omission would delete the stored W field: that is a conflict. A
+     * stored W field that no account slot can hold is a conflict as well. Returns the merged record and the conflicting paths.
+     */
+    fun mergeWallet(page: JSONObject, stored: JSONObject, eoa: String): Pair<JSONObject, List<String>> {
         val out = JSONObject(page.toString())
         val conflicts = mutableSetOf<String>()
         mergeKey(page, stored, out, "mnemonic", "mnemonic", conflicts)
@@ -278,27 +299,19 @@ internal object ShellRecordPolicy {
                 conflicts,
             )
         }
-        val storedProfiles = stored.optJSONArray("profiles")
-        if (storedProfiles != null) {
-            val pageProfiles = page.optJSONArray("profiles")
-            val outProfiles = out.optJSONArray("profiles")
-            for (i in 0 until storedProfiles.length()) {
-                val storedProfile = storedProfiles.optJSONObject(i) ?: continue
-                if (!storedProfile.has("privateKeyArmor")) continue
-                val pageProfile = pageProfiles?.optJSONObject(i)
-                if (pageProfile == null) {
-                    conflicts += "profiles[*].privateKeyArmor"
-                    continue
-                }
-                mergeKey(
-                    pageProfile,
-                    storedProfile,
-                    outProfiles?.optJSONObject(i),
-                    "privateKeyArmor",
-                    "profiles[*].privateKeyArmor",
-                    conflicts,
-                )
+        val name = "profiles[*].privateKeyArmor"
+        val storedSlot = accountSlot(stored, eoa)
+        val pageSlot = accountSlot(page, eoa)
+        val storedProfile = storedSlot?.let { stored.optJSONArray("profiles")?.optJSONObject(it) }
+        if (storedProfile != null && storedProfile.has("privateKeyArmor")) {
+            if (pageSlot == null) {
+                conflicts += name
+            } else {
+                val pageProfile = page.optJSONArray("profiles")?.optJSONObject(pageSlot)
+                mergeKey(pageProfile, storedProfile, out.optJSONArray("profiles")?.optJSONObject(pageSlot), "privateKeyArmor", name, conflicts)
             }
+        } else if (storedSlot == null && hasProfileKey(stored, "privateKeyArmor")) {
+            conflicts += name
         }
         return out to conflicts.sorted()
     }
@@ -445,7 +458,7 @@ internal typealias ShellReplyFields = List<Pair<String, Any?>>
 /** What the bridge needs about the account before it can answer. */
 internal sealed class ShellRecordAccount {
     /** The account is known, and its page store is [store]. */
-    class Ready(val store: SealedPageRecordStore) : ShellRecordAccount()
+    class Ready(val store: SealedPageRecordStore, val eoa: String) : ShellRecordAccount()
 
     /** No wallet and no imported account. Nothing can be read or held for it yet. */
     object Unknown : ShellRecordAccount()
@@ -639,23 +652,16 @@ internal class ShellRecordBridge(
         if (requestBytes > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
         val record = body.optJSONObject("record") ?: return reply("bad_request", emptyList())
         val rev = record.opt("rev")
-        val schema = record.opt("schemaVersion")
-        if (rev !is Int || schema !is Int) return reply("bad_request", emptyList())
+        if (rev !is Int) return reply("bad_request", emptyList())
 
         ShellRecordPolicy.preWriteRefusal(record)?.let { (code, names) ->
             return if (names.isEmpty()) reply(code, emptyList()) else reply(code, listOf("names" to JSONArray(names)))
         }
-        val wallet = ShellRecordPolicy.walletIn(record)
-        if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
-            return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
-        }
-        val violations = ShellRecordPolicy.whitelistViolations(record)
-        if (violations.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(violations)))
 
         val acc = account()
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
-        if (migrating()) return reply("migrating", emptyList())
-        val store = (acc as? ShellRecordAccount.Ready)?.store
+        val ready = acc as? ShellRecordAccount.Ready
+        val store = ready?.store
         val current: JSONObject? = if (store == null) {
             null
         } else {
@@ -665,6 +671,23 @@ internal class ShellRecordBridge(
                 return reply("error", listOf("sub" to "record_unreadable"))
             }
         }
+
+        // W fields (§25.52J.2, §25.52F.5, R412): a copy that holds W fields takes only schema 2 writes, so an older or schema-less page
+        // cannot drop or change them. Without a stored copy, a W field needs schema 2 as well.
+        val schema = record.opt("schemaVersion")
+        val storedWallet = current?.let { ShellRecordPolicy.walletIn(it) }.orEmpty()
+        if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
+            return reply("wallet_copy_not_approved", listOf("names" to JSONArray(storedWallet)))
+        }
+        if (schema !is Int) return reply("bad_request", emptyList())
+        val wallet = ShellRecordPolicy.walletIn(record)
+        if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
+            return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
+        }
+        val violations = ShellRecordPolicy.whitelistViolations(record)
+        if (violations.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(violations)))
+
+        if (migrating()) return reply("migrating", emptyList())
         if (current == null) {
             // No copy yet: the first write only after the import has established the state (§25.52K.4). Never a new wallet on failure.
             when (outcome()) {
@@ -685,7 +708,7 @@ internal class ShellRecordBridge(
         val merged = when {
             nativeWrite || current == null -> JSONObject(record.toString())
             else -> {
-                val (out, conflicts) = ShellRecordPolicy.mergeWallet(record, current)
+                val (out, conflicts) = ShellRecordPolicy.mergeWallet(record, current, ready?.eoa.orEmpty())
                 if (conflicts.isNotEmpty()) {
                     return reply(
                         "conflict",
@@ -768,9 +791,9 @@ object BeamioShellRecordImport {
         val app = context.applicationContext
         val bound = ShellRecordState.bound.get()
         return when (val state = NativeWallet.vault(app).state()) {
-            is NativeWalletVault.State.Ready -> ShellRecordAccount.Ready(storeFor(app, state.eoa.lowercase()))
+            is NativeWalletVault.State.Ready -> ShellRecordAccount.Ready(storeFor(app, state.eoa.lowercase()), state.eoa.lowercase())
             else -> when {
-                bound != null -> ShellRecordAccount.Ready(storeFor(app, bound))
+                bound != null -> ShellRecordAccount.Ready(storeFor(app, bound), bound)
                 state is NativeWalletVault.State.Locked -> ShellRecordAccount.Locked
                 else -> ShellRecordAccount.Unknown
             }
