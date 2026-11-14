@@ -21,7 +21,12 @@ android {
         minSdk = 24
         // QA switch (R559): -PchatDisableHistoryWrites=true builds a candidate whose history writes nothing (no fragment, index or
         // pointer upload). Without the property the value is true, as before: production behaviour does not change.
-        buildConfigField("boolean", "HISTORY_WRITES", (!project.hasProperty("chatDisableHistoryWrites")).toString())
+        // Only the value "true" switches writes off: -PchatDisableHistoryWrites=false (or any other value) keeps them on (R565 review).
+        buildConfigField(
+            "boolean",
+            "HISTORY_WRITES",
+            (project.findProperty("chatDisableHistoryWrites")?.toString() != "true").toString(),
+        )
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

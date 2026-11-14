@@ -127,6 +127,23 @@ class HistoryWriteSwitchTest {
     }
 
     @Test
+    fun aDisabledFlushReturnsDisabledNotEmpty() {
+        // R565 review: EMPTY means "nothing to write"; a switched-off flush reports DISABLED, so no report reads it as "all written".
+        val net = CountingNet()
+        val s = store(Files.createTempDirectory("history-switch-result").toFile(), net, writesEnabled = false)
+        prepare(s)
+        for (i in 1..10) append(s, i)
+        assertEquals(BeamioConetChatHistoryStore.FlushResult.DISABLED, s.flushNowBlocking())
+        assertEquals(0, net.uploads.get() + net.submits.get())
+    }
+
+    @Test
+    fun theDefaultBuildKeepsWritesOn() {
+        // Production (and a run without -PchatDisableHistoryWrites) keeps the writes on, so the default is unchanged.
+        assertTrue("BuildConfig.HISTORY_WRITES must be true without the QA property", BuildConfig.HISTORY_WRITES)
+    }
+
+    @Test
     fun controlWithTheSwitchOnDoesWrite() {
         // The same steps write when the switch is on, so the zero above comes from the switch.
         val (net, _) = runWith(writesEnabled = true)

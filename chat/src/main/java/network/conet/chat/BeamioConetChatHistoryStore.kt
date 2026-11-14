@@ -110,7 +110,11 @@ class BeamioConetChatHistoryStore(
             .put("body", body)
     }
 
-    enum class FlushResult { OK, EMPTY, CONFLICT, ERROR, NOT_READY }
+    /**
+     * DISABLED: the build switched history writes off (QA switch, R559). Nothing was written; the entries stay in the local queue. It is not
+     * EMPTY, which means there was nothing to write.
+     */
+    enum class FlushResult { OK, EMPTY, CONFLICT, ERROR, NOT_READY, DISABLED }
 
     private val eoa = eoa.lowercase()
     private val ipfsRead = ipfsBaseUrl.trimEnd('/')
@@ -685,7 +689,7 @@ class BeamioConetChatHistoryStore(
     }
 
     private fun flushUnlocked(): FlushResult {
-        if (!writesEnabled) return FlushResult.EMPTY
+        if (!writesEnabled) return FlushResult.DISABLED
         if (!ready || destroyed) return FlushResult.NOT_READY
         if (pending.entries.isEmpty()) return FlushResult.EMPTY
         for (attempt in 0 until HistoryBatch.CAS_ATTEMPTS) {
@@ -695,6 +699,7 @@ class BeamioConetChatHistoryStore(
             when (outcome) {
                 FlushResult.OK -> return FlushResult.OK
                 FlushResult.EMPTY -> return FlushResult.EMPTY
+                FlushResult.DISABLED -> return FlushResult.DISABLED
                 FlushResult.CONFLICT -> {
                     log("info", "[history] head moved by another device; retry ${attempt + 1}/${HistoryBatch.CAS_ATTEMPTS}")
                     if (attempt + 1 < HistoryBatch.CAS_ATTEMPTS) clock.sleep(HistoryBatch.casRetryDelay(random))
@@ -710,7 +715,7 @@ class BeamioConetChatHistoryStore(
     }
 
     private fun flushAttempt(): FlushResult {
-        if (!writesEnabled) return FlushResult.EMPTY
+        if (!writesEnabled) return FlushResult.DISABLED
         unlandedJustNow = false
         val key = indexKey ?: return FlushResult.ERROR
         val masterKey = master ?: return FlushResult.ERROR
