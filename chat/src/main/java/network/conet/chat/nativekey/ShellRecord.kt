@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import network.conet.chat.identity.IdentityProvisionContract
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -275,7 +276,12 @@ internal object ShellRecordPolicy {
         else -> false
     }
 
-    private fun canonicalText(value: String): String = value.filter { it.isLetterOrDigit() }.uppercase()
+    /**
+     * The canonical form of §25.19.2 N (NFKD, then S, Mn, Me and Cf removed; the same function the identity contract uses), then letters and digits
+     * only, in upper case. Full-width letters, compatibility forms, combining marks and zero-width characters do not hide a header (F2 condition 3).
+     */
+    private fun canonicalText(value: String): String =
+        IdentityProvisionContract.normalize(value).filter { it.isLetterOrDigit() }.uppercase()
 
     private val CANONICAL_PGP_HEADER: String = canonicalText(PGP_HEADER)
 
@@ -297,21 +303,21 @@ internal object ShellRecordPolicy {
     }
 
     /**
-     * The W-class type check (§25.52O.3; iOS f8cf2bc): `mnemonicPhrase`, `recoveryWords` and a profile's `privateKeyArmor` are strings or null. A
-     * wrapper object (the 0.53.x device-key form) is not an approved form. A null is the page's deletion, judged by the merge (WM-05), not here.
-     * Returns the failing path names, sorted; empty when all pass. The form of a key and the address it derives are not checked here: that is
-     * open (§25.52N.9 Q1, A4 materials F2), pending the interface owner's ruling on the synthetic vector values.
+     * The W-class type check (§25.52AF.3 rules 1 and 4, r3cd): a value of `mnemonicPhrase`, `recoveryWords` or a profile's `privateKeyArmor` that
+     * is an object or an array is refused (`bad_request`, names the path, nothing echoed or stored). Scalars, including null, are not refused here:
+     * they follow the current W merge rules (§25.52H.2, §25.52R.2). A wrapper object (the 0.53.x device-key form) is an array or an object, so it is
+     * refused. Returns the failing path names, sorted; empty when all pass. The key-shape scan runs before this check (AF.3 rule 3).
      */
     fun walletTypeRefusal(record: JSONObject): List<String> {
-        fun stringOrNull(value: Any?): Boolean = value == null || value == JSONObject.NULL || value is String
+        fun objectOrArray(value: Any?): Boolean = value is JSONObject || value is JSONArray
         val names = sortedSetOf<String>()
         for (key in listOf("mnemonicPhrase", "recoveryWords")) {
-            if (!stringOrNull(record.opt(key))) names += key
+            if (objectOrArray(record.opt(key))) names += key
         }
         record.optJSONArray("profiles")?.let { profiles ->
             for (i in 0 until profiles.length()) {
                 val profile = profiles.optJSONObject(i) ?: continue
-                if (!stringOrNull(profile.opt("privateKeyArmor"))) names += W_PROFILE_PATH
+                if (objectOrArray(profile.opt("privateKeyArmor"))) names += W_PROFILE_PATH
             }
         }
         return names.toList()
@@ -1109,14 +1115,14 @@ internal class ShellRecordBridge(
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
         }
-        // §25.52O.3 (iOS f8cf2bc): the W-class values are strings or null; a wrapper object is bad_request naming the path. It comes after the
-        // schema rules, and before the key-shaped and whitelist checks, so a wrapper is named by its path and not by its sub-paths.
-        val walletRefusal = ShellRecordPolicy.walletTypeRefusal(record)
-        if (walletRefusal.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(walletRefusal)))
-
-        // §25.52O.5 steps 4 and 5: key-shaped content first, then the whitelist (§25.52N.4).
+        // §25.52O.5 steps 4 and 5: key-shaped content first (this also covers privateKeyArmorWrap, §25.52AF.3 rule 2), then the W-class type
+        // check (§25.52AF.3 rule 3), then the whitelist (§25.52N.4).
         val keyShaped = ShellRecordPolicy.keyShapedIn(record)
         if (keyShaped.isNotEmpty()) return reply("key_shaped_content", listOf("names" to JSONArray(keyShaped)))
+        // §25.52O.3, §25.52AF.3 (r3cd): a W-class object or array is bad_request naming the path. Before the whitelist, so the path is named and not
+        // its sub-paths.
+        val walletRefusal = ShellRecordPolicy.walletTypeRefusal(record)
+        if (walletRefusal.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(walletRefusal)))
         val violations = ShellRecordPolicy.whitelistViolations(record)
         if (violations.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(violations)))
 

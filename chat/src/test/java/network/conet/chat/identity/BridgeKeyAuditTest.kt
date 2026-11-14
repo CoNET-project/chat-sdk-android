@@ -208,15 +208,24 @@ class BridgeKeyAuditTest {
             ),
         )
 
-        // Listed reads whose status is pending the interface owner's ruling (R598/R604): W-class values from a bridge payload. Not T-50 passing.
+        // Category b of 25.52AE.1 (r3cc): W-class handling in the page record, on an exact W path only (profiles[*].privateKeyArmor for the account,
+        // top-level mnemonicPhrase). Not a bridge parameter and not an answer value. Listed so that a new occurrence fails.
+        val pageRecordW: Map<String, List<String>> = mapOf(
+            "ShellRecord.kt" to listOf(
+                // mergeKey copies the stored W armor into the merge result (mergeWallet, 25.52H.2, 25.52AE.1 row 498).
+                "\"privateKeyArmor\",",
+                // The W-class type check on write (walletTypeRefusal, 25.52AF.3 rule 1): it tests that the value is an object or array, and never
+                // returns it.
+                "if (objectOrArray(profile.opt(\"privateKeyArmor\"))) names += W_PROFILE_PATH",
+            ),
+        )
+
+        // Listed reads that stay pending the interface owner's ruling: not counted as T-50 passing. The first is the check of another profile's
+        // privateKeyArmor (mergeWallet). 25.52AE.1 row 507 requires such a profile to be bad_request naming the path, and not merged; the current
+        // behaviour is to be verified before this line can move to category b.
         val pendingRuling: Map<String, List<String>> = mapOf(
             "ShellRecord.kt" to listOf(
-                // The page payload's profiles are checked for a W-class armor in another profile (mergeWallet, 25.52H.2).
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
-                // mergeKey copies the stored W armor into the result derived from the payload (mergeWallet, 25.52H.2).
-                "\"privateKeyArmor\",",
-                // The W-class type check on write (walletTypeRefusal, 25.52O.3, iOS f8cf2bc). It tests the value's type, never returns it.
-                "if (!stringOrNull(profile.opt(\"privateKeyArmor\"))) names += W_PROFILE_PATH",
             ),
         )
 
@@ -241,7 +250,7 @@ class BridgeKeyAuditTest {
                 }
             }
         }
-        val listed = (allowed.asSequence() + pendingRuling.asSequence() + (if (qaBuild) qaOnly.asSequence() else emptySequence()))
+        val listed = (allowed.asSequence() + pageRecordW.asSequence() + pendingRuling.asSequence() + (if (qaBuild) qaOnly.asSequence() else emptySequence()))
             .flatMap { (file, lines) -> lines.map { "$file|$it" } }
             .toList()
         val foundCounts = found.groupingBy { it }.eachCount()

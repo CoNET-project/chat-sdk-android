@@ -22,7 +22,20 @@ class ShellRecordF2Test {
         "-----begin pgp private key block-----",
         "x BEGIN  PGP\tPRIVATE KEY",
         "BEGIN-PGP-PRIVATE-KEY",
+        // Full-width letters and spaces (NFKD maps them to ASCII; 25.19.2 N).
+        "ＢＥＧＩＮ ＰＧＰ ＰＲＩＶＡＴＥ ＫＥＹ",
+        // A combining acute on a letter of the header (Mn, removed by N).
+        "BEGIN PGP PRIV́ATE KEY",
+        // A zero-width space and a soft hyphen inside the header (Cf, removed by N).
+        "BEGIN PGP PRI​VATE KEY­",
     )
+
+    @Test
+    fun aFullWidthOrCombiningHeaderIsRefusedAsThePlainHeaderIs() {
+        for (variant in pgpVariants) {
+            assertTrue("header in: $variant", ShellRecordPolicy.hasPgpHeader(JSONObject().put("x", variant)))
+        }
+    }
 
     private fun bridge(store: SealedPageRecordStore) = ShellRecordBridge(
         account = { ShellRecordAccount.Ready(store, ACCOUNT) },
@@ -168,5 +181,42 @@ class ShellRecordF2Test {
         assertNull("a short key", ShellRecordPolicy.addressOfArmor("0x" + "1".repeat(63)))
         val address = ShellRecordPolicy.addressOfArmor("0x" + "11".repeat(32))
         assertTrue("a valid key derives an address", address != null && address.matches(Regex("0x[0-9a-f]{40}")))
+    }
+
+    // ---- r3cd (25.52AF.3): objects and arrays are refused; scalars are not; key shape comes first ----
+
+    @Test
+    fun aWrapperWithTheKeysInAnotherOrderIsStillRefused() {
+        val reordered = JSONObject().put("v", 1).put("mode", "aes-256-gcm").put("eoa", ACCOUNT).put("kdf", "scrypt")
+            .put("salt", "c2FsdA==").put("iv", "aXY=").put("ct", "c3ludGhldGlj")
+        assertEquals(listOf("mnemonicPhrase"), ShellRecordPolicy.walletTypeRefusal(JSONObject().put("mnemonicPhrase", reordered)))
+    }
+
+    @Test
+    fun scalarsIncludingNullAndNumbersAreNotRefusedByTheTypeCheck() {
+        // 25.52AF.3 rule 4: a non-string scalar follows the current W merge rules, unchanged.
+        val scalars = JSONObject().put("mnemonicPhrase", 5).put("recoveryWords", true)
+        assertTrue(ShellRecordPolicy.walletTypeRefusal(scalars).isEmpty())
+        val nullRecord = JSONObject().put("mnemonicPhrase", JSONObject.NULL)
+        assertTrue(ShellRecordPolicy.walletTypeRefusal(nullRecord).isEmpty())
+    }
+
+    @Test
+    fun aWrapperUnderPrivateKeyArmorWrapIsKeyShapedContentBeforeTheTypeCheck() {
+        // 25.52AF.3 rules 2 and 3: the key-shape scan comes first, so the answer is key_shaped_content, not bad_request.
+        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
+        val record = schema2("emailAddr" to "a", "privateKeyArmorWrap" to wrapper).put("mnemonicPhrase", wrapper)
+        val resp = bridge(store).handle(ShellOrigin.EMBEDDED_PAGE, writeReq(record), 500)
+        assertEquals("key_shaped_content", resultOf(resp).optString("code"))
+        assertNull("nothing is stored", store.read())
+    }
+
+    @Test
+    fun aWrapperInTheMnemonicPhraseWithoutTheWrapKeyIsBadRequestNamingTheTopLevelPath() {
+        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
+        val record = schema2("emailAddr" to "a").put("mnemonicPhrase", wrapper)
+        val resp = bridge(store).handle(ShellOrigin.EMBEDDED_PAGE, writeReq(record), 500)
+        assertEquals("bad_request", resultOf(resp).optString("code"))
+        assertEquals("mnemonicPhrase", resultOf(resp).optJSONArray("names")?.getString(0))
     }
 }
