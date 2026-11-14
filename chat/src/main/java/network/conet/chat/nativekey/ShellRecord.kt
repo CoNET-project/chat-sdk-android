@@ -1070,11 +1070,17 @@ internal class ShellRecordBridge(
         val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
         if (extra.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(extra.sortedWith(UTF8_ORDER))))
 
-        return if (type == "shellRecordRead") read(acc, reply) else write(body, requestBytes, nativeWrite, acc, reply)
+        // 25.52CF.1 (r3ef): an exception in the handler gives the fallback, once, with the reqId as sent. No detail is returned.
+        return try {
+            if (type == "shellRecordRead") read(acc, reply) else write(body, requestBytes, nativeWrite, acc, reply)
+        } catch (_: Exception) {
+            if (type == "shellRecordRead") reply("error", listOf("sub" to "record_unreadable")) else reply("write_failed", emptyList())
+        }
     }
 
     private fun read(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
-        if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
+        // 25.52CH.1 (r3eg): a locked store is a business result, ok:true, with sub storage_locked.
+        if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "storage_locked"))
         if (migrating()) return reply("migrating", emptyList())
         if (acc is ShellRecordAccount.Ready) {
             val current: JSONObject? = try {
@@ -1165,7 +1171,8 @@ internal class ShellRecordBridge(
             return if (names.isEmpty()) reply(code, emptyList()) else reply(code, listOf("names" to JSONArray(names)))
         }
 
-        if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
+        // 25.52CH.1 (r3eg): a locked store on a write is write_failed, once.
+        if (acc is ShellRecordAccount.Locked) return reply("write_failed", emptyList())
         val ready = acc as? ShellRecordAccount.Ready
         val store = ready?.store
         val current: JSONObject? = if (store == null) {

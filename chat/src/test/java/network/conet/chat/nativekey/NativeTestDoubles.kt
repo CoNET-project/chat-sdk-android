@@ -16,6 +16,7 @@ internal class NativeTestCrash : Error("simulated crash")
 
 internal class NativeTestWrap : KeyWrap {
     var failSeal = false
+    var opens = 0
     var openOverride: ((ByteArray) -> ByteArray)? = null
     private var secret: SecretKey = newKey()
 
@@ -29,6 +30,7 @@ internal class NativeTestWrap : KeyWrap {
     }
 
     override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? {
+        opens++
         return try {
             val c = Cipher.getInstance("AES/GCM/NoPadding")
             c.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, sealed.copyOfRange(0, 12)))

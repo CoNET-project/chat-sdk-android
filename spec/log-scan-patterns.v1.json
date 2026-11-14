@@ -255,13 +255,18 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "a7a2246d7f4140e2689b054cf392e1a32d3e5d91c2787ca18f4dd0c659293c40",
+        "sha256": "340fb91794e7550ef31ed9eb5cbb09a824f4c3e7c43eab9a7b10756783c1faeb",
         "source": "spec §25.52BS（r3dp）"
       },
       {
         "name": "interface/protocol/table-T.v1.json",
         "sha256": "c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569",
         "source": "spec §25.52BY（r3dy）"
+      },
+      {
+        "name": "interface/protocol/domain-tags-vectors.v1.json",
+        "sha256": "86d6ece8f3ff960b636fc1a8f0d757e3643f207ce0a3737d412d49caaaf67d12",
+        "source": "spec §25.27.9（r3ed）"
       },
       {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
@@ -321,6 +326,10 @@
       },
       {
         "name": "interface/protocol/table-T.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/domain-tags-vectors.v1.json",
         "specRecorded": true
       }
     ],

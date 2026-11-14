@@ -156,12 +156,24 @@ internal class NativePgpVault(
      * signature type must be 0x00 or 0x01. Certification signatures are refused. Returns an armored signature.
      */
     @Synchronized
+    /**
+     * The stored record and its marker are both present, and the marker does not match: the record is locked (25.52CI.1). Unlike [state],
+     * nothing is opened, decrypted or deleted here.
+     */
+    fun locked(): Boolean {
+        val r = files.read(rec) ?: return false
+        val m = files.read(mark) ?: return false
+        return !m.contentEquals(digestHex(r).toByteArray(Charsets.US_ASCII))
+    }
+
     fun sign(
         purposeId: String,
         sigType: Int,
         message: ByteArray,
         registry: Set<String> = REGISTERED_PURPOSES,
     ): NativePgp.Outcome {
+        // 25.52CI.1 (r3eh): the lock is judged first. A locked record refuses with pgp_locked, before the signature type, the purpose and any key read.
+        if (locked()) return NativePgp.Outcome.fail("pgp_locked")
         // Order (spec 25.27.6, r3i): the signature type is judged first, then the purpose.
         if (sigType !in NativePgp.ALLOWED_SIG_TYPES) return NativePgp.Outcome.fail("sig_type_not_allowed")
         if (!PURPOSE_RE.matches(purposeId) || purposeId !in registry) {

@@ -1,0 +1,93 @@
+{
+  "file": "domain-tags-vectors.v1.json",
+  "spec": "spec §25.27.3、§25.27.6、§25.27.9（r3ed，PM R727）",
+  "purpose": "PGP 域标签的非重叠与不可生成性。两端的 SDK 内部标签须与本文件逐字节相同，并通过 DT-T1 至 DT-T3。",
+  "generator": "gen-domain-tags.mjs",
+  "labels": [
+    {
+      "id": "DT-01",
+      "kind": "candidate",
+      "name": "chatEnvelope",
+      "label": "beamio.pgp.chatEnvelope.v1\n",
+      "labelHex": "6265616d696f2e7067702e63686174456e76656c6f70652e76310a",
+      "source": "§25.27.3"
+    },
+    {
+      "id": "DT-02",
+      "kind": "candidate",
+      "name": "groupMessage",
+      "label": "beamio.pgp.groupMessage.v1\n",
+      "labelHex": "6265616d696f2e7067702e67726f75704d6573736167652e76310a",
+      "source": "§25.27.3"
+    },
+    {
+      "id": "DT-03",
+      "kind": "candidate",
+      "name": "voiceSignal",
+      "label": "beamio.pgp.voiceSignal.v1\n",
+      "labelHex": "6265616d696f2e7067702e766f6963655369676e616c2e76310a",
+      "source": "§25.27.3"
+    },
+    {
+      "id": "DT-04",
+      "kind": "sdk-internal-sign",
+      "name": "PRECHECK",
+      "label": "beamio.pgp.migrate.precheck.v1\n",
+      "labelHex": "6265616d696f2e7067702e6d6967726174652e707265636865636b2e76310a",
+      "source": "Android PgpMigration.kt:28"
+    },
+    {
+      "id": "DT-05",
+      "kind": "sdk-internal-sign",
+      "name": "CHALLENGE",
+      "label": "beamio.pgp.migrate.challenge.v1\n",
+      "labelHex": "6265616d696f2e7067702e6d6967726174652e6368616c6c656e67652e76310a",
+      "source": "Android PgpMigration.kt:27；iOS challengeDomain 字节相同"
+    },
+    {
+      "id": "DT-06",
+      "kind": "sdk-internal-aad",
+      "name": "STAGED",
+      "label": "beamio.pgp.migrate.staged.v1|",
+      "labelHex": "6265616d696f2e7067702e6d6967726174652e7374616765642e76317c",
+      "source": "Android PgpMigration.kt:565（AAD 前缀，|之前）"
+    },
+    {
+      "id": "DT-07",
+      "kind": "sdk-internal-aad",
+      "name": "MARKER",
+      "label": "beamio.pgp.migrate.marker.v1|",
+      "labelHex": "6265616d696f2e7067702e6d6967726174652e6d61726b65722e76317c",
+      "source": "Android PgpMigration.kt:613（AAD 前缀，|之前）"
+    }
+  ],
+  "cases": [
+    {
+      "id": "DT-T1",
+      "check": "两两互不相等（UTF-8 字节）",
+      "result": "pass",
+      "detail": []
+    },
+    {
+      "id": "DT-T2",
+      "check": "任一标签不为另一标签的 UTF-8 字节前缀",
+      "result": "pass",
+      "detail": []
+    },
+    {
+      "id": "DT-T3",
+      "check": "内部签名标签的中段不符合 purposeId 语法（含 \".\"），故不可由 purposeId 生成",
+      "result": "pass",
+      "detail": []
+    }
+  ],
+  "selfCheck": {
+    "result": "pass",
+    "checks": [
+      "DT-T1",
+      "DT-T2",
+      "DT-T3",
+      "候选标签自检"
+    ]
+  }
+}

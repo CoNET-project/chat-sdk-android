@@ -489,6 +489,48 @@ class ShellRecordTest {
     }
 
     @Test
+    fun aLockedStoreOnAWriteIsWriteFailedOnce() {
+        // 25.52CH.1 (r3eg): a write on a locked store is ok:true with write_failed, once, with the reqId as sent.
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Locked },
+            migrating = { false },
+            outcome = { ImportOutcome.ABSENT },
+        )
+        val record = JSONObject().put("rev", 1).put("schemaVersion", 1)
+        val write = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordWrite").put("reqId", "w1").put("record", record), 60)
+        assertEquals(true, write.getBoolean("ok"))
+        assertEquals("write_failed", write.getJSONObject("result").getString("code"))
+        assertEquals("w1", write.getString("reqId"))
+    }
+
+    @Test
+    fun aStorageExceptionIsTheFallbackOnceForReadAndWrite() {
+        // 25.52CF.1 (r3ef): a read that throws gives error with sub record_unreadable; a write that throws gives write_failed. Both are ok:true,
+        // once, with the reqId as sent, and no record content.
+        val files = object : VaultFiles {
+            override fun read(name: String): ByteArray? = throw IllegalStateException("simulated storage fault")
+            override fun write(name: String, bytes: ByteArray) = throw IllegalStateException("simulated storage fault")
+            override fun delete(name: String) = throw IllegalStateException("simulated storage fault")
+        }
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "${DerivedAccount.ADDRESS}:default")
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.Ready(store, DerivedAccount.ADDRESS) },
+            migrating = { false },
+            outcome = { ImportOutcome.ABSENT },
+        )
+        val read = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "f1"), 40)
+        assertEquals(true, read.getBoolean("ok"))
+        assertEquals("error", read.getJSONObject("result").getString("code"))
+        assertEquals("record_unreadable", read.getJSONObject("result").getString("sub"))
+        assertEquals("f1", read.getString("reqId"))
+        val record = JSONObject().put("rev", 1).put("schemaVersion", 1)
+        val write = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordWrite").put("reqId", "f2").put("record", record), 60)
+        assertEquals(true, write.getBoolean("ok"))
+        assertEquals("write_failed", write.getJSONObject("result").getString("code"))
+        assertEquals("f2", write.getString("reqId"))
+    }
+
+    @Test
     fun aLockedVaultAnswersAnErrorNotAnAbsence() {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Locked },
@@ -497,7 +539,7 @@ class ShellRecordTest {
         )
         val read = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40)
         assertEquals("error", read.v().getString("code"))
-        assertEquals("locked", read.v().getString("sub"))
+        assertEquals("storage_locked", read.v().getString("sub"))
     }
 
     @Test

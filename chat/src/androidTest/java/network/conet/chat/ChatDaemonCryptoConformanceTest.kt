@@ -277,6 +277,67 @@ class ChatDaemonCryptoConformanceTest {
         }
         assertEquals("the unknown name was answered once", 1, acks.count { it.optString("reqId") == "unk-1" })
     }
+
+    /**
+     * 25.52CB.2 (r3eb, R725): locked, through the real vault store. The marker of the test record is overwritten with a value that does not match,
+     * which is the fault of a damaged store. No product hook is used. In G2 (a ready session) the families C1, C2, C3, C5, W7 and N0 answer
+     * `locked`, once, before their parameters are read. N0 answers once when unlocked, and C5 is not no_key in G2.
+     */
+    @Test
+    fun lockedFamiliesAnswerLockedOnceBeforeTheParameters() {
+        val key = ByteArray(32) { 0x11 }
+        val eoa = requireNotNull(WalletAddress.fromPrivateKey(key)).lowercase()
+        val vault = NativeWallet.vault(context)
+        val imported = vault.importKey(eoa, key.copyOf())
+        assertTrue("a synthetic test record for the test account: ${imported.code}", imported == NativeWalletVault.Import.OK)
+        NativeSessionState.markReady()
+        val acks = CopyOnWriteArrayList<JSONObject>()
+        val emit: (JSONObject) -> Unit = { payload ->
+            payload.optJSONObject("event")?.let { event -> if (event.optString("type") == "ack") acks += event }
+        }
+        fun answersOf(reqId: String): List<JSONObject> = acks.filter { it.optString("reqId") == reqId }
+        // The answer may come from a worker: wait for n answers, then a short settle time in which a second answer would show.
+        fun awaitAnswers(reqId: String, n: Int) {
+            val deadline = System.currentTimeMillis() + 5_000
+            while (answersOf(reqId).size < n && System.currentTimeMillis() < deadline) Thread.sleep(20)
+            Thread.sleep(200)
+        }
+        try {
+            BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "walletAddress").put("reqId", "g2-n0"), emit)
+            awaitAnswers("g2-n0", 1)
+            assertEquals("N0 in G2 answers once", 1, answersOf("g2-n0").size)
+            assertTrue("N0 in G2 is ok", answersOf("g2-n0").single().getBoolean("ok"))
+            BeamioConetChatModule.handleCommand(
+                context,
+                JSONObject().put("type", "deriveSubkeys").put("reqId", "g2-c5").put("accountKey", "$eoa:default"),
+                emit,
+            )
+            awaitAnswers("g2-c5", 1)
+            assertEquals("C5 in G2 answers once", 1, answersOf("g2-c5").size)
+            assertTrue("C5 in G2 is not no_key", answersOf("g2-c5").single().optString("error") != "no_key")
+            NativeWallet.migrationFiles(context).write(NativeWalletVault.MARK, "00".toByteArray(Charsets.US_ASCII))
+            assertTrue("the vault reports Locked after the damage", vault.state() is NativeWalletVault.State.Locked)
+            val families = listOf(
+                "historySign" to "lk-c1",
+                "gossipSign" to "lk-c2",
+                "pgpDecryptInbound" to "lk-c3",
+                "deriveSubkeys" to "lk-c5",
+                "ephemeralSign" to "lk-w7",
+                "walletAddress" to "lk-n0",
+            )
+            for ((type, id) in families) {
+                BeamioConetChatModule.handleCommand(context, JSONObject().put("type", type).put("reqId", id), emit)
+            }
+            for ((_, id) in families) awaitAnswers(id, 1)
+            for ((type, id) in families) {
+                assertEquals("$type locked answers once", 1, answersOf(id).size)
+                assertEquals("$type locked, before the parameters", "locked", answersOf(id).single().optString("error"))
+            }
+        } finally {
+            NativeSessionState.reset()
+            vault.forget()
+        }
+    }
 }
 
 /** Structural JSON equality (Android's org.json has no `similar`). Numbers compare by value. */

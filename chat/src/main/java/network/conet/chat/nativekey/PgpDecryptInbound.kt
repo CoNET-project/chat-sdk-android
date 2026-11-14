@@ -51,8 +51,8 @@ internal object PgpDecryptInbound {
      */
     fun gateRefusal(gate: NoKeyGate.Gate, locked: Boolean): String? = when {
         gate == NoKeyGate.Gate.G0 -> "no_key"
-        gate == NoKeyGate.Gate.G1 -> "not_ready"
         locked -> "locked"
+        gate == NoKeyGate.Gate.G1 -> "not_ready"
         else -> null
     }
 

@@ -183,6 +183,8 @@ class PgpDecryptInboundTest {
     fun theGateRefusesBeforeAnyPayloadIsRead() {
         assertEquals("no_key", PgpDecryptInbound.gateRefusal(Gate.G0, locked = false))
         assertEquals("not_ready", PgpDecryptInbound.gateRefusal(Gate.G1, locked = false))
+        // 25.52BZ.4 (r3ea): a locked record answers locked before not_ready, as the gate step does for every family.
+        assertEquals("locked", PgpDecryptInbound.gateRefusal(Gate.G1, locked = true))
         assertEquals("locked", PgpDecryptInbound.gateRefusal(Gate.G2, locked = true))
         assertNull(PgpDecryptInbound.gateRefusal(Gate.G2, locked = false))
     }

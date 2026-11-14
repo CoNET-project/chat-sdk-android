@@ -361,8 +361,11 @@
         "family": "C4",
         "state": "G2",
         "locked": true,
-        "expect": "no_signature",
-        "note": "C4 直接调用不经过桥（PM R718）；仅原生测试。锁定时不签名（§25.52BS.2、§25.52BT.3）"
+        "expect": {
+          "refusal": "pgp_locked",
+          "signatureOutput": false
+        },
+        "note": "C4 直接调用不经过桥（PM R718）；仅原生测试。锁定时拒签，码为 pgp_locked（§25.52CG.1），不产生签名输出"
       }
     ]
   },

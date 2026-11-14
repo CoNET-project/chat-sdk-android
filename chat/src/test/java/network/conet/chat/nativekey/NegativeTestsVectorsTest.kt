@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3ec; sha256 a7a2246d…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3eg; sha256 340fb917…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -29,8 +29,7 @@ class NegativeTestsVectorsTest {
 
     /** The cases that are not run here, with the reason. Each is a pending ruling, a vector gap, or a surface run elsewhere. */
     private val pending: Map<String, String> = buildMap {
-        put("T-control-sign", "signature output not applicable (vector applicability, 25.52BW.1, BZ.2): chatEnvelope is not registered; the domain tag is checked by theDomainTagOfTheEnumeratedPurposeIsTheFixedOne")
-        put("T-130-04", "nativeOnly (vector r3ec, PM R718): a direct C4 call, not a bridge case; the locked refusal is pgp_locked in NativePgpCommandTest.aLockedRecordAnswersPgpLocked; whether that is the vector label no_signature needs the interface owner's ruling")
+        put("T-control-sign", "only the domain tag check runs (25.52CG.2); the signature output is not applicable (25.52BW.1, CA.2, CD.1)")
         put("T-130-06", "status pending-mapping (25.52BZ.5): family W5 has no bridge name (25.52AR.3), so there is no command to run")
         for (id in listOf("T-130-09", "T-130-10", "T-130-11", "T-130-12")) {
             put(id, "status pending-mapping (25.52BZ.5): family N1-N4 has no command mapping in the vector; ruling pending")
@@ -58,7 +57,7 @@ class NegativeTestsVectorsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("a7a2246d7f4140e2689b054cf392e1a32d3e5d91c2787ca18f4dd0c659293c40", sha)
+        assertEquals("340fb91794e7550ef31ed9eb5cbb09a824f4c3e7c43eab9a7b10756783c1faeb", sha)
         assertEquals(33, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
             cases("passcodeLocked").size + cases("logScan").size)
         assertEquals(1, v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").length())
@@ -179,6 +178,26 @@ class NegativeTestsVectorsTest {
     }
 
     @Test
+    fun t13004NativeOnlyLockedSignIsPgpLockedWithNoSignatureOutput() {
+        // T-130-04 (nativeOnly, 25.52CG.1): the expect is {refusal:"pgp_locked", signatureOutput:false}. The record is locked by its marker,
+        // as the vault reports it. The function refuses, returns no signature value, and opens no key (25.52CI.1).
+        val c = v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").getJSONObject(0)
+        assertEquals("T-130-04", c.getString("id"))
+        val expect = c.getJSONObject("expect")
+        assertEquals("pgp_locked", expect.getString("refusal"))
+        assertFalse(expect.getBoolean("signatureOutput"))
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        val vault = NativePgpVault(wrap, files, SYN_EOA)
+        files.map[NativePgpVault.recName(SYN_EOA)] = "record".toByteArray(Charsets.US_ASCII)
+        files.map[NativePgpVault.markName(SYN_EOA)] = "00".toByteArray(Charsets.US_ASCII)
+        val out = NativeWalletCommands.pgpSign(vault, "chatEnvelope", "aGVsbG8=", 0x00, setOf("chatEnvelope"))
+        assertEquals("pgp_locked", out.code)
+        assertNull("no signature value", out.value)
+        assertEquals("no key is opened", 0, wrap.opens)
+    }
+
+    @Test
     fun thePendingCasesAreExactlyTheListedOnes() {
         // Every case of the file is either run by a test above or listed here with its reason. The pending ids exist in the file.
         val nativeOnly = v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly")
@@ -187,7 +206,7 @@ class NegativeTestsVectorsTest {
         assertEquals(34, all.size)
         val unknown = pending.keys.filter { it !in all }
         assertTrue("pending ids exist in the file: $unknown", unknown.isEmpty())
-        assertEquals(9, pending.size)
+        assertEquals(8, pending.size)
         assertNotNull(pending["T-control-sign"])
     }
 }

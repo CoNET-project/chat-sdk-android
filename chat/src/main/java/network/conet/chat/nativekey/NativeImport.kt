@@ -27,6 +27,8 @@ object NativeWalletCommands {
         sigType: Int,
         registry: Set<String> = NativePgpVault.REGISTERED_PURPOSES,
     ): NativeOutcome {
+        // 25.52CI.1 (r3eh): the lock is judged before the parameters (the message, the signature type, the purpose).
+        if (vault.locked()) return NativeOutcome("pgp_locked")
         val message = messageBase64?.let { runCatching { ConetChatCryptoUtil.base64Decode(it) }.getOrNull() }
             ?: return NativeOutcome("bad_request")
         if (message.size > PGP_SIGN_MAX_BYTES) return NativeOutcome("too_long")

@@ -88,10 +88,32 @@ class NativePgpCommandTest {
     @Test
     fun aLockedRecordAnswersPgpLocked() {
         val files = NativeTestFiles()
-        val vault = NativePgpVault(NativeTestWrap(), files, SYN_EOA)
+        val wrap = NativeTestWrap()
+        val vault = NativePgpVault(wrap, files, SYN_EOA)
         assertEquals(NativePgpVault.Put.OK, vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", ecc().getString("privateArmored"), ecc().getString("passphrase")))
         files.map[NativePgpVault.markName(SYN_EOA)] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
-        assertEquals("pgp_locked", NativeWalletCommands.pgpSign(vault, purpose, messageB64, 0x00, registry).code)
+        wrap.opens = 0
+        val out = NativeWalletCommands.pgpSign(vault, purpose, messageB64, 0x00, registry)
+        // Function-level "locked does not sign" (25.52BT.3, CB.3): the refusal is pgp_locked, no signature value is returned, and no key is
+        // opened (unwrapped) while the record is locked.
+        assertEquals("pgp_locked", out.code)
+        org.junit.Assert.assertNull("no signature value while locked", out.value)
+        assertEquals("no key is opened while locked", 0, wrap.opens)
+    }
+
+    @Test
+    fun aLockedRecordRefusesBeforeTheParameters() {
+        // 25.52CI.1 (r3eh): the lock is judged first. A locked record refuses with pgp_locked before the message, the signature type, the purpose
+        // and any key read.
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        val vault = NativePgpVault(wrap, files, SYN_EOA)
+        assertEquals(NativePgpVault.Put.OK, vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", ecc().getString("privateArmored"), ecc().getString("passphrase")))
+        files.map[NativePgpVault.markName(SYN_EOA)] = "0".repeat(64).toByteArray(Charsets.US_ASCII)
+        wrap.opens = 0
+        assertEquals("pgp_locked", NativeWalletCommands.pgpSign(vault, purpose, "!!not base64", 0x10, registry).code)
+        assertEquals("pgp_locked", NativeWalletCommands.pgpSign(vault, "notRegistered", messageB64, 0x10, registry).code)
+        assertEquals("no key is opened while locked", 0, wrap.opens)
     }
 
     @Test
