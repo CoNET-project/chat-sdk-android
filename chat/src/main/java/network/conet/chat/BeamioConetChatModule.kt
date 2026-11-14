@@ -202,6 +202,16 @@ object BeamioConetChatModule {
             historyDeleteCommand(context, type, body)
             return
         }
+        // 25.52AR.2, 25.52AN.5: a name outside the bridge command table is rejected before the gate and before any payload is read. The answer does
+        // not depend on the gate state (G0 no_key, G1 not_ready), so it is decided here and not in dispatch.
+        if (!BridgeCommandTable.isRegistered(type)) {
+            Log.w(TAG, "command_rejected name=${type.take(64)}")
+            val code = BridgeCommandTable.countRejection()
+            // Protocol v1: a command that expects an answer gets one.
+            val reqId = body.optInt("reqId", 0)
+            if (reqId > 0) ack(reqId, false, error = code)
+            return
+        }
         val route = NoKeyGate.route(type)
         // X-21 is retired (no key crosses the bridge): refused whether or not a key exists (25.24, 25.26.4 table C).
         if (route == NoKeyGate.Route.NOT_SUPPORTED) {
@@ -306,10 +316,12 @@ object BeamioConetChatModule {
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             else -> {
-                Log.w(TAG, "unknown command $type")
+                // Unreachable while the table and this dispatch agree (BridgeCommandTableTest). Answered the same way if they ever diverge.
+                Log.w(TAG, "command_rejected name=${type.take(64)}")
+                val code = BridgeCommandTable.countRejection()
                 // Protocol v1: a command that expects an answer gets one.
                 val reqId = body.optInt("reqId", 0)
-                if (reqId > 0) ack(reqId, false, error = "unknown_command")
+                if (reqId > 0) ack(reqId, false, error = code)
             }
         }
     }

@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 /**
  * ChatDaemon protocol v1 conformance (Android, on a device): EIP-191 signing,
  * PGP envelopes and ACK hashes through the module's WebView crypto host, plus
- * the module's own `hello` / `unknown_command` answers. Same shared vectors as
+ * the module's own `hello` / `command_rejected` answers (25.52AR.2). Same shared vectors as
  * the JVM test (assets: `chat-daemon-vectors.v1.json`).
  *
  *   ./gradlew :chat:connectedDebugAndroidTest
@@ -109,7 +109,7 @@ class ChatDaemonCryptoConformanceTest {
         assertTrue(jsonEquals(hello.getJSONObject("result"), BeamioConetChatProtocol.helloResult()))
         val unknown = acks.getValue(42)
         assertEquals(false, unknown.getBoolean("ok"))
-        assertEquals("unknown_command", unknown.getString("error"))
+        assertEquals("command_rejected", unknown.getString("error"))
     }
 }
 
