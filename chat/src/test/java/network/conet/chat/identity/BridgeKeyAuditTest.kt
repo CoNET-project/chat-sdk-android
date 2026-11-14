@@ -192,7 +192,6 @@ class BridgeKeyAuditTest {
                 // Stored-record reads: the EOA key of the page record already held on the device (25.52H.2, 25.52I.2). They judge the stored copy,
                 // and no payload value reaches a reply from them.
                 "!matches[0].has(\"privateKeyArmor\") -> \"needs_native_recovery\"",
-                "fun accountHoldsEoaKey(record: JSONObject, eoa: String): Boolean = matchingProfiles(record, eoa).any { it.has(\"privateKeyArmor\") }",
                 "if (storedProfile != null && storedProfile.has(\"privateKeyArmor\")) {",
                 "} else if (storedSlot == null && hasProfileKey(stored, \"privateKeyArmor\")) {",
                 // Legacy import (25.52K.5): the armor of the legacy record, checked by address before it is stored. Not a bridge payload.
@@ -226,6 +225,10 @@ class BridgeKeyAuditTest {
         val pendingRuling: Map<String, List<String>> = mapOf(
             "ShellRecord.kt" to listOf(
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
+                // accountHoldsEoaKey (25.52P.4) is also called on the merged record at the write check (ShellRecord, after mergeWallet): that record
+                // holds the page payload, so this line is pending like the other payload reads (audit of 00537c5). Its other callers read the
+                // stored record only.
+                "fun accountHoldsEoaKey(record: JSONObject, eoa: String): Boolean = matchingProfiles(record, eoa).any { it.has(\"privateKeyArmor\") }",
             ),
         )
 
