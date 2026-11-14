@@ -29,6 +29,7 @@ import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.localread.LocalChatEvent
+import network.conet.chat.localread.NativeHistoryDelete
 import network.conet.chat.localread.LocalMediaKind
 import network.conet.chat.localread.LocalPage
 import network.conet.chat.localread.LocalSource
@@ -182,6 +183,12 @@ object BeamioConetChatModule {
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).
         if (type == "pgpMigrate") {
             pgpMigrateCommand(body)
+            return
+        }
+        // historyDeleteMessage and historyDeleteConversation (r3by §25.52AC): the gate of historyOpenConversation, then the native store.
+        // The reqId is echoed as sent (a string or an integer), so the ack does not go through [ack].
+        if (type == NativeHistoryDelete.MESSAGE || type == NativeHistoryDelete.CONVERSATION) {
+            historyDeleteCommand(context, type, body)
             return
         }
         val route = NoKeyGate.route(type)
@@ -1517,6 +1524,14 @@ object BeamioConetChatModule {
                 .put("convKey", ev.convKey ?: JSONObject.NULL).put("pendingKept", ev.pendingKept)
         }
         return JSONObject().put("type", "event:historyChange").put("payload", p)
+    }
+
+    /** The gate (G0 `no_key`, G1 `not_ready`) and then the answer of [NativeHistoryDelete]: one ack per request, sent through the event channel. */
+    private fun historyDeleteCommand(context: Context, type: String, body: JSONObject) {
+        val gate = NoKeyGate.gateOf(NativeWallet.vault(context).state(), NativeSessionState.isReady())
+        val answer = NoKeyGate.answerFor(type, gate)
+        val refusal = if (answer == NoKeyGate.NO_KEY || answer == NoKeyGate.NOT_READY) answer else null
+        emitEvent(NativeHistoryDelete.ack(type, body, refusal, currentSession()?.history?.localStore()))
     }
 
     private fun handleHistoryOpen(body: JSONObject) {

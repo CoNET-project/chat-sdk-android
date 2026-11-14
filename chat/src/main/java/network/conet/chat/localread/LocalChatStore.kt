@@ -506,6 +506,78 @@ class LocalChatStore(
         syncState = state
     }
 
+    // ---- native deletion (spec r3by §25.52AC.2, §25.52AC.3) ------------------------------
+
+    /**
+     * `historyDeleteMessage`: tombstones the one row whose sendKey is [sendKey] (§25.52AC.2). The row is found by the stable id that the
+     * sendKey derives, so a tombstone (which has lost its metadata) is still found. Nothing else changes. Returns true when a live row was
+     * tombstoned; false when the row is missing or already a tombstone (idempotent).
+     */
+    fun tombstoneMessage(convKey: String, sendKey: String): Boolean {
+        synchronized(lock) {
+            requireKey()
+            val idx = requireIdxKey()
+            val cb = LocalChatIds.convBlind(idx, convKey)
+            val derived = LocalChatIds.stableIdOf(idx, sendKey)
+            val sid = aliasTarget(derived) ?: derived
+            val row = loadRow(cb, sid) ?: return false
+            if (row.state != SqlSchema.STATE_NORMAL) return false
+            requireDb().transaction { tombstoneRows(cb, listOf(sid)) }
+            emit(LocalChatEvent.Deleted(convKey, sid))
+            return true
+        }
+    }
+
+    /**
+     * `historyDeleteConversation`: tombstones every live message of one conversation, then removes that conversation's index row and its
+     * layout rows (§25.52AC.3), in one transaction. Other conversations, and messages that arrive later, are not touched. Returns true when
+     * something was removed (a live message, or the index row); false when the conversation is absent (idempotent).
+     */
+    fun tombstoneConversation(convKey: String): Boolean {
+        synchronized(lock) {
+            requireKey()
+            val cb = LocalChatIds.convBlind(requireIdxKey(), convKey)
+            val d = requireDb()
+            val (live, existed) = d.transaction {
+                val live = d.query("SELECT stable_id FROM msg WHERE conv_blind = ? AND state = ?", arrayOf(cb, SqlSchema.STATE_NORMAL.toLong()))
+                    .map { it[0] as String }
+                val existed = (d.query("SELECT COUNT(*) FROM conv WHERE conv_blind = ?", arrayOf(cb)).first()[0] as Long) > 0L
+                tombstoneRows(cb, live)
+                d.execute("DELETE FROM conv WHERE conv_blind = ?", arrayOf(cb))
+                d.execute("DELETE FROM layout WHERE conv_blind = ?", arrayOf(cb))
+                Pair(live, existed)
+            }
+            windows.remove(convKey)
+            for (sid in live) emit(LocalChatEvent.Deleted(convKey, sid))
+            val deleted = live.isNotEmpty() || existed
+            if (deleted) bumpEpoch()
+            return deleted
+        }
+    }
+
+    /** The tombstone write for each row: body and metadata gone, layout rows removed (§25.52AC.2). Called inside a transaction. */
+    private fun tombstoneRows(cb: String, sids: List<String>) {
+        val d = requireDb()
+        for (sid in sids) {
+            d.execute(
+                "UPDATE msg SET state = ?, body_enc = NULL, meta_enc = NULL WHERE conv_blind = ? AND stable_id = ?",
+                arrayOf(SqlSchema.STATE_TOMBSTONE.toLong(), cb, sid),
+            )
+            removeLayouts(cb, sid)
+        }
+    }
+
+    /** Test helper: the state of the row for [sendKey] (0 live, 1 tombstone, 2 superseded), or null when there is no row. */
+    internal fun stateOfSendKey(convKey: String, sendKey: String): Int? {
+        synchronized(lock) {
+            val idx = requireIdxKey()
+            val cb = LocalChatIds.convBlind(idx, convKey)
+            val derived = LocalChatIds.stableIdOf(idx, sendKey)
+            val sid = aliasTarget(derived) ?: derived
+            return loadRow(cb, sid)?.state
+        }
+    }
+
     // ---- clearing (spec 10, T-12) ----------------------------------------------------
 
     /** Clear one conversation; pending rows are kept and counted; dbEpoch changes (T-12). */

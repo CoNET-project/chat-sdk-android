@@ -606,6 +606,14 @@ internal interface DeviceFlags {
 
     fun setAccountPointer()
 
+    /**
+     * The account this device has bound, kept across a cold start (R488): the lower-case EOA, a public value. Null when the address is missing or
+     * malformed; the bridge then finds the account from the copy (§25.52AD.2).
+     */
+    fun accountAddress(): String?
+
+    fun setAccountAddress(eoa: String)
+
     /** §25.52T.5: set when the legacy store is unreadable while no pointer and no record exist. */
     fun legacyUnreadable(): Boolean
 
@@ -619,6 +627,10 @@ internal object NoDeviceFlags : DeviceFlags {
     override fun accountPointer(): Boolean = false
 
     override fun setAccountPointer() = Unit
+
+    override fun accountAddress(): String? = null
+
+    override fun setAccountAddress(eoa: String) = Unit
 
     override fun legacyUnreadable(): Boolean = false
 
@@ -636,6 +648,14 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
 
     override fun setAccountPointer() = files.write(POINTER, byteArrayOf(1))
 
+    override fun accountAddress(): String? = try {
+        files.read(ADDRESS)?.toString(Charsets.UTF_8)?.takeIf { ShellRecordAccounts.isAddress(it) }
+    } catch (_: Exception) {
+        null
+    }
+
+    override fun setAccountAddress(eoa: String) = files.write(ADDRESS, eoa.lowercase().toByteArray(Charsets.UTF_8))
+
     override fun legacyUnreadable(): Boolean = flag(LEGACY)
 
     override fun setLegacyUnreadable() = files.write(LEGACY, byteArrayOf(1))
@@ -650,6 +670,7 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
 
     companion object {
         const val POINTER = "account_pointer.v1"
+        const val ADDRESS = "account_address.v1"
         const val LEGACY = "legacy_store_unreadable.v1"
     }
 }
@@ -749,6 +770,9 @@ internal sealed class ShellRecordAccount {
 
     /** The vault is locked and no account is bound. */
     object Locked : ShellRecordAccount()
+
+    /** A native record exists but this session has not initialised for it (G1, §25.26.4c): `not_ready`, and the payload is not read. */
+    object NotReady : ShellRecordAccount()
 }
 
 /**
@@ -856,8 +880,11 @@ internal class ShellImportFlow(
     }
 }
 
-/** The codes that the ack refuses at the envelope level (§25.52T.2): the request is not processed, so the ack has `ok: false` and an `error`. */
-private val ENVELOPE_CODES = setOf("origin_refused", "too_large")
+/**
+ * The codes that the ack refuses at the envelope level (§25.52T.2, §25.52AD.4): the request is not processed, so the ack has `ok: false` and an
+ * `error`. `not_ready` is the G1 answer of the gate (§25.26.4c), given before the payload is read.
+ */
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready")
 
 /**
  * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
@@ -904,14 +931,16 @@ internal class ShellRecordBridge(
             "shellRecordWrite" -> ShellRecordPolicy.WRITE_FIELDS
             else -> return reply("bad_request", emptyList())
         }
+        // §25.52AD.4 step 2: the gate answers before the payload is read. G1 is not_ready (§25.26.4c).
+        val acc = account()
+        if (acc is ShellRecordAccount.NotReady) return reply("not_ready", emptyList())
         val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
         if (extra.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(extra.sortedWith(UTF8_ORDER))))
 
-        return if (type == "shellRecordRead") read(reply) else write(body, requestBytes, nativeWrite, reply)
+        return if (type == "shellRecordRead") read(acc, reply) else write(body, requestBytes, nativeWrite, acc, reply)
     }
 
-    private fun read(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
-        val acc = account()
+    private fun read(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
         if (migrating()) return reply("migrating", emptyList())
         if (acc is ShellRecordAccount.Ready) {
@@ -949,6 +978,10 @@ internal class ShellRecordBridge(
         try {
             if (valid) flags.clearLegacyUnreadable()
             if (!flags.accountPointer() && ShellRecordPolicy.matchingProfiles(record, eoa).isNotEmpty()) flags.setAccountPointer()
+            // R488: a readable record that holds the account's key persists the address, which the cold start restores.
+            if (valid && ShellRecordPolicy.accountHoldsEoaKey(record, eoa) && flags.accountAddress() != eoa.lowercase()) {
+                flags.setAccountAddress(eoa)
+            }
         } catch (_: IOException) {
             // The flags are not critical for a readable record: the next read repairs them.
         }
@@ -983,6 +1016,7 @@ internal class ShellRecordBridge(
         body: JSONObject,
         requestBytes: Int,
         nativeWrite: Boolean,
+        acc: ShellRecordAccount,
         reply: (String, ShellReplyFields) -> JSONObject,
     ): JSONObject {
         if (requestBytes > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
@@ -995,7 +1029,6 @@ internal class ShellRecordBridge(
             return if (names.isEmpty()) reply(code, emptyList()) else reply(code, listOf("names" to JSONArray(names)))
         }
 
-        val acc = account()
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
         val ready = acc as? ShellRecordAccount.Ready
         val store = ready?.store
@@ -1070,6 +1103,7 @@ internal class ShellRecordBridge(
         // only leaves the pointer unset.
         try {
             flags.setAccountPointer()
+            if (ready != null) flags.setAccountAddress(ready.eoa)
         } catch (_: IOException) {
             // Read later from the record; the pointer is set by the next successful write.
         }
@@ -1099,6 +1133,66 @@ internal object ShellRecordState {
     val outcome: AtomicReference<ImportOutcome?> = AtomicReference(null)
     val bound: AtomicReference<String?> = AtomicReference(null)
     val migrationPending: AtomicBoolean = AtomicBoolean(false)
+}
+
+/**
+ * Decides the account that a shell record request is answered for (§25.26.4c, §25.52AD.2 to §25.52AD.4). Pure: the vault state, the session
+ * flag, the bound account and the page copies are passed in, so the decision can be tested without a device.
+ *  - A vault with a record (Ready or Locked): G1 (this session not initialised) is [ShellRecordAccount.NotReady] when [sessionGate] holds;
+ *    otherwise the record's account, or Locked.
+ *  - No vault record (G0): the account bound by this process's import, else the persisted address (R488), else the held copy ([heldCopy]),
+ *    else Unknown.
+ */
+internal object ShellRecordAccounts {
+    private val COPY_NAME = Regex("""page\.v1\.([0-9a-f]{40})\.default\.rec""")
+    private val ADDRESS = Regex("""0x[0-9a-f]{40}""")
+
+    /** A lower-case account address: `0x` and 40 hex digits. */
+    fun isAddress(value: String): Boolean = ADDRESS.matches(value)
+
+    fun resolve(
+        vault: NativeWalletVault.State,
+        sessionReady: Boolean,
+        sessionGate: Boolean,
+        bound: String?,
+        copyNames: () -> List<String>,
+        storeOf: (String) -> SealedPageRecordStore,
+        persisted: () -> String? = { null },
+    ): ShellRecordAccount = when (vault) {
+        is NativeWalletVault.State.Ready, is NativeWalletVault.State.Locked -> when {
+            sessionGate && !sessionReady -> ShellRecordAccount.NotReady
+            vault is NativeWalletVault.State.Ready -> {
+                val eoa = vault.eoa.lowercase()
+                ShellRecordAccount.Ready(storeOf(eoa), eoa)
+            }
+            bound != null -> ShellRecordAccount.Ready(storeOf(bound), bound)
+            else -> ShellRecordAccount.Locked
+        }
+        is NativeWalletVault.State.NoKey -> {
+            // R488: the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
+            val restored = bound ?: persisted()?.takeIf { isAddress(it) }
+            if (restored != null) ShellRecordAccount.Ready(storeOf(restored), restored)
+            else heldCopy(copyNames(), storeOf) ?: ShellRecordAccount.Unknown
+        }
+    }
+
+    /**
+     * The held copy of the only page record on the device (§25.52AD.2). The single file `page.v1.<address>.default.rec` names the account; the
+     * copy is held when it opens and a profile of that account holds the EOA private key. A copy that is present but cannot be opened is still
+     * a record: the account is returned, so reads and writes answer `record_unreadable` and never `absent`. Null when the file names are not
+     * exactly one copy, or when the copy opens and is not held.
+     */
+    fun heldCopy(names: List<String>, storeOf: (String) -> SealedPageRecordStore): ShellRecordAccount.Ready? {
+        val hits = names.mapNotNull { COPY_NAME.matchEntire(it)?.groupValues?.get(1) }
+        val eoa = hits.singleOrNull()?.let { "0x$it" } ?: return null
+        val store = storeOf(eoa)
+        return try {
+            val record = store.read() ?: return null
+            if (ShellRecordPolicy.accountHoldsEoaKey(record, eoa)) ShellRecordAccount.Ready(store, eoa) else null
+        } catch (_: IOException) {
+            ShellRecordAccount.Ready(store, eoa)
+        }
+    }
 }
 
 /**
@@ -1145,7 +1239,8 @@ object BeamioShellRecordImport {
     fun writeWalletNative(context: Context, record: JSONObject): JSONObject {
         val body = JSONObject().put("type", "shellRecordWrite").put("reqId", 0).put("record", record)
         val bytes = body.toString().toByteArray(Charsets.UTF_8).size
-        return bridge(context).handle(ShellOrigin.EMBEDDED_PAGE, body, bytes, nativeWrite = true)
+        // The native creation runs before this session is initialised (G1 is the state it creates from), so the session gate does not apply.
+        return bridge(context, sessionGate = false).handle(ShellOrigin.EMBEDDED_PAGE, body, bytes, nativeWrite = true)
     }
 
     /** The first-run import (§25.52K), called by [BeamioPgpMigrationImport.importFirstRun]. */
@@ -1164,12 +1259,16 @@ object BeamioShellRecordImport {
         )
         val code = flow.run(eoa, wallet, pgp)
         applyImportMarker(flagsOf(app), code)
-        if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) ShellRecordState.bound.set(eoa)
+        if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) {
+            ShellRecordState.bound.set(eoa)
+            // R488: the binding survives a cold start, so the shell does not have to bind again on every start.
+            runCatching { flagsOf(app).setAccountAddress(eoa) }
+        }
         return code
     }
 
-    private fun bridge(context: Context): ShellRecordBridge = ShellRecordBridge(
-        account = { accountOf(context) },
+    private fun bridge(context: Context, sessionGate: Boolean = true): ShellRecordBridge = ShellRecordBridge(
+        account = { accountOf(context, sessionGate) },
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),
@@ -1178,17 +1277,17 @@ object BeamioShellRecordImport {
     /** The device-level flags, in the same no-backup directory as the page copies (§25.52T). */
     internal fun flagsOf(app: Context): DeviceFlags = DeviceFlagFiles(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))
 
-    private fun accountOf(context: Context): ShellRecordAccount {
+    private fun accountOf(context: Context, sessionGate: Boolean): ShellRecordAccount {
         val app = context.applicationContext
-        val bound = ShellRecordState.bound.get()
-        return when (val state = NativeWallet.vault(app).state()) {
-            is NativeWalletVault.State.Ready -> ShellRecordAccount.Ready(storeFor(app, state.eoa.lowercase()), state.eoa.lowercase())
-            else -> when {
-                bound != null -> ShellRecordAccount.Ready(storeFor(app, bound), bound)
-                state is NativeWalletVault.State.Locked -> ShellRecordAccount.Locked
-                else -> ShellRecordAccount.Unknown
-            }
-        }
+        return ShellRecordAccounts.resolve(
+            vault = NativeWallet.vault(app).state(),
+            sessionReady = NativeSessionState.isReady(),
+            sessionGate = sessionGate,
+            bound = ShellRecordState.bound.get(),
+            copyNames = { AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")).names() },
+            storeOf = { eoa -> storeFor(app, eoa) },
+            persisted = { flagsOf(app).accountAddress() },
+        )
     }
 
     /** The page store of [eoa] in the default workspace (§25.52F.3). */

@@ -106,6 +106,9 @@ class AndroidVaultFiles(private val dir: File) : VaultFiles {
         File(dir, name).delete()
         File(dir, "$name.tmp").delete()
     }
+
+    /** The file names in the directory, for the page-copy discovery (§25.52AD.2). Empty when the directory does not exist. */
+    fun names(): List<String> = dir.list()?.toList().orEmpty()
 }
 
 /** The app's single native wallet vault, and the one-time adoption of the pre-upgrade key. */

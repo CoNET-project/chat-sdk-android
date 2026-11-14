@@ -1,7 +1,8 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bx (§25.52K to §25.52AB) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `46be37560b953bd47c78ed019f76c6bad998b9afaf132e8f87f04368e3d21ba7`, 232 self-checks).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bz (§25.52K to §25.52AD), with the native history
+deletion of r3by (§25.52AC), and the vectors `spec/pgp-migration-vectors.v1.json` (sha256
+`0769d01ac10b7fa19e5da08ede287f4dbb6a06bc131bbbd20d42d57e0e97667e`, 254 self-checks).
 
 ## Public entries
 
@@ -25,8 +26,8 @@ Every answer to `shellRecordRead` and `shellRecordWrite` is an ack. No separate 
 - Reached by the bridge: `{type: "ack", reqId, ok: true, result: {code, ...}}`. The outcome is `result.code`: `ok`, `absent`, `error`
   (with `sub` in `result`), `migrating`, `conflict` (with `currentRev`), `wallet_copy_not_approved`, `pgp_private_in_payload`,
   `key_shaped_content`, `bad_request` (with `names`), `wallet_fields_missing`, `write_failed`.
-- Envelope-level refusal: `{type: "ack", reqId, ok: false, error}` with no `result`. `error` is `origin_refused`, `too_large`, or a
-  `bad_request` without names (an invalid reqId, a missing record, a non-integer `rev`).
+- Envelope-level refusal: `{type: "ack", reqId, ok: false, error}` with no `result`. `error` is `origin_refused`, `too_large`, `not_ready`
+  (G1, given before the payload is read, §25.52AD.4), or a `bad_request` without names (an invalid reqId, a missing record, a non-integer `rev`).
 - `reqId` is echoed as sent (a string or an integer), or `null` when it is invalid.
 - The response never contains the internal `store`.
 
@@ -223,6 +224,39 @@ it is `too_large`, checked before the schema-specific answers.
 - The page's reply rules (reqId keys, the 10 s timeout, late and duplicate replies, malformed replies, and the write hold after a timed-out
   write) are the page adapter's. `ShellRecordReplyTest` pins them as a reference against RP-01 to RP-08b.
 
+## Gate exceptions and the judgement (§25.52AD, r3bz)
+
+- A held copy (the page record holds the W fields of the account, §25.52AD.2) lets `shellRecordRead` and `shellRecordWrite` run under G0 as
+  the account's record. Other native names stay `no_key` under G0; the gate reads the vault only, so a copy changes nothing for them.
+- Under G0, with no import bound in this process, the account is the persisted address (`account_address.v1` in the no-backup
+  directory, R488). The address is written by a successful import, by a successful write, and by the first read that holds the account's
+  key, so a cold start restores the binding without the shell binding again. Without a persisted address, the account comes from the single
+  copy file `page.v1.<address>.default.rec` (`ShellRecordAccounts.heldCopy`). The file must open with that address. A copy that is present but cannot be opened gives
+  `record_unreadable`, never `absent`. Two or more copy files, or a readable copy with no EOA key, give no account.
+- G1 (a native record, this session not initialised) answers `not_ready` before the payload is read. The native creation
+  (`writeWalletNative`) is not gated by the session.
+- Order (§25.52AD.4): the origin first; then G1 `not_ready`; then, under G0 without a held copy, the reader's judgement
+  (`legacy_store_unreadable`, `absent`, `import_not_done`, or `migrating` while the reader has not finished); then the record rules.
+- The window and chat channels share the judgement. The chat channel gets no reply on Android (R476), so GX-10b checks the chat channel
+  sends nothing and that the window judgement for the same request is `absent`.
+
+## Native history deletion (§25.52AC, r3by)
+
+- `historyDeleteMessage {reqId, convKey, messageId}` tombstones the one row whose sendKey is `messageId` (state 1, body and metadata
+  cleared, layout rows removed, one `deleted` event). `deleted: false` when the row is missing or already a tombstone.
+- `historyDeleteConversation {reqId, convKey}` tombstones the live messages of that conversation and removes its index row and layout rows,
+  in one transaction. Other conversations, and messages that arrive later, are kept.
+- Answer: `{type, reqId, ok: true, result: {code, deleted}}`, or `{code: "bad_request", names}` for `convKey` (`0x` and 40 lower-case hex)
+  and `messageId` (1 to 128 visible ASCII). An invalid reqId is `ok: false`, `bad_request`, with `reqId: null`. The gate is the one of
+  `historyOpenConversation`: G0 `no_key`, G1 `not_ready`, both as `ok: false`.
+- A locked store answers `busy` and changes nothing.
+- These commands never write the page record. The page removes its own conversation entry with `shellRecordWrite`, built from a fresh read
+  with the same `rev` (DL-10a, DL-10b). A stale `rev` is `conflict`.
+- Open: the history read rows must carry `messageId` (= sendKey) for the page to call these (§25.52AC.2). That output is not added in this
+  build; it waits for integration confirmation (§25.52AC.9). Where message bodies live (the page record's `chats[*].messages` or the native
+  store) is open (§25.52AC.7). The DL vectors place `chats` at the root, while the whitelist places it under `profiles[*].chats`
+  (§25.52Q.3); the DL-10 tests use the whitelist place.
+
 ## QA hook: the state without the EOA key (§25.52AA.5, HK-01 to HK-03)
 
 - `NativeQaHooks.dropEoaKeyOfAccount` removes `privateKeyArmor` from the account's profile and keeps the rest of the record, its revision,
@@ -234,6 +268,10 @@ it is `too_large`, checked before the schema-specific answers.
   AAR before release and keep its output with the release receipt. It exits 1 on the QA AAR, as it should.
 
 ## Tests
+
+`GateExceptionTest` runs GX-01 to GX-10b (r3bz). `NativeHistoryDeleteTest` runs DL-01 to DL-09 against the real store (JVM SQLite), and
+`PageRecordEntryDeleteTest` runs DL-10a and DL-10b (r3by). `ColdStartAccountTest` runs the cold-start cases (R488): a read and a write after
+a restart reach the original account, also when two copies exist.
 
 `ShellRecordAckVectorsTest` runs AK-01 to AK-28 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7, §25.52AA.7). `ShellRecordTransportTest`
 runs TP and SA; `ShellRecordReplyTest` runs RP-01 to RP-08b; `ShellRecordBoundaryTest` runs OR-01 to OR-03; `QaHookPresenceTest` runs HK-01 to HK-03 (the QA configuration adds `NativeQaHooksTest`). `ShellRecordR439Test` covers the r3bq rules

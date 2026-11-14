@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bx）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bz）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -6404,6 +6404,953 @@
       }
     }
   ],
+  "nativeDeleteCases": [
+    {
+      "id": "DL-01",
+      "title": "消息删除：只删被选中的一条（墓碑 state=1），同会话其它消息与其它会话不变（r3by，§25.52AC.2）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "d1",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "messageId": "m1"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d1",
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "deleted": true
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 1
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-02",
+      "title": "消息删除：消息不存在：ok，deleted:false，不改动（幂等）（r3by）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "d2",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "messageId": "mX"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d2",
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "deleted": false
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-03",
+      "title": "消息删除：已是墓碑：ok，deleted:false（幂等）（r3by）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "d3",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "messageId": "m1"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 1
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d3",
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "deleted": false
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 1
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-04",
+      "title": "会话删除：只删被选中的会话；其它会话及其中新增的消息保留（r3by，§25.52AC.3）",
+      "cmd": {
+        "type": "historyDeleteConversation",
+        "reqId": "d4",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m3": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d4",
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "deleted": true
+          }
+        },
+        "history": {
+          "convs": {
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m3": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-05",
+      "title": "会话删除：会话不存在：ok，deleted:false（幂等）（r3by）",
+      "cmd": {
+        "type": "historyDeleteConversation",
+        "reqId": "d5",
+        "convKey": "0xcccccccccccccccccccccccccccccccccccccccc"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d5",
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "deleted": false
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-06",
+      "title": "消息删除：convKey 不合法：bad_request，报路径名 convKey（内容级）（r3by）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "d6",
+        "convKey": "0xABC",
+        "messageId": "m1"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d6",
+          "ok": true,
+          "result": {
+            "code": "bad_request",
+            "names": [
+              "convKey"
+            ]
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-07",
+      "title": "消息删除：messageId 为空：bad_request，报路径名 messageId（r3by）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "d7",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "messageId": ""
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d7",
+          "ok": true,
+          "result": {
+            "code": "bad_request",
+            "names": [
+              "messageId"
+            ]
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-08",
+      "title": "reqId 不合法（信封级）：ok:false，reqId 为 null，error 为 bad_request（r3by）",
+      "cmd": {
+        "type": "historyDeleteMessage",
+        "reqId": "",
+        "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "messageId": "m1"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": null,
+          "ok": false,
+          "error": "bad_request"
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    },
+    {
+      "id": "DL-09",
+      "title": "会话删除：convKey 不合法：bad_request，报路径名 convKey（r3by）",
+      "cmd": {
+        "type": "historyDeleteConversation",
+        "reqId": "d9",
+        "convKey": "nope"
+      },
+      "before": {
+        "convs": {
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              },
+              "m2": {
+                "state": 0
+              }
+            }
+          },
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+            "msgs": {
+              "m1": {
+                "state": 0
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "d9",
+          "ok": true,
+          "result": {
+            "code": "bad_request",
+            "names": [
+              "convKey"
+            ]
+          }
+        },
+        "history": {
+          "convs": {
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                },
+                "m2": {
+                  "state": 0
+                }
+              }
+            },
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
+              "msgs": {
+                "m1": {
+                  "state": 0
+                }
+              }
+            }
+          }
+        },
+        "pageRecordWrite": false
+      }
+    }
+  ],
+  "pageRecordDeleteCases": [
+    {
+      "id": "DL-10a",
+      "title": "页面记录会话条目删除：写入 rev 与当前不符（陈旧副本）：conflict，不覆盖（r3by，§25.52AC.4）",
+      "rec": {
+        "rev": 3,
+        "chats": [
+          {
+            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "emailAddr": "a"
+          },
+          {
+            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "emailAddr": "b"
+          }
+        ]
+      },
+      "writeRev": 2,
+      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "code": "conflict",
+        "currentRev": 3,
+        "rec": {
+          "rev": 3,
+          "chats": [
+            {
+              "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "emailAddr": "a"
+            },
+            {
+              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "emailAddr": "b"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "DL-10b",
+      "title": "页面记录会话条目删除：从新鲜读回（rev 相符）构造：ok，rev 加一，仅删该会话条目（r3by）",
+      "rec": {
+        "rev": 3,
+        "chats": [
+          {
+            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "emailAddr": "a"
+          },
+          {
+            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "emailAddr": "b"
+          }
+        ]
+      },
+      "writeRev": 3,
+      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "code": "ok",
+        "rev": 4,
+        "rec": {
+          "rev": 4,
+          "chats": [
+            {
+              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "emailAddr": "b"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "gateExceptionCases": [
+    {
+      "id": "GX-01",
+      "title": "升级用户：G0 下已有导入副本（W 已加密保存）：shellRecordRead 按记录正常返回 ok（r3bz，R480 第 1 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": true,
+        "eoa": "a1",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g1"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g1",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "GX-02",
+      "title": "升级用户：G0 下已有导入副本：shellRecordWrite 按 rev 正常写入，返回 ok 与新 rev（r3bz，R480 第 1 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": true,
+        "eoa": "a1",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      },
+      "kind": "write",
+      "req": {
+        "reqId": "g2",
+        "record": {
+          "rev": 2,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonicPhrase": "M"
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g2",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 3
+        }
+      }
+    },
+    {
+      "id": "GX-03",
+      "title": "全新设备：G0 无副本，旧存储确认不存在，指针为空：absent（r3bz，R480 第 2 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": false,
+        "eoa": "a1",
+        "legacy": "absent",
+        "pointer": false,
+        "marker": false,
+        "store": null
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g3"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g3",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "GX-04",
+      "title": "G0 无副本，旧存储读不到，指针为空：legacy_store_unreadable，不返回 no_key 或 absent（r3bz，R480 第 3 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": false,
+        "eoa": "a1",
+        "legacy": "unreadable",
+        "pointer": false,
+        "marker": false,
+        "store": null
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g4"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g4",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "legacy_store_unreadable"
+        }
+      }
+    },
+    {
+      "id": "GX-05",
+      "title": "G0 无副本，读取器尚未完成读取：migrating（窗口通道与聊天通道一致，不得以 absent 应答）（r3bz，R480 第 4 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": false,
+        "eoa": "a1",
+        "pointer": false,
+        "marker": false,
+        "store": null
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g5"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g5",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "GX-06",
+      "title": "G0 无副本，其它原生命令：no_key（§25.26.4c 不变，r3bz）",
+      "input": {
+        "gate": "G0",
+        "copy": false
+      },
+      "kind": "other",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "no_key"
+      }
+    },
+    {
+      "id": "GX-07",
+      "title": "G0 有副本，其它原生命令：仍为 no_key（例外只适用于 shellRecord，r3bz，R480 第 5 条）",
+      "input": {
+        "gate": "G0",
+        "copy": true
+      },
+      "kind": "other",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "no_key"
+      }
+    },
+    {
+      "id": "GX-08",
+      "title": "G1（已有原生钥记录，未 init）：shellRecordRead 仍为 not_ready（r3bz）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G1",
+        "copy": true,
+        "eoa": "a1",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g8"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g8",
+        "ok": false,
+        "error": "not_ready"
+      }
+    },
+    {
+      "id": "GX-09",
+      "title": "来源不符：先于一切判定，origin_refused，不处理（即使 G0 有副本）（r3bz，R480 第 3 条）",
+      "input": {
+        "origin": "refused",
+        "gate": "G0",
+        "copy": true,
+        "eoa": "a1",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g9"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g9",
+        "ok": false,
+        "error": "origin_refused"
+      }
+    },
+    {
+      "id": "GX-10a",
+      "title": "窗口通道：全新设备，读取完成后 absent，判定与聊天通道相同（r3bz，R480 第 4 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": false,
+        "eoa": "a1",
+        "legacy": "absent",
+        "pointer": false,
+        "marker": false,
+        "store": null,
+        "channel": "window"
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g10a"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g10a",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "GX-10b",
+      "title": "聊天通道：全新设备，读取完成后 absent，判定与窗口通道相同（r3bz，R480 第 4 条）",
+      "input": {
+        "origin": "allowed",
+        "gate": "G0",
+        "copy": false,
+        "eoa": "a1",
+        "legacy": "absent",
+        "pointer": false,
+        "marker": false,
+        "store": null,
+        "channel": "chat"
+      },
+      "kind": "read",
+      "req": {
+        "reqId": "g10b"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "g10b",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    }
+  ],
   "unregisterCases": [
     {
       "id": "UG-01",
@@ -6792,7 +7739,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 232,
+    "runs": 254,
     "result": "pass"
   }
 }

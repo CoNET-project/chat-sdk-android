@@ -61,6 +61,11 @@ class PgpMigrationVectorsTest {
         assertEquals(13, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(7, migrationStateCases.length())
         assertEquals(9, doc.getJSONArray("importCases").length())
+        // r3bz (§25.52AD.7): GX-01 to GX-10b (11 cases). r3by (§25.52AC.8): DL-01 to DL-09 (9 cases) and DL-10a, DL-10b (2 cases).
+        assertEquals(11, doc.getJSONArray("gateExceptionCases").length())
+        assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
+        assertEquals(2, doc.getJSONArray("pageRecordDeleteCases").length())
+        assertEquals(254, doc.getJSONObject("selfCheck").getInt("runs"))
     }
 
     @Test
@@ -385,7 +390,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bx (§25.52AB.6, `46be3756…21ba7`). */
-        const val PINNED_SHA256 = "46be37560b953bd47c78ed019f76c6bad998b9afaf132e8f87f04368e3d21ba7"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bz (§25.52AD.7, `0769d01a…667e`). */
+        const val PINNED_SHA256 = "0769d01ac10b7fa19e5da08ede287f4dbb6a06bc131bbbd20d42d57e0e97667e"
     }
 }
