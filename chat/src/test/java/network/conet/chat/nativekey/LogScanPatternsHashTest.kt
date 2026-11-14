@@ -22,7 +22,8 @@ class LogScanPatternsHashTest {
         // r3dm (R700, R693): the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
         // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
         // r3dz (R721, R722): the protocol version is 273947fe…; c2df8584… is withdrawn.
-        assertEquals("273947fe89927dda35c6434d53fdb589712fe913933988f404e46b5e8ee2145f", sha)
+        // r3ec (interface, 2026-11-14): the protocol version is 6e38a8ad…; 273947fe… is withdrawn.
+        assertEquals("6e38a8ad41f70716d06d2ca21f2569217d57638837560b07dd056cfa804c73ef", sha)
     }
 
     @Test
@@ -40,8 +41,8 @@ class LogScanPatternsHashTest {
         assertTrue(sums.contains("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd"))
         assertTrue(sums.contains("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0"))
         // r3dp: the negative tests file (25.52BS) is listed too: 13 entries.
-        // r3dz: the negative tests file is ccc445ec…; r3dy adds table-T (c5e54b94…): 14 entries.
-        assertTrue(sums.contains("ccc445ec563b6b3fcbdecf0c891ede5caec289fc6ef6911db08dee5ebf266c5b"))
+        // r3ec: the negative tests file is a7a2246d… (was ccc445ec…); r3dy adds table-T (c5e54b94…): 14 entries.
+        assertTrue(sums.contains("a7a2246d7f4140e2689b054cf392e1a32d3e5d91c2787ca18f4dd0c659293c40"))
         assertTrue(sums.contains("c5e54b94497a095ca268e1e8aa962e8e71fcc758d19c1933d8fe6defc672c569"))
         assertEquals(14, entries.length())
     }

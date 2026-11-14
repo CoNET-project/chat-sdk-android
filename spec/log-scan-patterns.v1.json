@@ -255,7 +255,7 @@
       },
       {
         "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "ccc445ec563b6b3fcbdecf0c891ede5caec289fc6ef6911db08dee5ebf266c5b",
+        "sha256": "a7a2246d7f4140e2689b054cf392e1a32d3e5d91c2787ca18f4dd0c659293c40",
         "source": "spec §25.52BS（r3dp）"
       },
       {

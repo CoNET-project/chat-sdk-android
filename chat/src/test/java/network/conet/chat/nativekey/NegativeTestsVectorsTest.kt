@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3dz, §25.52BZ; sha256 ccc445ec…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3ec; sha256 a7a2246d…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -29,13 +29,12 @@ class NegativeTestsVectorsTest {
 
     /** The cases that are not run here, with the reason. Each is a pending ruling, a vector gap, or a surface run elsewhere. */
     private val pending: Map<String, String> = buildMap {
-        put("T-control-sign", "signature output not applicable: chatEnvelope is not registered (25.52BW.1, BZ.2); the domain tag is checked by a separate test")
-        put("T-130-04", "conflicts with T-130-14 and 25.52BP.1: family C4 expects locked for pgpSign, but pgpSign is unknown_command in every state; ruling pending")
-        put("T-130-06", "family W5 has no bridge name (25.52AR.3), so there is no command to run")
+        put("T-control-sign", "signature output not applicable (vector applicability, 25.52BW.1, BZ.2): chatEnvelope is not registered; the domain tag is checked by theDomainTagOfTheEnumeratedPurposeIsTheFixedOne")
+        put("T-130-04", "nativeOnly (vector r3ec, PM R718): a direct C4 call, not a bridge case; the locked refusal is pgp_locked in NativePgpCommandTest.aLockedRecordAnswersPgpLocked; whether that is the vector label no_signature needs the interface owner's ruling")
+        put("T-130-06", "status pending-mapping (25.52BZ.5): family W5 has no bridge name (25.52AR.3), so there is no command to run")
         for (id in listOf("T-130-09", "T-130-10", "T-130-11", "T-130-12")) {
-            put(id, "family N1-N4: no command mapping in the vector (25.52BZ.5); ruling pending")
+            put(id, "status pending-mapping (25.52BZ.5): family N1-N4 has no command mapping in the vector; ruling pending")
         }
-        put("T-130-16", "family identityReady: no command mapping in the vector (25.52BZ.5); ruling pending")
         put("T-131", "native-log surface: run by scripts/log-scan.py on the device logcat, not in the JVM tests (see the receipt)")
         put("T-132", "WebView console and storage surface: run by scripts/log-scan.py on the device capture, not in the JVM tests (see the receipt)")
     }
@@ -59,9 +58,10 @@ class NegativeTestsVectorsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("ccc445ec563b6b3fcbdecf0c891ede5caec289fc6ef6911db08dee5ebf266c5b", sha)
-        assertEquals(35, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
+        assertEquals("a7a2246d7f4140e2689b054cf392e1a32d3e5d91c2787ca18f4dd0c659293c40", sha)
+        assertEquals(33, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
             cases("passcodeLocked").size + cases("logScan").size)
+        assertEquals(1, v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").length())
     }
 
     @Test
@@ -181,11 +181,13 @@ class NegativeTestsVectorsTest {
     @Test
     fun thePendingCasesAreExactlyTheListedOnes() {
         // Every case of the file is either run by a test above or listed here with its reason. The pending ids exist in the file.
-        val all = listOf("bridgeSource", "pgpFixedDomain", "importPolicy", "passcodeLocked", "logScan").flatMap { s -> cases(s).map { it.getString("id") } }
-        assertEquals(35, all.size)
+        val nativeOnly = v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly")
+        val all = listOf("bridgeSource", "pgpFixedDomain", "importPolicy", "passcodeLocked", "logScan").flatMap { s -> cases(s).map { it.getString("id") } } +
+            (0 until nativeOnly.length()).map { nativeOnly.getJSONObject(it).getString("id") }
+        assertEquals(34, all.size)
         val unknown = pending.keys.filter { it !in all }
         assertTrue("pending ids exist in the file: $unknown", unknown.isEmpty())
-        assertEquals(10, pending.size)
+        assertEquals(9, pending.size)
         assertNotNull(pending["T-control-sign"])
     }
 }

@@ -24,7 +24,7 @@ class CredFieldsTest {
     }
 
     @Test
-    fun theSixCommandsAreTheCredCommands() {
+    fun theSevenCommandsAreTheCredCommands() {
         assertEquals(
             setOf("pgpRestore", "pgpRestoreEvaluate", "pgpDecryptInbound", "pgpIdentityCreate", "provisionIdentity", "init", "pgpMigrate"),
             CredFields.COMMANDS,
@@ -82,7 +82,7 @@ class CredFieldsTest {
     }
 
     @Test
-    fun refusalNamesAreOnlyForTheSixCommands() {
+    fun refusalNamesAreOnlyForTheCredCommands() {
         val body = JSONObject().put("pin", 1)
         assertEquals(listOf("pin"), CredFields.refusalNames("init", body))
         assertEquals(emptyList<String>(), CredFields.refusalNames("send", body))

@@ -129,11 +129,13 @@
       {
         "id": "T-control-sign",
         "name": "enumerated-document-sig",
+        "applicability": "signing-output-not-applicable（BW.1；chatEnvelope 未注册，§25.27.2）",
+        "domainTagCheck": true,
         "req": {
           "purposeId": "chatEnvelope",
           "sigType": "0x01"
         },
-        "expect": true,
+        "expect": null,
         "domainTag": "beamio.pgp.chatEnvelope.v1\n"
       }
     ]
@@ -198,8 +200,7 @@
       "N4",
       "pgpDecrypt",
       "pgpSign",
-      "walletTransferOnce",
-      "identityReady"
+      "walletTransferOnce"
     ],
     "unknownCommandFamilies": [
       "pgpSign"
@@ -212,134 +213,156 @@
       {
         "id": "T-130-01",
         "family": "C1",
+        "state": "G2",
         "commands": [
           "historySign"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-02",
         "family": "C2",
+        "state": "G2",
         "commands": [
           "gossipSign"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-03",
         "family": "C3",
+        "state": "G2",
         "commands": [
           "pgpDecryptInbound"
         ],
-        "locked": true,
-        "expect": "locked"
-      },
-      {
-        "id": "T-130-04",
-        "family": "C4",
-        "commands": [
-          "pgpSign"
-        ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-05",
         "family": "C5",
+        "state": "G2",
         "commands": [
           "deriveSubkeys"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-06",
         "family": "W5",
+        "state": "G2",
         "commands": null,
+        "status": "pending-mapping",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-07",
         "family": "W7",
+        "state": "G2",
         "commands": [
           "ephemeralSign"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-08",
         "family": "N0",
+        "state": "G2",
         "commands": [
           "walletAddress"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-09",
         "family": "N1",
+        "state": "G2",
         "commands": null,
+        "status": "pending-mapping",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-10",
         "family": "N2",
+        "state": "G2",
         "commands": null,
+        "status": "pending-mapping",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-11",
         "family": "N3",
+        "state": "G2",
         "commands": null,
+        "status": "pending-mapping",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-12",
         "family": "N4",
+        "state": "G2",
         "commands": null,
+        "status": "pending-mapping",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-13",
         "family": "pgpDecrypt",
+        "state": "G2",
         "commands": [
           "pgpDecryptInbound"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "locked"
       },
       {
         "id": "T-130-14",
         "family": "pgpSign",
+        "state": "G2",
         "commands": [
           "pgpSign"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "unknown_command"
       },
       {
         "id": "T-130-15",
         "family": "walletTransferOnce",
+        "state": "G2",
         "commands": [
           "walletTransferOnce"
         ],
+        "status": "bridge",
         "locked": true,
         "expect": "not_supported"
-      },
+      }
+    ],
+    "nativeOnly": [
       {
-        "id": "T-130-16",
-        "family": "identityReady",
-        "commands": null,
+        "id": "T-130-04",
+        "family": "C4",
+        "state": "G2",
         "locked": true,
-        "expect": "locked"
+        "expect": "no_signature",
+        "note": "C4 直接调用不经过桥（PM R718）；仅原生测试。锁定时不签名（§25.52BS.2、§25.52BT.3）"
       }
     ]
   },
@@ -395,21 +418,28 @@
       {
         "id": "T-131",
         "surface": "native-log",
+        "executor": "native（各原生端的日志输出，SDK 与壳）",
+        "sample": "native: cold start ok; ready=true; eoa=0xabababababababababababababababababababab; bridge ack ok",
         "expect": []
       },
       {
         "id": "T-132",
         "surface": "webview-console-storage",
+        "executor": "shell（WebView 控制台与存储采集由壳执行；SDK 不执行，PM R718）",
+        "sample": "native: cold start ok; ready=true; eoa=0xabababababababababababababababababababab; bridge ack ok",
         "expect": []
       },
       {
         "id": "T-131-control",
         "surface": "positive-control",
+        "executor": "test-harness（注入正控制样例）",
+        "sample": "leak test: 5e1c2d6840b2a54f911848b39b7de0372424e3029581e3fc0e3a1703bdd6cd6d",
         "expect": [
           "wallet-private-key-hex"
         ]
       }
     ],
+    "sampleRule": "hex(label) 为 SHA-256(\"hex:\" + label) 的十六进制。样例为合成值，由标签派生，不是密钥，不得出现在任何真实日志中",
     "positiveControl": "T-131-control（扫描器必须命中一条注入的模式）"
   }
 }
