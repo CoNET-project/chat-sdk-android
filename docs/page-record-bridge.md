@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bq (§25.52K to §25.52U) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `e2effd9f5e9ef071baf85a0a38e34ac35745d80a4bf92a9254158b672063a491`, 186 self-checks).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3br (§25.52K to §25.52V) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `fba0ecf167f2b3e86bac7888ea646b25db20a972dcf9ac9914f9326353f92990`, 188 self-checks).
 
 ## Public entries
 
@@ -153,7 +153,11 @@ verified on a device in this build.
   `profiles[*].pgpKey.publicKeyArmor`, `.publicKeyObj`, `beamio.pgpPublicKeyArmor`, `beamio.pgpPublicKeyID`, `chats[*].chatData.publicArmored`,
   `routePgpKeyID`, `routersArmoreds`.
 - Read and first import: the public and private PGP fields are removed (`chatManager.pgpKey`, `pgpKey`, `pgpPassphrase`, and the public
-  paths above). An emptied `beamio` or `chatManager` is removed.
+  paths above). An emptied `beamio` or `chatManager` is removed. A read never rewrites the store (§25.52V.3): a residual field is stripped on
+  every read until the next full page write replaces it.
+- Native write (§25.52V.2): a PGP public field is `bad_request` with the path names, even with `nativeWrite` (AK-22). The page record never
+  holds PGP material; the account's PGP public material belongs to the SDK account record, written by the native creation flow.
+  That flow is not part of this build: the BouncyCastle key generator is not approved for production (`verify_unavailable`).
 
 ## Unregister and the W fields (§25.52H.2 rule 5, §25.52M.2, §25.52S.4)
 

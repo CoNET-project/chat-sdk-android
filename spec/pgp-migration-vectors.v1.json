@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bq）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3br）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -5415,6 +5415,108 @@
           "sub": "needs_native_recovery"
         }
       }
+    },
+    {
+      "id": "AK-21",
+      "title": "每次读回均剥离残留 PGP 公开字段（chatManager.pgpKey.*、beamio.pgpPublicKeyArmor/ID）；存储不改写（r3br，R441 第 2 条）",
+      "kind": "read",
+      "reqId": "r21",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "chatManager": {
+                "router": "r",
+                "pgpKey": {
+                  "publicKey": "P",
+                  "keyID": "K"
+                }
+              }
+            }
+          ],
+          "beamio": {
+            "accountName": "n",
+            "pgpPublicKeyArmor": "PUB",
+            "pgpPublicKeyID": "K"
+          }
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r21",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 1,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "chatManager": {
+                  "router": "r"
+                }
+              }
+            ],
+            "beamio": {
+              "accountName": "n"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-22",
+      "title": "原生创建写入亦不得携带 PGP 公开字段：页面记录不含 PGP，原生写入同样 bad_request（r3br，R441 第 1 条）",
+      "kind": "write",
+      "reqId": "w22",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeWrite": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w22",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "chatManager": {
+                "router": "r",
+                "pgpKey": {
+                  "publicKey": "PUB",
+                  "keyID": "K"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w22",
+        "ok": true,
+        "result": {
+          "code": "bad_request",
+          "names": [
+            "profiles[*].chatManager.pgpKey.keyID",
+            "profiles[*].chatManager.pgpKey.publicKey"
+          ]
+        }
+      }
     }
   ],
   "unregisterCases": [
@@ -5805,7 +5907,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 186,
+    "runs": 188,
     "result": "pass"
   }
 }
