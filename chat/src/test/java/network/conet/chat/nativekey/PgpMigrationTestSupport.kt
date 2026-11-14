@@ -49,6 +49,10 @@ internal object PgpMigrationKeys {
     }
 }
 
+/** A legacy record from text armor, as the tests build it. */
+internal fun legacyRecord(eoa: String, priv: String, pub: String): LegacyRecord =
+    LegacyRecord(eoa, priv.toByteArray(Charsets.UTF_8), pub.toByteArray(Charsets.UTF_8))
+
 /**
  * Store, crypto and chain faults for one step of a vector or one test. Each is applied only to the call it names. Interruptions
  * are not here: they go through the checkpoint closure ([checkpointFor]), as §25.52C.4 requires.
@@ -147,12 +151,15 @@ internal fun migrationEngine(
     chain: ChainAnswer,
     faults: MigrationFaults = MigrationFaults(),
     recovery: MigrationRecovery = FixedRecovery(p = false, chain = false),
+    primary: LegacyRecord? = null,
     eoa: String = PgpMigrationKeys.ACCOUNT,
 ): PgpMigrationEngine = PgpMigrationEngine(
     eoa = eoa,
     legacy = FixedLegacy(legacy),
+    primary = primary,
     staged = FaultyStaged(SealedStagedStore(wrap, files, eoa, PgpMigrationKeys.WORKSPACE), faults),
     marker = FaultyMarker(SealedMarkerStore(wrap, files, eoa, PgpMigrationKeys.WORKSPACE), faults),
+    lastCode = FileLastCodeStore(files, eoa, PgpMigrationKeys.WORKSPACE),
     chain = FixedChain(chain),
     crypto = FaultyCrypto(NativeMigrationCrypto(approvedFlag = faults.approved), faults),
     recovery = recovery,
@@ -166,3 +173,6 @@ internal fun stagedFileName(eoa: String = PgpMigrationKeys.ACCOUNT): String =
 
 internal fun markerFileName(eoa: String = PgpMigrationKeys.ACCOUNT): String =
     "pgp.v1.mig.${eoa.removePrefix("0x")}.${PgpMigrationKeys.WORKSPACE}.m"
+
+internal fun lastCodeFileName(eoa: String = PgpMigrationKeys.ACCOUNT): String =
+    "pgp.v1.mig.${eoa.removePrefix("0x")}.${PgpMigrationKeys.WORKSPACE}.last"

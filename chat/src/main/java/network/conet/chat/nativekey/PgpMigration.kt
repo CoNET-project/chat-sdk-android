@@ -7,17 +7,18 @@ import java.io.IOException
 import java.security.SecureRandom
 
 /**
- * Migration of the legacy PGP private key into the SDK's secure store (spec r3at §25.52, §25.52A, §25.52C; U5).
+ * Migration of the legacy PGP private key into the SDK's secure store (spec r3ay §25.52D, §25.52E; earlier §25.52, §25.52A, §25.52C; U5).
  *
- * The source is the SDK's own account record L, read only, inside the SDK. The target is N, one sealed item per account. The
- * success marker M is written last. Nothing here takes a key, a passphrase or an old public key from the bridge, and nothing
- * here generates a key. L is never changed or removed by the migration. Results are codes only.
+ * The sources are the SDK's own account record L, read inside the SDK, and the page store P, which the shell reads natively and
+ * hands in as bytes (§25.52D.3). The target is N, one sealed item per account. The success marker M is written last. Nothing
+ * here takes a key, a passphrase or an old public key from the bridge, and nothing here generates a key. The migration never
+ * removes or changes L. Results are codes only.
  */
 internal object PgpMigrationPolicy {
     /**
-     * Approval of the OpenPGP functions behind the migration (§25.52.10: sign, verify, primary fingerprint and first subkey ID).
-     * They are not approved yet, so the production path answers `verify_unavailable` and writes nothing (§25.52A.3, §25.52C.1).
-     * The tests run the same pipeline with an approving [MigrationCrypto].
+     * Approval of the Android OpenPGP functions behind the migration (§25.52.10, §25.52E.8). The approval of 2026-11-14 covers
+     * iOS only. The Android (BouncyCastle) functions are not approved, so the production path answers `verify_unavailable` and
+     * writes nothing. The tests run the same pipeline with an approving [MigrationCrypto].
      */
     const val OPENPGP_APPROVED = false
 
@@ -29,14 +30,27 @@ internal object PgpMigrationPolicy {
     const val SOURCE_LEGACY = "legacyPwa"
     const val NONCE_BYTES = 32
 
+    /** The failure set of §25.52D.4: a last result in this set makes the state `failed`. */
+    val FAILED_CODES: Set<String> = setOf(
+        "fingerprint_mismatch",
+        "legacy_unreadable",
+        "account_mismatch",
+        "chain_unavailable",
+        "write_failed",
+        "reread_failed",
+        "challenge_failed",
+        "verify_unavailable",
+        "store_missing",
+    )
+
     internal val EOA_RE = Regex("^0x[0-9a-f]{40}$")
     internal val WORKSPACE_RE = Regex("^[a-z0-9_-]{1,32}$")
 }
 
 /**
- * The result codes of §25.52.5 and the unregister codes of §25.52C.3. [wire] is the code sent to the page.
+ * The result codes of §25.52.5, the unregister codes of §25.52C.3 and the states of §25.52D.4. [wire] is the code sent to the page.
  */
-internal enum class MigrationCode(val wire: String) {
+enum class MigrationCode(val wire: String) {
     OK("ok"),
     ALREADY_VERIFIED("already_verified"),
     NONE("none"),
@@ -53,7 +67,31 @@ internal enum class MigrationCode(val wire: String) {
 }
 
 /** [fp] is the full lower-case fingerprint. The page only ever gets its first 16 characters. */
-internal class MigrationResult(val code: MigrationCode, val fp: String? = null)
+class MigrationResult internal constructor(val code: MigrationCode, val fp: String? = null)
+
+/**
+ * The page store's PGP fields (P), handed in by the shell in the same process (§25.52D.3, §25.52B.2). The shell reads them
+ * natively from the WebView store and does not pass them through the WebView. The arrays are zero-filled after the run,
+ * whatever its result. [keyId] is carried with the record (§25.52D.3); the check itself uses the key's own identifier.
+ */
+class LegacyPgpSource(
+    val privateArmor: ByteArray,
+    val publicArmor: ByteArray,
+    val keyId: String,
+) {
+    /** Runs [block] with the record for [eoa], then zero-fills the arrays. */
+    internal fun <T> useAs(eoa: String, block: (LegacyRecord) -> T): T = try {
+        block(LegacyRecord(eoa, privateArmor, publicArmor))
+    } finally {
+        privateArmor.fill(0)
+        publicArmor.fill(0)
+    }
+
+    companion object {
+        /** The size limit of each armor (§25.52D.3). A larger armor is `legacy_unreadable`. */
+        const val MAX_BYTES = 64 * 1024
+    }
+}
 
 /**
  * A run stopped by an interruption (process death, power loss, lock). It produces no result event (§25.52.12). The next call to
@@ -77,8 +115,12 @@ internal enum class Stage {
     AFTER_MARKER_DELETED,
 }
 
-/** The legacy record L as read. Read only. */
-internal class LegacyRecord(val eoa: String, val privateArmor: String, val publicArmor: String)
+/** A legacy record, from L or from P. The private and public armor are bytes, so they can be zero-filled. */
+internal class LegacyRecord(val eoa: String, val privateArmor: ByteArray, val publicArmor: ByteArray) {
+    fun privateText(): String = String(privateArmor, Charsets.UTF_8)
+
+    fun publicText(): String = String(publicArmor, Charsets.UTF_8)
+}
 
 /** The target N: the account's private armor and the fingerprint it had when written. */
 internal class StagedItem(val eoa: String, val fp: String, val privateArmor: String)
@@ -118,6 +160,16 @@ internal interface MigrationMarker {
     fun delete()
 }
 
+/** The last result of a complete run, non-secret (§25.52D.4). Written only when a run finishes, never on an interruption. */
+internal interface MigrationLastCode {
+    /** `null` when there is none. */
+    fun read(): String?
+
+    fun write(code: String)
+
+    fun delete()
+}
+
 internal fun interface MigrationChain {
     fun registered(eoa: String): ChainAnswer
 }
@@ -127,7 +179,7 @@ internal fun interface MigrationChain {
  * a chain backup that is registered and restorable by P-IMP-PGP (§25.30).
  */
 internal interface MigrationRecovery {
-    /** Source P can be read natively. No reader is in this build yet (r3aw), so production answers `false`. */
+    /** Source P can be read natively. The shell's reader is not in this build, so production answers `false`. */
     fun pReadable(): Boolean
 
     /** The account's chain backup is registered and can be restored. Production answers `false` when unsure. */
@@ -157,15 +209,20 @@ internal interface MigrationCrypto {
 }
 
 /**
- * The migration pipeline for one account (§25.52.6, §25.52A.2) and the unregister (§25.52C.3). Each call is one run; a run that
- * is interrupted leaves the stored state as it was at that point, and the next call resumes from it. A run returns exactly one
- * [MigrationResult] or throws [PgpMigrationInterrupted].
+ * The migration pipeline for one account (§25.52.6, §25.52A.2, §25.52D.4) and the unregister (§25.52C.3). Each call is one run;
+ * a run that is interrupted leaves the stored state as it was at that point, and the next call resumes from it. A run returns
+ * exactly one [MigrationResult] or throws [PgpMigrationInterrupted].
+ *
+ * [primary] is the page store's record P, or `null` to use L (§25.52D.3). When both are present and both readable, their public
+ * fingerprints must agree (SR-03).
  */
 internal class PgpMigrationEngine(
     private val eoa: String,
     private val legacy: MigrationLegacy,
+    private val primary: LegacyRecord?,
     private val staged: MigrationStaged,
     private val marker: MigrationMarker,
+    private val lastCode: MigrationLastCode,
     private val chain: MigrationChain,
     private val crypto: MigrationCrypto,
     private val recovery: MigrationRecovery,
@@ -175,7 +232,7 @@ internal class PgpMigrationEngine(
     /** Stops the run with a code. Internal only; [run] turns it into a result. */
     private class Stop(val code: MigrationCode, val fp: String? = null) : RuntimeException()
 
-    /** `none`, `pending` or `verified`, read only (§25.52.4). */
+    /** `none`, `pending`, `failed` or `verified`, read only (§25.52D.4). */
     fun state(): String {
         val m = try {
             marker.read()
@@ -187,31 +244,42 @@ internal class PgpMigrationEngine(
         } catch (_: IOException) {
             return "pending"
         }
-        if (m == null && n == null) return "none"
-        if (m == null || n == null || n.fp != m.fp) return "pending"
-        val l = legacy.read()
-        if (l != null && crypto.publicFingerprint(l.publicArmor) != n.fp) return "pending"
-        return "verified"
+        if (m != null && n != null && n.fp == m.fp) return "verified"
+        if (readLastCode()?.let { it in PgpMigrationPolicy.FAILED_CODES } == true) return "failed"
+        if (n != null) return "pending"
+        return "none"
     }
 
-    fun run(checkpoint: (Stage) -> Unit = {}): MigrationResult = try {
-        execute(checkpoint)
-    } catch (stop: Stop) {
-        MigrationResult(stop.code, stop.fp)
+    /**
+     * One run. Records the result as the last code when the run finishes. An interrupted run records nothing (§25.52D.4).
+     */
+    fun run(checkpoint: (Stage) -> Unit = {}): MigrationResult {
+        val result = try {
+            execute(checkpoint)
+        } catch (stop: Stop) {
+            MigrationResult(stop.code, stop.fp)
+        }
+        runCatching { lastCode.write(result.code.wire) }
+        return result
     }
 
     private fun execute(checkpoint: (Stage) -> Unit): MigrationResult {
         if (!PgpMigrationPolicy.EOA_RE.matches(eoa)) return MigrationResult(MigrationCode.ACCOUNT_MISMATCH)
+        primary?.let { p ->
+            val limit = LegacyPgpSource.MAX_BYTES
+            if (p.privateArmor.size > limit || p.publicArmor.size > limit) return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
+        }
+        val l = selectLegacy()
         val m = readMarker()
         val n = readStaged()
-        val l = legacy.read()
 
         // Step 1: a marker exists.
         if (m != null) {
             if (n != null) {
                 if (n.fp != m.fp) return MigrationResult(MigrationCode.FINGERPRINT_MISMATCH)
                 if (l != null) {
-                    val f0 = crypto.publicFingerprint(l.publicArmor) ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
+                    val f0 = crypto.publicFingerprint(l.publicText())
+                        ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
                     if (f0 != n.fp) return MigrationResult(MigrationCode.FINGERPRINT_MISMATCH)
                 }
                 return MigrationResult(MigrationCode.ALREADY_VERIFIED, m.fp)
@@ -221,13 +289,29 @@ internal class PgpMigrationEngine(
             removeMarker()
         }
 
-        // Step 2: no legacy record. The chain is the only reference for F0.
+        // Step 2: no source record. The chain is the only reference for F0.
         if (l == null) {
             return if (n == null) MigrationResult(MigrationCode.NONE) else confirmStagedWithoutLegacy(n, checkpoint)
         }
 
-        // Step 3: the legacy record is present.
+        // Step 3: a source record is present.
         return migrateFromLegacy(l, n, checkpoint)
+    }
+
+    /**
+     * The source selection of §25.52D.9 and SR-01 to SR-07. P has priority over L. When both are present and both readable, a
+     * different public fingerprint is `fingerprint_mismatch` (thrown, so nothing is written). Returns the record used, or `null`
+     * when there is none. The size limit of P is checked by the caller.
+     */
+    private fun selectLegacy(): LegacyRecord? {
+        val p = primary ?: return legacy.read()
+        val l = legacy.read()
+        if (l != null) {
+            val fpP = crypto.publicFingerprint(p.publicText())
+            val fpL = crypto.publicFingerprint(l.publicText())
+            if (fpP != null && fpL != null && fpP != fpL) throw Stop(MigrationCode.FINGERPRINT_MISMATCH)
+        }
+        return p
     }
 
     private fun confirmStagedWithoutLegacy(n: StagedItem, checkpoint: (Stage) -> Unit): MigrationResult {
@@ -240,12 +324,13 @@ internal class PgpMigrationEngine(
     }
 
     private fun migrateFromLegacy(l: LegacyRecord, n: StagedItem?, checkpoint: (Stage) -> Unit): MigrationResult {
+        val priv = l.privateText()
         // Pre-check (no write): both armors parse, the approval gate is open, and an empty passphrase signs.
-        val f1 = crypto.secretFingerprint(l.privateArmor) ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
-        val f0 = crypto.publicFingerprint(l.publicArmor) ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
+        val f1 = crypto.secretFingerprint(priv) ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
+        val f0 = crypto.publicFingerprint(l.publicText()) ?: return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
         if (!crypto.approved()) return MigrationResult(MigrationCode.VERIFY_UNAVAILABLE)
         val probe = PgpMigrationPolicy.PRECHECK_MESSAGE.toByteArray(Charsets.UTF_8)
-        if (crypto.sign(l.privateArmor, PgpMigrationPolicy.PRECHECK_LABEL, probe) == null) {
+        if (crypto.sign(priv, PgpMigrationPolicy.PRECHECK_LABEL, probe) == null) {
             return MigrationResult(MigrationCode.LEGACY_UNREADABLE)
         }
         if (f1 != f0) return MigrationResult(MigrationCode.FINGERPRINT_MISMATCH)
@@ -263,12 +348,12 @@ internal class PgpMigrationEngine(
             return verifyStaged(n.privateArmor, f0, wroteStaged = false, checkpoint = checkpoint)
         }
         try {
-            staged.write(StagedItem(eoa, f0, l.privateArmor))
+            staged.write(StagedItem(eoa, f0, priv))
         } catch (_: IOException) {
             throw Stop(MigrationCode.WRITE_FAILED)
         }
         checkpoint(Stage.AFTER_STAGED_WRITE)
-        return verifyStaged(l.privateArmor, f0, wroteStaged = true, checkpoint = checkpoint)
+        return verifyStaged(priv, f0, wroteStaged = true, checkpoint = checkpoint)
     }
 
     /**
@@ -314,9 +399,9 @@ internal class PgpMigrationEngine(
     }
 
     /**
-     * Unregister (§25.52C.3): removes M, then N. L is never removed. The recovery source is checked before any removal: L
-     * exists, or P is readable, or a chain backup is registered and restorable. Without one, and with N or M present, the
-     * result is `unregister_refused` and nothing is removed. Nothing present is `ok` (idempotent).
+     * Unregister (§25.52C.3, §25.52D.12): removes M, then N, then the last code. L is never removed. The recovery source is
+     * checked before any removal: L exists, or P is readable, or a chain backup is registered and restorable. Without one, and
+     * with N or M present, the result is `unregister_refused` and nothing is removed. Nothing present is `ok` (idempotent).
      */
     fun unregister(checkpoint: (Stage) -> Unit = {}): MigrationResult = try {
         unregisterRun(checkpoint)
@@ -337,18 +422,28 @@ internal class PgpMigrationEngine(
         } catch (_: IOException) {
             true
         }
-        if (!markerPresent && !stagedPresent) return MigrationResult(MigrationCode.OK)
+        if (!markerPresent && !stagedPresent) {
+            lastCode.delete()
+            return MigrationResult(MigrationCode.OK)
+        }
         if (!hasRecoverySource()) return MigrationResult(MigrationCode.UNREGISTER_REFUSED)
         if (markerPresent) {
             marker.delete()
             checkpoint(Stage.AFTER_MARKER_DELETED)
         }
         if (stagedPresent) staged.delete()
+        lastCode.delete()
         return MigrationResult(MigrationCode.OK)
     }
 
     private fun hasRecoverySource(): Boolean =
         legacy.read() != null || recovery.pReadable() || recovery.chainRegistered()
+
+    private fun readLastCode(): String? = try {
+        lastCode.read()
+    } catch (_: IOException) {
+        null
+    }
 
     private fun readStaged(): StagedItem? = try {
         staged.read()
@@ -470,11 +565,37 @@ internal class SealedMarkerStore(
     }
 }
 
+/** The last result of an account's complete run (§25.52D.4). Plain JSON: it holds a code, never key material. */
+internal class FileLastCodeStore(
+    private val files: VaultFiles,
+    eoa: String,
+    workspace: String,
+) : MigrationLastCode {
+    private val name = "pgp.v1.mig.${eoa.removePrefix("0x")}.$workspace.last"
+
+    override fun read(): String? {
+        val bytes = files.read(name) ?: return null
+        return try {
+            JSONObject(String(bytes, Charsets.UTF_8)).getString("code")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    override fun write(code: String) {
+        files.write(name, JSONObject().put("v", 1).put("code", code).toString().toByteArray(Charsets.UTF_8))
+    }
+
+    override fun delete() {
+        files.delete(name)
+    }
+}
+
 /** The production legacy source: the SDK's own account record, read only (§25.52.3). */
 internal class BeamioChatPgpLegacy(private val context: Context) : MigrationLegacy {
     override fun read(): LegacyRecord? {
         val copy = BeamioChatPgpStore.legacyCopy(context) ?: return null
-        return LegacyRecord(copy.eoa, copy.privateArmor, copy.publicArmor)
+        return LegacyRecord(copy.eoa, copy.privateArmor.toByteArray(Charsets.UTF_8), copy.publicArmor.toByteArray(Charsets.UTF_8))
     }
 }
 
@@ -489,8 +610,8 @@ internal class AddressPgpMigrationChain : MigrationChain {
 }
 
 /**
- * The production recovery sources (§25.52C.3). P is not readable in this build (r3aw defines the native reader). A chain
- * backup counts when the record exists, the backup decrypts with the vault key of this account, and the result parses as a
+ * The production recovery sources (§25.52C.3). P is not readable in this build: the shell's reader is not wired to unregister. A
+ * chain backup counts when the record exists, the backup decrypts with the vault key of this account, and the result parses as a
  * private key. An unreadable chain, a locked vault or another account counts as not registered: unregister then refuses.
  */
 internal class ProductionRecovery(private val context: Context, private val eoa: String) : MigrationRecovery {
@@ -541,24 +662,39 @@ internal class NativeMigrationCrypto(
 }
 
 /**
- * The public entry of the native layer (§25.52.4, §25.52C.2; class name per §25.52C.2). Takes an account and a workspace, and
- * nothing secret. The checkpoint parameter is internal to the engine, so it is not part of this API (§25.52C.4).
+ * The public entry of the native layer (§25.52D.3; class name per §25.52C.2). Takes an account, a workspace and an optional page
+ * source P, and nothing secret. The checkpoint parameter is internal to the engine, so it is not part of this API (§25.52C.4).
+ * Calls block: run them off the main thread.
  */
-internal object BeamioPgpMigrationImport {
-    /** One run for [eoa]. Blocking; call it off the main thread. */
-    fun run(context: Context, eoa: String, workspace: String = PgpMigrationPolicy.WORKSPACE): MigrationResult =
-        engine(context, eoa, workspace)?.run() ?: MigrationResult(MigrationCode.ACCOUNT_MISMATCH)
+object BeamioPgpMigrationImport {
+    /**
+     * One run for [eoa]. With [source] nil the run reads L; otherwise it uses P (§25.52D.9). The source arrays are zero-filled
+     * after the run, whatever its result.
+     */
+    fun run(
+        context: Context,
+        eoa: String,
+        workspace: String = PgpMigrationPolicy.WORKSPACE,
+        source: LegacyPgpSource? = null,
+    ): MigrationResult {
+        if (source == null) return engine(context, eoa, workspace, null)?.run() ?: refused()
+        return source.useAs(eoa.lowercase()) { record ->
+            engine(context, eoa, workspace, record)?.run() ?: refused()
+        }
+    }
 
-    /** `none`, `pending` or `verified`. Read only. */
+    /** `none`, `pending`, `failed` or `verified`. Read only. */
     fun state(context: Context, eoa: String, workspace: String = PgpMigrationPolicy.WORKSPACE): String =
-        engine(context, eoa, workspace)?.state() ?: "none"
+        engine(context, eoa, workspace, null)?.state() ?: "none"
 
-    /** Unregister (§25.52C.3): removes M and N after the recovery check. L is never removed. Blocking. */
+    /** Unregister (§25.52C.3, §25.52D.12): removes M, N and the last code after the recovery check. L is never removed. */
     fun unregister(context: Context, eoa: String, workspace: String = PgpMigrationPolicy.WORKSPACE): MigrationResult =
-        engine(context, eoa, workspace)?.unregister() ?: MigrationResult(MigrationCode.ACCOUNT_MISMATCH)
+        engine(context, eoa, workspace, null)?.unregister() ?: refused()
+
+    private fun refused(): MigrationResult = MigrationResult(MigrationCode.ACCOUNT_MISMATCH)
 
     /** The engine for a canonical account and a safe workspace name. Null for anything else, so no file name is built from it. */
-    private fun engine(context: Context, eoa: String, workspace: String): PgpMigrationEngine? {
+    private fun engine(context: Context, eoa: String, workspace: String, primary: LegacyRecord?): PgpMigrationEngine? {
         val account = eoa.lowercase()
         if (!PgpMigrationPolicy.EOA_RE.matches(account)) return null
         if (!PgpMigrationPolicy.WORKSPACE_RE.matches(workspace)) return null
@@ -568,8 +704,10 @@ internal object BeamioPgpMigrationImport {
         return PgpMigrationEngine(
             eoa = account,
             legacy = BeamioChatPgpLegacy(app),
+            primary = primary?.let { LegacyRecord(account, it.privateArmor, it.publicArmor) },
             staged = SealedStagedStore(wrap, files, account, workspace),
             marker = SealedMarkerStore(wrap, files, account, workspace),
+            lastCode = FileLastCodeStore(files, account, workspace),
             chain = AddressPgpMigrationChain(),
             crypto = NativeMigrationCrypto(),
             recovery = ProductionRecovery(app, account),

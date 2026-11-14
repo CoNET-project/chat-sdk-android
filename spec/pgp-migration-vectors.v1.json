@@ -1,9 +1,9 @@
 {
   "meta": {
     "file": "pgp-migration-vectors.v1.json",
-    "spec": "interface/spec.md §25.52C（r3av；§25.52B、§25.52A、§25.52 中有差异处以 §25.52C 为准）",
+    "spec": "interface/spec.md §25.52E（r3ax；§25.52D 与其余各节中有差异处以 §25.52E 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3av）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3ax）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1609,188 +1609,435 @@
       }
     }
   ],
-  "pageRecordCases": [
+  "shellRecordCases": [
     {
-      "id": "PR-01",
-      "title": "页面记录获取：不返回 pgpKey、chatManager.pgpKey、privateKeyArmor",
-      "given": {
-        "stored": {
-          "emailAddr": "a@example.test",
-          "keyID": "0xaaaa",
-          "index": 0,
-          "pgpKey": {
-            "privateKey": "SYNTH-PRIV",
-            "publicKey": "SYNTH-PUB",
-            "keyID": "K1"
-          },
-          "chatManager": {
-            "router": "r1",
-            "pgpKey": {
-              "privateKey": "SYNTH-PRIV",
-              "publicKey": "SYNTH-PUB",
-              "keyID": "K1"
-            }
-          },
-          "privateKeyArmor": "SYNTH-EOA-PRIV"
-        },
-        "gate": "G2"
+      "id": "TR-01",
+      "title": "来源不是内嵌页面：origin_refused（读与写）",
+      "kind": "read",
+      "ctx": {
+        "origin": "other"
       },
+      "store": null,
       "expect": {
-        "code": "ok",
+        "code": "origin_refused"
+      }
+    },
+    {
+      "id": "TR-02",
+      "title": "reqId 缺失：bad_request，reqId 回为 null",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
         "record": {
-          "emailAddr": "a@example.test",
-          "keyID": "0xaaaa",
-          "index": 0,
-          "chatManager": {
-            "router": "r1"
-          }
-        }
-      }
-    },
-    {
-      "id": "PR-02",
-      "title": "页面记录保存：携带 chatManager.pgpKey，key_over_bridge_refused，只记字段名",
-      "given": {
-        "stored": null,
-        "gate": "G2",
-        "req": {
-          "record": {
-            "chatManager": {
-              "pgpKey": {
-                "privateKey": "x"
-              }
-            }
-          }
-        }
-      },
-      "expect": {
-        "code": "key_over_bridge_refused",
-        "fields": [
-          "chatManager.pgpKey"
-        ],
-        "stored": null
-      }
-    },
-    {
-      "id": "PR-03",
-      "title": "页面记录保存：携带 privateKeyArmor（EOA 私钥），key_over_bridge_refused",
-      "given": {
-        "stored": null,
-        "gate": "G2",
-        "req": {
-          "record": {
-            "privateKeyArmor": "x"
-          }
-        }
-      },
-      "expect": {
-        "code": "key_over_bridge_refused",
-        "fields": [
-          "privateKeyArmor"
-        ],
-        "stored": null
-      }
-    },
-    {
-      "id": "PR-04",
-      "title": "页面记录保存：非白名单字段，bad_request",
-      "given": {
-        "stored": null,
-        "gate": "G2",
-        "req": {
-          "record": {
-            "foo": 1
-          }
+          "rev": 0,
+          "schemaVersion": 1
         }
       },
       "expect": {
         "code": "bad_request",
-        "fields": [
-          "foo"
-        ],
-        "stored": null
+        "reqId": null,
+        "store": null
       }
     },
     {
-      "id": "PR-05",
-      "title": "页面记录保存：白名单字段合并写入，不写 PGP 字段",
-      "given": {
-        "stored": {
-          "emailAddr": "old",
-          "keyID": "0xaaaa"
-        },
-        "gate": "G2",
-        "req": {
-          "record": {
-            "emailAddr": "b@example.test",
-            "chatManager": {
-              "router": "r2"
+      "id": "TR-03",
+      "title": "超过 2 MB：too_large",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "sizeBytes": 2097153
+      },
+      "store": null,
+      "req": {
+        "reqId": "w1",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "code": "too_large",
+        "reqId": "w1",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-04",
+      "title": "迁移中读取：migrating，不返回记录",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed",
+        "migrating": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "TR-05",
+      "title": "rev 不一致：conflict，返回当前 rev，存储不变",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 3,
+        "record": {
+          "rev": 3,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w2",
+        "record": {
+          "rev": 2,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "emailAddr": "b"
             }
+          ]
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 3,
+        "reqId": "w2",
+        "store": {
+          "rev": 3,
+          "record": {
+            "rev": 3,
+            "schemaVersion": 1
           }
+        }
+      }
+    },
+    {
+      "id": "TR-06",
+      "title": "任一字符串值含 PGP 私钥头（聊天记录内）：pgp_private_in_payload",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w3",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chats": [
+                {
+                  "chatData": {
+                    "text": "x -----BEGIN PGP PRIVATE KEY BLOCK-----"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "pgp_private_in_payload",
+        "names": [],
+        "reqId": "w3",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-07",
+      "title": "禁止路径 chatManager.pgpKey.privateKey：pgp_private_in_payload，只记路径名",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w4",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chatManager": {
+                "pgpKey": {
+                  "privateKey": "x",
+                  "keyID": "k"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "pgp_private_in_payload",
+        "names": [
+          "profiles[*].chatManager.pgpKey.privateKey"
+        ],
+        "reqId": "w4",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-08",
+      "title": "W 类（EOA 私钥）未批准：wallet_copy_not_approved，存储不变",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "walletCopyApproved": false
+      },
+      "store": null,
+      "req": {
+        "reqId": "w5",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "wallet_copy_not_approved",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "w5",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-09",
+      "title": "白名单外字段：bad_request，只记路径名",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w6",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "foo": 1
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].foo"
+        ],
+        "reqId": "w6",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-10",
+      "title": "合法写入：ok，rev 递增；随后读取返回新 rev",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w7",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "emailAddr": "c",
+              "chatManager": {
+                "router": "r",
+                "pgpKey": {
+                  "publicKey": "PUB",
+                  "keyID": "K"
+                }
+              }
+            }
+          ]
         }
       },
       "expect": {
         "code": "ok",
-        "stored": {
-          "emailAddr": "b@example.test",
-          "keyID": "0xaaaa",
-          "chatManager": {
-            "router": "r2"
+        "rev": 1,
+        "reqId": "w7",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 1,
+            "profiles": [
+              {
+                "emailAddr": "c",
+                "chatManager": {
+                  "router": "r",
+                  "pgpKey": {
+                    "publicKey": "PUB",
+                    "keyID": "K"
+                  }
+                }
+              }
+            ]
           }
         }
       }
     },
     {
-      "id": "PR-06",
-      "title": "页面记录保存：G0 下 no_key（白名单字段）",
-      "given": {
-        "stored": null,
-        "gate": "G0",
-        "req": {
-          "record": {
-            "emailAddr": "b"
-          }
+      "id": "TR-11",
+      "title": "写入失败：write_failed，存储保持原样",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "writeFailed": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
         }
       },
-      "expect": {
-        "code": "no_key",
-        "stored": null
-      }
-    },
-    {
-      "id": "PR-07",
-      "title": "页面记录保存：写入失败，存储保持原样",
-      "given": {
-        "stored": {
-          "emailAddr": "old"
-        },
-        "gate": "G2",
-        "req": {
-          "record": {
-            "emailAddr": "new"
-          }
-        },
-        "faults": {
-          "writeFailed": true
+      "req": {
+        "reqId": "w8",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "emailAddr": "d"
+            }
+          ]
         }
       },
       "expect": {
         "code": "write_failed",
-        "stored": {
-          "emailAddr": "old"
+        "reqId": "w8",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 1
+          }
         }
       }
     },
     {
-      "id": "PR-08",
-      "title": "页面记录获取：尚未初始化，not_found",
-      "given": {
-        "stored": null,
-        "gate": "G2"
+      "id": "TR-12",
+      "title": "页面记录初始化被阻塞（W 类未批准）：读取为 error，不返回 absent",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed",
+        "initBlocked": true
       },
+      "store": null,
       "expect": {
-        "code": "not_found"
+        "code": "error",
+        "sub": "wallet_copy_not_approved"
       }
+    },
+    {
+      "id": "TR-13",
+      "title": "无页面记录：absent",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "expect": {
+        "code": "absent"
+      }
+    }
+  ],
+  "migrationStateCases": [
+    {
+      "id": "SS-01",
+      "title": "N 与 M 指纹一致：verified",
+      "st": {
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "lastCode": "ok"
+      },
+      "expect": "verified"
+    },
+    {
+      "id": "SS-02",
+      "title": "只有 N，最近结果非失败（中断或未运行）：pending",
+      "st": {
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "lastCode": null
+      },
+      "expect": "pending"
+    },
+    {
+      "id": "SS-03",
+      "title": "只有 N，最近结果为 fingerprint_mismatch：failed",
+      "st": {
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "lastCode": "fingerprint_mismatch"
+      },
+      "expect": "failed"
+    },
+    {
+      "id": "SS-04",
+      "title": "无 N、无 M：none",
+      "st": {
+        "N": null,
+        "M": null,
+        "lastCode": null
+      },
+      "expect": "none"
+    },
+    {
+      "id": "SS-05",
+      "title": "M 存在但 N 缺失，最近结果 store_missing：failed",
+      "st": {
+        "N": null,
+        "M": {
+          "fp": "A"
+        },
+        "lastCode": "store_missing"
+      },
+      "expect": "failed"
+    },
+    {
+      "id": "SS-06",
+      "title": "N 存在，最近结果 chain_unavailable（可重试）：failed",
+      "st": {
+        "N": {
+          "fp": "A"
+        },
+        "M": null,
+        "lastCode": "chain_unavailable"
+      },
+      "expect": "failed"
     }
   ],
   "sourceCases": [
@@ -1904,6 +2151,170 @@
       "expect": {
         "use": null,
         "code": "none"
+      }
+    }
+  ],
+  "pageReadCases": [
+    {
+      "id": "RD-01",
+      "title": "读回 ok 且 record.rev 为整数：接受",
+      "resp": {
+        "code": "ok",
+        "record": {
+          "rev": 2,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "action": "accept",
+        "rev": 2
+      }
+    },
+    {
+      "id": "RD-02",
+      "title": "读回 absent：接受（首次进入）",
+      "resp": {
+        "code": "absent"
+      },
+      "expect": {
+        "action": "accept_absent"
+      }
+    },
+    {
+      "id": "RD-03",
+      "title": "读回 migrating：失败关闭，不当作 absent",
+      "resp": {
+        "code": "migrating"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-04",
+      "title": "读回 error（wallet_copy_not_approved）：失败关闭",
+      "resp": {
+        "code": "error",
+        "sub": "wallet_copy_not_approved"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-05",
+      "title": "读回 ok 但缺少 record.rev：失败关闭",
+      "resp": {
+        "code": "ok",
+        "record": {
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-06",
+      "title": "读回未知码：失败关闭",
+      "resp": {
+        "code": "done"
+      },
+      "expect": {
+        "action": "fail_closed"
+      }
+    }
+  ],
+  "pageWriteCases": [
+    {
+      "id": "WR-01",
+      "title": "写入 ok：接受并采用新 rev",
+      "resp": {
+        "code": "ok",
+        "rev": 3
+      },
+      "expect": {
+        "action": "accept",
+        "rev": 3
+      }
+    },
+    {
+      "id": "WR-02",
+      "title": "写入 conflict：失败关闭，须重新读取",
+      "resp": {
+        "code": "conflict",
+        "currentRev": 4
+      },
+      "expect": {
+        "action": "fail_closed",
+        "reason": "reread_required"
+      }
+    }
+  ],
+  "pageRefuseCases": [
+    {
+      "id": "PW-01",
+      "title": "写入前：记录含 PGP 私钥头（聊天记录内）：页面拒绝发送",
+      "record": {
+        "profiles": [
+          {
+            "chats": [
+              {
+                "chatData": {
+                  "text": "x -----BEGIN PGP PRIVATE KEY BLOCK-----"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "action": "refuse",
+        "reason": "pgp_header"
+      }
+    },
+    {
+      "id": "PW-02",
+      "title": "写入前：命中 chatManager.pgpKey.privateKey：页面拒绝发送，只记路径名",
+      "record": {
+        "profiles": [
+          {
+            "chatManager": {
+              "pgpKey": {
+                "privateKey": "x"
+              }
+            }
+          }
+        ]
+      },
+      "expect": {
+        "action": "refuse",
+        "reason": "pgp_path",
+        "names": [
+          "profiles[*].chatManager.pgpKey.privateKey"
+        ]
+      }
+    },
+    {
+      "id": "PW-03",
+      "title": "写入前：不含 PGP 私钥的记录：发送",
+      "record": {
+        "profiles": [
+          {
+            "emailAddr": "a",
+            "chatManager": {
+              "router": "r",
+              "pgpKey": {
+                "publicKey": "PUB",
+                "keyID": "K"
+              }
+            }
+          }
+        ]
+      },
+      "expect": {
+        "action": "send",
+        "reason": null
       }
     }
   ],
@@ -2103,7 +2514,7 @@
     "unregister_refused"
   ],
   "selfCheck": {
-    "runs": 70,
+    "runs": 92,
     "result": "pass"
   }
 }

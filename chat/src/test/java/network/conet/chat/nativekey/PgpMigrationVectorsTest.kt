@@ -12,13 +12,17 @@ import java.io.IOException
 import java.security.MessageDigest
 
 /**
- * The SDK side of the PGP migration vectors (spec r3av §25.52C.8; earlier §25.52A.8, §25.52.17; T-251 to T-255, T-267, T-269).
+ * The SDK side of the PGP migration vectors (spec r3ay §25.52D.14, §25.52E.8; earlier §25.52C.8, §25.52A.8; T-251 to T-255,
+ * T-267, T-269, T-276, T-277, T-279).
  *
- * The state cases run through the bridge decision ([PgpMigrationBridge.ackFor]) and the pipeline ([PgpMigrationEngine.run]). Each
- * case starts from a fresh store and each step from a fresh engine, so every step is a restart. The unregister cases run
- * [PgpMigrationEngine.unregister]. Not run here: the 6 PWA event cases (T-256, the page's), the 8 page-record cases (PR-01 to
- * PR-08, T-262 to T-264) and the 7 source-selection cases (SR-01 to SR-07, T-265), which need the native readers still pending
- * (r3aw) and are not part of this change.
+ * Run here: the 36 state cases (42 steps) through the bridge decision ([PgpMigrationBridge.ackFor]) and the pipeline
+ * ([PgpMigrationEngine.run]); the 6 unregister cases (7 steps) through [PgpMigrationEngine.unregister]; the 6 migration-state cases
+ * (SS-01 to SS-06) through [PgpMigrationEngine.state]; and the 5 source-selection cases whose inputs the SDK receives (SR-01,
+ * SR-02, SR-03, SR-06, SR-07). Each case starts from a fresh store and each step from a fresh engine, so every step is a restart.
+ *
+ * Not run here, by design: the 6 PWA event cases (P-01 to P-06, the page's), the 13 page-bridge cases (TR), the 6 page-read cases
+ * (RD), the 2 page-write cases (WR) and the 3 page-refusal cases (PW), which belong to the shell's page store; and SR-04 and SR-05,
+ * whose inputs (account match and the measured layout of P) are decided by the shell before it calls the SDK.
  *
  * The vectors name fingerprints by label (`A`, `B`). `A` is the no-passphrase key of `pgp-native-vectors.v1.json`, `B` is a
  * second generated key. Only codes, labels and presence flags are compared; no key material leaves the test.
@@ -30,6 +34,8 @@ class PgpMigrationVectorsTest {
     private val doc = JSONObject(String(bytes, Charsets.UTF_8))
     private val cases: JSONArray = doc.getJSONArray("cases")
     private val unregisterCases: JSONArray = doc.getJSONArray("unregisterCases")
+    private val migrationStateCases: JSONArray = doc.getJSONArray("migrationStateCases")
+    private val sourceCases: JSONArray = doc.getJSONArray("sourceCases")
 
     @Test
     fun theVectorFileIsThePinnedOne() {
@@ -39,14 +45,19 @@ class PgpMigrationVectorsTest {
 
     @Test
     fun theCountsAreThoseOfTheSpec() {
-        // r3av: 36 state cases (42 steps), 6 PWA event cases, 8 page-record cases, 7 source cases, 6 unregister cases (7 steps).
+        // r3ay: 36 state cases (42 steps), 6 PWA event cases, 13 shell-record cases, 6 read, 2 write, 3 refusal, 7 source,
+        // 6 unregister cases (7 steps), 6 migration-state cases.
         assertEquals(36, cases.length())
         assertEquals(42, (0 until cases.length()).sumOf { cases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(6, doc.getJSONArray("pwaEventCases").length())
-        assertEquals(8, doc.getJSONArray("pageRecordCases").length())
-        assertEquals(7, doc.getJSONArray("sourceCases").length())
+        assertEquals(13, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(6, doc.getJSONArray("pageReadCases").length())
+        assertEquals(2, doc.getJSONArray("pageWriteCases").length())
+        assertEquals(3, doc.getJSONArray("pageRefuseCases").length())
+        assertEquals(7, sourceCases.length())
         assertEquals(6, unregisterCases.length())
         assertEquals(7, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
+        assertEquals(6, migrationStateCases.length())
     }
 
     @Test
@@ -66,6 +77,41 @@ class PgpMigrationVectorsTest {
             val c = unregisterCases.getJSONObject(i)
             failures += runUnregisterCase(c).map { "${c.getString("id")}: $it" }
         }
+        assertEquals(emptyList<String>(), failures)
+    }
+
+    @Test
+    fun everyMigrationStateCaseMatchesItsExpectation() {
+        val failures = mutableListOf<String>()
+        for (i in 0 until migrationStateCases.length()) {
+            val c = migrationStateCases.getJSONObject(i)
+            val got = runMigrationState(c)
+            val want = c.getString("expect")
+            if (got != want) failures += "${c.getString("id")}: state $got != $want"
+        }
+        assertEquals(emptyList<String>(), failures)
+    }
+
+    @Test
+    fun theSourceCasesTheSdkReceivesMatchTheirExpectation() {
+        val failures = mutableListOf<String>()
+        val ran = mutableListOf<String>()
+        val skipped = mutableListOf<String>()
+        for (i in 0 until sourceCases.length()) {
+            val c = sourceCases.getJSONObject(i)
+            val id = c.getString("id")
+            val p = c.getJSONObject("input").optJSONObject("P")
+            // SR-04 (account match) and SR-05 (measured layout) are decided by the shell before the SDK is called.
+            val shellSide = p != null && (p.optString("layout") != "measured" || !p.optBoolean("matched", false))
+            if (shellSide) {
+                skipped += id
+                continue
+            }
+            ran += id
+            failures += runSourceCase(c).map { "$id: $it" }
+        }
+        assertEquals("the SDK-side source cases", listOf("SR-01", "SR-02", "SR-03", "SR-06", "SR-07"), ran)
+        assertEquals("shell-side source cases", listOf("SR-04", "SR-05"), skipped)
         assertEquals(emptyList<String>(), failures)
     }
 
@@ -207,6 +253,64 @@ class PgpMigrationVectorsTest {
         return failures
     }
 
+    /** SS-01 to SS-06: the stored N, M and last code, and the state the engine derives from them. */
+    private fun runMigrationState(c: JSONObject): String {
+        val st = c.getJSONObject("st")
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        st.optJSONObject("N")?.let { n ->
+            val k = PgpMigrationKeys.byLabel(n.getString("fp"))
+            SealedStagedStore(wrap, files, ACCOUNT, WORKSPACE).write(StagedItem(ACCOUNT, k.fp, k.priv))
+        }
+        st.optJSONObject("M")?.let { m ->
+            val k = PgpMigrationKeys.byLabel(m.getString("fp"))
+            SealedMarkerStore(wrap, files, ACCOUNT, WORKSPACE).write(MarkerItem(k.fp, "legacyPwa", 1L))
+        }
+        if (!st.isNull("lastCode")) FileLastCodeStore(files, ACCOUNT, WORKSPACE).write(st.getString("lastCode"))
+        return migrationEngine(files, wrap, null, ChainAnswer.Unavailable).state()
+    }
+
+    /**
+     * SR-01 to SR-07 as the SDK receives them. P, when present, is the page store's record and carries a trailing newline, so the
+     * stored bytes show whether P or L was used. Both keys are synthetic (`A` and `B`).
+     */
+    private fun runSourceCase(c: JSONObject): List<String> {
+        val input = c.getJSONObject("input")
+        val expect = c.getJSONObject("expect")
+        val pJson = input.optJSONObject("P")
+        val lJson = input.optJSONObject("L")
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+
+        val primary = pJson?.let { p ->
+            val k = PgpMigrationKeys.byLabel(p.getString("fp"))
+            legacyRecord(ACCOUNT, k.priv + "\n", k.pub)
+        }
+        val legacy = lJson?.let { l ->
+            val k = PgpMigrationKeys.byLabel(l.getString("fp"))
+            legacyRecord(ACCOUNT, k.priv, k.pub)
+        }
+        val chainLabel = pJson?.getString("fp") ?: lJson?.getString("fp") ?: "A"
+
+        val out = mutableListOf<String>()
+        val engine = migrationEngine(files, wrap, legacy, ChainAnswer.Found(PgpMigrationKeys.byLabel(chainLabel).fp), primary = primary)
+        val result = engine.run()
+        val stored = SealedStagedStore(wrap, files, ACCOUNT, WORKSPACE).read()
+
+        val wantCode = expect.opt("code") as? String
+        if (wantCode != null) {
+            if (result.code.wire != wantCode) out += "code ${result.code.wire} != $wantCode"
+            if (stored != null) out += "N was written for a refused source"
+        } else {
+            if (result.code != MigrationCode.OK) out += "code ${result.code.wire} != ok"
+        }
+        when (expect.opt("use") as? String) {
+            "P" -> if (stored?.privateArmor != primary?.privateText()) out += "N does not hold the page source P"
+            "L" -> if (stored?.privateArmor != legacy?.privateText()) out += "N does not hold the legacy record L"
+        }
+        return out
+    }
+
     private fun stateMismatches(state: JSONObject, hasLegacy: Boolean, wrap: NativeTestWrap, files: NativeTestFiles): List<String> {
         val out = mutableListOf<String>()
         if (hasLegacy != state.getBoolean("L")) out += "L presence $hasLegacy != ${state.getBoolean("L")}"
@@ -227,7 +331,7 @@ class PgpMigrationVectorsTest {
             "encrypted" -> PgpMigrationKeys.encrypted
             else -> throw IllegalArgumentException("unknown armor case")
         }
-        return LegacyRecord(account, priv, PgpMigrationKeys.byLabel(l.getString("pubFp")).pub)
+        return legacyRecord(account, priv, PgpMigrationKeys.byLabel(l.getString("pubFp")).pub)
     }
 
     private fun chainAnswer(mode: String?, label: String): ChainAnswer = when (mode) {
@@ -251,7 +355,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3av (§25.52C.8). */
-        const val PINNED_SHA256 = "6b99d868cc4f8f87590acc9001a68d2d5d11762d41f0b7ca557d3d7e0867fe8c"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3ay (§25.52E.8). */
+        const val PINNED_SHA256 = "ba817cf7b9f718f9222024c721945b99412fafc20652a1c137d6af6453c27fbb"
     }
 }
