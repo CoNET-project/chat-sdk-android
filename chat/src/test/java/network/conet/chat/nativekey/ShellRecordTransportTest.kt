@@ -61,12 +61,11 @@ class ShellRecordTransportTest {
     }
 
     @Test
-    fun theAndroidChatChannelIsNotAnsweredAtAll() {
-        // SA-02 (§25.52AB.5, R476): the chat-module channel is not processed and gets no reply; the module's shellRecord branch sends nothing.
+    fun theAndroidChatChannelAnswersShellRecordOnceAsNotSupported() {
+        // SA-02 (25.52AY.1, r3cw): the chat-module channel answers a shellRecord* request once. shellRecordRead and shellRecordWrite are not_supported.
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
-        val branch = module.substringAfter("if (type.startsWith(\"shellRecord\")) {").substringBefore("return")
-        assertTrue(branch.contains("shellRecordChatChannelReply(body)"))
-        assertFalse(branch.contains("emitEvent(shellAck"))
-        assertFalse(module.contains("shellAck(echo, \"not_supported\""))
+        assertTrue(module.contains("BridgeCommandTable.chatChannelShellRecordCode(type)?.let { code ->"))
+        assertFalse(module.contains("shellRecordChatChannelReply"))
+        assertEquals("not_supported", network.conet.chat.BridgeCommandTable.chatChannelShellRecordCode("shellRecordWrite"))
     }
 }

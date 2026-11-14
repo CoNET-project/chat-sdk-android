@@ -8,7 +8,6 @@ import org.json.JSONArray
 import network.conet.chat.identity.CredFields
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
-import network.conet.chat.nativekey.shellRecordChatChannelReply
 import network.conet.chat.nativekey.IdentityPublic
 import network.conet.chat.nativekey.NativeDerivationCommands
 import network.conet.chat.nativekey.VoiceChannelKeys
@@ -29,6 +28,7 @@ import network.conet.chat.nativekey.PgpMigrationPolicy
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.NoKeyGate
+import network.conet.chat.nativekey.ShellRecordPolicy
 import network.conet.chat.localread.LocalChatEvent
 import network.conet.chat.localread.NativeHistoryDelete
 import network.conet.chat.localread.LocalMediaKind
@@ -100,18 +100,12 @@ object BeamioConetChatModule {
     private var session: Session? = null
     private var appContext: Context? = null
 
-    @Volatile
-    private var emitFn: ((JSONObject) -> Unit)? = null
-
     /**
-     * Replaces the web emit used by [handleCommand] and returns the one it replaces. Only the QA native entry (QA builds) calls this: it
-     * captures the ack of one native command and puts the previous emit back afterwards. The bridge path never calls it.
+     * The web emit of the last [handleCommand]. Internal, not private: the QA source set (chatQaHooks) swaps it through an extension of this
+     * object (25.52AX.3). The release source has no swap.
      */
-    internal fun swapWebEmit(emit: ((JSONObject) -> Unit)?): ((JSONObject) -> Unit)? {
-        val previous = emitFn
-        emitFn = emit
-        return previous
-    }
+    @Volatile
+    internal var emitFn: ((JSONObject) -> Unit)? = null
 
     private val listen = BeamioConetChatListenSession()
     private val voiceSessions = HashSet<String>()
@@ -167,6 +161,12 @@ object BeamioConetChatModule {
         appContext = context.applicationContext
         emitFn = emit
         BeamioConetChatSignBroker.setEmit(emit)
+        // 25.52AW.1, 25.52AU.1, 25.52AX.1: the envelope comes first, for every entry. A reqId that is missing or not valid is `bad_request` with a
+        // null reqId, answered once, before any gate or state change. Integer 0 is valid and is echoed (T-179).
+        if (!ShellRecordPolicy.reqIdValid(body.opt("reqId"))) {
+            emitEvent(JSONObject().put("type", "ack").put("reqId", JSONObject.NULL).put("ok", false).put("error", "bad_request"))
+            return
+        }
         // A pre-upgrade wallet key is adopted before the no-key check, so an upgraded install keeps its wallet even
         // when the first command is `init` (25.25.6 U-3, U-4). This does nothing once a native record exists or when
         // no legacy key is left. Only the outcome is logged, never the key.
@@ -185,11 +185,10 @@ object BeamioConetChatModule {
             identityPublicCommand(body)
             return
         }
-        // shellRecord* (r3az §25.52D.5, §25.52AA.3, §25.52AB.5): on Android the page records come only through window.BeamioShellRecord, which
-        // the shell hands to BeamioShellRecordImport.answerFromPage with the verified origin. The chat-module channel has no verified origin, so
-        // it is not processed and gets no reply: the shared rule below returns nothing.
-        if (type.startsWith("shellRecord")) {
-            shellRecordChatChannelReply(body)?.let { emitEvent(it) }
+        // shellRecord* on the chat channel (25.52AY.1, AU.1, AB.4): one answer. The page records come only through window.BeamioShellRecord
+        // (25.52AA.2), so shellRecordRead and shellRecordWrite here are not_supported. Any other shellRecord* name is unknown_command.
+        BridgeCommandTable.chatChannelShellRecordCode(type)?.let { code ->
+            ack(echoId(body), false, error = code)
             return
         }
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).
@@ -212,26 +211,23 @@ object BeamioConetChatModule {
             }
         }
         // 25.52AT.1 step 3, 25.52AS.3, 25.52AT.2: a name outside the bridge command table is `unknown_command` before the gate, in every state
-        // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes.
+        // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes. It is not counted (25.52AW.2).
         if (!BridgeCommandTable.isRegistered(type)) {
             Log.w(TAG, "unknown_command name=${type.take(64)}")
-            val code = BridgeCommandTable.countUnknown()
-            // Protocol v1: a command that expects an answer gets one.
-            val reqId = body.optInt("reqId", 0)
-            if (reqId > 0) ack(reqId, false, error = code)
+            ack(echoId(body), false, error = BridgeCommandTable.UNKNOWN_COMMAND)
             return
         }
         val route = NoKeyGate.route(type)
         // X-21 is retired (no key crosses the bridge): refused whether or not a key exists (25.24, 25.26.4 table C).
         if (route == NoKeyGate.Route.NOT_SUPPORTED) {
-            ack(body.optInt("reqId", -1), false, error = network.conet.chat.x21.X21Retired.ERROR)
+            ack(echoId(body), false, error = network.conet.chat.x21.X21Retired.ERROR)
             return
         }
         // Allowed names keep their normal semantics. Everything else is gated by the state of the native record and
         // of this session (25.26.4c): G0 no_key, G1 not_ready (init checks the EOA in dispatch), G2 as before. The
         // payload is not read for any refused name.
         if (route != NoKeyGate.Route.PASS) {
-            val reqId = body.optInt("reqId", -1)
+            val reqId = echoId(body)
             val state = NativeWallet.vault(context).state()
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
             when (route) {
@@ -263,7 +259,7 @@ object BeamioConetChatModule {
     private fun dispatch(type: String, body: JSONObject) {
         when (type) {
             // Protocol v1: version + capabilities (see BeamioConetChatProtocol).
-            "hello" -> ack(body.optInt("reqId", 0), true, result = BeamioConetChatProtocol.helloResult())
+            "hello" -> ack(echoId(body), true, result = BeamioConetChatProtocol.helloResult())
             "init" -> handleInit(body)
             "setRoutes" -> currentSession()?.let { s -> body.optJSONArray("routes")?.let { s.routes = objects(it) } }
             "setNodes" -> currentSession()?.let { s -> body.optJSONArray("nodes")?.let { s.nodes = parseNodes(it) } }
@@ -303,7 +299,7 @@ object BeamioConetChatModule {
                 resumeListen()
             }
             "destroy" -> destroy()
-            "clearIdentity" -> clearIdentity(body.optInt("reqId", -1))
+            "clearIdentity" -> clearIdentity(echoId(body))
             "provisionIdentity" -> provisionIdentity(body)
             "walletAddress" -> walletAddressCommand(body)
             "gossipSign" -> gossipSignCommand(body)
@@ -327,10 +323,7 @@ object BeamioConetChatModule {
             else -> {
                 // Unreachable while the table and this dispatch agree (BridgeCommandTableTest). Answered the same way if they ever diverge.
                 Log.w(TAG, "unknown_command name=${type.take(64)}")
-                val code = BridgeCommandTable.countUnknown()
-                // Protocol v1: a command that expects an answer gets one.
-                val reqId = body.optInt("reqId", 0)
-                if (reqId > 0) ack(reqId, false, error = code)
+                ack(echoId(body), false, error = BridgeCommandTable.UNKNOWN_COMMAND)
             }
         }
     }
@@ -341,7 +334,7 @@ object BeamioConetChatModule {
     // ---- init / routes / nodes -----------------------------------------------------
 
     private fun handleInit(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val ctx = appContext ?: return
         val payload = body.optJSONObject("payload")
         if (payload == null) {
@@ -481,7 +474,7 @@ object BeamioConetChatModule {
      * the wallet's account, after the wallet check. Nothing is kept in the session, and nothing goes back to the page.
      * With no key in the payload, the existing record stands. Returns `false` after acking an error.
      */
-    private fun storeInitPgp(ctx: Context, reqId: Int, eoa: String, armor: String, passphrase: String): Boolean {
+    private fun storeInitPgp(ctx: Context, reqId: Any, eoa: String, armor: String, passphrase: String): Boolean {
         if (armor.isEmpty()) return true
         return when (NativeWallet.pgpFor(ctx, eoa).put(eoa, armor, passphrase)) {
             // The legacy copy L is kept (r3as §25.52.3): this version never clears it.
@@ -496,7 +489,7 @@ object BeamioConetChatModule {
     private fun adoptNativeWallet(
         ctx: Context,
         host: BeamioOpenPgpHost,
-        reqId: Int,
+        reqId: Any,
         eoa: String,
         done: () -> Unit,
     ) {
@@ -535,7 +528,7 @@ object BeamioConetChatModule {
         }
     }
 
-    private fun finishInit(ctx: Context, reqId: Int, s: Session, attach: Boolean) {
+    private fun finishInit(ctx: Context, reqId: Any, s: Session, attach: Boolean) {
         run {
             val history = BeamioConetChatHistoryStore(
                 eoa = s.eoa,
@@ -784,7 +777,7 @@ object BeamioConetChatModule {
      * runs on the worker. A refusal (`unregister_refused`) removes nothing and keeps the session. L, the legacy PGP copy, is kept
      * in every case: the migration never removes it, and PM R364 asks that clearIdentity not remove it before the check.
      */
-    private fun clearIdentity(reqId: Int) {
+    private fun clearIdentity(reqId: Any) {
         val ctx = appContext
         val eoa = ctx?.let { recoveryAccountOf(it) }
         if (ctx == null || eoa == null) {
@@ -803,7 +796,7 @@ object BeamioConetChatModule {
         }
     }
 
-    private fun finishClearIdentity(ctx: Context?, reqId: Int) {
+    private fun finishClearIdentity(ctx: Context?, reqId: Any) {
         NativeSessionState.reset()
         destroy()
         BeamioConetChatSignBroker.clearNativeSigner()
@@ -889,7 +882,7 @@ object BeamioConetChatModule {
 
     /** N0 `walletAddress` (spec 25.18.2): the account EOA, no signature. */
     private fun walletAddressCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
+        val reqId = echoId(body)
         val ctx = appContext ?: run {
             ack(reqId, false, error = "not_initialised")
             return
@@ -905,7 +898,7 @@ object BeamioConetChatModule {
      * the signing address, never the key.
      */
     private fun gossipSignCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
+        val reqId = echoId(body)
         val ctx = appContext ?: run {
             ack(reqId, false, error = "not_initialised")
             return
@@ -919,6 +912,9 @@ object BeamioConetChatModule {
         if (out.code == "ok") {
             ack(reqId, true, result = JSONObject().put("signature", out.value).put("address", out.address))
         } else {
+            // 25.52AW.2, T-53, T-135: a kind or shape refusal of this known command is counted as command_rejected (in-process only). The gate
+            // answers (no_key, locked) are not refusals of the kind or shape, so they are not counted.
+            if (out.code != "no_key" && out.code != "locked") BridgeCommandTable.countCommandRejected()
             ack(reqId, false, error = out.code)
         }
     }
@@ -928,7 +924,7 @@ object BeamioConetChatModule {
      * in G2 only. The PGP private key and its passphrase stay in the native record.
      */
     private fun pgpSignCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
+        val reqId = echoId(body)
         val ctx = appContext ?: run {
             ack(reqId, false, error = "not_initialised")
             return
@@ -1175,7 +1171,7 @@ object BeamioConetChatModule {
      * passed readback. The module stores nothing from this call.
      */
     private fun provisionIdentity(body: JSONObject) {
-        val reqId = body.optInt("reqId", -1)
+        val reqId = echoId(body)
         val p = body.optJSONObject("payload") ?: body
         // The contract refuses key material and non-canonical input before anything else is read.
         val checked = IdentityProvisionContract.validate(IdentityProvisionContract.Command.PROVISION_IDENTITY, p)
@@ -1219,7 +1215,7 @@ object BeamioConetChatModule {
     // ---- send ---------------------------------------------------------------------
 
     private fun handleSend(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val ctx = appContext
         val s = currentSession()
         val to = body.optJSONObject("to")
@@ -1275,7 +1271,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleGroup(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val ctx = appContext
         val s = currentSession()
         val request = body.optJSONObject("request")
@@ -1342,7 +1338,7 @@ object BeamioConetChatModule {
     // ---- presence / native wake ---------------------------------------------------
 
     private fun handleQueryPresence(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val s = currentSession()
         if (s == null) {
             ack(reqId, false, error = "not_ready")
@@ -1389,7 +1385,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleQueryNativeWake(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val s = currentSession()
         val contact = body.optJSONObject("contact")
         if (s == null || contact == null) {
@@ -1421,7 +1417,7 @@ object BeamioConetChatModule {
     // ---- history ------------------------------------------------------------------
 
     private fun handleHistoryLoad(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         if (hist == null || !hist.isReady()) {
             // History key derivation (a PWA signature) may still be in flight: not an error.
@@ -1449,7 +1445,7 @@ object BeamioConetChatModule {
     private val unboundedHistoryReads = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun handleHistoryRead(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val options = body.optJSONObject("options")
         if (options == null || !options.has("limit")) {
             // Full result is kept as before. Log the caller label only, never content.
@@ -1468,7 +1464,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryAppend(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         val entry = body.optJSONObject("entry")
         if (hist == null || entry == null || !hist.isReady()) {
@@ -1585,7 +1581,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryOpen(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val convKey = body.optString("convKey", "").lowercase()
         val vp = viewportOf(body.optJSONObject("viewport"))
         if (convKey.isEmpty() || vp == null) {
@@ -1597,7 +1593,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryLoadOlder(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val convKey = body.optString("convKey", "").lowercase()
         val cursor = body.optString("cursor", "")
         val vp = viewportOf(body.optJSONObject("viewport"))
@@ -1610,7 +1606,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryReportLayout(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         val store = hist?.localStore()
         val convKey = body.optString("convKey", "").lowercase()
@@ -1627,7 +1623,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryClearCache(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         val store = hist?.localStore()
         if (store == null) {
@@ -1653,7 +1649,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleHistoryFullSync(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         if (hist == null || !hist.isReady()) {
             ack(reqId, false, error = "not_ready")
@@ -1664,7 +1660,7 @@ object BeamioConetChatModule {
 
     /** Migration import (spec r2 11.2): at most 200 rows per call. Sendkeys, stable ids, dedupe and sealing are native. */
     private fun handleHistoryImportBatch(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val hist = currentSession()?.history
         val store = hist?.localStore()
         if (store == null) {
@@ -1719,7 +1715,7 @@ object BeamioConetChatModule {
 
     /** Row count and the M3 digest of the held rows, for the PWA to compare (spec r2 11.1 M3, 11.2). */
     private fun handleHistoryVerifyImport(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val store = currentSession()?.history?.localStore()
         if (store == null) {
             ack(reqId, false, error = "not_ready")
@@ -1736,7 +1732,7 @@ object BeamioConetChatModule {
     // ---- mailbox commands / voice ----------------------------------------------------
 
     private fun handleMailboxCommand(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val s = currentSession()
         if (s == null) {
             ack(reqId, false, error = "not_ready")
@@ -1761,7 +1757,7 @@ object BeamioConetChatModule {
     }
 
     private fun handleVoiceListen(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val sessionId = body.optString("sessionId", "")
         synchronized(lock) { voiceSessions.add(sessionId) }
         // The shell's native voice signaling owns the voice SSE — never open a second one.
@@ -1769,13 +1765,13 @@ object BeamioConetChatModule {
     }
 
     private fun handleVoiceUnlisten(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         synchronized(lock) { voiceSessions.remove(body.optString("sessionId", "")) }
         ack(reqId, true, result = JSONObject().put("ok", true))
     }
 
     private fun handleVoiceFrame(body: JSONObject) {
-        val reqId = body.optInt("reqId", 0)
+        val reqId = echoId(body)
         val s = currentSession()
         if (s == null) {
             ack(reqId, false, error = "not_ready")
@@ -2317,9 +2313,11 @@ object BeamioConetChatModule {
         }
     }
 
-    private fun ack(reqId: Int, ok: Boolean, result: Any? = null, error: String? = null) {
-        if (reqId < 0) return
-        val payload = JSONObject().put("type", "ack").put("reqId", reqId).put("ok", ok)
+    /** The reqId as the page sent it (a string or an integer). The envelope has checked it (25.52AW.1); it is echoed unchanged (T-179). */
+    private fun echoId(body: JSONObject): Any = body.opt("reqId") ?: JSONObject.NULL
+
+    private fun ack(reqId: Any?, ok: Boolean, result: Any? = null, error: String? = null) {
+        val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
         if (ok && result != null) payload.put("result", result)
         if (!ok) payload.put("error", error ?: "error")
         emitEvent(payload)

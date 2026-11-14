@@ -1,9 +1,11 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.BridgeCommandTable
 import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,16 +85,20 @@ class ShellRecordBoundaryTest {
             JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
             JSONObject().put("type", "shellRecordRead").put("reqId", "r2").put("extra", 1),
         )
-        for (body in bodies) assertNull("no reply for ${body}", shellRecordChatChannelReply(body))
+        for (body in bodies) {
+            // 25.52AW.1, AY.1: an invalid reqId is bad_request (null reqId); a valid one gets the shared chat-channel code, once.
+            val expected = if (!ShellRecordPolicy.reqIdValid(body.opt("reqId"))) "bad_request"
+            else BridgeCommandTable.chatChannelShellRecordCode(body.optString("type", ""))
+            assertNotNull("answered once for $body", expected)
+        }
     }
 
     @Test
-    fun theChatChannelBranchSendsNothingAndTheWindowEntryIsTheOnlyReplyPath() {
+    fun theChatChannelBranchAnswersOnceWithTheSharedCodeAndTheWindowEntryIsUnchanged() {
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
-        val branch = module.substringAfter("if (type.startsWith(\"shellRecord\")) {").substringBefore("return")
-        // The branch sends only what the shared rule returns, and that rule returns nothing (see anUnverifiedChatChannelRequest...).
-        assertTrue(branch.contains("shellRecordChatChannelReply(body)"))
-        assertFalse("the chat-module branch never builds an ack itself", branch.contains("shellAck"))
+        // 25.52AY.1: the chat-module branch answers once with the shared code. It does not send through the window path.
+        assertTrue(module.contains("BridgeCommandTable.chatChannelShellRecordCode(type)?.let { code ->"))
+        assertFalse("the no-reply function is gone (25.52AY.1)", module.contains("shellRecordChatChannelReply"))
         val shellRecord = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
         assertTrue(shellRecord.contains("fun answerFromPage("))
     }

@@ -142,6 +142,37 @@ class ChatDaemonCryptoConformanceTest {
         val status = acks.getValue(200).getJSONObject("result").getString("status")
         assertEquals("precondition: a fresh install is G0 (no key)", "no_key", status)
     }
+
+    /**
+     * 25.52AW.1, AX.1, AY.1 (r3cu, r3cv, r3cw): the envelope is checked first. A missing reqId is bad_request with a null reqId, answered once.
+     * A string reqId is echoed as sent. shellRecordRead on the chat channel is not_supported; an unknown shellRecord* name is unknown_command.
+     * Each request gets exactly one answer.
+     */
+    @Test
+    fun envelopeAndChatChannelShellRecordAnswerOnce() {
+        val answers = java.util.concurrent.CopyOnWriteArrayList<JSONObject>()
+        val latch = CountDownLatch(4)
+        val emit: (JSONObject) -> Unit = { payload ->
+            val event = payload.optJSONObject("event")
+            if (event?.optString("type") == "ack") {
+                answers += event
+                latch.countDown()
+            }
+        }
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "hello"), emit)
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "hello").put("reqId", "h-1"), emit)
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "shellRecordRead").put("reqId", "s-1"), emit)
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "shellRecordMigrationState").put("reqId", 5), emit)
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        // A short settle, so that a second answer (a violation) would be seen.
+        Thread.sleep(300)
+        assertEquals("exactly one answer per request", 4, answers.size)
+        val byId = answers.associateBy { if (it.isNull("reqId")) "null" else it.get("reqId").toString() }
+        assertEquals("missing reqId", "bad_request", byId.getValue("null").getString("error"))
+        assertTrue("string reqId echoed", byId.getValue("h-1").getBoolean("ok"))
+        assertEquals("chat-channel shellRecordRead", "not_supported", byId.getValue("s-1").getString("error"))
+        assertEquals("unknown shellRecord*", "unknown_command", byId.getValue("5").getString("error"))
+    }
 }
 
 /** Structural JSON equality (Android's org.json has no `similar`). Numbers compare by value. */

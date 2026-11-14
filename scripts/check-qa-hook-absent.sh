@@ -1,6 +1,6 @@
 #!/bin/sh
 # QA exclusion scan for one artifact (spec r3bw §25.52AA.5; r3cf §25.52AH.6 item 2; r3cl §25.52AN.3 and AN.4; r3cn §25.52AP).
-# It counts the hits of each QA identifier of §25.52AN.2 (Android) and of removeEOAPrivateKey (AN.5), in the FILE NAMES and in the CONTENTS of the
+# It counts the hits of each binary QA identifier of §25.52AN.2 (Android, AU.3, AX.3: swapWebEmit included) and of removeEOAPrivateKey (AN.5), in the FILE NAMES and in the CONTENTS of the
 # artifact. The artifact may be an AAR, APK, AAB or JAR (archives unpacked recursively, three levels deep, so classes.jar and dex files are
 # scanned) or a POM. Matching is case-sensitive and case-insensitive; the case-insensitive count includes the case-sensitive one.
 # Only the counts and the paths of hits are printed, never matched bytes.
@@ -8,7 +8,7 @@
 # On a QA build the same script is the positive control: every identifier must hit at least once there (25.52AP.2).
 # Usage: scripts/check-qa-hook-absent.sh <artifact>
 set -eu
-IDENTIFIERS="NativeQaHooks dropEoaKeyOfAccount dropEoaKey runCommand runWith ALLOWED_COMMANDS chatQaHooks src/qa removeEOAPrivateKey"
+IDENTIFIERS="NativeQaHooks dropEoaKeyOfAccount dropEoaKey runCommand runWith ALLOWED_COMMANDS swapWebEmit removeEOAPrivateKey"
 if [ "$#" -ne 1 ]; then
   echo "usage: $0 <artifact>" >&2
   exit 2

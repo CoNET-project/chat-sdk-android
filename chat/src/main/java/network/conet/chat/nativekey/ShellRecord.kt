@@ -252,6 +252,15 @@ internal object ShellRecordPolicy {
         else -> false
     }
 
+    /**
+     * §25.52BB.3: a legacy private key in the read form of Q1. The 64 hex digits may carry "0x" or "0X" and may be in either case; the result is
+     * "0x" plus 64 lower-case hex digits. `null` when the value is not 64 hex digits, so the import is import_failed.
+     */
+    fun normalizeLegacyKey(value: String): String? {
+        val hex = if (value.startsWith("0x") || value.startsWith("0X")) value.substring(2) else value
+        return if (HEX_KEY.matches(hex)) "0x" + hex.lowercase() else null
+    }
+
     /** Every path of [value], with `[*]` for array elements, as §25.52D.7 writes them. */
     fun pathsOf(value: Any?, path: String = "", out: MutableSet<String> = mutableSetOf()): Set<String> {
         when (value) {
@@ -968,12 +977,21 @@ internal class ShellImportFlow(
         val profile = if (index >= 0) profiles?.optJSONObject(index) else null
         // §25.52N.6, §25.52R.5 (暂定): a matching profile without its privateKeyArmor is import_failed; a key that derives another address
         // is address_mismatch (§25.52K.5).
+        // §25.52BB.3 (r3cz, R673): the legacy key is normalized first (Q1 read rule) and the stored form is "0x" plus 64 lower-case hex digits. A
+        // key that cannot be normalized is import_failed. After normalization, a key that derives another address is address_mismatch. The
+        // normalized key is what the write check sees, and what is stored.
         val armor = profile?.optString("privateKeyArmor", "").orEmpty()
         if (profile == null || armor.isEmpty()) {
             outcome.set(ImportOutcome.NOT_DONE)
             return ShellImportCode.IMPORT_FAILED
         }
-        val derived = addressOf(armor)
+        val canonical = ShellRecordPolicy.normalizeLegacyKey(armor)
+        if (canonical == null) {
+            outcome.set(ImportOutcome.NOT_DONE)
+            return ShellImportCode.IMPORT_FAILED
+        }
+        profile.put("privateKeyArmor", canonical)
+        val derived = addressOf(canonical)
         if (derived == null || !derived.equals(eoa, ignoreCase = true)) {
             outcome.set(ImportOutcome.NOT_DONE)
             return ShellImportCode.ADDRESS_MISMATCH
@@ -1039,7 +1057,8 @@ internal class ShellRecordBridge(
         val allowed = when (type) {
             "shellRecordRead" -> ShellRecordPolicy.READ_FIELDS
             "shellRecordWrite" -> ShellRecordPolicy.WRITE_FIELDS
-            else -> return reply("bad_request", emptyList())
+            // 25.52AW.1: an unknown shellRecord* name on the window channel is unknown_command (§25.52AU.1). Other unknown types keep bad_request.
+            else -> return reply(if (type.startsWith("shellRecord")) "unknown_command" else "bad_request", emptyList())
         }
         // §25.52AD.4 step 2: the gate answers before the payload is read. G1 is not_ready (§25.26.4c).
         val acc = account()
@@ -1241,16 +1260,6 @@ internal class ShellRecordBridge(
         }
         return reply("ok", listOf("rev" to next))
     }
-}
-
-/**
- * The chat-module channel for `shellRecord*` (§25.52AB.5, R476): the channel has no verified origin, so the request is not processed and gets
- * no reply, whatever its reqId or type. Returns `null` for every body; the caller sends nothing.
- */
-internal fun shellRecordChatChannelReply(body: JSONObject): JSONObject? {
-    @Suppress("UNUSED_VARIABLE")
-    val unverified = body
-    return null
 }
 
 /**

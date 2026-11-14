@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.Log
 import network.conet.chat.BeamioConetChatModule
 import network.conet.chat.identity.IdentityProvisionContract
+import network.conet.chat.swapWebEmit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch

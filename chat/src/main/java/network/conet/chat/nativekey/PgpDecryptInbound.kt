@@ -60,12 +60,8 @@ internal object PgpDecryptInbound {
      * `reqId` as the ack echoes it: a string, or a non-negative JSON integer. Anything else is null (25.28.3). A-01 uses a
      * string; A-16 uses an object, which gives null and `bad_request`.
      */
-    fun reqIdOf(body: JSONObject): Any? = when (val v = body.opt("reqId")) {
-        is String -> v
-        is Int -> if (v >= 0) v else null
-        is Long -> if (v in 0..Int.MAX_VALUE) v.toInt() else null
-        else -> null
-    }
+    /** The reqId when it is valid (25.52AW.1: a string of 1 to 64 printable ASCII, or an integer 0 to 2^53-1), else null. */
+    fun reqIdOf(body: JSONObject): Any? = body.opt("reqId")?.takeIf { ShellRecordPolicy.reqIdValid(it) }
 
     /** The first forbidden key name found at any depth, or null. */
     internal fun forbiddenKey(node: Any?): String? = when (node) {

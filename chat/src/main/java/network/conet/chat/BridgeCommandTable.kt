@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 internal object BridgeCommandTable {
     const val UNKNOWN_COMMAND = "unknown_command"
+    const val COMMAND_REJECTED = "command_rejected"
     const val SHELL_RECORD_PREFIX = "shellRecord"
 
     /** The `when (type)` table of [BeamioConetChatModule] (dispatch). */
@@ -39,22 +40,42 @@ internal object BridgeCommandTable {
     /** Answered by the gate (`NoKeyGate.route`) without dispatch (table D). */
     val GATE_STATUS: Set<String> = setOf("walletStatus", "passcodeStatus")
 
+    /**
+     * The page-record commands (25.52AA.2, AY.1). On the chat channel they are answered `not_supported`, once. Other `shellRecord*` names are
+     * `unknown_command` (25.52AW.1). They are listed here because they are in the command table T (25.52AU.4).
+     */
+    val CHAT_CHANNEL_SHELL_RECORD: Set<String> = setOf("shellRecordRead", "shellRecordWrite")
+
+    /**
+     * The chat-channel answer for a `shellRecord*` name (25.52AY.1, AU.1): `not_supported` for shellRecordRead and shellRecordWrite, `unknown_command`
+     * for any other name with the prefix, and null for a name without it.
+     */
+    fun chatChannelShellRecordCode(type: String): String? = when {
+        !type.startsWith(SHELL_RECORD_PREFIX) -> null
+        type in CHAT_CHANNEL_SHELL_RECORD -> "not_supported"
+        else -> UNKNOWN_COMMAND
+    }
+
     /** True when [name] is a name the module answers. A name that is not registered is answered `unknown_command` before the gate. */
     fun isRegistered(name: String): Boolean =
         name in DISPATCH ||
             name in DECIDED_BEFORE_DISPATCH ||
             name in GATE_STATUS ||
             name in NoKeyGate.RETIRED ||
-            name.startsWith(SHELL_RECORD_PREFIX)
+            name in CHAT_CHANNEL_SHELL_RECORD
 
-    private val rejected = AtomicInteger(0)
+    private val commandRejected = AtomicInteger(0)
 
-    /** Counts one `unknown_command` and returns its code. The count is in-process; the tests read it. */
-    fun countUnknown(): String {
-        rejected.incrementAndGet()
-        return UNKNOWN_COMMAND
+    /**
+     * Counts one `command_rejected` (25.52AW.2, T-53, T-135): a refusal of the kind or the shape of a known command. It is an in-process
+     * diagnostic count. It is not in any answer or event, and it is not persisted. A name outside the table is `unknown_command` and is not counted.
+     */
+    fun countCommandRejected(): String {
+        commandRejected.incrementAndGet()
+        return COMMAND_REJECTED
     }
 
-    val rejectionCount: Int
-        get() = rejected.get()
+    /** The in-process count of `command_rejected`. Read by the tests. */
+    val commandRejectedCount: Int
+        get() = commandRejected.get()
 }

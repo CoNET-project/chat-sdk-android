@@ -202,6 +202,8 @@ class BridgeKeyAuditTest {
                 "} else if (storedSlot == null && hasProfileKey(stored, \"privateKeyArmor\")) {",
                 // Legacy import (25.52K.5): the armor of the legacy record, checked by address before it is stored. Not a bridge payload.
                 "val armor = profile?.optString(\"privateKeyArmor\", \"\").orEmpty()",
+                // BB.3 (r3cz): the legacy armor is normalized on first import, then stored. The stored legacy record, not a bridge payload.
+                "profile.put(\"privateKeyArmor\", canonical)",
                 // Removal and key-shape lists of the record (WALLET_REMOVAL_PATHS, FORBIDDEN_PATHS, PGP_STRIP_PATHS, KEY_SHAPED_EXACT,
                 // isKeyShaped, PROFILE_LEAVES, 25.52N.4, 25.52O.2, 25.52O.5). Membership or removal only; PROFILE_LEAVES is the record schema.
                 "\"pgpPassphrase\",",

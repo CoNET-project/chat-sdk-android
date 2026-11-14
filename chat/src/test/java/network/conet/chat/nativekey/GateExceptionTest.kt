@@ -1,5 +1,6 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.BridgeCommandTable
 import network.conet.chat.localread.NativeHistoryDelete
 import org.json.JSONArray
 import org.json.JSONObject
@@ -102,9 +103,9 @@ class GateExceptionTest {
     }
 
     @Test
-    fun theChatChannelNeverReplies() {
-        val body = JSONObject().put("type", "shellRecordRead").put("reqId", "c1")
-        assertNull(shellRecordChatChannelReply(body))
+    fun theChatChannelAnswersShellRecordReadOnceAsNotSupported() {
+        // 25.52AY.1 (r3cw): on the chat channel shellRecordRead is not_supported, once. Not silent.
+        assertEquals("not_supported", BridgeCommandTable.chatChannelShellRecordCode("shellRecordRead"))
     }
 
     @Test
@@ -180,7 +181,7 @@ class GateExceptionTest {
 
     /**
      * GX-10b (recorded deviation, R476, §25.52AB.5). The vector expects the chat channel to answer `absent`. The rule says the chat channel never
-     * replies, and the implementation follows the rule. This test pins the deviation without editing the vector: the chat channel gives no reply,
+     * replies, and the implementation follows the rule. This test pins the deviation without editing the vector: the chat channel answers not_supported (AY.1),
      * and the judgement the window channel gives for the same request is the vector's `absent`. The decision belongs to the interface owner.
      */
     @Test
@@ -188,7 +189,8 @@ class GateExceptionTest {
         val cases = doc.getJSONArray("gateExceptionCases")
         val c = (0 until cases.length()).map { cases.getJSONObject(it) }.single { it.getString("id") == "GX-10b" }
         val judged = judge(c)
-        assertNull("the chat channel must not reply (R476)", shellRecordChatChannelReply(judged.body))
+        assertEquals("the chat channel answers not_supported (AY.1)", "not_supported",
+            BridgeCommandTable.chatChannelShellRecordCode(judged.body.getString("type")))
         assertEquals(emptyList<String>(), compare(judged.window, withA1(c.getJSONObject("expect"))))
     }
 

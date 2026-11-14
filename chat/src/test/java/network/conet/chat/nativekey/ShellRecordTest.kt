@@ -426,7 +426,8 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
             40,
         )
-        assertEquals("bad_request", refused.v().getString("code"))
+        // 25.52AW.1, AU.1: an unknown shellRecord* name on the window channel is unknown_command (it was bad_request before r3cu).
+        assertEquals("unknown_command", refused.v().getString("code"))
         val text = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
         assertTrue(text.contains("fun migrationState(context: Context): String"))
     }
@@ -498,7 +499,7 @@ class ShellRecordTest {
     @Test
     fun theGenericBridgeRefusesTheShellRecordCommands() {
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
-        assertTrue(module.contains("type.startsWith(\"shellRecord\")"))
+        assertTrue(module.contains("BridgeCommandTable.chatChannelShellRecordCode(type)"))
         assertFalse("the generic bridge never sends the page record", module.contains("BeamioShellRecordImport.handle("))
     }
 
