@@ -8,6 +8,9 @@ version = "0.2.16"
 
 android {
     namespace = "network.conet.chat"
+    buildFeatures {
+        buildConfig = true
+    }
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -16,6 +19,9 @@ android {
 
     defaultConfig {
         minSdk = 24
+        // QA switch (R559): -PchatDisableHistoryWrites=true builds a candidate whose history writes nothing (no fragment, index or
+        // pointer upload). Without the property the value is true, as before: production behaviour does not change.
+        buildConfigField("boolean", "HISTORY_WRITES", (!project.hasProperty("chatDisableHistoryWrites")).toString())
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -73,6 +73,11 @@ class BeamioConetChatHistoryStore(
     private val dbRootProvider: (() -> ByteArray?)? = null,
     /** Opens the local SQLite handle (null file = in-memory). Android by default; tests inject JDBC. */
     private val sqlDbFactory: (File?) -> SqlDb = { AndroidSqlDb.open(it) },
+    /**
+     * R559 switch: false means nothing is written. The queue still takes entries locally; no fragment, index or pointer is uploaded or
+     * submitted. Production builds take the build value (true), so their behaviour is unchanged.
+     */
+    private val writesEnabled: Boolean = BuildConfig.HISTORY_WRITES,
 ) {
     data class IndexRecord(
         val seq: Int,
@@ -680,6 +685,7 @@ class BeamioConetChatHistoryStore(
     }
 
     private fun flushUnlocked(): FlushResult {
+        if (!writesEnabled) return FlushResult.EMPTY
         if (!ready || destroyed) return FlushResult.NOT_READY
         if (pending.entries.isEmpty()) return FlushResult.EMPTY
         for (attempt in 0 until HistoryBatch.CAS_ATTEMPTS) {
@@ -704,6 +710,7 @@ class BeamioConetChatHistoryStore(
     }
 
     private fun flushAttempt(): FlushResult {
+        if (!writesEnabled) return FlushResult.EMPTY
         unlandedJustNow = false
         val key = indexKey ?: return FlushResult.ERROR
         val masterKey = master ?: return FlushResult.ERROR
