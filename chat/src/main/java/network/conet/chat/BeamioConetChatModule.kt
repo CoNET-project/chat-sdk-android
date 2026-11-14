@@ -101,6 +101,17 @@ object BeamioConetChatModule {
 
     @Volatile
     private var emitFn: ((JSONObject) -> Unit)? = null
+
+    /**
+     * Replaces the web emit used by [handleCommand] and returns the one it replaces. Only the QA native entry (QA builds) calls this: it
+     * captures the ack of one native command and puts the previous emit back afterwards. The bridge path never calls it.
+     */
+    internal fun swapWebEmit(emit: ((JSONObject) -> Unit)?): ((JSONObject) -> Unit)? {
+        val previous = emitFn
+        emitFn = emit
+        return previous
+    }
+
     private val listen = BeamioConetChatListenSession()
     private val voiceSessions = HashSet<String>()
     private val seenArmor = object : LinkedHashMap<String, Boolean>(256, 0.75f, false) {
