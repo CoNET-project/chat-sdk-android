@@ -133,15 +133,6 @@
       "note": "W5 kind=gossip"
     },
     {
-      "id": "NK-W6a",
-      "command": "pgpSign",
-      "layer": "wallet",
-      "expectCode": "no_key",
-      "dataReturned": false,
-      "signed": false,
-      "note": "W6 / C4"
-    },
-    {
       "id": "NK-W6b",
       "command": "pgpDecrypt",
       "layer": "wallet",
@@ -678,11 +669,11 @@
     }
   ],
   "counts": {
-    "noKeyWallet": 27,
+    "noKeyWallet": 26,
     "noKeyChat": 29,
-    "noKeyTotal": 56,
+    "noKeyTotal": 55,
     "notSupported": 3,
-    "total": 59
+    "total": 58
   },
   "dispatchEvidence": {
     "ios": {
@@ -839,17 +830,6 @@
       "bridgeName": "signMessage",
       "mode": null,
       "kind": "gossip",
-      "ios": null,
-      "android": null,
-      "pwa": null,
-      "expect": "no_key"
-    },
-    {
-      "id": "NK-W6a",
-      "spec": "pgpSign",
-      "bridgeName": "pgpSign",
-      "mode": null,
-      "kind": null,
       "ios": null,
       "android": null,
       "pwa": null,
@@ -1635,13 +1615,6 @@
       "name": "notifyBackgroundChat",
       "class": "聊天通知",
       "recommendation": "建议列入 no_key",
-      "listed": false,
-      "pendingPm": true
-    },
-    {
-      "name": "setNativeChatPgpSecrets",
-      "class": "PGP 材料",
-      "recommendation": "建议列入 no_key（不接受私钥，25.24）",
       "listed": false,
       "pendingPm": true
     },

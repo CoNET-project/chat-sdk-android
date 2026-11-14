@@ -9,11 +9,11 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3x, sha256 bc0bf236…6cd91).
+ * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3dm, sha256 947d0ceb…540dd).
  *
  * The routing decision is [NoKeyGate.route], which is what the module calls before any dispatch. The vectors list
- * 27 wallet names and 29 chat names that must answer `no_key` (56 entries), and 3 retired X-21 names that must answer
- * `not_supported` (59 entries in all). Each entry is checked by its name only: the gate never reads a payload.
+ * 26 wallet names and 29 chat names that must answer `no_key` (55 entries; pgpSign is not in the table, 25.52BP.1), and 3 retired X-21 names that must answer
+ * `not_supported` (58 entries in all). Each entry is checked by its name only: the gate never reads a payload.
  */
 class NoKeyRejectVectorsTest {
     private val bytes = File(System.getenv("NO_KEY_VECTORS") ?: "../spec/no-key-reject-vectors.v1.json").readBytes()
@@ -32,31 +32,31 @@ class NoKeyRejectVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         // r3x (spec §25.46.10, AL-7): nativeAccountCreateOpen joins the allowed list. The r3h file (b3bda74a…8a597) is withdrawn.
-        assertEquals("bc0bf236f9c514f6bfe330ccb92f28f850f34824bb8efb916b63d44efda6cd91", sha256Hex(bytes))
+        assertEquals("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd", sha256Hex(bytes))
     }
 
     @Test
     fun entryCountsMatchTheManifest() {
-        assertEquals(27, v.getJSONArray("walletCommands").length())
+        assertEquals(26, v.getJSONArray("walletCommands").length())
         assertEquals(29, v.getJSONArray("chatCommands").length())
         assertEquals(3, v.getJSONArray("retiredCommands").length())
         assertEquals(2, v.getJSONArray("specialStatus").length())
         assertEquals(3, v.getJSONArray("secretPayloadControls").length())
         val noKey = v.getJSONArray("walletCommands").length() + v.getJSONArray("chatCommands").length()
         val notSupported = v.getJSONArray("retiredCommands").length()
-        // r3f: 27 wallet + 29 chat = 56 no_key entries; 3 retired entries are not_supported. Together 59.
-        assertEquals(56, noKey)
+        // r3dm (25.52BP.1): pgpSign removed from walletCommands: 26 wallet + 29 chat = 55 no_key entries; 3 retired entries are not_supported. Together 58.
+        assertEquals(55, noKey)
         assertEquals(3, notSupported)
-        assertEquals(59, noKey + notSupported)
+        assertEquals(58, noKey + notSupported)
         val counts = v.getJSONObject("counts")
-        assertEquals(56, counts.getInt("noKeyTotal"))
+        assertEquals(55, counts.getInt("noKeyTotal"))
         assertEquals(3, counts.getInt("notSupported"))
-        assertEquals(59, counts.getInt("total"))
+        assertEquals(58, counts.getInt("total"))
     }
 
     @Test
     fun everyNoKeyEntryRoutesToNoKey() {
-        // 56 entries answer no_key: every wallet and chat name, including the eight names added in r3f.
+        // 55 entries answer no_key: every wallet and chat name (pgpSign is not in the table, 25.52BP.1).
         var n = 0
         for (list in listOf(v.getJSONArray("walletCommands"), v.getJSONArray("chatCommands"))) {
             for (i in 0 until list.length()) {
@@ -65,7 +65,7 @@ class NoKeyRejectVectorsTest {
                 n++
             }
         }
-        assertEquals(56, n)
+        assertEquals(55, n)
     }
 
     @Test

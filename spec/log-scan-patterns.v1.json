@@ -225,12 +225,12 @@
       },
       {
         "name": "interface/protocol/no-key-reject-vectors.v1.json",
-        "sha256": "b3bda74a5f126700bdc81fe9822e16bba1c7703ed67978bbf1e5b70448d4a597",
+        "sha256": "947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd",
         "source": "spec 25.26.4、25.26.6（r3f）"
       },
       {
         "name": "interface/protocol/gate-state-vectors.v1.json",
-        "sha256": "e789d90175db53035397ddb1dbdb729b1df92b7d855d234dc006abf4906e3a27",
+        "sha256": "94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0",
         "source": "spec 25.26.4c（r3g）"
       },
       {

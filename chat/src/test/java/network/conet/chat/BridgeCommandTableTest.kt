@@ -88,11 +88,11 @@ class BridgeCommandTableTest {
     }
 
     @Test
-    fun theChatChannelShellRecordCodesAreNotSupportedAndUnknown() {
-        // 25.52AY.1, AU.1: shellRecordRead and shellRecordWrite are not_supported on the chat channel; another shellRecord* name is unknown_command.
+    fun theChatChannelShellRecordPrefixIsNotSupportedForEveryName() {
+        // 25.52AZ.1, BO.4 (r3dl): the chat channel answers not_supported, once, for every name with the shellRecord prefix. Per prefix, not per name.
         assertEquals("not_supported", BridgeCommandTable.chatChannelShellRecordCode("shellRecordRead"))
         assertEquals("not_supported", BridgeCommandTable.chatChannelShellRecordCode("shellRecordWrite"))
-        assertEquals("unknown_command", BridgeCommandTable.chatChannelShellRecordCode("shellRecordMigrationState"))
+        assertEquals("not_supported", BridgeCommandTable.chatChannelShellRecordCode("shellRecordMigrationState"))
         assertNull(BridgeCommandTable.chatChannelShellRecordCode("send"))
         assertFalse(BridgeCommandTable.isRegistered("shellRecordMigrationState"))
     }
@@ -104,7 +104,14 @@ class BridgeCommandTableTest {
         val name = source.indexOf("BridgeCommandTable.isRegistered(type)")
         val gate = source.indexOf("val route = NoKeyGate.route(type)")
         assertTrue("CRED comes first", cred in 0 until name)
+        val shellRecordBranch = source.indexOf("BridgeCommandTable.chatChannelShellRecordCode(type)")
+        assertTrue("the shellRecord prefix branch comes before the name check (25.52AZ.1)", cred in 0 until shellRecordBranch && shellRecordBranch < name)
+        val migrate = source.indexOf("NativeWallet.migrateLegacy(context)")
+        val pgpDecrypt = source.indexOf("if (type == \"pgpDecryptInbound\")")
         assertTrue("the name check comes before the gate", name in 0 until gate)
+        // 25.52AT.1 (AQ.2, AU.2): the refusals and the name check come before the legacy adoption (a state change) and before the handlers.
+        assertTrue("the name check comes before the legacy adoption", name in 0 until migrate)
+        assertTrue("the legacy adoption comes before the pgpDecryptInbound handler", migrate in 0 until pgpDecrypt)
         assertTrue("the unknown answer is unknown_command", source.contains("unknown_command name="))
         assertFalse("command_rejected is not an answer to a name outside the table (25.52AS.3)", source.contains("\"command_rejected"))
         assertFalse("an unknown name is not counted (25.52AW.2)", source.contains("countUnknown"))

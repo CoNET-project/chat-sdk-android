@@ -97,8 +97,7 @@ class NativePgpCommandTest {
     @Test
     fun theGateDecidesThePgpSignNameByState() {
         // G0 no_key, G1 not_ready, G2 dispatch (the handler runs only in G2).
-        assertEquals("no_key", NoKeyGate.answerFor("pgpSign", NoKeyGate.Gate.G0))
-        assertEquals("not_ready", NoKeyGate.answerFor("pgpSign", NoKeyGate.Gate.G1))
-        assertEquals("dispatch", NoKeyGate.answerFor("pgpSign", NoKeyGate.Gate.G2))
+        // 25.52BP.1 (r3dm): pgpSign is not a bridge name. The module answers unknown_command for it before the gate, in every state.
+        assertFalse("pgpSign is not registered", network.conet.chat.BridgeCommandTable.isRegistered("pgpSign"))
     }
 }

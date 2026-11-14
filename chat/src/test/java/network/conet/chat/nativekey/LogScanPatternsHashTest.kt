@@ -19,7 +19,8 @@ class LogScanPatternsHashTest {
         // The canonical copy interface/protocol/log-scan-patterns.v1.json (spec r3cj, unchanged since r3ch), byte for byte. Previously 90ee2122… (r3ce) and e5d2fa13… (r3cc, which still
         // listed the spec's own hash) and d8cffc70… (r3i, without the chat-route sources).
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        assertEquals("8169b1bb6389afdbccb92a42348a3a323aa99663c0e4d4d05f2e349bf34dae1b", sha)
+        // r3dm (R700, R693): the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
+        assertEquals("884391e5cf81a138dd8b5653ef10dc9a09541d4aeed69f86d97bc9e1bf7e642b", sha)
     }
 
     @Test
@@ -33,6 +34,9 @@ class LogScanPatternsHashTest {
         assertTrue(sums.contains("a26a24cd0397c280295d7b86df8ea27b733682c5166f99c053f18276840d5bd9"))
         // r3ch (25.52AJ.3): one literal exemption for the test directory file name digest (fceaf6c8…), listed by value. 12 entries.
         assertTrue(sums.contains("fceaf6c89021ad554dd855bd11d2cb71f69170a239b19c5cff7d844b071d5c9e"))
+        // r3dm: the no-key and gate vector values are the current ones (R690 rule, 25.52BO and BP).
+        assertTrue(sums.contains("947d0ceb9a62a6817fc5491d79baf5eccf4d3703e00bec5e9b7a4cc549d540dd"))
+        assertTrue(sums.contains("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0"))
         assertEquals(12, entries.length())
     }
 }

@@ -144,9 +144,8 @@ class ChatDaemonCryptoConformanceTest {
     }
 
     /**
-     * 25.52AW.1, AX.1, AY.1 (r3cu, r3cv, r3cw): the envelope is checked first. A missing reqId is bad_request with a null reqId, answered once.
-     * A string reqId is echoed as sent. shellRecordRead on the chat channel is not_supported; an unknown shellRecord* name is unknown_command.
-     * Each request gets exactly one answer.
+     * 25.52AW.1, AX.1, AZ.1 (r3cu, r3cv, r3cx): the envelope is checked first. A missing reqId is bad_request with a null reqId, answered once.
+     * A string reqId is echoed as sent. Any shellRecord* name on the chat channel is not_supported. Each request gets exactly one answer.
      */
     @Test
     fun envelopeAndChatChannelShellRecordAnswerOnce() {
@@ -171,7 +170,41 @@ class ChatDaemonCryptoConformanceTest {
         assertEquals("missing reqId", "bad_request", byId.getValue("null").getString("error"))
         assertTrue("string reqId echoed", byId.getValue("h-1").getBoolean("ok"))
         assertEquals("chat-channel shellRecordRead", "not_supported", byId.getValue("s-1").getString("error"))
-        assertEquals("unknown shellRecord*", "unknown_command", byId.getValue("5").getString("error"))
+        assertEquals("any shellRecord* name on the chat channel (25.52AZ.1, BO.4)", "not_supported", byId.getValue("5").getString("error"))
+    }
+
+    /**
+     * 25.52AT.1 step 2, 25.52AQ.2, BG.3 (r3cu, r3de): a credential field of a CRED command is refused before the gate, in G0 (a fresh install, no key),
+     * with the field name in result.names. The gate would answer no_key for these commands; the refusal comes first. walletStatus afterwards is still
+     * no_key: the refusals change no state. The G1 and later states are not run here.
+     */
+    @Test
+    fun credentialFieldsAreRefusedBeforeTheGateInG0() {
+        val answers = java.util.concurrent.CopyOnWriteArrayList<JSONObject>()
+        val commands = listOf("pgpDecryptInbound", "pgpRestore", "pgpRestoreEvaluate", "pgpIdentityCreate", "provisionIdentity", "init", "pgpMigrate")
+        val latch = CountDownLatch(commands.size + 1)
+        val emit: (JSONObject) -> Unit = { payload ->
+            val event = payload.optJSONObject("event")
+            if (event?.optString("type") == "ack") {
+                answers += event
+                latch.countDown()
+            }
+        }
+        commands.forEach { cmd ->
+            BeamioConetChatModule.handleCommand(context, JSONObject().put("type", cmd).put("reqId", "c-$cmd").put("pin", "123456"), emit)
+        }
+        BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "walletStatus").put("reqId", "ws"), emit)
+        assertTrue(latch.await(10, TimeUnit.SECONDS))
+        Thread.sleep(300)
+        val byId = answers.associateBy { it.get("reqId").toString() }
+        for (cmd in commands) {
+            val a = byId.getValue("c-$cmd")
+            assertEquals("$cmd ok", false, a.getBoolean("ok"))
+            assertEquals("$cmd is refused before the gate", "key_over_bridge_refused", a.getString("error"))
+            val names = a.getJSONObject("result").getJSONArray("names")
+            assertEquals("$cmd names the field (result.names)", "pin", names.getString(0))
+        }
+        assertEquals("the refusals change no state: still G0", "no_key", byId.getValue("ws").getJSONObject("result").getString("status"))
     }
 }
 

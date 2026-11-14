@@ -47,14 +47,11 @@ internal object BridgeCommandTable {
     val CHAT_CHANNEL_SHELL_RECORD: Set<String> = setOf("shellRecordRead", "shellRecordWrite")
 
     /**
-     * The chat-channel answer for a `shellRecord*` name (25.52AY.1, AU.1): `not_supported` for shellRecordRead and shellRecordWrite, `unknown_command`
-     * for any other name with the prefix, and null for a name without it.
+     * The chat-channel answer for a `shellRecord` prefix (25.52AZ.1, BO.4): `not_supported`, once, for every name with the prefix. The rule is
+     * per prefix, not per name. The window channel is different: an unknown `shellRecord*` name there is `unknown_command` (25.52AY.1, AU.1).
+     * Null for a name without the prefix.
      */
-    fun chatChannelShellRecordCode(type: String): String? = when {
-        !type.startsWith(SHELL_RECORD_PREFIX) -> null
-        type in CHAT_CHANNEL_SHELL_RECORD -> "not_supported"
-        else -> UNKNOWN_COMMAND
-    }
+    fun chatChannelShellRecordCode(type: String): String? = if (type.startsWith(SHELL_RECORD_PREFIX)) "not_supported" else null
 
     /** True when [name] is a name the module answers. A name that is not registered is answered `unknown_command` before the gate. */
     fun isRegistered(name: String): Boolean =

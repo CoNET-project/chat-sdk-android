@@ -167,14 +167,9 @@ object BeamioConetChatModule {
             emitEvent(JSONObject().put("type", "ack").put("reqId", JSONObject.NULL).put("ok", false).put("error", "bad_request"))
             return
         }
-        // A pre-upgrade wallet key is adopted before the no-key check, so an upgraded install keeps its wallet even
-        // when the first command is `init` (25.25.6 U-3, U-4). This does nothing once a native record exists or when
-        // no legacy key is left. Only the outcome is logged, never the key.
-        runCatching { NativeWallet.migrateLegacy(context) }
-            .onFailure { Log.w(TAG, "legacy wallet adoption failed: ${it.javaClass.simpleName}") }
-        runCatching { NativeWallet.migrateLegacyPgp(context) }
-            .onFailure { Log.w(TAG, "legacy PGP adoption failed: ${it.javaClass.simpleName}") }
         val type = body.optString("type", "")
+        // Order (25.52AT.1, AU.2, AQ.2): the credential check, the command name, and the chat-channel shell-record answer come before the
+        // legacy adoption, so a refused or unknown request changes no state. The adoption belongs to the gate step; it runs before the gate handlers.
         // 25.52AT.1 step 2 (25.52AQ.2, BG.3: pgpMigrate included): a credential field of a CRED command is refused before the gate, with the field names and no values.
         if (type in CredFields.COMMANDS) {
             val names = CredFields.refusalNames(type, body)
@@ -183,6 +178,26 @@ object BeamioConetChatModule {
                 return
             }
         }
+        // shellRecord* prefix on the chat channel (25.52AZ.1, BO.4): one answer, not_supported, for every name with the prefix. The page records
+        // come only through window.BeamioShellRecord (25.52AA.2).
+        BridgeCommandTable.chatChannelShellRecordCode(type)?.let { code ->
+            ack(echoId(body), false, error = code)
+            return
+        }
+        // 25.52AT.1 step 3, 25.52AS.3, 25.52AT.2: a name outside the bridge command table is `unknown_command` before the gate, in every state
+        // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes. It is not counted (25.52AW.2).
+        if (!BridgeCommandTable.isRegistered(type)) {
+            Log.w(TAG, "unknown_command name=${type.take(64)}")
+            ack(echoId(body), false, error = BridgeCommandTable.UNKNOWN_COMMAND)
+            return
+        }
+        // A pre-upgrade wallet key is adopted before the no-key check, so an upgraded install keeps its wallet even
+        // when the first command is `init` (25.25.6 U-3, U-4). This does nothing once a native record exists or when
+        // no legacy key is left. Only the outcome is logged, never the key.
+        runCatching { NativeWallet.migrateLegacy(context) }
+            .onFailure { Log.w(TAG, "legacy wallet adoption failed: ${it.javaClass.simpleName}") }
+        runCatching { NativeWallet.migrateLegacyPgp(context) }
+            .onFailure { Log.w(TAG, "legacy PGP adoption failed: ${it.javaClass.simpleName}") }
         // pgpDecryptInbound (25.34): reqId first, then the gate, inside the handler. It is not routed through the table.
         if (type == "pgpDecryptInbound") {
             handlePgpDecryptInbound(body)
@@ -191,12 +206,6 @@ object BeamioConetChatModule {
         // identityPublic (25.48): G2 only, read-only. Like pgpDecryptInbound it is decided in its handler, gate first.
         if (type == "identityPublic") {
             identityPublicCommand(body)
-            return
-        }
-        // shellRecord* on the chat channel (25.52AY.1, AU.1, AB.4): one answer. The page records come only through window.BeamioShellRecord
-        // (25.52AA.2), so shellRecordRead and shellRecordWrite here are not_supported. Any other shellRecord* name is unknown_command.
-        BridgeCommandTable.chatChannelShellRecordCode(type)?.let { code ->
-            ack(echoId(body), false, error = code)
             return
         }
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).
@@ -208,13 +217,6 @@ object BeamioConetChatModule {
         // The reqId is echoed as sent (a string or an integer), so the ack does not go through [ack].
         if (type == NativeHistoryDelete.MESSAGE || type == NativeHistoryDelete.CONVERSATION) {
             historyDeleteCommand(context, type, body)
-            return
-        }
-        // 25.52AT.1 step 3, 25.52AS.3, 25.52AT.2: a name outside the bridge command table is `unknown_command` before the gate, in every state
-        // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes. It is not counted (25.52AW.2).
-        if (!BridgeCommandTable.isRegistered(type)) {
-            Log.w(TAG, "unknown_command name=${type.take(64)}")
-            ack(echoId(body), false, error = BridgeCommandTable.UNKNOWN_COMMAND)
             return
         }
         val route = NoKeyGate.route(type)

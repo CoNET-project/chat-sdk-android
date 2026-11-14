@@ -10,7 +10,8 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di) and 25.52BL (r3dj) against `spec/gate-state-vectors.v1.json` (r3dj, sha256 e67ed4cc…, 136 cases).
+ * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v1.json`
+ * (r3dm, sha256 94792dc4…, 133 cases).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  *
  * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an
@@ -27,24 +28,24 @@ class GateStateVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("e67ed4ccd9d19fb3e3f9be4c0b4aa660772287afa88a1458387cef91b7484311", sha256Hex(bytes))
+        assertEquals("94792dc4b2eed210b15caf7be612ce7fb96babb80c0bd74d4edb491ca3eb2da0", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        // r3dj: 136 cases (G0 33, G1 103). G1 allowed commands 67; init 3; shell-layer not gated 26; rejected names 8 (25.52BK, 25.52BL).
-        assertEquals(136, cases.length())
+        // r3dm: 133 cases (G0 32, G1 101). G1 allowed commands 66 (pgpSign removed, 25.52BP.1); init 3; shell-layer not gated 26; rejected names 8.
+        assertEquals(133, cases.length())
         val counts = v.getJSONObject("counts")
-        assertEquals(136, counts.getInt("cases"))
-        assertEquals(67, counts.getInt("g1Commands"))
+        assertEquals(133, counts.getInt("cases"))
+        assertEquals(66, counts.getInt("g1Commands"))
         assertEquals(3, counts.getInt("g1Init"))
         assertEquals(26, counts.getInt("shellNotGatedCases"))
         assertEquals(8, counts.getInt("shellRejectCases"))
         var g0 = 0
         var g1 = 0
         for (i in 0 until cases.length()) if (cases.getJSONObject(i).getString("state") == "G0") g0++ else g1++
-        assertEquals(33, g0)
-        assertEquals(103, g1)
+        assertEquals(32, g0)
+        assertEquals(101, g1)
     }
 
     @Test

@@ -1,7 +1,7 @@
 {
   "file": "gate-state-vectors.v1.json",
   "spec": "spec §25.26.4c（门控状态）与 §25.26.4b（壳层入口），r3g；G1 允许命令新增 nativeAccountCreateOpen（r3x，§25.46.10）",
-  "revision": "spec r3dj（G1 允许命令 67 个，136 项，含 shellNotGated 26 项、拒绝名 8 项）；r3di 为 128 项；r3x 为 102 项；r3g 为原始登记",
+  "revision": "spec r3dl（G1 允许命令 67 个，134 项，含 shellNotGated 26 项、拒绝名 8 项；shellGated 15 项）；r3dj 为 136 项（含 setNativeChatPgpSecrets 2 例，r3dl 删除）；r3di 为 128 项；r3x 为 102 项；r3g 为原始登记",
   "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")；记录 EOA 由此派生。不是真实钱包，禁止用于生产。",
   "recordEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
@@ -17,7 +17,8 @@
     "4. G1：init 核对 EOA，一致则 ok 并进入 G2，不一致或缺失则 address_mismatch；其余一律 not_ready，不读 payload。",
     "5. G2：既有行为。",
     "6. shellNotGated（13 名）：G0、G1 各一例，期望不被门控拒绝（不返回 no_key 或 not_ready）。不规定应答码，应答由各壳动作实现（r3di）。",
-    "7. 壳层拒绝 4 名（notifyVoiceMicReady、queryIncomingCallOutcome、startNativeVoiceMic、cacheCallerAvatars）：G0 回 no_key，G1 回 not_ready，不读 payload（r3dj，R682 读法）。"
+    "7. 壳层拒绝 4 名（notifyVoiceMicReady、queryIncomingCallOutcome、startNativeVoiceMic、cacheCallerAvatars）：G0 回 no_key，G1 回 not_ready，不读 payload（r3dj，R682 读法）。",
+    "8. setNativeChatPgpSecrets 已删除（r3dl，PM R691）：不在本向量内。旧调用按 AU.1 应答 unknown_command。"
   ],
   "shellGated": [
     "prepareSystemCall",
@@ -27,7 +28,6 @@
     "endSystemCall",
     "clearOfflineChatAlerts",
     "notifyBackgroundChat",
-    "setNativeChatPgpSecrets",
     "postPgpCiphertext",
     "setNativeVoiceRelayNodes",
     "setNativeSiNodeRoster",
@@ -154,16 +154,6 @@
       "state": "G1",
       "command": "signMessage",
       "kind": "gossip",
-      "payload": {},
-      "expect": {
-        "code": "not_ready",
-        "payloadRead": false
-      }
-    },
-    {
-      "id": "G1-NK-W6a",
-      "state": "G1",
-      "command": "pgpSign",
       "payload": {},
       "expect": {
         "code": "not_ready",
@@ -930,28 +920,6 @@
       }
     },
     {
-      "id": "G0-SH-setNativeChatPgpSecrets",
-      "state": "G0",
-      "command": "setNativeChatPgpSecrets",
-      "shell": true,
-      "payload": {},
-      "expect": {
-        "code": "no_key",
-        "payloadRead": false
-      }
-    },
-    {
-      "id": "G1-SH-setNativeChatPgpSecrets",
-      "state": "G1",
-      "command": "setNativeChatPgpSecrets",
-      "shell": true,
-      "payload": {},
-      "expect": {
-        "code": "not_ready",
-        "payloadRead": false
-      }
-    },
-    {
       "id": "G0-SH-postPgpCiphertext",
       "state": "G0",
       "command": "postPgpCiphertext",
@@ -1615,12 +1583,12 @@
     }
   ],
   "counts": {
-    "cases": 136,
+    "cases": 133,
     "shellNotGatedCases": 26,
     "shellRejectCases": 8,
-    "g1Commands": 67,
+    "g1Commands": 66,
     "g1Init": 3,
-    "shellGated": 16,
+    "shellGated": 15,
     "shellNotGated": 13
   }
 }
