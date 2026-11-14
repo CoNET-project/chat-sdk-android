@@ -136,7 +136,7 @@ class ShellRecordTest {
             .put("schemaVersion", 2)
             .put("mnemonic", "OTHER")
             .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("emailAddr", "b").put("privateKeyArmor", "EOA")))
-        assertEquals(listOf("mnemonic"), ShellRecordPolicy.mergeWallet(different, stored, ACCOUNT).second)
+        assertEquals(listOf("mnemonic"), ShellRecordPolicy.mergeWallet(different, stored, ACCOUNT).names)
     }
 
     @Test
@@ -181,7 +181,7 @@ class ShellRecordTest {
             .put("rev", 1)
             .put("schemaVersion", 2)
             .put("profiles", JSONArray().put(JSONObject().put("keyID", "0x5555555555555555555555555555555555555555")))
-        assertEquals(listOf("profiles[*].privateKeyArmor"), ShellRecordPolicy.mergeWallet(page, stored, ACCOUNT).second)
+        assertEquals(listOf("profiles[*].privateKeyArmor"), ShellRecordPolicy.mergeWallet(page, stored, ACCOUNT).names)
 
         // Two profiles claim the account: no slot is chosen among them.
         val twice = JSONObject()
@@ -193,7 +193,7 @@ class ShellRecordTest {
                     .put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "A"))
                     .put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "B")),
             )
-        assertEquals(listOf("profiles[*].privateKeyArmor"), ShellRecordPolicy.mergeWallet(twice, twice, ACCOUNT).second)
+        assertEquals(listOf("profiles[*].privateKeyArmor"), ShellRecordPolicy.mergeWallet(twice, twice, ACCOUNT).names)
     }
 
     @Test
@@ -415,23 +415,22 @@ class ShellRecordTest {
     }
 
     @Test
-    fun theMigrationStateCommandAnswersAndRefusesExtraFields() {
+    fun theMigrationStateIsNotAPageCommand() {
+        // §25.52L.6 (D7): the page cannot ask for the migration state. The bridge refuses the command; the native query is separate.
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
             migrationState = { "pending" },
             outcome = { ImportOutcome.ABSENT },
         )
-        val ok = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"), 40)
-        assertEquals("ok", ok.getString("code"))
-        assertEquals("pending", ok.getString("state"))
-        val extra = bridge.handle(
+        val refused = bridge.handle(
             ShellOrigin.EMBEDDED_PAGE,
-            JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s2").put("eoa", "0x1"),
-            60,
+            JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
+            40,
         )
-        assertEquals("bad_request", extra.getString("code"))
-        assertEquals(listOf("eoa"), extra.getJSONArray("names").toList())
+        assertEquals("bad_request", refused.getString("code"))
+        val text = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
+        assertTrue(text.contains("fun migrationState(context: Context): String"))
     }
 
     @Test

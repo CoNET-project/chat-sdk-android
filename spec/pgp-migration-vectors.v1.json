@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bf）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bh）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1791,10 +1791,11 @@
     },
     {
       "id": "TR-08",
-      "title": "W 类（EOA 私钥）写入（已批准，schemaVersion 2）：ok，原生加密副本保存",
+      "title": "W 类（EOA 私钥）写入（已批准，schemaVersion 2，档案 keyID 与账户匹配）：ok，原生加密副本保存",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": null,
       "req": {
@@ -1804,6 +1805,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "privateKeyArmor": "EOA"
             }
           ]
@@ -1820,6 +1822,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "privateKeyArmor": "EOA"
               }
             ]
@@ -2029,6 +2032,158 @@
       "store": null,
       "expect": {
         "code": "absent"
+      }
+    },
+    {
+      "id": "TR-15",
+      "title": "写入含 PGP 公开字段（不在白名单）：bad_request，只记路径名（r3bh，D10）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w12",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chatManager": {
+                "router": "r",
+                "pgpKey": {
+                  "publicKey": "PUB",
+                  "keyID": "K"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].chatManager.pgpKey.publicKey",
+          "profiles[*].chatManager.pgpKey.keyID"
+        ],
+        "reqId": "w12",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-16",
+      "title": "容器子树中的私钥形态键（profiles[*].data）：key_shaped_content（r3bh，D13）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w13",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "data": {
+                "privateKeyArmor": "x"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].data.privateKeyArmor"
+        ],
+        "reqId": "w13",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-17",
+      "title": "容器子树中的 mnemonic 键：key_shaped_content（r3bh，D13）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w14",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "data": {
+                "mnemonic": "m"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].data.mnemonic"
+        ],
+        "reqId": "w14",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-18",
+      "title": "精确路径：chatManager 下的非白名单键：bad_request（r3bh，D13）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w15",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "chatManager": {
+                "router": "r",
+                "extra": "x"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].chatManager.extra"
+        ],
+        "reqId": "w15",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-19",
+      "title": "读回应答超过 2 MB（信封计入）：too_large（r3bh，D14）",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed",
+        "responseBytes": 2097153
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2
+        }
+      },
+      "expect": {
+        "code": "too_large"
       }
     }
   ],
@@ -2401,11 +2556,28 @@
     },
     {
       "id": "PW-03",
-      "title": "写入前：不含 PGP 私钥的记录：发送",
+      "title": "写入前：不含 PGP 字段的记录（页面副本）：发送",
       "record": {
         "profiles": [
           {
             "emailAddr": "a",
+            "chatManager": {
+              "router": "r"
+            }
+          }
+        ]
+      },
+      "expect": {
+        "action": "send",
+        "reason": null
+      }
+    },
+    {
+      "id": "PW-04",
+      "title": "写入前：记录含 PGP 公开字段（不在页面副本内）：页面拒绝发送（r3bh，D10）",
+      "record": {
+        "profiles": [
+          {
             "chatManager": {
               "router": "r",
               "pgpKey": {
@@ -2417,8 +2589,12 @@
         ]
       },
       "expect": {
-        "action": "send",
-        "reason": null
+        "action": "refuse",
+        "reason": "pgp_field_not_allowed",
+        "names": [
+          "profiles[*].chatManager.pgpKey.publicKey",
+          "profiles[*].chatManager.pgpKey.keyID"
+        ]
       }
     }
   ],
@@ -2427,7 +2603,8 @@
       "id": "WM-01",
       "title": "页面写入省略 W 字段：原生保留现有 W 字段（不能以省略删除）",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2436,6 +2613,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA"
             }
@@ -2450,6 +2628,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "b"
             }
           ]
@@ -2466,6 +2645,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "b",
                 "privateKeyArmor": "EOA"
               }
@@ -2479,7 +2659,8 @@
       "id": "WM-02",
       "title": "页面带不同的 W 字段：conflict（reason w_differs），不覆盖，存储不变",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2488,6 +2669,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA"
             }
@@ -2502,6 +2684,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "b",
               "privateKeyArmor": "OTHER"
             }
@@ -2524,6 +2707,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "a",
                 "privateKeyArmor": "EOA"
               }
@@ -2537,7 +2721,8 @@
       "id": "WM-03",
       "title": "首次写入携带 W 字段（原生尚无）：接受",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2546,6 +2731,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a"
             }
           ]
@@ -2558,6 +2744,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a"
             }
           ],
@@ -2575,6 +2762,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "a"
               }
             ],
@@ -2587,7 +2775,8 @@
       "id": "WM-04",
       "title": "页面带相同的 W 字段：接受",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2596,6 +2785,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA"
             }
@@ -2610,6 +2800,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "b",
               "privateKeyArmor": "EOA"
             }
@@ -2628,6 +2819,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "b",
                 "privateKeyArmor": "EOA"
               }
@@ -2641,7 +2833,8 @@
       "id": "WM-05",
       "title": "页面以 null 删除 W 字段：conflict（reason w_differs），存储不变",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1"
       },
       "store": {
         "rev": 1,
@@ -2650,6 +2843,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA"
             }
@@ -2664,6 +2858,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "b",
               "privateKeyArmor": null
             }
@@ -2686,6 +2881,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "a",
                 "privateKeyArmor": "EOA"
               }
@@ -2700,6 +2896,7 @@
       "title": "原生建号或恢复替换 W 字段：接受（页面路径不可替换）",
       "ctx": {
         "origin": "allowed",
+        "eoa": "a1",
         "nativeWrite": true
       },
       "store": {
@@ -2709,6 +2906,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "a",
               "privateKeyArmor": "EOA"
             }
@@ -2723,6 +2921,7 @@
           "schemaVersion": 2,
           "profiles": [
             {
+              "keyID": "a1",
               "emailAddr": "b",
               "privateKeyArmor": "NEW"
             }
@@ -2741,6 +2940,7 @@
             "schemaVersion": 2,
             "profiles": [
               {
+                "keyID": "a1",
                 "emailAddr": "b",
                 "privateKeyArmor": "NEW"
               }
@@ -2749,6 +2949,147 @@
           }
         }
       }
+    },
+    {
+      "id": "WM-07",
+      "title": "D5：存储含 W 字段，写入 schemaVersion 1（或缺失）一律拒绝：wallet_copy_not_approved，存储不变",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m7",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "wallet_copy_not_approved",
+        "names": [
+          "profiles[*].privateKeyArmor",
+          "mnemonic"
+        ],
+        "reqId": "m7",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-08",
+      "title": "D6：W 字段所在档案的 keyID 与账户不匹配：conflict（reason w_account_unmatched）",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m8",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "zz",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 1,
+        "reason": "w_account_unmatched",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "m8",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    }
+  ],
+  "formatCases": [
+    {
+      "id": "FM-01",
+      "title": "AAD 为小写 \"eoa:workspace\" 加 1 个版本字节（十六进制）"
+    },
+    {
+      "id": "FM-02",
+      "title": "文件布局：版本 1 字节、nonce 12 字节、密文 n 字节、tag 16 字节；总长 29 + n"
+    },
+    {
+      "id": "FM-03",
+      "title": "版本字节不是 0x01：record_unreadable，不解密"
+    },
+    {
+      "id": "FM-04",
+      "title": "文件属于另一个账户（AAD 不符）：record_unreadable，不解密，不返回 absent"
+    },
+    {
+      "id": "FM-05",
+      "title": "文件长度不足 29 字节：record_unreadable"
     }
   ],
   "importCases": [
@@ -3492,7 +3833,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 113,
+    "runs": 126,
     "result": "pass"
   }
 }

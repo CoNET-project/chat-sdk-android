@@ -26,11 +26,12 @@ class ShellRecordVectorsTest {
 
     @Test
     fun theShellRecordGroupsMatchTheSpec() {
-        assertEquals(14, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(19, doc.getJSONArray("shellRecordCases").length())
         assertEquals(7, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
-        assertEquals(3, doc.getJSONArray("pageRefuseCases").length())
-        assertEquals(6, doc.getJSONArray("walletMergeCases").length())
+        assertEquals(4, doc.getJSONArray("pageRefuseCases").length())
+        assertEquals(8, doc.getJSONArray("walletMergeCases").length())
+        assertEquals(5, doc.getJSONArray("formatCases").length())
     }
 
     @Test
@@ -94,20 +95,24 @@ class ShellRecordVectorsTest {
             val c = list.getJSONObject(i)
             val record = c.getJSONObject("record")
             val expect = c.getJSONObject("expect")
-            // Page reference: the header first (reason pgp_header), then a forbidden path (pgp_path, with names).
+            val id = c.getString("id")
+            // Page reference (§25.52I.3, §25.52L.8): the header first (pgp_header), then a forbidden path (pgp_path), then a PGP public
+            // field (pgp_field_not_allowed, PW-04). A copy without PGP fields is sent (PW-03).
+            val publicFields = ShellRecordPolicy.pathsOf(record).filter { it.startsWith("profiles[*].chatManager.pgpKey.") }.sorted()
             val (action, reason, names) = when {
                 ShellRecordPolicy.hasPgpHeader(record) -> Triple("refuse", "pgp_header", emptyList())
                 ShellRecordPolicy.forbiddenIn(record).isNotEmpty() ->
                     Triple("refuse", "pgp_path", ShellRecordPolicy.forbiddenIn(record))
+                publicFields.isNotEmpty() -> Triple("refuse", "pgp_field_not_allowed", publicFields)
                 else -> Triple("send", null, emptyList())
             }
-            val id = c.getString("id")
             if (action != expect.getString("action")) failures += "$id: action $action"
             if (expect.has("reason") && reason != expect.opt("reason").takeIf { it != JSONObject.NULL }) failures += "$id: reason $reason"
-            if (expect.has("names") && names != expect.getJSONArray("names").toList()) failures += "$id: names $names"
-            // Native half (§25.52E.5): the same records are refused by the bridge's own check.
-            val native = ShellRecordPolicy.preWriteRefusal(record)
-            if ((native != null) != (action == "refuse")) failures += "$id: native refusal $native"
+            if (expect.has("names") && names.sorted() != expect.getJSONArray("names").toList().sorted()) failures += "$id: names $names"
+            // Native half (§25.52E.5, §25.52L.8): the bridge refuses the same records; the PGP public fields come back as bad_request (TR-15).
+            val nativeRefused = ShellRecordPolicy.preWriteRefusal(record) != null ||
+                ShellRecordPolicy.whitelistViolations(record).any { ".pgpKey." in it }
+            if (nativeRefused != (action == "refuse")) failures += "$id: native refusal $nativeRefused"
         }
         assertEquals(emptyList<String>(), failures)
     }
@@ -116,7 +121,12 @@ class ShellRecordVectorsTest {
     private fun runBridgeCase(c: JSONObject): List<String> {
         val ctx = c.optJSONObject("ctx") ?: JSONObject()
         val h = Harness(migrating = ctx.optBoolean("migrating"))
-        c.optJSONObject("store")?.let { h.store.write(JSONObject(it.getJSONObject("record").toString())) }
+        c.optJSONObject("store")?.let { seed ->
+            val record = mapLabels(seed.getJSONObject("record")) as JSONObject
+            // TR-19: a stored copy whose read answer is larger than 2 MB once the envelope is counted.
+            if (ctx.has("responseBytes")) record.put("padding", "x".repeat(ctx.getInt("responseBytes")))
+            h.store.write(record)
+        }
         val before = canon(h.store.readOrNull())
         // The write fault is armed after the seed, so the seed itself is never the failing write.
         h.files.failWrites = ctx.optBoolean("writeFailed")
@@ -125,7 +135,7 @@ class ShellRecordVectorsTest {
         // The wallet-merge cases carry no kind: they are all writes.
         val kind = c.optString("kind", "write")
         val body = JSONObject().put("type", if (kind == "read") "shellRecordRead" else "shellRecordWrite")
-        c.optJSONObject("req")?.let { req -> for (k in req.keys()) body.put(k, req.get(k)) }
+        (mapLabels(c.optJSONObject("req")) as? JSONObject)?.let { req -> for (k in req.keys()) body.put(k, req.get(k)) }
         if (!body.has("reqId") && kind == "read") body.put("reqId", "r0")
         val size = if (ctx.has("sizeBytes")) ctx.getInt("sizeBytes") else body.toString().toByteArray(Charsets.UTF_8).size
         val resp = h.bridge().handle(origin, body, size, nativeWrite = ctx.optBoolean("nativeWrite"))
@@ -148,7 +158,7 @@ class ShellRecordVectorsTest {
             if (got != want) out += "names $got != $want"
         }
         if (expect.has("record")) {
-            if (canon(resp.opt("record")) != canon(expect.get("record"))) out += "record ${resp.opt("record")}"
+            if (canon(resp.opt("record")) != canon(mapLabels(expect.get("record")))) out += "record ${resp.opt("record")}"
         }
         if (expect.has("walletFieldsRedacted") && resp.optBoolean("walletFieldsRedacted") != expect.getBoolean("walletFieldsRedacted")) {
             out += "walletFieldsRedacted"
@@ -161,7 +171,7 @@ class ShellRecordVectorsTest {
                 if (canon(after) != before) out += "store changed: ${canon(after)}"
             } else {
                 val want = wantStore as JSONObject
-                if (canon(after) != canon(want.get("record"))) out += "store ${canon(after)} != ${canon(want.get("record"))}"
+                if (canon(after) != canon(mapLabels(want.get("record")))) out += "store ${canon(after)} != ${canon(mapLabels(want.get("record")))}"
                 if (after?.optInt("rev", -1) != want.getInt("rev")) out += "store rev"
             }
         }
@@ -253,7 +263,7 @@ class ShellRecordVectorsTest {
     }
 
     private fun mapLabel(label: String): String = when (label) {
-        "A1" -> ACCOUNT
+        "A1", "a1" -> ACCOUNT
         "A2" -> OTHER
         else -> label
     }
