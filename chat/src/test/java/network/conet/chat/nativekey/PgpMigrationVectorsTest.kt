@@ -45,15 +45,16 @@ class PgpMigrationVectorsTest {
 
     @Test
     fun theCountsAreThoseOfTheSpec() {
-        // r3ay: 36 state cases (42 steps), 6 PWA event cases, 13 shell-record cases, 6 read, 2 write, 3 refusal, 7 source,
-        // 6 unregister cases (7 steps), 6 migration-state cases.
+        // r3bb: 36 state cases (42 steps), 6 PWA event cases, 14 shell-record cases, 7 read, 2 write, 3 refusal, 6 wallet merge,
+        // 7 source, 6 unregister cases (7 steps), 6 migration-state cases. The shell-record and merge groups run in ShellRecordVectorsTest.
         assertEquals(36, cases.length())
         assertEquals(42, (0 until cases.length()).sumOf { cases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(6, doc.getJSONArray("pwaEventCases").length())
-        assertEquals(13, doc.getJSONArray("shellRecordCases").length())
-        assertEquals(6, doc.getJSONArray("pageReadCases").length())
+        assertEquals(14, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(7, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
         assertEquals(3, doc.getJSONArray("pageRefuseCases").length())
+        assertEquals(6, doc.getJSONArray("walletMergeCases").length())
         assertEquals(7, sourceCases.length())
         assertEquals(6, unregisterCases.length())
         assertEquals(7, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
@@ -355,7 +356,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3ay (§25.52E.8). */
-        const val PINNED_SHA256 = "ba817cf7b9f718f9222024c721945b99412fafc20652a1c137d6af6453c27fbb"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bb (§25.52H.8). */
+        const val PINNED_SHA256 = "3f9cf260b3d01cc276ff6dbad43c0baa605b980cfbb4ae4b7e74fc0acf061138"
     }
 }

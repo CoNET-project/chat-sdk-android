@@ -171,6 +171,12 @@ object BeamioConetChatModule {
             identityPublicCommand(body)
             return
         }
+        // shellRecord* (r3az §25.52D.5): answered only by BeamioShellRecordImport.handle, with the origin the shell verified.
+        // Through this generic bridge there is no verified origin, so the names are refused here.
+        if (type.startsWith("shellRecord")) {
+            ack(body.optInt("reqId", -1), false, error = "origin_refused")
+            return
+        }
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).
         if (type == "pgpMigrate") {
             pgpMigrateCommand(body)

@@ -1,9 +1,9 @@
 {
   "meta": {
     "file": "pgp-migration-vectors.v1.json",
-    "spec": "interface/spec.md §25.52E（r3ax；§25.52D 与其余各节中有差异处以 §25.52E 为准）",
+    "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3ax）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bb）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1791,15 +1791,52 @@
     },
     {
       "id": "TR-08",
-      "title": "W 类（EOA 私钥）未批准：wallet_copy_not_approved，存储不变",
+      "title": "W 类（EOA 私钥）写入（已批准，schemaVersion 2）：ok，原生加密副本保存",
       "kind": "write",
       "ctx": {
-        "origin": "allowed",
-        "walletCopyApproved": false
+        "origin": "allowed"
       },
       "store": null,
       "req": {
         "reqId": "w5",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 1,
+        "reqId": "w5",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-08b",
+      "title": "W 类写入，旧版本兼容路径（schemaVersion 1）：wallet_copy_not_approved，存储不变",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w5b",
         "record": {
           "rev": 0,
           "schemaVersion": 1,
@@ -1815,7 +1852,7 @@
         "names": [
           "profiles[*].privateKeyArmor"
         ],
-        "reqId": "w5",
+        "reqId": "w5b",
         "store": null
       }
     },
@@ -1941,16 +1978,38 @@
     },
     {
       "id": "TR-12",
-      "title": "页面记录初始化被阻塞（W 类未批准）：读取为 error，不返回 absent",
+      "title": "读回剥离 W 类字段（EOA 私钥、助记词不经 WebView 回传），标注 walletFieldsRedacted",
       "kind": "read",
       "ctx": {
-        "origin": "allowed",
-        "initBlocked": true
+        "origin": "allowed"
       },
-      "store": null,
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonic": "M",
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
       "expect": {
-        "code": "error",
-        "sub": "wallet_copy_not_approved"
+        "code": "ok",
+        "schemaVersion": 1,
+        "walletFieldsRedacted": true,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a"
+            }
+          ]
+        }
       }
     },
     {
@@ -2192,13 +2251,34 @@
     },
     {
       "id": "RD-04",
-      "title": "读回 error（wallet_copy_not_approved）：失败关闭",
+      "title": "读回 error（wallet_copy_not_approved，旧版兼容码）：失败关闭",
       "resp": {
         "code": "error",
         "sub": "wallet_copy_not_approved"
       },
       "expect": {
         "action": "fail_closed"
+      }
+    },
+    {
+      "id": "RD-07",
+      "title": "读回 ok，W 类字段已剥离：接受（accept_redacted），页面不把缺失的 W 字段当作不存在",
+      "resp": {
+        "code": "ok",
+        "walletFieldsRedacted": true,
+        "record": {
+          "rev": 2,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "action": "accept_redacted",
+        "rev": 2
       }
     },
     {
@@ -2315,6 +2395,335 @@
       "expect": {
         "action": "send",
         "reason": null
+      }
+    }
+  ],
+  "walletMergeCases": [
+    {
+      "id": "WM-01",
+      "title": "页面写入省略 W 字段：原生保留现有 W 字段（不能以省略删除）",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m1",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "m1",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "b",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-02",
+      "title": "页面带不同的 W 字段：conflict（reason w_differs），不覆盖，存储不变",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m2",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "b",
+              "privateKeyArmor": "OTHER"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 1,
+        "reason": "w_differs",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "m2",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-03",
+      "title": "首次写入携带 W 字段（原生尚无）：接受",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "m3",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "m3",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "a"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-04",
+      "title": "页面带相同的 W 字段：接受",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m4",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "b",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "m4",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "b",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-05",
+      "title": "页面以 null 删除 W 字段：conflict（reason w_differs），存储不变",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m5",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "b",
+              "privateKeyArmor": null
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 1,
+        "reason": "w_differs",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "m5",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonic": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-06",
+      "title": "原生建号或恢复替换 W 字段：接受（页面路径不可替换）",
+      "ctx": {
+        "origin": "allowed",
+        "nativeWrite": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonic": "M"
+        }
+      },
+      "req": {
+        "reqId": "m6",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "emailAddr": "b",
+              "privateKeyArmor": "NEW"
+            }
+          ],
+          "mnemonic": "N2"
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "m6",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "emailAddr": "b",
+                "privateKeyArmor": "NEW"
+              }
+            ],
+            "mnemonic": "N2"
+          }
+        }
       }
     }
   ],
@@ -2514,7 +2923,7 @@
     "unregister_refused"
   ],
   "selfCheck": {
-    "runs": 92,
+    "runs": 100,
     "result": "pass"
   }
 }
