@@ -21,6 +21,12 @@ internal object NativeDerivationCommands {
     /** W4: at most 64 `(seq, prevCid)` pairs per call (§25.3, §25.43.5). */
     const val MAX_BATCH = 64
 
+    /** W4 (r3cb, §25.43.5): zero pairs is `bad_batch`. */
+    const val BAD_BATCH = "bad_batch"
+
+    /** W4 (r3cb, §25.43.5): more than [MAX_BATCH] pairs refuses the whole batch, with no truncation and no partial derivation. */
+    const val BATCH_TOO_LARGE = "batch_too_large"
+
     private const val WORKSPACE = "default"
     private val EOA_RE = Regex("^0x[0-9a-f]{40}$")
 
@@ -97,7 +103,9 @@ internal object NativeDerivationCommands {
     fun fragmentKeys(key: ByteArray, accountKey: String, batch: JSONArray?, vaultEoa: String): Outcome {
         val (eoa, error) = accountOf(accountKey, vaultEoa)
         if (error != null) return Outcome.fail(error)
-        if (batch == null || batch.length() == 0 || batch.length() > MAX_BATCH) return Outcome.fail(BAD_REQUEST)
+        // r3cb: zero pairs is bad_batch; more than MAX_BATCH refuses the whole batch before any key is derived (no truncation).
+        if (batch == null || batch.length() == 0) return Outcome.fail(BAD_BATCH)
+        if (batch.length() > MAX_BATCH) return Outcome.fail(BATCH_TOO_LARGE)
         val signature = NativeDerivation.historySignature(key, eoa!!) ?: return Outcome.fail(LOCKED)
         val rProto = NativeDerivation.protocolRoot(signature)
         val out = JSONArray()

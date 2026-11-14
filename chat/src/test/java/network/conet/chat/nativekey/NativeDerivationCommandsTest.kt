@@ -93,11 +93,38 @@ class NativeDerivationCommandsTest {
 
     @Test
     fun w4RefusesABatchOutsideOneToSixtyFour() {
-        assertEquals(NativeDerivationCommands.BAD_REQUEST, NativeDerivationCommands.fragmentKeys(p, accountKey, null, eoa).error)
-        assertEquals(NativeDerivationCommands.BAD_REQUEST, NativeDerivationCommands.fragmentKeys(p, accountKey, JSONArray(), eoa).error)
+        // r3cb D-13 (T-375): zero pairs is bad_batch, and derives nothing.
+        assertEquals(NativeDerivationCommands.BAD_BATCH, NativeDerivationCommands.fragmentKeys(p, accountKey, null, eoa).error)
+        assertEquals(NativeDerivationCommands.BAD_BATCH, NativeDerivationCommands.fragmentKeys(p, accountKey, JSONArray(), eoa).error)
+        // r3cb D-12 (T-374): 65 pairs refuse the whole batch as batch_too_large, with no truncation and no key in the reply.
         val tooMany = JSONArray()
         repeat(NativeDerivationCommands.MAX_BATCH + 1) { tooMany.put(JSONObject().put("seq", it).put("prevCid", "c")) }
-        assertEquals(NativeDerivationCommands.BAD_REQUEST, NativeDerivationCommands.fragmentKeys(p, accountKey, tooMany, eoa).error)
+        val refused = NativeDerivationCommands.fragmentKeys(p, accountKey, tooMany, eoa)
+        assertEquals(NativeDerivationCommands.BATCH_TOO_LARGE, refused.error)
+        assertNull(refused.result)
+    }
+
+    @Test
+    fun w4DerivesASixtyFourPairBatchInOrderAndMatchesD11() {
+        // r3cb D-11 (T-373): all 64 pairs derive, in input order, and the first two match D-04 and D-05.
+        val expect = cases.getValue("D-11")
+        val pairs = expect.getJSONArray("pairs")
+        val keysExpected = expect.getJSONArray("keys")
+        assertEquals(NativeDerivationCommands.MAX_BATCH, pairs.length())
+        assertEquals(keysExpected.length(), pairs.length())
+        val batch = JSONArray()
+        for (i in 0 until pairs.length()) {
+            val pair = pairs.getJSONObject(i)
+            batch.put(JSONObject().put("seq", pair.getInt("seq")).put("prevCid", pair.getString("prevCid")))
+        }
+        val keys = NativeDerivationCommands.fragmentKeys(p, accountKey, batch, eoa).result!!.getJSONArray("fragKeys")
+        assertEquals(pairs.length(), keys.length())
+        for (i in 0 until keys.length()) {
+            assertEquals("pair $i", pairs.getJSONObject(i).getInt("seq"), keys.getJSONObject(i).getInt("seq"))
+            assertEquals("key $i", keysExpected.getString(i), keys.getJSONObject(i).getString("fragKey"))
+        }
+        assertEquals(cases.getValue("D-04").getString("fragKey"), keys.getJSONObject(0).getString("fragKey"))
+        assertEquals(cases.getValue("D-05").getString("fragKey"), keys.getJSONObject(1).getString("fragKey"))
     }
 
     @Test
