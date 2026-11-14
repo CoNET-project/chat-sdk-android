@@ -179,6 +179,11 @@ internal class NativePgpVault(
         if (!PURPOSE_RE.matches(purposeId) || purposeId !in registry) {
             return NativePgp.Outcome.fail("purpose_not_registered")
         }
+        // 25.27.6 step 2a (r3em, CM.2): a text signature (0x01) must not carry a CR. The SDK builds the internal messages without one, so this
+        // is an assertion. It comes before the key is opened.
+        if (sigType == NativePgp.SIG_CANONICAL_TEXT && message.contains(0x0D.toByte())) {
+            return NativePgp.Outcome.fail("message_contains_cr")
+        }
         val unlocked = unlock() ?: return refusal()
         val secret = NativePgp.parseSecret(unlocked.privateArmor)
             ?: return NativePgp.Outcome.fail("bad_pgp_key")

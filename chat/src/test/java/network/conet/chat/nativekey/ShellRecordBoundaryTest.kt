@@ -85,7 +85,8 @@ class ShellRecordBoundaryTest {
 
     @Test
     fun anUnverifiedChatChannelRequestGetsNoReplyWhateverItAsks() {
-        // R476, §25.52AB.5: the chat-module channel has no verified origin. Nothing is processed and nothing is sent, for any reqId or type.
+        // 25.52CM.3 (r3em): the SDK does not receive or check the origin of the chat channel. The shell checks it before calling the SDK, and does not
+        // forward an entry whose origin it cannot get. This test checks the shared code of the chat channel for each request, not the origin.
         val bodies = listOf(
             request("r1"),
             JSONObject().put("type", "shellRecordWrite").put("reqId", "w1").put("record", JSONObject().put("rev", 0).put("schemaVersion", 2)),

@@ -149,6 +149,22 @@ class NativePgpCommandTest {
     }
 
     @Test
+    fun aTextSignatureWithACRIsRefusedAfterThePurposeAndBeforeAnyKeyIsOpened() {
+        // 25.27.6 step 2a (r3em, CM.2): a text signature (0x01) whose message holds a CR is message_contains_cr. The purpose is judged first,
+        // and no key is opened for the refusal. The binary type 0x00 is not affected by a CR.
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        val vault = NativePgpVault(wrap, files, SYN_EOA)
+        assertEquals(NativePgpVault.Put.OK, vault.put("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa", ecc().getString("privateArmored"), ecc().getString("passphrase")))
+        val withCr = "YQ0KYg==" // "a\r\nb"
+        wrap.opens = 0
+        assertEquals("message_contains_cr", NativeWalletCommands.pgpSign(vault, purpose, withCr, 0x01, registry).code)
+        assertEquals("the purpose is judged first", "purpose_not_registered", NativeWalletCommands.pgpSign(vault, "notRegistered", withCr, 0x01, registry).code)
+        assertEquals("no key is opened for the refusal", 0, wrap.opens)
+        assertTrue("the binary type is not refused for a CR", NativeWalletCommands.pgpSign(vault, purpose, withCr, 0x00, registry).code != "message_contains_cr")
+    }
+
+    @Test
     fun theGateDecidesThePgpSignNameByState() {
         // G0 no_key, G1 not_ready, G2 dispatch (the handler runs only in G2).
         // 25.52BP.1 (r3dm): pgpSign is not a bridge name. The module answers unknown_command for it before the gate, in every state.
