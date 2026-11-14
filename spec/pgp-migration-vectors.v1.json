@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3br）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bs）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1627,7 +1627,8 @@
       "title": "reqId 缺失：bad_request，reqId 回为 null",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -1648,6 +1649,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "sizeBytes": 2097153
       },
       "store": null,
@@ -1727,7 +1729,8 @@
       "title": "任一字符串值含 PGP 私钥头（聊天记录内）：pgp_private_in_payload",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -1760,7 +1763,8 @@
       "title": "禁止路径 chatManager.pgpKey.privateKey：pgp_private_in_payload，只记路径名",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -1795,6 +1799,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -1835,7 +1840,8 @@
       "title": "W 类写入，旧版本兼容路径（schemaVersion 1）：wallet_copy_not_approved，存储不变",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -1864,7 +1870,8 @@
       "title": "白名单外字段：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -1893,7 +1900,8 @@
       "title": "合法写入：ok，rev 递增；随后读取返回新 rev",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2043,7 +2051,8 @@
       "title": "写入含 PGP 公开字段（不在白名单）：bad_request，只记路径名（r3bh，D10）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2079,7 +2088,8 @@
       "title": "容器子树中的私钥形态键（profiles[*].data）：key_shaped_content（r3bh，D13）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2111,7 +2121,8 @@
       "title": "容器子树中的 mnemonic 键：key_shaped_content（r3bh，D13）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2143,7 +2154,8 @@
       "title": "精确路径：chatManager 下的非白名单键：bad_request（r3bh，D13）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2196,6 +2208,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2274,7 +2287,8 @@
       "title": "顶层 mnemonic（旧名，非精确 W 路径）：key_shaped_content，只记路径名（r3bj）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2305,7 +2319,8 @@
       "title": "walletVault.mnemonic（已移出白名单）：key_shaped_content，只记路径名（r3bj）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2337,7 +2352,8 @@
       "title": "beamio 下的 PGP 公开字段（beamio 不在白名单）：bad_request，只记路径名（r3bj）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2365,6 +2381,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2448,6 +2465,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2482,6 +2500,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2517,6 +2536,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2550,7 +2570,8 @@
       "title": "encryptedString（恢复备份，不在白名单）：bad_request，只记路径名（r3bk）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2575,7 +2596,8 @@
       "title": "duplicatePassword（旧版秘密字段，非 W）：key_shaped_content，只记路径名（r3bk，r3bl 改用此名）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2600,7 +2622,8 @@
       "title": "多个非白名单字段：整条拒绝，names 列全部路径（按 UTF-8 字节序），不静默丢弃（r3bk，R427 第 3 点）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2708,6 +2731,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2750,7 +2774,8 @@
       "title": "recoveryWords 在 schemaVersion 1 中：wallet_copy_not_approved，存储不变（r3bl，R428）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2776,6 +2801,7 @@
       "kind": "write",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1"
       },
       "store": null,
@@ -2865,7 +2891,8 @@
       "title": "chats 子树中的 chatData.publicArmored（PGP 公开）：bad_request，只记路径名（r3bm）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2902,7 +2929,8 @@
       "title": "chats 子树中的 routePgpKeyID 与 routersArmoreds（PGP 公开）：bad_request，路径名按 UTF-8 字节序（r3bm）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -2990,7 +3018,8 @@
       "title": "passcode（整体不在白名单，清单仅列顶层 passcode）：bad_request，路径名按 UTF-8 字节序（r3bp，撤销 r3bm 的 passcode.status）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -3019,7 +3048,8 @@
       "title": "duplicateMnemonicPhrase（助记词副本，非 W）：key_shaped_content，只记路径名（r3bm）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -3044,7 +3074,8 @@
       "title": "fragmentClass 与 search（明文，暂定容器）：ok（r3bm）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -3084,7 +3115,8 @@
       "title": "beamio.pgpPublicKeyID（PGP 公开）：bad_request，只记路径名（r3bm）",
       "kind": "write",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -5112,7 +5144,8 @@
       "kind": "write",
       "reqId": "w1",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -5170,7 +5203,8 @@
       "kind": "write",
       "reqId": "w3",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -5203,7 +5237,8 @@
       "kind": "write",
       "reqId": "x13",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "legacy": "absent"
       },
       "store": null,
       "req": {
@@ -5226,6 +5261,7 @@
       "reqId": "w4",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "sizeBytes": 2097153
       },
       "store": null,
@@ -5481,6 +5517,7 @@
       "reqId": "w22",
       "ctx": {
         "origin": "allowed",
+        "legacy": "absent",
         "eoa": "a1",
         "nativeWrite": true
       },
@@ -5515,6 +5552,151 @@
             "profiles[*].chatManager.pgpKey.keyID",
             "profiles[*].chatManager.pgpKey.publicKey"
           ]
+        }
+      }
+    },
+    {
+      "id": "AK-23",
+      "title": "未完成读取（旧存储未读取）、原生记录为空：写入一律拒绝为 migrating（r3bs，R442 第 3 条）",
+      "kind": "write",
+      "reqId": "w23",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w23",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w23",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-24",
+      "title": "旧记录已找到、导入未完成：写入拒绝为 migrating，不覆盖旧数据（r3bs）",
+      "kind": "write",
+      "reqId": "w24",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "found"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w24",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w24",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-25",
+      "title": "旧存储不可读：写入拒绝为 migrating（r3bs）",
+      "kind": "write",
+      "reqId": "w25",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "unreadable"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w25",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w25",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-26",
+      "title": "原生记录存在（读取已为 ok）：写入按 rev 正常处理（r3bs）",
+      "kind": "write",
+      "reqId": "w26",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w26",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w26",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 2
+        }
+      }
+    },
+    {
+      "id": "AK-27",
+      "title": "指针存在而记录为空：写入拒绝为 migrating，不新建记录（r3bs）",
+      "kind": "write",
+      "reqId": "w27",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "absent",
+        "pointer": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w27",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w27",
+        "ok": true,
+        "result": {
+          "code": "migrating"
         }
       }
     }
@@ -5907,7 +6089,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 188,
+    "runs": 193,
     "result": "pass"
   }
 }

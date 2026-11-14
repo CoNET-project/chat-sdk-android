@@ -55,10 +55,23 @@ enum class ShellImportCode(val wire: String) {
     LEGACY_UNREADABLE("legacy_unreadable"),
     IMPORT_FAILED("import_failed"),
     ADDRESS_MISMATCH("address_mismatch"),
+
+    /** An account that is not a canonical EOA: no profile can match it, so nothing is read or written (R444, fail closed). */
+    ACCOUNT_MISMATCH("account_mismatch"),
 }
 
 /** What the import has established for the page store, read by the bridge (§25.52K.4). `null` means the import has not run. */
-internal enum class ImportOutcome { ABSENT, LEGACY_UNREADABLE, NOT_DONE, DONE }
+internal enum class ImportOutcome {
+    ABSENT,
+    LEGACY_UNREADABLE,
+
+    /** The legacy record was found and its import did not finish (§25.52K.5): the only case of `import_not_done`. */
+    NOT_DONE,
+    DONE,
+
+    /** The account is not a canonical EOA: the legacy store is not read; reads answer account_mismatch, writes wait (R444). */
+    ACCOUNT_MISMATCH,
+}
 
 /** The wallet-field merge (§25.52H.2): the merged record, the conflicting paths (sorted) and the reason when there is a conflict. */
 internal data class WalletMerge(val record: JSONObject, val names: List<String>, val reason: String?)
@@ -764,8 +777,9 @@ internal class ShellImportFlow(
 
     private fun importWallet(eoa: String, wallet: LegacyWalletRecord): ShellImportCode {
         if (!PgpMigrationPolicy.EOA_RE.matches(eoa)) {
-            outcome.set(ImportOutcome.NOT_DONE)
-            return ShellImportCode.ADDRESS_MISMATCH
+            // R444: the legacy store is not read for an account that cannot match any profile. This is account_mismatch, not import_not_done.
+            outcome.set(ImportOutcome.ACCOUNT_MISMATCH)
+            return ShellImportCode.ACCOUNT_MISMATCH
         }
         val store = storeFor(eoa)
         // §25.52K.3 step 1: an existing copy is never imported over (IM-07). An unreadable copy is existing too.
@@ -910,17 +924,20 @@ internal class ShellRecordBridge(
                 val rev = current.opt("rev") as? Int ?: return reply("error", listOf("sub" to "record_unreadable"))
                 // §25.52U.5: a record is the source of truth. It clears the device marker, and repairs an empty account pointer when a
                 // profile matches the account. The marker has no say while a record exists.
-                repairFlags(current, acc.eoa)
+                // §25.52S.3, §25.52U.4: a schema 2 copy is judged against the account's profile (needs_native_recovery, account_mismatch).
+                val judgement = if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN) {
+                    ShellRecordPolicy.accountJudgement(current, acc.eoa)
+                } else {
+                    null
+                }
+                repairFlags(current, acc.eoa, valid = judgement == null)
                 ShellRecordPolicy.stripPgpForRead(current)
                 val out = reply(
                     "ok",
                     listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
                 )
                 if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
-                // §25.52S.3, §25.52U.4: a schema 2 copy is judged against the account's profile (needs_native_recovery, account_mismatch).
-                if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN) {
-                    ShellRecordPolicy.accountJudgement(current, acc.eoa)?.let { sub -> return reply("error", listOf("sub" to sub)) }
-                }
+                judgement?.let { sub -> return reply("error", listOf("sub" to sub)) }
                 return out
             }
         }
@@ -928,9 +945,9 @@ internal class ShellRecordBridge(
     }
 
     /** The flags a readable record sets: the marker is cleared, and an empty pointer is repaired when a profile matches (§25.52U.5). */
-    private fun repairFlags(record: JSONObject, eoa: String) {
+    private fun repairFlags(record: JSONObject, eoa: String, valid: Boolean) {
         try {
-            flags.clearLegacyUnreadable()
+            if (valid) flags.clearLegacyUnreadable()
             if (!flags.accountPointer() && ShellRecordPolicy.matchingProfiles(record, eoa).isNotEmpty()) flags.setAccountPointer()
         } catch (_: IOException) {
             // The flags are not critical for a readable record: the next read repairs them.
@@ -958,6 +975,7 @@ internal class ShellRecordBridge(
                 reply("error", listOf("sub" to "legacy_store_unreadable"))
             }
             ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
+            ImportOutcome.ACCOUNT_MISMATCH -> reply("error", listOf("sub" to "account_mismatch"))
         }
     }
 
@@ -1013,20 +1031,14 @@ internal class ShellRecordBridge(
         // Step 6: migrating. Step 7: the revision. The first write carries rev 0 (§25.52E.3).
         if (migrating()) return reply("migrating", emptyList())
         if (current == null) {
-            // No native record (§25.52T.3, §25.52T.5, AK-15): the first write only once the legacy store is confirmed absent, and never
-            // on a device that has an account pointer. Never a new wallet on a failure.
-            if (flags.accountPointer()) return reply("error", listOf("sub" to "account_record_missing"))
+            // §25.52W.3, AK-23 to AK-25, AK-27, R445: with no native record, a write waits for a completed read. A pointer, a marker, or any
+            // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed
+            // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
+            if (flags.accountPointer() || flags.legacyUnreadable()) return reply("migrating", emptyList())
             when (outcome()) {
-                null -> return reply("migrating", emptyList())
-                ImportOutcome.ABSENT -> {
-                    if (store == null) return reply("error", listOf("sub" to "no_key"))
-                    flags.clearLegacyUnreadable()
-                }
-                ImportOutcome.LEGACY_UNREADABLE -> {
-                    flags.setLegacyUnreadable()
+                ImportOutcome.ABSENT -> if (store == null) return reply("error", listOf("sub" to "no_key"))
+                null, ImportOutcome.LEGACY_UNREADABLE, ImportOutcome.NOT_DONE, ImportOutcome.DONE, ImportOutcome.ACCOUNT_MISMATCH ->
                     return reply("migrating", emptyList())
-                }
-                ImportOutcome.NOT_DONE, ImportOutcome.DONE -> return reply("error", listOf("sub" to "import_not_done"))
             }
         }
         val target = store ?: return reply("error", listOf("sub" to "no_key"))

@@ -118,9 +118,18 @@ class ShellRecordVectorsTest {
     }
 
     /** One bridge case: the store seeded from `store`, the request from `req`, the context from `ctx`, then the expectations. */
+    /** The reader state of a case (§25.52W.7): `legacy` absent, empty, unreadable, found; no state means the legacy store was not read. */
+    private fun legacyOutcome(ctx: JSONObject): ImportOutcome? = when (ctx.opt("legacy") as? String) {
+        "absent", "empty" -> ImportOutcome.ABSENT
+        "unreadable" -> ImportOutcome.LEGACY_UNREADABLE
+        "found" -> ImportOutcome.NOT_DONE
+        null -> null
+        else -> throw IllegalArgumentException("unknown legacy state")
+    }
+
     private fun runBridgeCase(c: JSONObject): List<String> {
         val ctx = c.optJSONObject("ctx") ?: JSONObject()
-        val h = Harness(migrating = ctx.optBoolean("migrating"))
+        val h = Harness(migrating = ctx.optBoolean("migrating"), outcome = legacyOutcome(ctx))
         c.optJSONObject("store")?.let { seed ->
             val record = mapLabels(seed.v().getJSONObject("record")) as JSONObject
             // TR-19: a stored copy whose read answer is larger than 2 MB once the envelope is counted.
@@ -290,7 +299,7 @@ class ShellRecordVectorsTest {
     }
 
     /** The bridge's own store and its bridge, with the migration flag as the context sets it. */
-    private class Harness(private val migrating: Boolean) {
+    private class Harness(private val migrating: Boolean, private val outcome: ImportOutcome?) {
         val files = FailingFiles(NativeTestFiles())
         private val wrap = NativeTestWrap()
         val store = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
@@ -299,7 +308,7 @@ class ShellRecordVectorsTest {
             account = { ShellRecordAccount.Ready(store, ACCOUNT) },
             migrating = { migrating },
             // The legacy store is confirmed absent for these cases, so a missing copy reads `absent` (§25.52K.4).
-            outcome = { ImportOutcome.ABSENT },
+            outcome = { outcome },
         )
     }
 

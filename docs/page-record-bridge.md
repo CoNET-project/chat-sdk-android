@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3br (§25.52K to §25.52V) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `fba0ecf167f2b3e86bac7888ea646b25db20a972dcf9ac9914f9326353f92990`, 188 self-checks).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bs (§25.52K to §25.52W) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `3b9800b81b21170efd51ec6d761bf7e2abb1631abe60d00c9d002c623c35cdd1`, 193 self-checks).
 
 ## Public entries
 
@@ -55,6 +55,11 @@ On success the copy is written with `schemaVersion: 2` and `rev: 1`. An existing
 ## Absence, the account pointer and the device marker (§25.52T.3 to §25.52T.6)
 
 - `absent` needs all three: the legacy store is confirmed absent or empty, the account pointer is empty, and there is no native record.
+- Write guard (§25.52W.3): a write waits for a completed read (`ok`, or `absent`). With no native record, a write answers `migrating`
+  while the pointer is set, the marker is set, or the legacy store was not read, found, or unreadable. The guard comes after the content
+  checks and before the revision check. A write with a native record follows the revision rules.
+- `import_not_done` is only for a found legacy record whose import did not finish (§25.52K.5). An account that is not a canonical EOA is
+  `account_mismatch` (fail closed): the legacy store is not read, nothing is written, and the import reports `account_mismatch`.
 - The account pointer (`account_pointer.v1`, no-backup directory, non-secret) is set by the first successful native write (the import or
   the native creation). Reads and writes never clear it. While it is set and no record exists, a read answers `error` with
   `account_record_missing`, never `absent`; a write answers the same error.
@@ -179,7 +184,8 @@ it is `too_large`, checked before the schema-specific answers.
   placeholder phrase, so the check is left for PM.
 - The first-run import has no whitelist for legacy fields beyond PGP (`legacy_fields_unknown` is not decided, §25.52N.6).
 - `accountSlot` keeps the conditional profile-0 fallback for records with no keyID (PM R424); Android measurement must confirm the keyID match.
-- Pending PM (r3bq §25.52U.11): `account_mismatch` (new sub-code, fail closed); the pointer repair on a read.
+- Pending PM (r3bq §25.52U.11): the pointer repair on a read (r3bs §25.52W.2 records it as written; the vectors do not cover it).
+- R444: the invalid-account result is `account_mismatch` (the shell's table suggested `migrating`; the PM chose `account_mismatch`).
 - Pending PM (earlier): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only); a marker set
   with a write answers `migrating` (§25.52T.5).
 - The read judgement is strict by keyID (§25.52U.4), while the write placement keeps the conditional profile-0 fallback of R424. A schema 2
@@ -189,7 +195,7 @@ it is `too_large`, checked before the schema-specific answers.
 
 ## Tests
 
-`ShellRecordAckVectorsTest` runs AK-01 to AK-20 (the ack group, §25.52T.8, §25.52U.9). `ShellRecordR439Test` covers the r3bq rules
+`ShellRecordAckVectorsTest` runs AK-01 to AK-27 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7). `ShellRecordR439Test` covers the r3bq rules
 that the vectors do not fix (the first-write guard, the marker and pointer repair, the case-insensitive keyID).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
