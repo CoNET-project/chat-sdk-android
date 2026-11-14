@@ -86,6 +86,19 @@ def compile_patterns(spec, fixtures):
     return regexes, runs, not_loaded
 
 
+def canonical_regexes(neg):
+    """25.52CG.3 (r3eh): the canonical pattern ids of the vector's logScan.patterns. Each value is SHA-256("hex:" + sha256Label), the
+    sampleRule of the vector. Each id is reported under its own name. LS-G1 is a separate check and is reported separately."""
+    out = []
+    for p in (neg.get("logScan") or {}).get("patterns", []):
+        label = p.get("sha256Label")
+        if not label:
+            continue
+        value = hashlib.sha256(("hex:" + label).encode("utf-8")).hexdigest()
+        out.append((p["id"], re.compile(re.escape(value), re.IGNORECASE), "hit"))
+    return out
+
+
 def scan_text(text, regexes, runs, wordset, allow):
     """Yields (pattern_id, line_no, column, fail_on, extra) for each hit. Never yields matched text."""
     for line_no, line in enumerate(text.splitlines(), start=1):
@@ -117,6 +130,7 @@ def main():
     ap.add_argument("--allow")
     ap.add_argument("--report")
     ap.add_argument("--source", action="append", default=[], metavar="ID=PATH")
+    ap.add_argument("--canonical", help="negative-tests-v1.json: the canonical ids of logScan.patterns (25.52CG.3)")
     args = ap.parse_args()
 
     spec = load_json(args.patterns)
@@ -140,6 +154,8 @@ def main():
                     allow.add(v)
 
     regexes, runs, not_loaded = compile_patterns(spec, fixtures)
+    if args.canonical:
+        regexes.extend(canonical_regexes(load_json(args.canonical)))
 
     # Canary self-test (spec 25.26.5): a line with LS-K1 must be detected, or the run is invalid.
     k1 = next(p["value"] for p in spec["patterns"] if p["id"] == "LS-K1")

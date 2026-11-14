@@ -117,6 +117,22 @@ class NativePgpCommandTest {
     }
 
     @Test
+    fun signedBytesAreTheLabelThenTheMessageWithTextCanonicalisation() {
+        // 25.52CD.3 (R737): the signed stream is the UTF-8 label, then the message (NativePgp.signDocument; verifyDocument in the same order).
+        // Signature type 0x01 is a text signature: the stream is canonical, so a LF in the label is hashed as CRLF.
+        val secret = requireNotNull(NativePgp.parseSecret(ecc().getString("privateArmored")))
+        val pass = ecc().getString("passphrase")
+        val msg = "M".toByteArray(Charsets.UTF_8)
+        val sig = NativePgp.signDocument(secret, pass, "L", msg, 0x01)
+        org.junit.Assert.assertTrue("signed", sig.ok)
+        val armored = requireNotNull(sig.value)
+        org.junit.Assert.assertTrue("label then message", NativePgp.verifyDocument(secret, "L", msg, armored))
+        org.junit.Assert.assertFalse("message then label is another stream", NativePgp.verifyDocument(secret, "M", "L".toByteArray(Charsets.UTF_8), armored))
+        val lf = NativePgp.signDocument(secret, pass, "beamio.pgp.x.v1\n", msg, 0x01)
+        org.junit.Assert.assertTrue("a LF in the label verifies as CRLF", NativePgp.verifyDocument(secret, "beamio.pgp.x.v1\r\n", msg, requireNotNull(lf.value)))
+    }
+
+    @Test
     fun theGateDecidesThePgpSignNameByState() {
         // G0 no_key, G1 not_ready, G2 dispatch (the handler runs only in G2).
         // 25.52BP.1 (r3dm): pgpSign is not a bridge name. The module answers unknown_command for it before the gate, in every state.
