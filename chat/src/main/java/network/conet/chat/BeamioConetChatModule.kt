@@ -175,6 +175,14 @@ object BeamioConetChatModule {
         runCatching { NativeWallet.migrateLegacyPgp(context) }
             .onFailure { Log.w(TAG, "legacy PGP adoption failed: ${it.javaClass.simpleName}") }
         val type = body.optString("type", "")
+        // 25.52AT.1 step 2 (25.52AQ.2, BG.3: pgpMigrate included): a credential field of a CRED command is refused before the gate, with the field names and no values.
+        if (type in CredFields.COMMANDS) {
+            val names = CredFields.refusalNames(type, body)
+            if (names.isNotEmpty()) {
+                refuseCredential(type, body, names)
+                return
+            }
+        }
         // pgpDecryptInbound (25.34): reqId first, then the gate, inside the handler. It is not routed through the table.
         if (type == "pgpDecryptInbound") {
             handlePgpDecryptInbound(body)
@@ -201,14 +209,6 @@ object BeamioConetChatModule {
         if (type == NativeHistoryDelete.MESSAGE || type == NativeHistoryDelete.CONVERSATION) {
             historyDeleteCommand(context, type, body)
             return
-        }
-        // 25.52AT.1 step 2 (25.52AQ.2): a credential field of a CRED command is refused before the gate, with the field names and no values.
-        if (type in CredFields.COMMANDS) {
-            val names = CredFields.refusalNames(type, body)
-            if (names.isNotEmpty()) {
-                refuseCredential(type, body, names)
-                return
-            }
         }
         // 25.52AT.1 step 3, 25.52AS.3, 25.52AT.2: a name outside the bridge command table is `unknown_command` before the gate, in every state
         // (G0 no_key, G1 not_ready, locked, busy). Nothing is read from the payload and no state changes. It is not counted (25.52AW.2).
@@ -303,7 +303,6 @@ object BeamioConetChatModule {
             "provisionIdentity" -> provisionIdentity(body)
             "walletAddress" -> walletAddressCommand(body)
             "gossipSign" -> gossipSignCommand(body)
-            "pgpSign" -> pgpSignCommand(body)
             "nativeImportOpen" -> nativeImportOpenCommand(body)
             "nativeRecoveryOpen" -> nativeRecoveryOpenCommand(body)
             "nativeAccountCreateOpen" -> nativeAccountCreateOpenCommand(body)
@@ -846,7 +845,8 @@ object BeamioConetChatModule {
         val code = if (reqId == null) "bad_request" else "key_over_bridge_refused"
         Log.i(TAG, "$command result=$code fields=${names.joinToString(",")}")
         val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code)
-        if (reqId != null) payload.put("names", JSONArray(names))
+        // 25.52BG.5: the names of an ack-level refusal are in the result, not at the top level.
+        if (reqId != null) payload.put("result", JSONObject().put("names", JSONArray(names)))
         emitEvent(payload)
     }
 
@@ -859,9 +859,6 @@ object BeamioConetChatModule {
             Log.i(TAG, "pgpDecryptInbound result=$code")
         }
         if (reqId == null) return refuse("bad_request")
-        // 25.52AT.1 step 2: the credential fields come before the gate (25.52AQ.2).
-        val credNames = CredFields.refusalNames("pgpDecryptInbound", body)
-        if (credNames.isNotEmpty()) return refuseCredential("pgpDecryptInbound", body, credNames)
         val ctx = appContext ?: return refuse("not_ready")
         val vault = NativeWallet.vault(ctx)
         val state = vault.state()
@@ -915,29 +912,6 @@ object BeamioConetChatModule {
             // 25.52AW.2, T-53, T-135: a kind or shape refusal of this known command is counted as command_rejected (in-process only). The gate
             // answers (no_key, locked) are not refusals of the kind or shape, so they are not counted.
             if (out.code != "no_key" && out.code != "locked") BridgeCommandTable.countCommandRejected()
-            ack(reqId, false, error = out.code)
-        }
-    }
-
-    /**
-     * C4 `pgpSign` (spec 25.22.2): the page gets the armored signature only. The gate runs before this, so it is reached
-     * in G2 only. The PGP private key and its passphrase stay in the native record.
-     */
-    private fun pgpSignCommand(body: JSONObject) {
-        val reqId = echoId(body)
-        val ctx = appContext ?: run {
-            ack(reqId, false, error = "not_initialised")
-            return
-        }
-        val out = NativeWalletCommands.pgpSign(
-            NativeWallet.pgp(ctx),
-            body.optString("purposeId", ""),
-            body.optString("message", "").ifEmpty { null },
-            body.optInt("sigType", -1),
-        )
-        if (out.code == "ok") {
-            ack(reqId, true, result = JSONObject().put("signature", out.value))
-        } else {
             ack(reqId, false, error = out.code)
         }
     }
@@ -1056,7 +1030,8 @@ object BeamioConetChatModule {
         fun answer(ok: Boolean, error: String? = null, fields: List<String>? = null) {
             val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", ok)
             if (!ok) payload.put("error", error ?: "error")
-            if (fields != null && fields.isNotEmpty()) payload.put("fields", JSONArray(fields))
+            // 25.52BG.5: the field names are in the result.
+            if (fields != null && fields.isNotEmpty()) payload.put("result", JSONObject().put("names", JSONArray(fields)))
             emitEvent(payload)
         }
         val ctx = appContext

@@ -138,8 +138,8 @@ class BridgeCommandTableTest {
     fun everyRegisteredNameIsInTOrH() {
         val (t, h) = tAndH()
         val exact = BridgeCommandTable.DISPATCH + BridgeCommandTable.DECIDED_BEFORE_DISPATCH + BridgeCommandTable.GATE_STATUS + NoKeyGate.RETIRED
-        // 25.52AW.3: the registered exact names are 44 + 5 + 2 + 3; the two page-record names are in T as well (AU.4).
-        assertEquals(54, exact.size)
+        // 25.52AW.3, BG.4: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); the two page-record names are in T (AU.4).
+        assertEquals(53, exact.size)
         val outside = (exact + BridgeCommandTable.CHAT_CHANNEL_SHELL_RECORD).filter { it !in t && it !in h }
         assertTrue("registered names outside T and H: $outside", outside.isEmpty())
         assertTrue("T1 names are in T", t.containsAll(setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")))

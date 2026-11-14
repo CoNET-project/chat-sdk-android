@@ -28,7 +28,7 @@ internal object BridgeCommandTable {
         "historyOpenConversation", "historyRead", "historyReportLayout", "historySign", "historyVerifyImport", "init",
         "issueGroupRoster", "issueGroupTombstone", "mailboxCommand", "nativeAccountCreateOpen", "nativeImportOpen",
         "nativeRecoveryOpen", "nodesResponse", "ownMailboxCommand", "pause", "pgpIdentityCreate", "pgpRestore",
-        "pgpRestoreEvaluate", "pgpSign", "provisionIdentity", "queryNativeWake", "queryPresence", "resume", "send",
+        "pgpRestoreEvaluate", "provisionIdentity", "queryNativeWake", "queryPresence", "resume", "send",
         "sendGroup", "setNodes", "setRoutes", "voiceFrame", "voiceListen", "voiceUnlisten", "walletAddress",
     )
 

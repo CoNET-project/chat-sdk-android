@@ -34,7 +34,7 @@
       "expect": {
         "code": "pgp_private_in_payload",
         "names": [
-          "profiles[*].chatManager.pgpKey"
+          "profiles[*].chatManager.pgpKey.privateKey"
         ],
         "store": null
       }
@@ -114,7 +114,7 @@
       "expect": {
         "code": "pgp_private_in_payload",
         "names": [
-          "profiles[*].pgpKey"
+          "profiles[*].pgpKey.publicKey"
         ],
         "store": null
       }

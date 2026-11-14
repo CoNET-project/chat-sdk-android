@@ -10,15 +10,7 @@ import org.json.JSONObject
  */
 internal object PgpMigrationBridge {
     /** Fields that carry key material. A request with one of them is refused, and only the field names are reported (R-02). */
-    val KEY_FIELDS: Set<String> = setOf(
-        "privateKeyArmor",
-        "pgpPrivateKeyArmored",
-        "pgpPassphrase",
-        "privateKeyHex",
-        "walletPrivateKey",
-        "mnemonic",
-        "recoveryCode",
-    )
+    val KEY_FIELDS: Set<String> = network.conet.chat.identity.CredFields.NAMES.toSet()
 
     private val FIELDS = setOf("type", "reqId")
 

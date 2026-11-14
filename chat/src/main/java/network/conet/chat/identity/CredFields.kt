@@ -12,7 +12,7 @@ import java.util.TreeSet
 object CredFields {
     /** The commands to which CRED applies (25.52AQ.2). Other commands keep their own rules. */
     val COMMANDS: Set<String> = setOf(
-        "pgpRestore", "pgpRestoreEvaluate", "pgpDecryptInbound", "pgpIdentityCreate", "provisionIdentity", "init",
+        "pgpRestore", "pgpRestoreEvaluate", "pgpDecryptInbound", "pgpIdentityCreate", "provisionIdentity", "init", "pgpMigrate",
     )
 
     /** CRED: the names of [IdentityProvisionContract.FORBIDDEN_KEYS]. The identity command's full forbidden set is this list (25.52AQ.2 c). */

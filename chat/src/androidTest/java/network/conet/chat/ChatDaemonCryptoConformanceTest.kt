@@ -119,7 +119,7 @@ class ChatDaemonCryptoConformanceTest {
     @Test
     fun unknownNamesAreUnknownCommandBeforeTheGateInG0() {
         val acks = java.util.concurrent.ConcurrentHashMap<Int, JSONObject>()
-        val names = listOf("notACommand", "signMessage", "pgpDecrypt", "removeEOAPrivateKey")
+        val names = listOf("notACommand", "signMessage", "pgpDecrypt", "removeEOAPrivateKey", "pgpSign")
         val latch = CountDownLatch(names.size + 1)
         val emit: (JSONObject) -> Unit = { payload ->
             val event = payload.optJSONObject("event")

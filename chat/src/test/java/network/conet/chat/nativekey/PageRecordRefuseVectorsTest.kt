@@ -9,9 +9,10 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-263 (25.52AQ.3, r3co) and 25.52AS.4 (r3cq): the page-record refusal vectors PR-02, PR-02b, PR-03 and PR-04. The vector file is a byte copy
- * of the interface file (`protocol/page-record-refuse-vectors.v1.json`, sha256 fbbcb077…); it is not edited here. The cases are run through the
- * shellRecordWrite bridge: the PGP path and key-shape refusals come before the whitelist, the migrating check comes after both, and nothing is stored.
+ * T-263, 25.52AQ.3 (r3co), 25.52AS.4 (r3cq), 25.52BG.1 (r3de): the page-record refusal vectors PR-02, PR-02b, PR-03 and PR-04. The vector file is a
+ * byte copy of the interface file (`protocol/page-record-refuse-vectors.v1.json`, sha256 44b7f0dd…, rebuilt in r3de with leaf-path names). It is not
+ * edited here. The cases run through the shellRecordWrite bridge: the PGP path and key-shape refusals come before the whitelist, the migrating check
+ * comes after both, and nothing is stored.
  */
 class PageRecordRefuseVectorsTest {
     private val bytes by lazy { File("../spec/page-record-refuse-vectors.v1.json").readBytes() }
@@ -33,16 +34,15 @@ class PageRecordRefuseVectorsTest {
     @Test
     fun theVectorFileIsTheInterfaceCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("fbbcb07715483cc7288de4b8302492301db95a0fe0ac02f4e43fa922746e50c2", sha)
+        assertEquals("44b7f0dd0a9cbfa33b7640fc0a1d2bb8071768fb66fdf8bef59a6c9ee03e90bf", sha)
     }
 
     @Test
-    fun thePageRecordRefusalCasesGiveTheirCodesNamesAndStoreNothing() {
+    fun theFourPageRecordRefusalCasesGiveTheirCodesLeafNamesAndStoreNothing() {
         val cases = doc.getJSONArray("cases")
         assertEquals(4, cases.length())
         val ids = (0 until cases.length()).map { cases.getJSONObject(it).getString("id") }
         assertEquals(listOf("PR-02", "PR-02b", "PR-03", "PR-04"), ids)
-        val mismatches = LinkedHashMap<String, String>()
         var passed = 0
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
@@ -53,23 +53,11 @@ class PageRecordRefuseVectorsTest {
             val resp = bridge(store, migrating).handle(ShellOrigin.EMBEDDED_PAGE, req, 500, nativeWrite = false)
             val result = resp.optJSONObject("result") ?: resp
             val expect = c.getJSONObject("expect")
-            val gotNames = strings(result.optJSONArray("names"))
-            val wantNames = strings(expect.getJSONArray("names"))
-            val codeOk = expect.getString("code") == result.optString("code")
-            val namesOk = wantNames == gotNames
-            if (codeOk && namesOk) passed++ else mismatches[id] =
-                "want ${expect.getString("code")} ${wantNames}, got ${result.optString("code")} ${gotNames}"
+            assertEquals("$id code", expect.getString("code"), result.optString("code"))
+            assertEquals("$id names (leaf paths, 25.52BG.1)", strings(expect.getJSONArray("names")), strings(result.optJSONArray("names")))
             assertNull("$id stores nothing", store.read())
+            passed++
         }
-        println("PR vectors passed $passed of ${cases.length()}; mismatches: $mismatches")
-        assertEquals("mismatches against the vectors", pendingRuling.keys, mismatches.keys)
+        assertEquals(4, passed)
     }
-
-    /**
-     * The cases whose answer differs from the vector, with the ruling that is needed. Empty when the code matches every vector. PR-02 is
-     * recorded here, not hidden: its code matches; its names list the leaf path, and the pinned pgp-migration vectors list the same leaf.
-     */
-    private val pendingRuling: Map<String, String> = mapOf(
-        "PR-02" to "names: the PR vector lists the forbidden prefix; the pinned pgp-migration vectors list the leaf (ruling pending)",
-    )
 }

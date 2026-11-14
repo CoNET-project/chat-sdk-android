@@ -184,16 +184,6 @@ class BridgeKeyAuditTest {
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"privateKeyHex\", \"privateKeyArmored\", \"privateKeyArmor\", \"pgpPrivateKeyArmored\",",
             ),
-            "PgpMigrationBridge.kt" to listOf(
-                // Refusal list of pgpMigrate (KEY_FIELDS): a request naming one is refused with key_over_bridge_refused; only names are read.
-                "\"mnemonic\",",
-                "\"pgpPassphrase\",",
-                "\"pgpPrivateKeyArmored\",",
-                "\"privateKeyArmor\",",
-                "\"privateKeyHex\",",
-                "\"recoveryCode\",",
-                "\"walletPrivateKey\",",
-            ),
             "ShellRecord.kt" to listOf(
                 // Stored-record reads: the EOA key of the page record already held on the device (25.52H.2, 25.52I.2). They judge the stored copy,
                 // and no payload value reaches a reply from them.

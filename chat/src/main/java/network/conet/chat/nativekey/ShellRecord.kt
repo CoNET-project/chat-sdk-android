@@ -405,13 +405,16 @@ internal object ShellRecordPolicy {
 
     /**
      * §25.52N.5 and §25.52B.5: a profile-level `pgpKey` is a private path, `profiles[*].pgpKey.*`, except the listed PGP public paths. The name is the
-     * forbidden prefix, `profiles[*].pgpKey` (vector PR-04, r3cq §25.52AS.4). The chatManager form is not changed here (its leaf names are pinned).
+     * leaf path that carries the value (25.52BG.1; vector PR-04 is `profiles[*].pgpKey.publicKey`).
      */
-    fun profilePgpKeyIn(record: JSONObject): List<String> =
-        pathsOf(record)
-            .filter { it == "profiles[*].pgpKey" || (it.startsWith("profiles[*].pgpKey.") && it !in PGP_PUBLIC_PATHS) }
-            .map { "profiles[*].pgpKey" }
-            .distinct()
+    fun profilePgpKeyIn(record: JSONObject): List<String> {
+        val all = pathsOf(record)
+        // Leaves only (25.52BG.1): a container path such as profiles[*].pgpKey is not named when a leaf below it is.
+        val children = all.filter { it.startsWith("profiles[*].pgpKey.") && it !in PGP_PUBLIC_PATHS }
+        val leaves = children.filter { c -> children.none { it != c && it.startsWith("$c.") } }
+        val bare = if (children.isEmpty() && "profiles[*].pgpKey" in all) listOf("profiles[*].pgpKey") else emptyList()
+        return (leaves + bare).distinct()
+    }
 
     /**
      * The whitelist violations of [record] (§25.52O.5, §25.52Q.3), sorted in UTF-8 byte order: the leaf paths outside the whitelist (an empty

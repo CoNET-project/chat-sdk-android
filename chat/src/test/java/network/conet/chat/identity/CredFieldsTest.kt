@@ -13,19 +13,20 @@ class CredFieldsTest {
     private val cred = listOf(
         "privateKeyHex", "privateKeyArmored", "pgpPrivateKeyArmored", "pgpPassphrase", "walletPrivateKey", "mnemonic",
         "recoveryCode", "pin", "password", "accountPassword",
-        "privateKeyArmor", "privateKeyArmorWrap", "encrypKeyArmored", "mnemonicPhrase", "recoveryWords",
+        "privateKeyArmor", "privateKeyArmorWrap", "encrypKeyArmored", "mnemonicPhrase", "recoveryWords", "passphrase",
     )
 
     @Test
-    fun theIdentityForbiddenSetIsTheFifteenCredNames() {
-        assertEquals(15, IdentityProvisionContract.FORBIDDEN_KEYS.size)
+    fun theIdentityForbiddenSetIsTheSixteenCredNames() {
+        // 25.52AQ.2 (r3co), 25.52BG.2 (r3de): the full CRED list. The identity vector (six names) is a subset, not the set (25.52BG.6).
+        assertEquals(16, IdentityProvisionContract.FORBIDDEN_KEYS.size)
         assertEquals(cred.toSet(), IdentityProvisionContract.FORBIDDEN_KEYS.toSet())
     }
 
     @Test
     fun theSixCommandsAreTheCredCommands() {
         assertEquals(
-            setOf("pgpRestore", "pgpRestoreEvaluate", "pgpDecryptInbound", "pgpIdentityCreate", "provisionIdentity", "init"),
+            setOf("pgpRestore", "pgpRestoreEvaluate", "pgpDecryptInbound", "pgpIdentityCreate", "provisionIdentity", "init", "pgpMigrate"),
             CredFields.COMMANDS,
         )
     }
@@ -86,5 +87,15 @@ class CredFieldsTest {
         assertEquals(listOf("pin"), CredFields.refusalNames("init", body))
         assertEquals(emptyList<String>(), CredFields.refusalNames("send", body))
         assertEquals(emptyList<String>(), CredFields.refusalNames("shellRecordWrite", body))
+    }
+
+    @Test
+    fun everyCommandRefusesEveryCredNameBeforeTheGate() {
+        // 25.52BG.6: the identity commands (and the other CRED commands) are tested against the whole CRED list, not six names.
+        for (command in CredFields.COMMANDS) {
+            for (name in cred) {
+                assertEquals("$command refuses $name", listOf(name), CredFields.refusalNames(command, JSONObject().put(name, "v")))
+            }
+        }
     }
 }

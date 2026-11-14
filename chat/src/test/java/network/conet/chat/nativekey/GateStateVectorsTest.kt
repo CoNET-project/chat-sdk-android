@@ -1,15 +1,21 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.BridgeCommandTable
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-160 and T-161 (spec 25.26.4c) against `spec/gate-state-vectors.v1.json` (r3x, sha256 d1318556…da66, 102 cases).
+ * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di) and 25.52BL (r3dj) against `spec/gate-state-vectors.v1.json` (r3dj, sha256 e67ed4cc…, 136 cases).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
- * Each case is decided by name and gate only; the payload is read solely by the G1 `init` check.
+ *
+ * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an
+ * SDK name outside the command table is answered `unknown_command` before the gate (25.52AT.1, AT.2). Such a case asserts `gateRefused` false and
+ * that the answer is none of `forbiddenCodes`. The other cases are decided by name and gate only.
  */
 class GateStateVectorsTest {
     private val bytes = File(System.getenv("GATE_STATE_VECTORS") ?: "../spec/gate-state-vectors.v1.json").readBytes()
@@ -21,15 +27,24 @@ class GateStateVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("d1318556b8aaecbff5d35f6be72062f0da9d9398feb6abcac281a5c6ac1bda66", sha256Hex(bytes))
+        assertEquals("e67ed4ccd9d19fb3e3f9be4c0b4aa660772287afa88a1458387cef91b7484311", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        // r3x: 102 cases; G1 allowed commands 67 (nativeAccountCreateOpen added, AL-7).
-        assertEquals(102, cases.length())
-        assertEquals(67, v.getJSONObject("counts").getInt("g1Commands"))
-        assertEquals(3, v.getJSONObject("counts").getInt("g1Init"))
+        // r3dj: 136 cases (G0 33, G1 103). G1 allowed commands 67; init 3; shell-layer not gated 26; rejected names 8 (25.52BK, 25.52BL).
+        assertEquals(136, cases.length())
+        val counts = v.getJSONObject("counts")
+        assertEquals(136, counts.getInt("cases"))
+        assertEquals(67, counts.getInt("g1Commands"))
+        assertEquals(3, counts.getInt("g1Init"))
+        assertEquals(26, counts.getInt("shellNotGatedCases"))
+        assertEquals(8, counts.getInt("shellRejectCases"))
+        var g0 = 0
+        var g1 = 0
+        for (i in 0 until cases.length()) if (cases.getJSONObject(i).getString("state") == "G0") g0++ else g1++
+        assertEquals(33, g0)
+        assertEquals(103, g1)
     }
 
     @Test
@@ -40,6 +55,10 @@ class GateStateVectorsTest {
             val id = c.getString("id")
             val command = c.getString("command")
             val expect = c.getJSONObject("expect")
+            if (expect.has("forbiddenCodes")) {
+                shellNotGatedCase(id, command, expect)
+                continue
+            }
             // G0 has no record; G1 has the record and no session (sessionReady false).
             val state: NativeWalletVault.State =
                 if (c.getString("state") == "G0") NativeWalletVault.State.NoKey else NativeWalletVault.State.Ready(recordEoa)
@@ -70,6 +89,20 @@ class GateStateVectorsTest {
                     assertEquals(id, command == "init", expect.getBoolean("payloadRead"))
                 }
             }
+        }
+    }
+
+    /**
+     * 25.52BK.2: the action is not gated. The SDK does not register the name, so the answer is `unknown_command` (before the gate), which is not
+     * one of the forbidden codes. The vector's `gateRefused` is false. The vector does not name a code, and the test does not require one.
+     */
+    private fun shellNotGatedCase(id: String, command: String, expect: JSONObject) {
+        assertFalse("$id: the action is not gated", expect.getBoolean("gateRefused"))
+        assertFalse("$id: the SDK does not register the shell-layer name $command", BridgeCommandTable.isRegistered(command))
+        val answer = BridgeCommandTable.UNKNOWN_COMMAND
+        val forbidden = expect.getJSONArray("forbiddenCodes")
+        for (k in 0 until forbidden.length()) {
+            assertTrue("$id: the answer $answer is not ${forbidden.getString(k)}", answer != forbidden.getString(k))
         }
     }
 

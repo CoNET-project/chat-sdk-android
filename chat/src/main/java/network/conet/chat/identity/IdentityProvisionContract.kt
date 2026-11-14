@@ -57,6 +57,7 @@ object IdentityProvisionContract {
         "encrypKeyArmored",
         "mnemonicPhrase",
         "recoveryWords",
+        "passphrase",
     )
 
     /** Only these keys may appear in the response body (the `result` object). `ok` belongs to the ack envelope. */
