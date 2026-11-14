@@ -52,7 +52,11 @@ class NativeQaEntryTest {
 
     @Test
     fun theAllowlistIsTheA5SetAndAnythingElseNeverReachesTheModule() {
-        assertEquals(setOf("identityPublic", "walletStatus", "init", "provisionIdentity", "pgpRestore"), NativeQaHooks.ALLOWED_COMMANDS)
+        // R591 list plus pgpRestoreEvaluate (read-only: evalRestore with write = false, PgpRestoreMachine.evaluate). Requested by the shell for A5.
+        assertEquals(
+            setOf("identityPublic", "walletStatus", "init", "provisionIdentity", "pgpRestore", "pgpRestoreEvaluate"),
+            NativeQaHooks.ALLOWED_COMMANDS,
+        )
         val others = listOf("send", "hello", "setRoutes", "gossipSign", "pgpSign", "clearIdentity", "nativeImportOpen", "historySign", "", "IDENTITYPUBLIC", "pgpRestore ")
         for (command in others) {
             val sink = FakeSink(answerEverything)

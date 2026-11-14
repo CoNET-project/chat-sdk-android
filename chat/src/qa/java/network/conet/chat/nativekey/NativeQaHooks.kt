@@ -28,7 +28,8 @@ object NativeQaHooks {
     const val DEFAULT_TIMEOUT_MS: Long = 15_000L
 
     /** The commands the QA page may run: the A5 device-evidence set. Any other command is refused as `not_allowed`. */
-    internal val ALLOWED_COMMANDS: Set<String> = setOf("identityPublic", "walletStatus", "init", "provisionIdentity", "pgpRestore")
+    internal val ALLOWED_COMMANDS: Set<String> =
+        setOf("identityPublic", "walletStatus", "init", "provisionIdentity", "pgpRestore", "pgpRestoreEvaluate")
 
     /**
      * The event types that answer a command: an `ack` for most commands, and `ready` for a successful `init` (the module's finishInit emits
