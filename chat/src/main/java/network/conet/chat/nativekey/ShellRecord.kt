@@ -857,7 +857,7 @@ internal class ShellImportFlow(
 }
 
 /** The codes that the ack refuses at the envelope level (§25.52T.2): the request is not processed, so the ack has `ok: false` and an `error`. */
-private val ENVELOPE_CODES = setOf("origin_refused", "too_large")
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_supported")
 
 /**
  * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
@@ -1030,6 +1030,8 @@ internal class ShellRecordBridge(
 
         // Step 6: migrating. Step 7: the revision. The first write carries rev 0 (§25.52E.3).
         if (migrating()) return reply("migrating", emptyList())
+        // §25.52AA, AK-28: a device marker holds the write back, with or without a record (the record is not yet read as valid).
+        if (flags.legacyUnreadable()) return reply("migrating", emptyList())
         if (current == null) {
             // §25.52W.3, AK-23 to AK-25, AK-27, R445: with no native record, a write waits for a completed read. A pointer, a marker, or any
             // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed

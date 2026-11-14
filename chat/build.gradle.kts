@@ -31,6 +31,15 @@ android {
         getByName("androidTest").kotlin.srcDir("src/sharedAcceptance/java")
     }
 
+    // QA-only hooks (spec r3bw §25.52AA.5): compiled only when the QA build asks for them with -PchatQaHooks. The production AAR never
+    // contains them: the hook sources live in src/qa/java and their behaviour tests in src/qaTest/java, and neither is added otherwise.
+    if (project.hasProperty("chatQaHooks")) {
+        sourceSets {
+            getByName("main").kotlin.srcDir("src/qa/java")
+            getByName("test").kotlin.srcDir("src/qaTest/java")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -74,6 +83,11 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+// The QA hook presence test reads the property in the test JVM (HK-01, HK-02).
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    if (project.hasProperty("chatQaHooks")) systemProperty("chatQaHooks", "true")
 }
 
 // Local Maven layout used by `scripts/publish-maven.sh` (consumed over raw.githubusercontent.com).

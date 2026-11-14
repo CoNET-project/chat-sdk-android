@@ -14,8 +14,8 @@ class ShellRecordAckVectorsTest {
     private val doc = JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8))
 
     @Test
-    fun theAckGroupHasTwentySevenCases() {
-        assertEquals(27, doc.getJSONArray("ackCases").length())
+    fun theAckGroupHasTwentyEightCases() {
+        assertEquals(28, doc.getJSONArray("ackCases").length())
     }
 
     @Test

@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bs (§25.52K to §25.52W) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `3b9800b81b21170efd51ec6d761bf7e2abb1631abe60d00c9d002c623c35cdd1`, 193 self-checks).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bw (§25.52K to §25.52AA) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `b1d21769dd802495b73ecb513dac9206bee25bb7283373fbfbb708d757e60036`, 220 self-checks).
 
 ## Public entries
 
@@ -55,6 +55,7 @@ On success the copy is written with `schemaVersion: 2` and `rev: 1`. An existing
 ## Absence, the account pointer and the device marker (§25.52T.3 to §25.52T.6)
 
 - `absent` needs all three: the legacy store is confirmed absent or empty, the account pointer is empty, and there is no native record.
+- A device marker holds every write back, with or without a record (§25.52AA, AK-28).
 - Write guard (§25.52W.3): a write waits for a completed read (`ok`, or `absent`). With no native record, a write answers `migrating`
   while the pointer is set, the marker is set, or the legacy store was not read, found, or unreadable. The guard comes after the content
   checks and before the revision check. A write with a native record follows the revision rules.
@@ -193,9 +194,31 @@ it is `too_large`, checked before the schema-specific answers.
 - The 108-path cap was checked against the measured manifest (page-record-paths-measured, 108 listed paths): all 62 whitelist paths
   (containers included) are among them. The tests do not read that manifest.
 
+## Transport and the accepted channels (§25.52AA.2, §25.52AA.3)
+
+- The page uses one transport adapter (`ShellRecordTransport`). On Android the only entry is `window.BeamioShellRecord`, which the shell
+  injects with the origin limited to `https://appassets.androidplatform.net`. The SDK entry is `BeamioShellRecordImport.handle`.
+- The chat-module channel (`shellRecordRead`, `shellRecordWrite` sent through the chat module) is refused on Android with the ack
+  `{type: "ack", reqId, ok: false, error: "not_supported"}`. It is never a fallback.
+- Without an injected `window.BeamioShellRecord`, Android answers `not_supported` (TP-03, TP-09). A refused origin on the window channel is
+  `origin_refused`, with no fallback (TP-02).
+- The selection rule is pinned by `ShellRecordTransportTest` against TP-01 to TP-10 and SA-01 to SA-04. The iOS rows are the iOS SDK's; they
+  are checked here only as the reference rule.
+
+## QA hook: the state without the EOA key (§25.52AA.5, HK-01 to HK-03)
+
+- `NativeQaHooks.dropEoaKeyOfAccount` removes `privateKeyArmor` from the account's profile and keeps the rest of the record, its revision,
+  the pointer, the marker, L and K. A read then answers `needs_native_recovery` (AK-20).
+- It exists only in a QA build: `./gradlew :chat:assembleRelease -PchatQaHooks=true`. The sources are `src/qa/java` (hook) and
+  `src/qaTest/java` (behaviour test), added to the build only with the property. The production AAR has no such symbol.
+- It is reachable from no bridge: no page message, no `window.BeamioShellRecord`, no chat-module command. Only the native test target calls it.
+- Release gate: `scripts/check-qa-hook-absent.sh <aar>` exits 1 when `NativeQaHooks` or `dropEoaKey` is in the AAR. Run it on the production
+  AAR before release and keep its output with the release receipt. It exits 1 on the QA AAR, as it should.
+
 ## Tests
 
-`ShellRecordAckVectorsTest` runs AK-01 to AK-27 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7). `ShellRecordR439Test` covers the r3bq rules
+`ShellRecordAckVectorsTest` runs AK-01 to AK-28 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7, §25.52AA.7). `ShellRecordTransportTest`
+runs TP and SA; `QaHookPresenceTest` runs HK-01 to HK-03 (the QA configuration adds `NativeQaHooksTest`). `ShellRecordR439Test` covers the r3bq rules
 that the vectors do not fix (the first-write guard, the marker and pointer repair, the case-insensitive keyID).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests

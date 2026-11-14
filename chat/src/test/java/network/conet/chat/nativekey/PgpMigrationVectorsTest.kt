@@ -385,7 +385,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bs (§25.52W.7, `3b9800b8…cdd1`). */
-        const val PINNED_SHA256 = "3b9800b81b21170efd51ec6d761bf7e2abb1631abe60d00c9d002c623c35cdd1"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bw (§25.52AA.7, `b1d21769…0036`). */
+        const val PINNED_SHA256 = "b1d21769dd802495b73ecb513dac9206bee25bb7283373fbfbb708d757e60036"
     }
 }

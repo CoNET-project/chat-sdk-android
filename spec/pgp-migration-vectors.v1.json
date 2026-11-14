@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bs）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bw）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -5699,6 +5699,393 @@
           "code": "migrating"
         }
       }
+    },
+    {
+      "id": "AK-28",
+      "title": "设备标记存在且原生记录存在：写入一律拒绝为 migrating（r3bu，R447 第 1 项，已定）",
+      "kind": "write",
+      "reqId": "w28",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "marker": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w28",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w28",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    }
+  ],
+  "nativeCreateCases": [
+    {
+      "id": "NC-01",
+      "title": "G0，account 为 BeamioTag，旧注册表确认无绑定，无 SDK 记录：create，进入第一屏（r3bv，R454）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "unbound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen"
+      }
+    },
+    {
+      "id": "NC-02",
+      "title": "G0，account 为 BeamioTag，旧注册表已绑定：already_bound，打开 nativeRecoveryOpen，不生成 EOA（r3bv）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "bound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen"
+      }
+    },
+    {
+      "id": "NC-03",
+      "title": "G0，account 为 EOA，SDK 既有记录存在：already_bound，不生成 EOA（r3bv）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "0x1111111111111111111111111111111111111111",
+        "registry": "unbound",
+        "sdkRecord": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen"
+      }
+    },
+    {
+      "id": "NC-04",
+      "title": "G0，绑定查询失败：lookup_unavailable，不生成 EOA，页面稍后重试（r3bv，失败关闭）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "unavailable",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry"
+      }
+    },
+    {
+      "id": "NC-05",
+      "title": "G1（设备已有钥）：not_available，门控不变，与绑定无关（r3bv）",
+      "input": {
+        "gate": "G1",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "unbound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "not_available",
+        "page": "none"
+      }
+    },
+    {
+      "id": "NC-06",
+      "title": "G2（已锁定）：not_available，门控不变；已绑定也不改变门控（r3bv）",
+      "input": {
+        "gate": "G2",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "bound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "not_available",
+        "page": "none"
+      }
+    },
+    {
+      "id": "NC-07",
+      "title": "G0，缺少 account：bad_request（account 必填，无法确认绑定，不生成 EOA）（r3bv）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": false,
+        "registry": "unbound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "bad_request",
+        "page": "none"
+      }
+    },
+    {
+      "id": "NC-08",
+      "title": "G0，account 为格式错误的 EOA：bad_request（r3bv）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "0x12",
+        "registry": "unbound",
+        "sdkRecord": false
+      },
+      "expect": {
+        "code": "bad_request",
+        "page": "none"
+      }
+    },
+    {
+      "id": "NC-09",
+      "title": "G0，account 为 BeamioTag，旧注册表确认无绑定，但 SDK 既有记录存在（防御性）：already_bound（r3bv）",
+      "input": {
+        "gate": "G0",
+        "hasAccount": true,
+        "account": "alice",
+        "registry": "unbound",
+        "sdkRecord": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen"
+      }
+    }
+  ],
+  "transportCases": [
+    {
+      "id": "TP-01",
+      "title": "Android，已注入 window.BeamioShellRecord，来源允许：window（r3bw，R460）",
+      "input": {
+        "platform": "android",
+        "windowInjected": true,
+        "chatChannel": false,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "window",
+        "error": null
+      }
+    },
+    {
+      "id": "TP-02",
+      "title": "Android，已注入，来源不允许：origin_refused，不回退（r3bw）",
+      "input": {
+        "platform": "android",
+        "windowInjected": true,
+        "chatChannel": false,
+        "originAllowed": false
+      },
+      "expect": {
+        "via": "refused",
+        "error": "origin_refused"
+      }
+    },
+    {
+      "id": "TP-03",
+      "title": "Android，未注入，聊天模块通道存在：not_supported，Android 不接受聊天通道（r3bw）",
+      "input": {
+        "platform": "android",
+        "windowInjected": false,
+        "chatChannel": true,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "refused",
+        "error": "not_supported"
+      }
+    },
+    {
+      "id": "TP-04",
+      "title": "iOS，已注入，来源允许：window（注入时优先）（r3bw）",
+      "input": {
+        "platform": "ios",
+        "windowInjected": true,
+        "chatChannel": true,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "window",
+        "error": null
+      }
+    },
+    {
+      "id": "TP-05",
+      "title": "iOS，已注入，来源不允许：origin_refused，不回退到聊天通道（r3bw）",
+      "input": {
+        "platform": "ios",
+        "windowInjected": true,
+        "chatChannel": true,
+        "originAllowed": false
+      },
+      "expect": {
+        "via": "refused",
+        "error": "origin_refused"
+      }
+    },
+    {
+      "id": "TP-06",
+      "title": "iOS，未注入，聊天模块通道，来源允许：chat（回退，r3bw）",
+      "input": {
+        "platform": "ios",
+        "windowInjected": false,
+        "chatChannel": true,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "chat",
+        "error": null
+      }
+    },
+    {
+      "id": "TP-07",
+      "title": "iOS，未注入，聊天模块通道，来源不允许：origin_refused（同一来源校验，r3bw）",
+      "input": {
+        "platform": "ios",
+        "windowInjected": false,
+        "chatChannel": true,
+        "originAllowed": false
+      },
+      "expect": {
+        "via": "refused",
+        "error": "origin_refused"
+      }
+    },
+    {
+      "id": "TP-08",
+      "title": "浏览器（非壳）：无通道，none，不走 shellRecord（r3bw）",
+      "input": {
+        "platform": "browser",
+        "windowInjected": false,
+        "chatChannel": false,
+        "originAllowed": false
+      },
+      "expect": {
+        "via": "none",
+        "error": null
+      }
+    },
+    {
+      "id": "TP-09",
+      "title": "Android，未注入，无聊天通道：not_supported（r3bw）",
+      "input": {
+        "platform": "android",
+        "windowInjected": false,
+        "chatChannel": false,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "refused",
+        "error": "not_supported"
+      }
+    },
+    {
+      "id": "TP-10",
+      "title": "iOS，未注入，无聊天通道：none（r3bw）",
+      "input": {
+        "platform": "ios",
+        "windowInjected": false,
+        "chatChannel": false,
+        "originAllowed": true
+      },
+      "expect": {
+        "via": "none",
+        "error": null
+      }
+    }
+  ],
+  "sdkAcceptCases": [
+    {
+      "id": "SA-01",
+      "title": "Android SDK 接受 window 入口（r3bw）",
+      "input": {
+        "platform": "android",
+        "channel": "window"
+      },
+      "expect": true
+    },
+    {
+      "id": "SA-02",
+      "title": "Android SDK 不接受聊天模块入口（r3bw）",
+      "input": {
+        "platform": "android",
+        "channel": "chat"
+      },
+      "expect": false
+    },
+    {
+      "id": "SA-03",
+      "title": "iOS SDK 接受 window 入口（r3bw）",
+      "input": {
+        "platform": "ios",
+        "channel": "window"
+      },
+      "expect": true
+    },
+    {
+      "id": "SA-04",
+      "title": "iOS SDK 接受聊天模块入口，并执行同一来源校验（r3bw）",
+      "input": {
+        "platform": "ios",
+        "channel": "chat"
+      },
+      "expect": true
+    }
+  ],
+  "qaHookCases": [
+    {
+      "id": "HK-01",
+      "title": "QA 构建：测试钩子存在，用于造出记录缺私钥状态（r3bw，R460）",
+      "input": {
+        "build": "qa"
+      },
+      "expect": {
+        "available": true
+      }
+    },
+    {
+      "id": "HK-02",
+      "title": "生产构建：测试钩子不存在（r3bw，R460）",
+      "input": {
+        "build": "production"
+      },
+      "expect": {
+        "available": false
+      }
+    },
+    {
+      "id": "HK-03",
+      "title": "测试钩子不经任何桥暴露（window、聊天模块、页面桥），QA 构建亦然（r3bw）",
+      "input": {
+        "build": "qa",
+        "channel": "window"
+      },
+      "expect": {
+        "exposed": false
+      }
     }
   ],
   "unregisterCases": [
@@ -6089,7 +6476,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 193,
+    "runs": 220,
     "result": "pass"
   }
 }
