@@ -28,7 +28,7 @@ class ShellRecordTest {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         SealedPageRecordStore(wrap, files, "$ACCOUNT:default").write(
-            JSONObject().put("rev", 1).put("schemaVersion", 2).put("mnemonic", token),
+            JSONObject().put("rev", 1).put("schemaVersion", 2).put("mnemonicPhrase", token),
         )
         assertEquals(1, files.map.size)
         for (bytes in files.map.values) {
@@ -78,7 +78,7 @@ class ShellRecordTest {
         val record = JSONObject()
             .put("rev", 1)
             .put("schemaVersion", 2)
-            .put("mnemonic", "M")
+            .put("mnemonicPhrase", "M")
             .put("pgpPassphrase", "")
             .put(
                 "profiles",
@@ -91,7 +91,7 @@ class ShellRecordTest {
                 ),
             )
         ShellRecordPolicy.stripPgpForRead(record)
-        assertEquals("M", record.getString("mnemonic"))
+        assertEquals("M", record.getString("mnemonicPhrase"))
         assertFalse(record.has("pgpPassphrase"))
         val profile = record.getJSONArray("profiles").getJSONObject(0)
         assertEquals("EOA", profile.getString("privateKeyArmor"))
@@ -107,12 +107,11 @@ class ShellRecordTest {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Ready(store, ACCOUNT) },
             migrating = { false },
-            migrationState = { "none" },
             outcome = { ImportOutcome.DONE },
         )
         val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r9"), 40)
-        assertEquals("ok", resp.getString("code"))
-        assertFalse(resp.has("walletFieldsRedacted"))
+        assertEquals("ok", resp.v().getString("code"))
+        assertFalse(resp.v().has("walletFieldsRedacted"))
     }
 
     @Test
@@ -120,7 +119,7 @@ class ShellRecordTest {
         val stored = JSONObject()
             .put("rev", 1)
             .put("schemaVersion", 2)
-            .put("mnemonic", "M")
+            .put("mnemonicPhrase", "M")
             .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("emailAddr", "a").put("privateKeyArmor", "EOA")))
         val omitted = JSONObject()
             .put("rev", 1)
@@ -129,14 +128,14 @@ class ShellRecordTest {
         val (merged, conflicts) = ShellRecordPolicy.mergeWallet(omitted, stored, ACCOUNT)
         assertTrue(conflicts.isEmpty())
         assertEquals("EOA", merged.getJSONArray("profiles").getJSONObject(0).getString("privateKeyArmor"))
-        assertEquals("M", merged.getString("mnemonic"))
+        assertEquals("M", merged.getString("mnemonicPhrase"))
 
         val different = JSONObject()
             .put("rev", 1)
             .put("schemaVersion", 2)
-            .put("mnemonic", "OTHER")
+            .put("mnemonicPhrase", "OTHER")
             .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("emailAddr", "b").put("privateKeyArmor", "EOA")))
-        assertEquals(listOf("mnemonic"), ShellRecordPolicy.mergeWallet(different, stored, ACCOUNT).names)
+        assertEquals(listOf("mnemonicPhrase"), ShellRecordPolicy.mergeWallet(different, stored, ACCOUNT).names)
     }
 
     @Test
@@ -204,10 +203,10 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordRead").put("reqId", "rw1"),
             40,
         )
-        assertEquals("ok", resp.getString("code"))
-        assertFalse(resp.has("walletFieldsRedacted"))
-        val record = resp.getJSONObject("record")
-        assertEquals("M", record.getString("mnemonic"))
+        assertEquals("ok", resp.v().getString("code"))
+        assertFalse(resp.v().has("walletFieldsRedacted"))
+        val record = resp.v().getJSONObject("record")
+        assertEquals("M", record.getString("mnemonicPhrase"))
         assertEquals("ACCOUNT-KEY", record.getJSONArray("profiles").getJSONObject(0).getString("privateKeyArmor"))
     }
 
@@ -235,8 +234,8 @@ class ShellRecordTest {
                 ),
         )
         val resp = readBridge(store).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "rp1"), 40)
-        assertEquals("ok", resp.getString("code"))
-        val profile = resp.getJSONObject("record").getJSONArray("profiles").getJSONObject(0)
+        assertEquals("ok", resp.v().getString("code"))
+        val profile = resp.v().getJSONObject("record").getJSONArray("profiles").getJSONObject(0)
         assertEquals("ACCOUNT-KEY", profile.getString("privateKeyArmor"))
         val chatManager = profile.getJSONObject("chatManager")
         assertEquals("ROUTER", chatManager.getString("router"))
@@ -263,10 +262,10 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordWrite").put("reqId", "wp1").put("record", record),
             200,
         )
-        assertEquals("bad_request", resp.getString("code"))
+        assertEquals("bad_request", resp.v().getString("code"))
         assertEquals(
             listOf("profiles[*].chatManager.pgpKey.keyID", "profiles[*].chatManager.pgpKey.publicKey"),
-            resp.getJSONArray("names").toList(),
+            resp.v().getJSONArray("names").toList(),
         )
     }
 
@@ -307,8 +306,8 @@ class ShellRecordTest {
                 JSONObject().put("type", "shellRecordWrite").put("reqId", "wr$schema").put("record", record),
                 200,
             )
-            assertEquals("wallet_copy_not_approved", resp.getString("code"))
-            assertEquals(listOf("mnemonic", "profiles[*].privateKeyArmor"), resp.getJSONArray("names").toList())
+            assertEquals("wallet_copy_not_approved", resp.v().getString("code"))
+            assertEquals(listOf("mnemonicPhrase", "profiles[*].privateKeyArmor"), resp.v().getJSONArray("names").toList())
         }
         assertEquals(1, store.read()!!.getInt("rev"))
     }
@@ -325,10 +324,10 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordWrite").put("reqId", "w2").put("record", record),
             200,
         )
-        assertEquals("ok", resp.getString("code"))
-        assertEquals(2, resp.getInt("rev"))
+        assertEquals("ok", resp.v().getString("code"))
+        assertEquals(2, resp.v().getInt("rev"))
         val stored = store.read()!!
-        assertEquals("M", stored.getString("mnemonic"))
+        assertEquals("M", stored.getString("mnemonicPhrase"))
         val profile = stored.getJSONArray("profiles").getJSONObject(0)
         assertEquals("ACCOUNT-KEY", profile.getString("privateKeyArmor"))
         assertEquals("b", profile.getString("emailAddr"))
@@ -352,8 +351,8 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordWrite").put("reqId", "w3").put("record", record),
             200,
         )
-        assertEquals("ok", resp.getString("code"))
-        assertEquals(2, resp.getInt("rev"))
+        assertEquals("ok", resp.v().getString("code"))
+        assertEquals(2, resp.v().getInt("rev"))
     }
 
     @Test
@@ -388,7 +387,7 @@ class ShellRecordTest {
             .put("rev", 0)
             .put("schemaVersion", 2)
             .put("extra", 1)
-            .put("mnemonic", "M")
+            .put("mnemonicPhrase", "M")
             .put(
                 "profiles",
                 JSONArray().put(
@@ -420,7 +419,6 @@ class ShellRecordTest {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
-            migrationState = { "pending" },
             outcome = { ImportOutcome.ABSENT },
         )
         val refused = bridge.handle(
@@ -428,7 +426,7 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
             40,
         )
-        assertEquals("bad_request", refused.getString("code"))
+        assertEquals("bad_request", refused.v().getString("code"))
         val text = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText()
         assertTrue(text.contains("fun migrationState(context: Context): String"))
     }
@@ -439,27 +437,24 @@ class ShellRecordTest {
         fun read(outcome: ImportOutcome?): String = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
-            migrationState = { "none" },
             outcome = { outcome },
-        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40).getString("code")
+        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40).v().getString("code")
 
         assertEquals("migrating", read(null))
         assertEquals("absent", read(ImportOutcome.ABSENT))
         val unreadable = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
-            migrationState = { "none" },
             outcome = { ImportOutcome.LEGACY_UNREADABLE },
         ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r2"), 40)
-        assertEquals("error", unreadable.getString("code"))
-        assertEquals("legacy_store_unreadable", unreadable.getString("sub"))
+        assertEquals("error", unreadable.v().getString("code"))
+        assertEquals("legacy_store_unreadable", unreadable.v().getString("sub"))
         val notDone = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
-            migrationState = { "none" },
             outcome = { ImportOutcome.NOT_DONE },
         ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r3"), 40)
-        assertEquals("import_not_done", notDone.getString("sub"))
+        assertEquals("import_not_done", notDone.v().getString("sub"))
     }
 
     @Test
@@ -467,12 +462,11 @@ class ShellRecordTest {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Locked },
             migrating = { false },
-            migrationState = { "none" },
             outcome = { ImportOutcome.ABSENT },
         )
         val read = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40)
-        assertEquals("error", read.getString("code"))
-        assertEquals("locked", read.getString("sub"))
+        assertEquals("error", read.v().getString("code"))
+        assertEquals("locked", read.v().getString("sub"))
     }
 
     @Test
@@ -484,12 +478,11 @@ class ShellRecordTest {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Ready(store, ACCOUNT) },
             migrating = { true },
-            migrationState = { "none" },
             outcome = { ImportOutcome.DONE },
         )
         val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r1"), 40)
-        assertEquals("migrating", resp.getString("code"))
-        assertFalse(resp.has("record"))
+        assertEquals("migrating", resp.v().getString("code"))
+        assertFalse(resp.v().has("record"))
     }
 
     @Test
@@ -528,7 +521,7 @@ class ShellRecordTest {
             JSONObject()
                 .put("rev", 1)
                 .put("schemaVersion", 2)
-                .put("mnemonic", "M")
+                .put("mnemonicPhrase", "M")
                 .put(
                     "profiles",
                     JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("emailAddr", "a").put("privateKeyArmor", "ACCOUNT-KEY")),
@@ -540,7 +533,6 @@ class ShellRecordTest {
     private fun readBridge(store: SealedPageRecordStore) = ShellRecordBridge(
         account = { ShellRecordAccount.Ready(store, ACCOUNT) },
         migrating = { false },
-        migrationState = { "none" },
         outcome = { ImportOutcome.DONE },
     )
 

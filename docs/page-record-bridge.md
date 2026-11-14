@@ -1,7 +1,7 @@
 # Page-record bridge and first-run import (SDK 0.2.16)
 
-This note is the SDK-side reference for the native page-record bridge. It follows spec r3bh (§25.52K, §25.52L) and the vectors
-`spec/pgp-migration-vectors.v1.json` (sha256 `9e7e6301e9e04c6848efb5409fae4fcba2bef8e489929bafea077152dc400c7f`).
+This note is the SDK-side reference for the native page-record bridge. It follows spec r3bo (§25.52K to §25.52S) and the vectors
+`spec/pgp-migration-vectors.v1.json` (sha256 `87880d8dbf844d626bbc1958d869eb4b3d6c7935507a3f2473fc36f6148748c3`).
 
 ## Public entries
 
@@ -11,31 +11,55 @@ This note is the SDK-side reference for the native page-record bridge. It follow
 | `BeamioPgpMigrationImport.run(context, eoa, workspace = "default", source: LegacyPgpSource?): MigrationResult` | One PGP migration run. `source == null` reads L; otherwise P is used. |
 | `BeamioPgpMigrationImport.state(context, eoa, workspace)` | `none`, `pending`, `failed` or `verified`. Read only. |
 | `BeamioPgpMigrationImport.unregister(context, eoa, workspace): MigrationResult` | Removes M, N, the last code and the page copy's W fields, after the recovery check. |
-| `BeamioShellRecordImport.handle(context, origin, body, requestBytes): JSONObject` | The page's bridge: `shellRecordRead` and `shellRecordWrite` only. |
+| `BeamioShellRecordImport.handle(context, origin, body, requestBytes): JSONObject` | The page's bridge: `shellRecordRead` and `shellRecordWrite` only. Returns the ack envelope (below). |
 | `BeamioShellRecordImport.writeWalletNative(context, record): JSONObject` | Native account creation or recovery. May replace the W fields. The page never calls it. |
 | `BeamioShellRecordImport.migrationState(context): String` | Native read-only query. The page does not call it. |
 | `BeamioShellRecordImport.setMigrationPending(Boolean)` | Start-up flag set by the shell. `importFirstRun` restores the value it found. |
 
-`context` is the Android `Context`; the spec's signatures omit it. `importFirstRun` is the public name, and `BeamioShellRecordImport` holds
-no entry of that name.
+`context` is the Android `Context`; the spec's signatures omit it.
+
+## Ack envelope (§25.28.3, R431)
+
+Every answer to `shellRecordRead` and `shellRecordWrite` is an ack. No separate event is sent.
+
+- Processed: `{type: "ack", reqId, ok: true, result: {code, ...}}`. `result.code` is the outcome, with its fields in `result`
+  (`rev`, `schemaVersion`, `record`, `currentRev`, `reason`, `names`).
+- Refused or failed: `{type: "ack", reqId, ok: false, error}`. `error` is the code (`origin_refused`, `too_large`, `migrating`,
+  `write_failed`, a `bad_request` without names), or the sub-code of an error answer (`needs_native_recovery`,
+  `legacy_store_unreadable`, `import_not_done`, `record_unreadable`, `storage_locked`, `locked`, `no_key`).
+- `reqId` is echoed as sent (a string or an integer), or `null` when it is invalid.
+- A `bad_request` that names paths is processed: it has `ok: true` and `result.code: "bad_request"` with `names`.
+
+Unverified origins through the generic bridge get the same refusal (`origin_refused`) with the reqId echoed.
 
 ## First-run import: input format
 
 - `eoa`: lower-case `0x` followed by 40 hex digits.
 - `walletRecord`: `LegacyWalletRecord`.
-  - `Found(bytes)`: UTF-8 JSON of the legacy wallet record. The reader strips the PGP fields; the SDK strips them again
-    (`chatManager.pgpKey`, `profiles[*].pgpKey`, `pgpPassphrase`, `chats[*].chatData.privateArmored`). The account is the profile whose
-    `keyID` equals `eoa` (case-insensitive, first match). Its `privateKeyArmor` must be `0x` + 64 hex digits and must derive `eoa`; otherwise
-    the result is `address_mismatch`. The input `schemaVersion` and `rev` are ignored.
+  - `Found(bytes)`: UTF-8 JSON of the legacy wallet record. The reader strips the PGP fields; the SDK strips them again, including the
+    PGP public fields (`beamio.pgpPublicKeyArmor`, `beamio.pgpPublicKeyID`, and the `chats[*].chatData` public fields).
+    The account is the profile whose `keyID` equals `eoa` (case-insensitive, first match). Its `privateKeyArmor` must be `0x` + 64 hex digits
+    and must derive `eoa`. Without a matching profile or without a `privateKeyArmor`: `import_failed` (provisional, §25.52N.6). A key that
+    derives another address: `address_mismatch`. `mnemonicPhrase` is kept; its derivation is not checked by the SDK in this build. The input
+    `schemaVersion` and `rev` are ignored.
   - `Absent`: the legacy store is confirmed absent or empty. Result `absent`.
   - `Unreadable(reason)`: the legacy store is temporarily unreadable. Result `legacy_unreadable`.
   - The byte array is zero-filled after use.
 - `pgpSource`: `LegacyPgpSource(privateArmor: ByteArray, publicArmor: ByteArray, keyId: String)`, or `null` to read L. Each armor is at most
   64 KB in UTF-8. The SDK zero-fills the arrays after use.
 - Result: `ShellImportCode` with the wire values `import_ok`, `exists`, `absent`, `legacy_unreadable`, `import_failed`, `address_mismatch`.
-  The PGP migration runs only after `import_ok`; its result is separate and does not change the import result.
+  The PGP migration runs only after `import_ok`; its result is separate.
 
-On success the copy is written with `schemaVersion: 2` and `rev: 1`. The copy is not overwritten: an existing copy gives `exists`.
+On success the copy is written with `schemaVersion: 2` and `rev: 1`. An existing copy gives `exists` and is never overwritten.
+
+## Fresh install and the device marker (§25.52K.4, R431)
+
+- `absent` is answered only when the import has confirmed the legacy store absent (`importFirstRun` with `Absent`), no copy exists, and
+  the device marker is not set. A fresh install reaches `absent` through that confirmation; before the import runs, a read answers `migrating`.
+- The device marker is the file `legacy_store_unreadable.v1` in the no-backup directory. The import sets it on `legacy_unreadable`. It is
+  cleared by a successful import (`import_ok`) or an existing copy (`exists`). A confirmed `absent` does not clear it.
+- While the marker is set, a read with no copy answers `error` with `legacy_store_unreadable`, never `absent`. A first write with no copy
+  answers the same error and creates no wallet.
 
 ## Page record: file format (§25.52L.2)
 
@@ -43,62 +67,94 @@ On success the copy is written with `schemaVersion: 2` and `rev: 1`. The copy is
 |---|---|---|
 | 0 | 1 | Version byte `0x01` |
 | 1 | 12 | Nonce, random per write |
-| 13 | n | AES-256-GCM ciphertext of the UTF-8 JSON copy (W fields included, PGP fields absent) |
+| 13 | n | AES-256-GCM ciphertext of the canonical JSON copy (see below) |
 | 13 + n | 16 | GCM tag |
 
 The file is `29 + n` bytes. Shorter files, a version byte other than `0x01`, or an AAD mismatch give `record_unreadable`. Such a file is
 never read as `absent` and never overwritten.
 
 AAD: the lower-case `eoa:workspace` UTF-8 bytes (workspace `default`), followed by the byte `0x01`.
-Example (FM-01): `0xAbC0…01` gives `3078616263…3a64656661756c7401`.
+
+Plaintext (§25.52M.4, tentative): the canonical JSON of the copy: UTF-8, object keys in UTF-8 byte order, no whitespace, array order kept.
 
 The Keystore key is AES-256-GCM, not exportable, with randomized encryption required. StrongBox is used when available. The key is not
 verified on a device in this build.
 
-## W fields and the account slot (§25.52H, §25.52L.4, §25.52L.5)
+## W fields (§25.52N.3, §25.52P.2, §25.52P.4, §25.52R.2)
 
-- W fields: `profiles[k].privateKeyArmor` on the account's record, top-level `mnemonic`, and `walletVault.mnemonic`.
-- The account's record is the profile whose `keyID` equals the account, compared without case. Several matches give no slot.
-- **Conditional fallback (documented; accepted by the PM under R424):** while no profile of the record carries a `keyID` at all, the
-  account's record is `profiles[0]`. This is the "until confirmed" rule of §25.52B.6. It applies to the W placement only. The first-run
-  import always matches by `keyID`. Android measurement must confirm the `keyID` match before release.
-- A W field in a profile other than the account's record gives `conflict` with `reason: "w_account_unmatched"`. So does a stored W field the
-  page cannot place. An omitted W field keeps the stored value. A different value, `null` included, gives `conflict` with `reason: "w_differs"`.
-- A stored copy with W fields takes only `schemaVersion` 2 writes. A write with schema 1 or without `schemaVersion` gets
-  `wallet_copy_not_approved`, listing the stored W paths, and the store is unchanged.
-- `writeWalletNative` may replace the W fields. The page path may not.
+- W fields: `profiles[*].privateKeyArmor` on the account's record (keyID equal to the account, case-insensitive), top-level
+  `mnemonicPhrase`, and top-level `recoveryWords`. They are encrypted, never sent by the page, and kept when the page omits them.
+- A different value, `null` included, gives `conflict` with `reason: "w_differs"`. A W field outside the account's record, or a stored one
+  the page cannot place, gives `conflict` with `reason: "w_account_unmatched"`. Only native creation or recovery replaces them.
+- Missing EOA key: a schema 2 copy with no profile holding `privateKeyArmor` is answered `error` with `needs_native_recovery` on read; the
+  page stays unavailable and offers the native recovery entry (`nativeRecoveryOpen`). A write that leaves no `privateKeyArmor` is refused
+  with `wallet_fields_missing`, and nothing is stored. A missing `mnemonicPhrase` is allowed.
+- `privateKeyArmorWrap` is not a W field: it is never stored, and a write with it is `key_shaped_content`.
+- Non-W fields are replaced as a whole by the payload (§25.52S.5). Non-W fields in the store that the payload does not carry are removed.
 
-## Writes: key-shape scan and whitelist (§25.52L.9)
+## Writes: the check order (§25.52O.5)
 
-The checks run in this order:
+1. Size (2 MB raw bytes), `rev` an integer.
+2. A PGP private header, or a forbidden PGP private path: `pgp_private_in_payload`.
+3. W fields with `schemaVersion` below 2, or a stored copy with W fields written at a lower schema: `wallet_copy_not_approved`.
+   A missing or non-integer `schemaVersion`: `bad_request`.
+4. Key-shaped content outside the W paths (`privateKey*`, `mnemonic*`, `pgpPassphrase*`, `pgpPrivate*`, `duplicateCode*`, `seed`,
+   `recoveryCode`, `recoveryPhrase`, `duplicatePassword`, `duplicateMnemonicPhrase`, `_duplicateCode`, `walletPrivateKey`): `key_shaped_content`,
+   path names listed.
+5. Anything outside the whitelist, and every PGP public path: `bad_request`, leaf paths listed in UTF-8 byte order.
+6. `migrating`, then the device marker and the import outcome for a first write.
+7. `rev` differs: `conflict` with `currentRev`.
+8. The wallet-field merge: `conflict` as above.
+9. A schema 2 copy without a holder of `privateKeyArmor`: `wallet_fields_missing`.
+10. Write failure: `write_failed`, the store unchanged.
 
-1. A PGP private-key header in any string value, or a forbidden PGP path: `pgp_private_in_payload`.
-2. A key shaped like private key material outside the W paths: `key_shaped_content`, with the paths named. Key names checked:
-   prefixes `privateKey`, `pgpPassphrase`, `pgpPrivate`, and the exact names `privateKeyHex`, `privateKeyArmored`, `walletPrivateKey`, `mnemonic`,
-   `seed`. The scan covers the container subtrees.
-3. Schema checks (above).
-4. Whitelist, by exact path: anything else is `bad_request`, with the paths named. PGP public fields under `chatManager.pgpKey` are not
-   whitelisted and are `bad_request`.
+## Whitelist (§25.52N.4, §25.52O.2, §25.52Q.3)
 
-## Unregister and the W fields (§25.52H.2 rule 5, §25.52J.3, R424)
+- Top level: `schemaVersion`, `rev`, `isReady`, `ver`, `nonce`, `upgradev2`, `webFilter`, `mnemonicPhrase`, `recoveryWords`; containers
+  `preferences`, `fx168Order`, `cardRedeems`, `ChannelPartners`, `referrals`, `fragmentClass`, `search`; `beamio` with 15 exact keys;
+  `passcode` with `status` only; `profiles`.
+- Profile: scalars `isPrimary`, `emailAddr`, `hdPath`, `index`, `isNode`, `referrer`, `nodeID`, `nodeIP_address`, `nodeRegion`,
+  `vpnTimeUsedInMin`, `webFilter`, `aaAccount`, `keyID`, `type`, `publicKeyArmor`, `privateKeyArmor`; containers `tokens`, `spClub`,
+  `SpClubPoints`, `spChannel`, `airdropEvent`, `data`, `activePassport`, `silentPassPassports`, `chats`, `phoneCalls`, `issuedCards`;
+  `chatManager` with `keyID`, `router`, and the container `routes`.
+- Containers take any subtree; the subtree still goes through the key-shape scan.
+- Not whitelisted: `encryptedString`, `keyObj` (whole), `duplicateAccount`, `walletVault`, the non-status keys of `passcode`, and every PGP
+  public path.
+
+## PGP fields (§25.52N.5, §25.52P.5, §25.52Q.3, §25.52R.3, §25.52S.2)
+
+- Private (`pgp_private_in_payload`): `chatManager.pgpKey.privateKey`, `chatManager.pgpKey.privateKeyArmor`,
+  `chatManager.pgpKey.privateKeyArmorWrap`, `profiles[*].pgpKey.privateKeyArmor`, `profiles[*].pgpKey.privateKeyArmorWrap`, the top-level
+  `pgpPassphrase`, `chats[*].chatData.privateArmored`. `privateKeyObj` is a key-shaped name instead.
+- Public (write: `bad_request` with the path names; the page refuses to send them): `chatManager.pgpKey.publicKey`, `.keyID`, `.routes`,
+  `profiles[*].pgpKey.publicKeyArmor`, `.publicKeyObj`, `beamio.pgpPublicKeyArmor`, `beamio.pgpPublicKeyID`, `chats[*].chatData.publicArmored`,
+  `routePgpKeyID`, `routersArmoreds`.
+- Read and first import: the public and private PGP fields are removed (`chatManager.pgpKey`, `pgpKey`, `pgpPassphrase`, and the public
+  paths above). An emptied `beamio` or `chatManager` is removed.
+
+## Unregister and the W fields (§25.52H.2 rule 5, §25.52M.2, §25.52S.4)
 
 `unregister` checks the recovery source before any removal: L exists, or P is readable, or a chain backup is registered. If none holds and
 M, N or W is present, the result is `unregister_refused` and nothing is removed.
 
-Removal order: M, then N, then the last code, then the W fields. The page copy keeps everything else, and its `rev` is incremented, so a
-page holding an older copy gets `conflict` on its next write. An unreadable copy is erased whole. A failed write of the copy gives
-`write_failed`; M, N and the last code are already gone, and the next call removes the W fields.
-
-Frozen r3bh §25.52D.12 leaves the page copy's handling open. The W-field removal above follows the PM's R424 instruction and the
-unfrozen r3bi §25.52M.2.
+Removal order: M, then N, then the last code, then the W fields (`privateKeyArmor`, `mnemonicPhrase`, `recoveryWords`). The page copy keeps
+everything else, and its `rev` is incremented, so a page holding an older copy gets `conflict` on its next write. An unreadable copy is erased
+whole. A failed write of the copy gives `write_failed`; the next call removes the W fields.
 
 ## Size limits (§25.52L.10)
 
-The 2 MB limit applies to the whole message envelope in raw UTF-8 bytes, on the request and on the response. The caller passes
-`requestBytes` for the request.
+The 2 MB limit applies to the whole message envelope in raw UTF-8 bytes, on the request and on the response. A read answer that would exceed
+it is `too_large`, checked before the schema-specific answers.
+
+## Open points
+
+- `mnemonicPhrase` derivation in the first-run import is not checked by the SDK (no BIP-39 derivation in this build). The vector IM-09 uses a
+  placeholder phrase, so the check is left for PM.
+- The first-run import has no whitelist for legacy fields beyond PGP (`legacy_fields_unknown` is not decided, §25.52N.6).
+- `accountSlot` keeps the conditional profile-0 fallback for records with no keyID (PM R424); Android measurement must confirm the keyID match.
 
 ## Tests
 
-`./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format
-tests (`ShellRecordFormatTest`), and the review-item tests (`ShellRecordR424Test`). The key-shape mutation (TR-16 disabled) fails
-the vector run.
+`./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
+(`ShellRecordFormatTest`), the review-item tests (`ShellRecordR424Test`), and the R431 tests (`ShellRecordR431Test`: ack envelope, fresh install,
+device marker, canonical JSON).

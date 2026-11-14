@@ -33,7 +33,7 @@ class ShellRecordFormatTest {
         val record = JSONObject().put("rev", 1).put("schemaVersion", 2)
         store.write(record)
         val bytes = files.map.values.single()
-        val n = record.toString().toByteArray(Charsets.UTF_8).size
+        val n = CanonicalJson.encode(record).toByteArray(Charsets.UTF_8).size
         assertEquals(29 + n, bytes.size)
         assertEquals(1, bytes[0].toInt())
         assertEquals(1, store.read()!!.getInt("rev"))
@@ -77,14 +77,13 @@ class ShellRecordFormatTest {
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Ready(store, eoa.lowercase()) },
             migrating = { false },
-            migrationState = { "none" },
             // Even with a confirmed-absent legacy store, the unreadable record must not turn into `absent`.
             outcome = { ImportOutcome.ABSENT },
         )
         val read = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "f1"), 40)
-        assertEquals("error", read.getString("code"))
-        assertEquals("record_unreadable", read.getString("sub"))
-        assertFalse(read.has("record"))
+        assertEquals("error", read.v().getString("code"))
+        assertEquals("record_unreadable", read.v().getString("sub"))
+        assertFalse(read.v().has("record"))
 
         val write = bridge.handle(
             ShellOrigin.EMBEDDED_PAGE,
@@ -94,8 +93,8 @@ class ShellRecordFormatTest {
                 .put("record", JSONObject().put("rev", 0).put("schemaVersion", 2).put("profiles", org.json.JSONArray())),
             200,
         )
-        assertEquals("error", write.getString("code"))
-        assertEquals("record_unreadable", write.getString("sub"))
+        assertEquals("error", write.v().getString("code"))
+        assertEquals("record_unreadable", write.v().getString("sub"))
         assertTrue("the unreadable file is kept", before.contentEquals(files.map[name]!!))
     }
 

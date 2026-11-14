@@ -7,6 +7,8 @@ import android.util.Log
 import org.json.JSONArray
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
+import network.conet.chat.nativekey.ShellRecordPolicy
+import network.conet.chat.nativekey.shellAck
 import network.conet.chat.nativekey.IdentityPublic
 import network.conet.chat.nativekey.NativeDerivationCommands
 import network.conet.chat.nativekey.VoiceChannelKeys
@@ -174,7 +176,10 @@ object BeamioConetChatModule {
         // shellRecord* (r3az §25.52D.5): answered only by BeamioShellRecordImport.handle, with the origin the shell verified.
         // Through this generic bridge there is no verified origin, so the names are refused here.
         if (type.startsWith("shellRecord")) {
-            ack(body.optInt("reqId", -1), false, error = "origin_refused")
+            // R431: the refusal is the ack envelope with the reqId as the page sent it (a string or an integer; null when invalid).
+            val raw = body.opt("reqId")
+            val echo: Any = if (ShellRecordPolicy.reqIdValid(raw)) raw!! else JSONObject.NULL
+            emitEvent(shellAck(echo, "origin_refused", emptyList()))
             return
         }
         // pgpMigrate (r3at §25.52.4): decided in its handler, key fields first, before the gate (R-02).

@@ -3,7 +3,7 @@
     "file": "pgp-migration-vectors.v1.json",
     "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
     "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bh）",
+    "generator": "gen-pgp-migration-vectors.mjs（r3bo）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
@@ -1983,7 +1983,7 @@
         "record": {
           "rev": 1,
           "schemaVersion": 2,
-          "mnemonic": "M",
+          "mnemonicPhrase": "M",
           "profiles": [
             {
               "emailAddr": "a",
@@ -2009,7 +2009,7 @@
         "record": {
           "rev": 1,
           "schemaVersion": 2,
-          "mnemonic": "M",
+          "mnemonicPhrase": "M",
           "profiles": [
             {
               "emailAddr": "a",
@@ -2063,8 +2063,8 @@
       "expect": {
         "code": "bad_request",
         "names": [
-          "profiles[*].chatManager.pgpKey.publicKey",
-          "profiles[*].chatManager.pgpKey.keyID"
+          "profiles[*].chatManager.pgpKey.keyID",
+          "profiles[*].chatManager.pgpKey.publicKey"
         ],
         "reqId": "w12",
         "store": null
@@ -2184,6 +2184,1112 @@
       },
       "expect": {
         "code": "too_large"
+      }
+    },
+    {
+      "id": "TR-20",
+      "title": "真实字段形态（Android 实测 0.52.932 清单，不含 PGP）：ok，rev 递增（r3bj，R422）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w20",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "isReady": true,
+          "nonce": "n",
+          "ver": 1,
+          "ChannelPartners": [],
+          "referrals": [],
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "aaAccount": "x",
+              "chatManager": {
+                "keyID": "k",
+                "router": "r",
+                "routes": []
+              },
+              "hdPath": "h",
+              "index": 0,
+              "isNode": false,
+              "isPrimary": true,
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "publicKeyArmor": "PUB",
+              "referrer": "r",
+              "tokens": [],
+              "type": "t",
+              "webFilter": "w"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 1,
+        "reqId": "w20",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "isReady": true,
+            "nonce": "n",
+            "ver": 1,
+            "ChannelPartners": [],
+            "referrals": [],
+            "mnemonicPhrase": "M",
+            "profiles": [
+              {
+                "aaAccount": "x",
+                "chatManager": {
+                  "keyID": "k",
+                  "router": "r",
+                  "routes": []
+                },
+                "hdPath": "h",
+                "index": 0,
+                "isNode": false,
+                "isPrimary": true,
+                "keyID": "a1",
+                "privateKeyArmor": "EOA",
+                "publicKeyArmor": "PUB",
+                "referrer": "r",
+                "tokens": [],
+                "type": "t",
+                "webFilter": "w"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-21",
+      "title": "顶层 mnemonic（旧名，非精确 W 路径）：key_shaped_content，只记路径名（r3bj）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w21",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "mnemonic": "m",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "mnemonic"
+        ],
+        "reqId": "w21",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-22",
+      "title": "walletVault.mnemonic（已移出白名单）：key_shaped_content，只记路径名（r3bj）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w22",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "walletVault": {
+            "mnemonic": "m"
+          },
+          "profiles": [
+            {
+              "keyID": "a1"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "walletVault.mnemonic"
+        ],
+        "reqId": "w22",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-23",
+      "title": "beamio 下的 PGP 公开字段（beamio 不在白名单）：bad_request，只记路径名（r3bj）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w23",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "beamio": {
+            "pgpPublicKeyArmor": "PUB"
+          }
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "beamio.pgpPublicKeyArmor"
+        ],
+        "reqId": "w23",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-24",
+      "title": "真实结构写入（PWA 类型清单，不含 PGP、不含 keyObj）：ok（r3bk，R427）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w24",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "isReady": true,
+          "ver": 1,
+          "nonce": 3,
+          "upgradev2": true,
+          "webFilter": false,
+          "passcode": {
+            "status": "none"
+          },
+          "preferences": {
+            "theme": "x"
+          },
+          "fx168Order": [],
+          "mnemonicPhrase": "M",
+          "beamio": {
+            "accountName": "n",
+            "darkTheme": false,
+            "language": "en",
+            "currency": "USD",
+            "localeCurrencyConfigured": true
+          },
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "publicKeyArmor": "PUB",
+              "chatManager": {
+                "keyID": "k",
+                "router": "r",
+                "routes": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 1,
+        "reqId": "w24",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "isReady": true,
+            "ver": 1,
+            "nonce": 3,
+            "upgradev2": true,
+            "webFilter": false,
+            "passcode": {
+              "status": "none"
+            },
+            "preferences": {
+              "theme": "x"
+            },
+            "fx168Order": [],
+            "mnemonicPhrase": "M",
+            "beamio": {
+              "accountName": "n",
+              "darkTheme": false,
+              "language": "en",
+              "currency": "USD",
+              "localeCurrencyConfigured": true
+            },
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA",
+                "publicKeyArmor": "PUB",
+                "chatManager": {
+                  "keyID": "k",
+                  "router": "r",
+                  "routes": []
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-25",
+      "title": "privateKeyArmorWrap（设备封装，不是批准的 W 路径）：key_shaped_content，只记路径名（r3bk）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w25",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "privateKeyArmorWrap": {
+                "ct": "x"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].privateKeyArmorWrap"
+        ],
+        "reqId": "w25",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-26",
+      "title": "keyObj.privateKeyObj（私钥对象）：key_shaped_content，只记路径名（r3bk）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w26",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "keyObj": {
+                "publicKeyObj": {},
+                "privateKeyObj": {}
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].keyObj.privateKeyObj"
+        ],
+        "reqId": "w26",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-27",
+      "title": "keyObj.publicKeyObj（keyObj 不在白名单）：bad_request，只记路径名（r3bk）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w27",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "keyObj": {
+                "publicKeyObj": {}
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].keyObj.publicKeyObj"
+        ],
+        "reqId": "w27",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-28",
+      "title": "encryptedString（恢复备份，不在白名单）：bad_request，只记路径名（r3bk）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w28",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "encryptedString": "Q"
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "encryptedString"
+        ],
+        "reqId": "w28",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-29",
+      "title": "duplicatePassword（旧版秘密字段，非 W）：key_shaped_content，只记路径名（r3bk，r3bl 改用此名）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w29",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "duplicatePassword": "p"
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "duplicatePassword"
+        ],
+        "reqId": "w29",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-30",
+      "title": "多个非白名单字段：整条拒绝，names 列全部路径（按 UTF-8 字节序），不静默丢弃（r3bk，R427 第 3 点）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w30",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "zeta": 1,
+          "alpha": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "foo": 3
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "alpha",
+          "profiles[*].foo",
+          "zeta"
+        ],
+        "reqId": "w30",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-31",
+      "title": "读回：schemaVersion 2 且无 privateKeyArmor：error（needs_native_recovery），页面不进页面口令恢复、不新建钱包（r3bl，R428；r3bo，R430）",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "error",
+        "sub": "needs_native_recovery"
+      }
+    },
+    {
+      "id": "TR-32",
+      "title": "读回：PGP 公开字段（beamio 下）读回时删除，其余保留（r3bl，R428）",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "beamio": {
+            "accountName": "n",
+            "pgpPublicKeyArmor": "PUB",
+            "pgpPublicKeyID": "K"
+          }
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "schemaVersion": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "beamio": {
+            "accountName": "n"
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-33",
+      "title": "recoveryWords 为 W（schemaVersion 2，档案持有 privateKeyArmor）：ok，原生保存（r3bl，R428）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w33",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "recoveryWords": "R",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 1,
+        "reqId": "w33",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "recoveryWords": "R",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-34",
+      "title": "recoveryWords 在 schemaVersion 1 中：wallet_copy_not_approved，存储不变（r3bl，R428）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w34",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "recoveryWords": "R"
+        }
+      },
+      "expect": {
+        "code": "wallet_copy_not_approved",
+        "names": [
+          "recoveryWords"
+        ],
+        "reqId": "w34",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-35",
+      "title": "schemaVersion 2 且合并后无 privateKeyArmor：wallet_fields_missing，存储不变（r3bl，R428）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w35",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "wallet_fields_missing",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "w35",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-36",
+      "title": "recoveryWords 与原生已存值不同：conflict（w_differs），存储不变（r3bl，R428）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "recoveryWords": "R1",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "w36",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "recoveryWords": "R2",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 1,
+        "names": [
+          "recoveryWords"
+        ],
+        "reqId": "w36",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "recoveryWords": "R1",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-37",
+      "title": "chats 子树中的 chatData.publicArmored（PGP 公开）：bad_request，只记路径名（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w37",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chats": [
+                {
+                  "address": "a",
+                  "chatData": {
+                    "publicArmored": "P",
+                    "online": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].chats[*].chatData.publicArmored"
+        ],
+        "reqId": "w37",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-38",
+      "title": "chats 子树中的 routePgpKeyID 与 routersArmoreds（PGP 公开）：bad_request，路径名按 UTF-8 字节序（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w38",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chats": [
+                {
+                  "address": "a",
+                  "chatData": {
+                    "routePgpKeyID": "K",
+                    "routersArmoreds": "R"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].chats[*].chatData.routePgpKeyID",
+          "profiles[*].chats[*].chatData.routersArmoreds"
+        ],
+        "reqId": "w38",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-39",
+      "title": "读回：chats 子树中的 PGP 公开字段读回时删除，其余保留（r3bm）",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chats": [
+                {
+                  "address": "a",
+                  "chatData": {
+                    "publicArmored": "P",
+                    "routersArmoreds": "R",
+                    "online": true,
+                    "routePgpKeyID": "K"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "schemaVersion": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "chats": [
+                {
+                  "address": "a",
+                  "chatData": {
+                    "online": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "TR-40",
+      "title": "passcode 的非 status 子键：bad_request，只记路径名（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w40",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "passcode": {
+            "status": "s",
+            "verifier": "v"
+          }
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "passcode.verifier"
+        ],
+        "reqId": "w40",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-41",
+      "title": "duplicateMnemonicPhrase（助记词副本，非 W）：key_shaped_content，只记路径名（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w41",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "duplicateMnemonicPhrase": "m"
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "duplicateMnemonicPhrase"
+        ],
+        "reqId": "w41",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-42",
+      "title": "fragmentClass 与 search（明文，暂定容器）：ok（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w42",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "fragmentClass": {
+            "kind": "x"
+          },
+          "search": {
+            "q": "x"
+          }
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 1,
+        "reqId": "w42",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 1,
+            "fragmentClass": {
+              "kind": "x"
+            },
+            "search": {
+              "q": "x"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-43",
+      "title": "beamio.pgpPublicKeyID（PGP 公开）：bad_request，只记路径名（r3bm）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed"
+      },
+      "store": null,
+      "req": {
+        "reqId": "w43",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "beamio": {
+            "accountName": "n",
+            "pgpPublicKeyID": "K"
+          }
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "beamio.pgpPublicKeyID"
+        ],
+        "reqId": "w43",
+        "store": null
+      }
+    },
+    {
+      "id": "TR-44",
+      "title": "原生已存 beamio PGP 公开字段：页面整份写入不携带则不保留（非 W 字段整份替换），mnemonicPhrase 省略保留（r3bn，集成 a）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "beamio": {
+            "accountName": "n",
+            "pgpPublicKeyArmor": "PUB",
+            "pgpPublicKeyID": "K"
+          }
+        }
+      },
+      "req": {
+        "reqId": "w44",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "beamio": {
+            "accountName": "n"
+          }
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "w44",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "mnemonicPhrase": "M",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "beamio": {
+              "accountName": "n"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-45",
+      "title": "recoveryWords 省略：原生保留（W，省略保留）（r3bn，集成 1）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "recoveryWords": "R1",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "w45",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "w45",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "recoveryWords": "R1",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "TR-46",
+      "title": "recoveryWords 不同值：页面写入 conflict（TR-36）；仅原生建号或恢复可替换（本例为原生写入，接受）（r3bn，集成 1）",
+      "kind": "write",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeWrite": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "recoveryWords": "R1",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "w46",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "recoveryWords": "R2",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA2"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "rev": 2,
+        "reqId": "w46",
+        "store": {
+          "rev": 2,
+          "record": {
+            "rev": 2,
+            "schemaVersion": 2,
+            "recoveryWords": "R2",
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA2"
+              }
+            ]
+          }
+        }
       }
     }
   ],
@@ -2482,6 +3588,17 @@
       "expect": {
         "action": "fail_closed"
       }
+    },
+    {
+      "id": "RD-08",
+      "title": "读回 error（needs_native_recovery）：停在 unavailable，给出原生恢复入口；不进页面口令恢复，不新建钱包（r3bo，R430）",
+      "resp": {
+        "code": "error",
+        "sub": "needs_native_recovery"
+      },
+      "expect": {
+        "action": "unavailable_native_recovery"
+      }
     }
   ],
   "pageWriteCases": [
@@ -2592,8 +3709,37 @@
         "action": "refuse",
         "reason": "pgp_field_not_allowed",
         "names": [
-          "profiles[*].chatManager.pgpKey.publicKey",
-          "profiles[*].chatManager.pgpKey.keyID"
+          "profiles[*].chatManager.pgpKey.keyID",
+          "profiles[*].chatManager.pgpKey.publicKey"
+        ]
+      }
+    },
+    {
+      "id": "PW-05",
+      "title": "写入前：beamio 下的 PGP 公开字段与 chats 子树中的 PGP 公开字段：页面拒绝发送，报路径名（r3bm）",
+      "record": {
+        "beamio": {
+          "accountName": "n",
+          "pgpPublicKeyID": "K"
+        },
+        "profiles": [
+          {
+            "chats": [
+              {
+                "chatData": {
+                  "publicArmored": "P"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "action": "refuse",
+        "reason": "pgp_field_not_allowed",
+        "names": [
+          "beamio.pgpPublicKeyID",
+          "profiles[*].chats[*].chatData.publicArmored"
         ]
       }
     }
@@ -2618,7 +3764,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2650,7 +3796,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -2674,7 +3820,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2689,7 +3835,7 @@
               "privateKeyArmor": "OTHER"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "expect": {
@@ -2712,14 +3858,14 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
     },
     {
       "id": "WM-03",
-      "title": "首次写入携带 W 字段（原生尚无）：接受",
+      "title": "首次写入携带 W 字段（privateKeyArmor 与 mnemonicPhrase；原生尚无）：接受（r3bl：privateKeyArmor 为持有的必需字段）",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -2745,10 +3891,11 @@
           "profiles": [
             {
               "keyID": "a1",
-              "emailAddr": "a"
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "expect": {
@@ -2763,10 +3910,11 @@
             "profiles": [
               {
                 "keyID": "a1",
-                "emailAddr": "a"
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -2790,7 +3938,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2805,7 +3953,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "expect": {
@@ -2824,7 +3972,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -2848,7 +3996,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2863,7 +4011,7 @@
               "privateKeyArmor": null
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "expect": {
@@ -2886,7 +4034,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -2911,7 +4059,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2926,7 +4074,7 @@
               "privateKeyArmor": "NEW"
             }
           ],
-          "mnemonic": "N2"
+          "mnemonicPhrase": "N2"
         }
       },
       "expect": {
@@ -2945,7 +4093,7 @@
                 "privateKeyArmor": "NEW"
               }
             ],
-            "mnemonic": "N2"
+            "mnemonicPhrase": "N2"
           }
         }
       }
@@ -2969,7 +4117,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -2988,8 +4136,8 @@
       "expect": {
         "code": "wallet_copy_not_approved",
         "names": [
-          "profiles[*].privateKeyArmor",
-          "mnemonic"
+          "mnemonicPhrase",
+          "profiles[*].privateKeyArmor"
         ],
         "reqId": "m7",
         "store": {
@@ -3004,7 +4152,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -3028,7 +4176,7 @@
               "privateKeyArmor": "EOA"
             }
           ],
-          "mnemonic": "M"
+          "mnemonicPhrase": "M"
         }
       },
       "req": {
@@ -3064,7 +4212,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         }
       }
@@ -3073,23 +4221,95 @@
   "formatCases": [
     {
       "id": "FM-01",
-      "title": "AAD 为小写 \"eoa:workspace\" 加 1 个版本字节（十六进制）"
+      "title": "AAD 为小写 \"eoa:workspace\" 加 1 个版本字节（十六进制）",
+      "result": "3078616263303030303030303030303030303030303030303030303030303030303030303030303030313a64656661756c7401",
+      "expect": "3078616263303030303030303030303030303030303030303030303030303030303030303030303030313a64656661756c7401"
     },
     {
       "id": "FM-02",
-      "title": "文件布局：版本 1 字节、nonce 12 字节、密文 n 字节、tag 16 字节；总长 29 + n"
+      "title": "文件布局：版本 1 字节、nonce 12 字节、密文 n 字节、tag 16 字节；总长 29 + n",
+      "result": {
+        "version": [
+          0,
+          1
+        ],
+        "nonce": [
+          1,
+          13
+        ],
+        "ciphertext": [
+          13,
+          23
+        ],
+        "tag": [
+          23,
+          39
+        ],
+        "total": 39
+      },
+      "expect": {
+        "version": [
+          0,
+          1
+        ],
+        "nonce": [
+          1,
+          13
+        ],
+        "ciphertext": [
+          13,
+          23
+        ],
+        "tag": [
+          23,
+          39
+        ],
+        "total": 39
+      }
     },
     {
       "id": "FM-03",
-      "title": "版本字节不是 0x01：record_unreadable，不解密"
+      "title": "版本字节不是 0x01：record_unreadable，不解密",
+      "result": "record_unreadable",
+      "expect": "record_unreadable"
     },
     {
       "id": "FM-04",
-      "title": "文件属于另一个账户（AAD 不符）：record_unreadable，不解密，不返回 absent"
+      "title": "文件属于另一个账户（AAD 不符）：record_unreadable，不解密，不返回 absent",
+      "result": "record_unreadable",
+      "expect": "record_unreadable"
     },
     {
       "id": "FM-05",
-      "title": "文件长度不足 29 字节：record_unreadable"
+      "title": "文件长度不足 29 字节：record_unreadable",
+      "result": "record_unreadable",
+      "expect": "record_unreadable"
+    }
+  ],
+  "canonicalCases": [
+    {
+      "id": "CJ-01",
+      "title": "对象键按 UTF-8 字节序排列，无空白",
+      "input": {
+        "b": 1,
+        "a": {
+          "d": "x",
+          "c": [
+            2,
+            1
+          ]
+        }
+      },
+      "expect": "{\"a\":{\"c\":[2,1],\"d\":\"x\"},\"b\":1}"
+    },
+    {
+      "id": "CJ-02",
+      "title": "非 ASCII 键按 UTF-8 字节序（é 的字节大于 z，故 z 在前）",
+      "input": {
+        "é": 1,
+        "z": 2
+      },
+      "expect": "{\"z\":2,\"é\":1}"
     }
   ],
   "importCases": [
@@ -3120,7 +4340,7 @@
                 }
               }
             ],
-            "mnemonic": "M",
+            "mnemonicPhrase": "M",
             "pgpPassphrase": ""
           }
         },
@@ -3146,7 +4366,7 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             },
             "read": {
@@ -3165,7 +4385,7 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             }
           }
@@ -3246,7 +4466,7 @@
                 }
               }
             ],
-            "mnemonic": "M",
+            "mnemonicPhrase": "M",
             "pgpPassphrase": ""
           }
         },
@@ -3296,7 +4516,7 @@
                 }
               }
             ],
-            "mnemonic": "M",
+            "mnemonicPhrase": "M",
             "pgpPassphrase": ""
           }
         },
@@ -3336,7 +4556,7 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             },
             "read": {
@@ -3355,7 +4575,7 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             },
             "legacyKept": true
@@ -3390,7 +4610,7 @@
                 }
               }
             ],
-            "mnemonic": "M",
+            "mnemonicPhrase": "M",
             "pgpPassphrase": ""
           }
         },
@@ -3426,7 +4646,7 @@
                 "privateKeyArmor": "EOA"
               }
             ],
-            "mnemonic": "M"
+            "mnemonicPhrase": "M"
           }
         },
         "legacy": {
@@ -3450,7 +4670,7 @@
                     "privateKeyArmor": "EOA"
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             },
             "read": {
@@ -3465,7 +4685,7 @@
                     "privateKeyArmor": "EOA"
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             }
           }
@@ -3519,7 +4739,7 @@
                   }
                 }
               ],
-              "mnemonic": "M",
+              "mnemonicPhrase": "M",
               "pgpPassphrase": ""
             }
           },
@@ -3540,7 +4760,7 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
               }
             },
             "read": {
@@ -3559,7 +4779,79 @@
                     }
                   }
                 ],
-                "mnemonic": "M"
+                "mnemonicPhrase": "M"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-09",
+      "title": "首次导入：旧记录残留 beamio.pgpPublicKeyArmor、beamio.pgpPublicKeyID：导入时剥离，其余 beamio 字段保留（r3bo，R430）",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M",
+            "beamio": {
+              "accountName": "n",
+              "pgpPublicKeyArmor": "PUB",
+              "pgpPublicKeyID": "K"
+            }
+          }
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "import_ok",
+            "store": {
+              "rev": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA"
+                  }
+                ],
+                "mnemonicPhrase": "M",
+                "beamio": {
+                  "accountName": "n"
+                }
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA"
+                  }
+                ],
+                "mnemonicPhrase": "M",
+                "beamio": {
+                  "accountName": "n"
+                }
               }
             }
           }
@@ -3824,6 +5116,128 @@
           }
         }
       ]
+    },
+    {
+      "id": "UG-09",
+      "title": "D9：注销删除 W 字段（L 存在，恢复源满足）：删除 M、N、W",
+      "given": {
+        "L": {
+          "fp": "A",
+          "pubFp": "A",
+          "eoa": "ok",
+          "armor": "ok"
+        },
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "W": true
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": true,
+              "N": null,
+              "M": null,
+              "W": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-10",
+      "title": "D9：无 L、P 不可读、链上未登记：unregister_refused，W 字段与其它项全部保留",
+      "given": {
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "W": true
+      },
+      "steps": [
+        {
+          "faults": {
+            "pReadable": false,
+            "chainRegistered": false
+          },
+          "expect": {
+            "code": "unregister_refused",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": "A",
+              "M": "A",
+              "W": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-11",
+      "title": "D9：无 L，但 P 可读：删除 M、N、W",
+      "given": {
+        "L": null,
+        "N": {
+          "fp": "A"
+        },
+        "M": {
+          "fp": "A"
+        },
+        "W": true
+      },
+      "steps": [
+        {
+          "faults": {
+            "pReadable": true
+          },
+          "expect": {
+            "code": "ok",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null,
+              "W": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "UG-12",
+      "title": "D9：仅有 W 字段，无恢复源：unregister_refused，W 保留",
+      "given": {
+        "L": null,
+        "N": null,
+        "M": null,
+        "W": true
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "code": "unregister_refused",
+            "interrupted": false,
+            "state": {
+              "L": false,
+              "N": null,
+              "M": null,
+              "W": true
+            }
+          }
+        }
+      ]
     }
   ],
   "unregisterCodes": [
@@ -3833,7 +5247,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 126,
+    "runs": 162,
     "result": "pass"
   }
 }

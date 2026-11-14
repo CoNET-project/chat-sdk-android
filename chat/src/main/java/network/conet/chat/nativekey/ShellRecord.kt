@@ -63,9 +63,73 @@ internal enum class ImportOutcome { ABSENT, LEGACY_UNREADABLE, NOT_DONE, DONE }
 /** The wallet-field merge (§25.52H.2): the merged record, the conflicting paths (sorted) and the reason when there is a conflict. */
 internal data class WalletMerge(val record: JSONObject, val names: List<String>, val reason: String?)
 
-/** The rules of §25.52D.5 to §25.52D.8, §25.52I, §25.52J and §25.52L. */
+/** Byte order of UTF-8 strings (§25.52N.9.2): the order of `names` and of the canonical keys. */
+internal val UTF8_ORDER: Comparator<String> = Comparator { a, b ->
+    val x = a.toByteArray(Charsets.UTF_8)
+    val y = b.toByteArray(Charsets.UTF_8)
+    for (i in 0 until minOf(x.size, y.size)) {
+        val d = (x[i].toInt() and 0xff) - (y[i].toInt() and 0xff)
+        if (d != 0) return@Comparator d
+    }
+    x.size - y.size
+}
+
+/**
+ * The canonical JSON of a page copy (§25.52M.4, tentative; vectors CJ-01, CJ-02): UTF-8, object keys in UTF-8 byte order, no whitespace,
+ * array order kept, strings escaped by the JSON rules. The stored plaintext is this byte string.
+ */
+internal object CanonicalJson {
+    fun encode(value: Any?): String = StringBuilder().also { write(value, it) }.toString()
+
+    private fun write(value: Any?, out: StringBuilder) {
+        when (value) {
+            null, JSONObject.NULL -> out.append("null")
+            is JSONObject -> {
+                out.append('{')
+                val keys = value.keys().asSequence().map { it.toString() }.sortedWith(UTF8_ORDER)
+                keys.forEachIndexed { i, k ->
+                    if (i > 0) out.append(',')
+                    quote(k, out)
+                    out.append(':')
+                    write(value.opt(k), out)
+                }
+                out.append('}')
+            }
+            is JSONArray -> {
+                out.append('[')
+                for (i in 0 until value.length()) {
+                    if (i > 0) out.append(',')
+                    write(value.opt(i), out)
+                }
+                out.append(']')
+            }
+            is String -> quote(value, out)
+            is Boolean, is Number -> out.append(value.toString())
+            else -> quote(value.toString(), out)
+        }
+    }
+
+    private fun quote(s: String, out: StringBuilder) {
+        out.append('"')
+        for (c in s) {
+            when (c) {
+                '"' -> out.append("\\\"")
+                '\\' -> out.append("\\\\")
+                '\n' -> out.append("\\n")
+                '\r' -> out.append("\\r")
+                '\t' -> out.append("\\t")
+                '\b' -> out.append("\\b")
+                '\u000c' -> out.append("\\f")
+                else -> if (c < ' ') out.append(String.format("\\u%04x", c.code)) else out.append(c)
+            }
+        }
+        out.append('"')
+    }
+}
+
+/** The rules of §25.52N to §25.52S: the W paths, the PGP paths, the whitelist, the key-shape scan, the merge and the strip. */
 internal object ShellRecordPolicy {
-    /** A request and a response are each at most 2 MB, in UTF-8 bytes (§25.52D.5). */
+    /** A request and a response are each at most 2 MB, in UTF-8 bytes (§25.52D.5, §25.52L.10). */
     const val MAX_BYTES = 2 * 1024 * 1024
 
     /** The bridge response schema (§25.52D.6). The record's own `schemaVersion` is separate. */
@@ -76,51 +140,93 @@ internal object ShellRecordPolicy {
 
     const val PGP_HEADER = "BEGIN PGP PRIVATE KEY"
 
-    /** §25.52D.8 and §25.52I.2: PGP paths that never enter the page record. Writing one is refused. */
+    /** §25.52N.3: the W path of the account's profile. */
+    const val W_PROFILE_PATH = "profiles[*].privateKeyArmor"
+
+    /** §25.52N.5: PGP private paths, refused with `pgp_private_in_payload` and the path names. */
     val FORBIDDEN_PATHS: Set<String> = setOf(
         "profiles[*].chatManager.pgpKey.privateKey",
         "profiles[*].chatManager.pgpKey.privateKeyArmor",
         "profiles[*].chatManager.pgpKey.privateKeyArmorWrap",
-        "profiles[*].pgpKey.privateKey",
         "profiles[*].pgpKey.privateKeyArmor",
         "profiles[*].pgpKey.privateKeyArmorWrap",
         "pgpPassphrase",
         "profiles[*].chats[*].chatData.privateArmored",
     )
 
-    /** §25.52I.2: PGP fields removed from a read copy. The whole object is removed (`chatManager.pgpKey` with its public part). */
+    /** §25.52N.5, §25.52P.5, §25.52Q.3, §25.52R.3: PGP public paths. A write is `bad_request` with the names; the page refuses to send them. */
+    val PGP_PUBLIC_PATHS: Set<String> = setOf(
+        "profiles[*].chatManager.pgpKey.publicKey",
+        "profiles[*].chatManager.pgpKey.keyID",
+        "profiles[*].chatManager.pgpKey.routes",
+        "profiles[*].pgpKey.publicKeyArmor",
+        "profiles[*].pgpKey.publicKeyObj",
+        "beamio.pgpPublicKeyArmor",
+        "beamio.pgpPublicKeyID",
+        "profiles[*].chats[*].chatData.publicArmored",
+        "profiles[*].chats[*].chatData.routePgpKeyID",
+        "profiles[*].chats[*].chatData.routersArmoreds",
+    )
+
+    /** §25.52N.5, §25.52S.2: removed from a read copy and from a first import. The whole `chatManager.pgpKey` and `pgpKey` go. */
     private val PGP_STRIP_PATHS: List<String> = listOf(
         "profiles[*].chatManager.pgpKey",
         "profiles[*].pgpKey",
         "pgpPassphrase",
         "profiles[*].chats[*].chatData.privateArmored",
+    ) + PGP_PUBLIC_PATHS.toList()
+
+    /** §25.52N.3, §25.52P.2, §25.52R.2: the W paths. Held only in a record of [WALLET_SCHEMA_MIN] or later. */
+    val WALLET_PATHS: Set<String> = setOf(W_PROFILE_PATH, "mnemonicPhrase", "recoveryWords")
+
+    /** §25.52N.3: the W paths are the only exemptions from the key-shape scan. */
+    val W_EXACT_PATHS: Set<String> = WALLET_PATHS
+
+    /** §25.52M.2, §25.52S.4: removed at the unregister. The retired names are removed too. */
+    private val WALLET_REMOVAL_PATHS: List<String> = listOf(W_PROFILE_PATH, "mnemonicPhrase", "recoveryWords", "mnemonic", "walletVault.mnemonic")
+
+    /** §25.52O.2: key names shaped like secret material, beside the prefixes of [isKeyShaped]. */
+    private val KEY_SHAPED_EXACT: Set<String> = setOf(
+        "seed", "walletPrivateKey", "recoveryCode", "recoveryPhrase", "recoveryWords", "duplicatePassword", "duplicateMnemonicPhrase",
+        "_duplicateCode",
     )
 
-    /** §25.52J.2: the W-class paths, allowed only in the page wallet copy, held only in a record of [WALLET_SCHEMA_MIN] or later. */
-    val WALLET_PATHS: Set<String> = setOf(
-        "profiles[*].privateKeyArmor",
-        "walletVault.mnemonic",
-        "mnemonic",
+    /** The whitelist as a tree (§25.52N.4, §25.52O.2, §25.52Q.3). Leaves are scalars; subtrees are containers; the rest is exact. */
+    private sealed class Rule
+    private object Leaf : Rule()
+    private object Subtree : Rule()
+    private class Exact(val keys: Map<String, Rule>) : Rule()
+    private class Each(val item: Rule) : Rule()
+
+    private val LEAF: Rule = Leaf
+    private val SUBTREE: Rule = Subtree
+
+    private val BEAMIO_KEYS = listOf(
+        "accountName", "image", "darkTheme", "isUSDCFaucet", "isETHFaucet", "initialLoading", "firstName", "lastName", "createdAt",
+        "language", "currency", "address", "payme", "tax", "localeCurrencyConfigured",
     )
-
-    /** §25.52L.9: the only paths where W fields may sit. A W-shaped key anywhere else is `key_shaped_content`. */
-    val W_EXACT_PATHS: Set<String> = setOf("profiles[*].privateKeyArmor", "walletVault.mnemonic", "mnemonic")
-
-    /** §25.52L.9: key names shaped like private key material, besides the prefixes of [isKeyShaped]. */
-    private val KEY_SHAPED_NAMES: Set<String> = setOf("privateKeyHex", "privateKeyArmored", "walletPrivateKey", "mnemonic", "seed")
-
-    /** §25.52D.8: the profile-level keys of the whitelist. */
-    val PROFILE_KEYS: Set<String> = setOf(
-        "isPrimary", "emailAddr", "hdPath", "index", "tokens", "isNode", "referrer", "spClub", "SpClubPoints",
-        "spChannel", "airdropEvent", "data", "type", "nodeID", "nodeIP_address", "nodeRegion", "activePassport",
-        "vpnTimeUsedInMin", "silentPassPassports", "webFilter", "chats", "phoneCalls", "aaAccount", "issuedCards", "keyID",
+    private val PROFILE_LEAVES = listOf(
+        "isPrimary", "emailAddr", "hdPath", "index", "isNode", "referrer", "nodeID", "nodeIP_address", "nodeRegion", "vpnTimeUsedInMin",
+        "webFilter", "aaAccount", "keyID", "type", "publicKeyArmor", "privateKeyArmor",
     )
+    private val PROFILE_SUBTREES = listOf(
+        "tokens", "spClub", "SpClubPoints", "spChannel", "airdropEvent", "data", "activePassport", "silentPassPassports", "chats",
+        "phoneCalls", "issuedCards",
+    )
+    private val ROOT_LEAVES = listOf("schemaVersion", "rev", "isReady", "ver", "nonce", "upgradev2", "webFilter", "mnemonicPhrase", "recoveryWords")
+    private val ROOT_SUBTREES = listOf("preferences", "fx168Order", "cardRedeems", "ChannelPartners", "referrals", "fragmentClass", "search")
 
-    /** The top-level keys: the schema and revision (§25.52E.3), the profiles, and the W keys `mnemonic` and `walletVault`. */
-    val TOP_KEYS: Set<String> = setOf("schemaVersion", "rev", "profiles", "mnemonic", "walletVault")
-
-    /** §25.52I.3: under `chatManager` only `router` is whitelisted. The PGP public fields are not. */
-    val CHAT_MANAGER_KEYS: Set<String> = setOf("router")
+    private val PROFILE_RULE: Rule = Exact(
+        PROFILE_LEAVES.associateWith { LEAF } + PROFILE_SUBTREES.associateWith { SUBTREE } +
+            mapOf("chatManager" to Exact(mapOf("keyID" to LEAF, "router" to LEAF, "routes" to SUBTREE))),
+    )
+    private val ROOT_RULE: Rule = Exact(
+        ROOT_LEAVES.associateWith { LEAF } + ROOT_SUBTREES.associateWith { SUBTREE } + mapOf(
+            "beamio" to Exact(BEAMIO_KEYS.associateWith { LEAF }),
+            "passcode" to Exact(mapOf("status" to LEAF)),
+            "profiles" to Each(PROFILE_RULE),
+        ),
+    )
 
     val READ_FIELDS: Set<String> = setOf("type", "reqId")
     val WRITE_FIELDS: Set<String> = setOf("type", "reqId", "record")
@@ -154,26 +260,27 @@ internal object ShellRecordPolicy {
         else -> false
     }
 
-    /**
-     * The key-shaped paths of [record] outside the W exact paths, sorted (§25.52L.9, TR-16, TR-17). A key is shaped like private key
-     * material when [isKeyShaped] holds for its name. The scan covers the container subtrees too.
-     */
-    fun keyShapedIn(record: JSONObject): List<String> =
-        pathsOf(record).filter { it !in W_EXACT_PATHS && isKeyShaped(it.substringAfterLast('.')) }.sorted()
-
-    /** True for a key name of §25.52L.9: `privateKey*`, `pgpPassphrase*`, `pgpPrivate*`, or one of the exact names. */
+    /** True for a key name of §25.52O.2: `privateKey*`, `mnemonic*`, `pgpPassphrase*`, `pgpPrivate*`, `duplicateCode*`, or an exact name. */
     fun isKeyShaped(key: String): Boolean =
-        key.startsWith("privateKey") || key.startsWith("pgpPassphrase") || key.startsWith("pgpPrivate") || key in KEY_SHAPED_NAMES
+        key.startsWith("privateKey") || key.startsWith("mnemonic") || key.startsWith("pgpPassphrase") ||
+            key.startsWith("pgpPrivate") || key.startsWith("duplicateCode") || key in KEY_SHAPED_EXACT
 
-    /** The forbidden paths present in [record], sorted (§25.52D.8). */
-    fun forbiddenIn(record: JSONObject): List<String> = pathsOf(record).filter { it in FORBIDDEN_PATHS }.sorted()
+    /** The key-shaped paths outside the W paths, sorted in UTF-8 byte order (§25.52N.4, §25.52O.5). */
+    fun keyShapedIn(record: JSONObject): List<String> =
+        pathsOf(record).filter { it !in W_EXACT_PATHS && isKeyShaped(it.substringAfterLast('.')) }.sortedWith(UTF8_ORDER)
 
-    /** The W-class paths present in [record], sorted (§25.52J.2). */
-    fun walletIn(record: JSONObject): List<String> = pathsOf(record).filter { it in WALLET_PATHS }.sorted()
+    /** The forbidden PGP private paths present in [record], sorted (§25.52N.5). */
+    fun forbiddenIn(record: JSONObject): List<String> = pathsOf(record).filter { it in FORBIDDEN_PATHS }.sortedWith(UTF8_ORDER)
+
+    /** The PGP public paths present in [record], sorted (§25.52N.5, §25.52Q.3). */
+    fun pgpPublicIn(record: JSONObject): List<String> = pathsOf(record).filter { it in PGP_PUBLIC_PATHS }.sortedWith(UTF8_ORDER)
+
+    /** The W paths present in [record], sorted (§25.52N.3). */
+    fun walletIn(record: JSONObject): List<String> = pathsOf(record).filter { it in WALLET_PATHS }.sortedWith(UTF8_ORDER)
 
     /**
-     * The native pre-write check (§25.52E.5, the native half of PW-01 and PW-02). A PGP header or a forbidden path refuses the write as
-     * `pgp_private_in_payload`. The header refusal carries no names (§25.52D.6). Returns the code and the names, or `null` when clean.
+     * The native pre-write check (§25.52E.5, §25.52O.5 step 2): a PGP header or a forbidden PGP private path refuses the write as
+     * `pgp_private_in_payload`. The header refusal carries no names. Returns the code and the names, or `null` when clean.
      */
     fun preWriteRefusal(record: JSONObject): Pair<String, List<String>>? {
         if (hasPgpHeader(record)) return "pgp_private_in_payload" to emptyList()
@@ -182,69 +289,50 @@ internal object ShellRecordPolicy {
     }
 
     /**
-     * Whitelist violations (§25.52D.8, §25.52I.3, §25.52J.2), sorted. The W paths are allowed here; the schema check decides them. Any
-     * PGP public field is outside the whitelist and is named as a violation.
+     * The whitelist violations of [record] (§25.52O.5, §25.52Q.3), sorted in UTF-8 byte order: the leaf paths outside the whitelist (an empty
+     * object or array outside it is a leaf), and the PGP public paths. Values are never named.
      */
     fun whitelistViolations(record: JSONObject): List<String> {
         val out = mutableSetOf<String>()
-        for (key in keysOf(record)) if (key !in TOP_KEYS) out += key
-        val profiles = record.opt("profiles")
-        if (profiles != null) {
-            if (profiles !is JSONArray) {
-                out += "profiles"
-            } else {
-                for (i in 0 until profiles.length()) {
-                    val profile = profiles.opt(i)
-                    if (profile !is JSONObject) out += "profiles[*]" else profileViolations(profile, out)
+        walk(record, ROOT_RULE, "", out)
+        out += pgpPublicIn(record)
+        return out.sortedWith(UTF8_ORDER)
+    }
+
+    private fun walk(value: Any?, rule: Rule, path: String, out: MutableSet<String>) {
+        when (rule) {
+            is Leaf, is Subtree -> Unit
+            is Exact -> {
+                if (value !is JSONObject) {
+                    out += path
+                    return
+                }
+                for (key in keysOf(value)) {
+                    val childPath = if (path.isEmpty()) key else "$path.$key"
+                    val child = value.opt(key)
+                    val childRule = rule.keys[key]
+                    if (childRule == null) reportAll(child, childPath, out) else walk(child, childRule, childPath, out)
                 }
             }
-        }
-        if (record.has("walletVault")) {
-            val vault = record.optJSONObject("walletVault")
-            if (vault == null) {
-                out += "walletVault"
-            } else {
-                for (key in keysOf(vault)) if (key != "mnemonic") out += "walletVault.$key"
-            }
-        }
-        return out.sorted()
-    }
-
-    private fun profileViolations(profile: JSONObject, out: MutableSet<String>) {
-        for (key in keysOf(profile)) {
-            when {
-                key in PROFILE_KEYS -> Unit
-                key == "privateKeyArmor" -> Unit
-                key == "chatManager" -> chatManagerViolations(profile.optJSONObject(key), out)
-                else -> out += "profiles[*].$key"
-            }
-        }
-    }
-
-    private fun chatManagerViolations(chatManager: JSONObject?, out: MutableSet<String>) {
-        if (chatManager == null) {
-            out += "profiles[*].chatManager"
-            return
-        }
-        for (key in keysOf(chatManager)) {
-            if (key in CHAT_MANAGER_KEYS) continue
-            if (key == "pgpKey") {
-                val pgpKey = chatManager.optJSONObject(key)
-                if (pgpKey == null) {
-                    out += "profiles[*].chatManager.pgpKey"
-                } else {
-                    for (k in keysOf(pgpKey)) out += "profiles[*].chatManager.pgpKey.$k"
+            is Each -> {
+                if (value !is JSONArray) {
+                    out += path
+                    return
                 }
-            } else {
-                out += "profiles[*].chatManager.$key"
+                for (i in 0 until value.length()) walk(value.opt(i), rule.item, "$path[*]", out)
             }
         }
     }
 
-    /**
-     * The read copy of a record (§25.52I.2): removes the PGP fields in place, and an empty `chatManager`. The W fields stay: a read
-     * carries them to the page.
-     */
+    private fun reportAll(value: Any?, path: String, out: MutableSet<String>) {
+        when {
+            value is JSONObject && value.length() > 0 -> for (key in keysOf(value)) reportAll(value.opt(key), "$path.$key", out)
+            value is JSONArray && value.length() > 0 -> for (i in 0 until value.length()) reportAll(value.opt(i), "$path[*]", out)
+            else -> out += path
+        }
+    }
+
+    /** The read copy (§25.52S.2): removes the PGP fields in place, an emptied `chatManager` and an emptied `beamio`. The W fields stay. */
     fun stripPgpForRead(record: JSONObject) {
         for (path in PGP_STRIP_PATHS) removePath(record, path.split('.'))
         record.optJSONArray("profiles")?.let { profiles ->
@@ -254,18 +342,13 @@ internal object ShellRecordPolicy {
                 if (chatManager.length() == 0) profile.remove("chatManager")
             }
         }
+        record.optJSONObject("beamio")?.let { if (it.length() == 0) record.remove("beamio") }
     }
 
-    /** Removes the W fields (§25.52H.2 rule 5, §25.52J.2 paths): top-level `mnemonic`, `walletVault.mnemonic`, every `profiles[k].privateKeyArmor`. */
+    /** Removes the W fields (§25.52H.2 rule 5, §25.52M.2, §25.52S.4): the account's `privateKeyArmor`, `mnemonicPhrase`, `recoveryWords`. */
     fun removeWallet(record: JSONObject) {
-        record.remove("mnemonic")
-        record.optJSONObject("walletVault")?.let { vault ->
-            vault.remove("mnemonic")
-            if (vault.length() == 0) record.remove("walletVault")
-        }
-        record.optJSONArray("profiles")?.let { profiles ->
-            for (i in 0 until profiles.length()) profiles.optJSONObject(i)?.remove("privateKeyArmor")
-        }
+        for (path in WALLET_REMOVAL_PATHS) removePath(record, path.split('.'))
+        record.optJSONObject("walletVault")?.let { if (it.length() == 0) record.remove("walletVault") }
     }
 
     /** Removes the value at a path. A segment ending in `[*]` is an array whose elements are each searched. */
@@ -303,6 +386,12 @@ internal object ShellRecordPolicy {
         return matches.singleOrNull()
     }
 
+    /** True when some profile of [record] holds the EOA private key (§25.52P.4). */
+    fun anyProfileHoldsEoaKey(record: JSONObject): Boolean {
+        val profiles = record.optJSONArray("profiles") ?: return false
+        return (0 until profiles.length()).any { profiles.optJSONObject(it)?.has("privateKeyArmor") == true }
+    }
+
     /** True when some profile of [record] holds [key]. */
     private fun hasProfileKey(record: JSONObject, key: String): Boolean {
         val profiles = record.optJSONArray("profiles") ?: return false
@@ -310,12 +399,11 @@ internal object ShellRecordPolicy {
     }
 
     /**
-     * The page's record merged with the stored wallet fields (§25.52H.2, §25.52H.3, §25.52L.5):
-     * - an omitted W field keeps the stored value; the same value is accepted; a different value, `null` included, is `w_differs`;
-     * - a W field in a profile other than the account's record is `w_account_unmatched`;
-     * - a stored W field that the page does not place in the account's record is `w_account_unmatched`, so an omission cannot delete it;
-     * - [replaceWallet] (native creation or recovery, §25.52H.2 rule 4) replaces the stored W fields; the placement rule still holds.
-     * Nothing is overwritten on a conflict.
+     * The page's record merged with the stored wallet fields (§25.52H.2, §25.52H.3, §25.52L.5, §25.52N.3): an omitted W field keeps the
+     * stored value; the same value is accepted; a different value, `null` included, is `w_differs`. A W field in a profile other than the
+     * account's record is `w_account_unmatched`, and so is a stored W field the page does not place in the account's record, so an omission
+     * cannot delete it. [replaceWallet] (native creation or recovery) replaces the stored W fields; the placement rule still holds. Non-W
+     * fields come from the payload alone (§25.52S.5). Nothing is overwritten on a conflict.
      */
     fun mergeWallet(page: JSONObject, stored: JSONObject, eoa: String, replaceWallet: Boolean = false): WalletMerge {
         val out = JSONObject(page.toString())
@@ -323,31 +411,18 @@ internal object ShellRecordPolicy {
         val unmatched = mutableSetOf<String>()
         val pageSlot = accountSlot(page, eoa)
         val storedSlot = accountSlot(stored, eoa)
-        val name = "profiles[*].privateKeyArmor"
 
         page.optJSONArray("profiles")?.let { profiles ->
             for (i in 0 until profiles.length()) {
-                if (profiles.optJSONObject(i)?.has("privateKeyArmor") == true && i != pageSlot) unmatched += name
+                if (profiles.optJSONObject(i)?.has("privateKeyArmor") == true && i != pageSlot) unmatched += W_PROFILE_PATH
             }
         }
         if (!replaceWallet) {
-            mergeKey(page, stored, out, "mnemonic", "mnemonic", differs)
-            val storedVault = stored.optJSONObject("walletVault")
-            if (storedVault != null && storedVault.has("mnemonic")) {
-                if (out.optJSONObject("walletVault") == null) out.put("walletVault", JSONObject())
-                mergeKey(
-                    page.optJSONObject("walletVault"),
-                    storedVault,
-                    out.optJSONObject("walletVault"),
-                    "mnemonic",
-                    "walletVault.mnemonic",
-                    differs,
-                )
-            }
+            for (key in listOf("mnemonicPhrase", "recoveryWords")) mergeKey(page, stored, out, key, key, differs)
             val storedProfile = storedSlot?.let { stored.optJSONArray("profiles")?.optJSONObject(it) }
             if (storedProfile != null && storedProfile.has("privateKeyArmor")) {
                 if (pageSlot == null) {
-                    unmatched += name
+                    unmatched += W_PROFILE_PATH
                 } else {
                     val pageProfile = page.optJSONArray("profiles")?.optJSONObject(pageSlot)
                     mergeKey(
@@ -355,15 +430,15 @@ internal object ShellRecordPolicy {
                         storedProfile,
                         out.optJSONArray("profiles")?.optJSONObject(pageSlot),
                         "privateKeyArmor",
-                        name,
+                        W_PROFILE_PATH,
                         differs,
                     )
                 }
             } else if (storedSlot == null && hasProfileKey(stored, "privateKeyArmor")) {
-                unmatched += name
+                unmatched += W_PROFILE_PATH
             }
         }
-        val names = (differs + unmatched).sorted()
+        val names = (differs + unmatched).sortedWith(UTF8_ORDER)
         val reason = when {
             unmatched.isNotEmpty() -> "w_account_unmatched"
             differs.isNotEmpty() -> "w_differs"
@@ -428,7 +503,7 @@ internal class SealedPageRecordStore(
 
     /** Replaces the whole record in one step. Throws [IOException] on any failure, and the earlier record is unchanged. */
     fun write(record: JSONObject) {
-        val plain = record.toString().toByteArray(Charsets.UTF_8)
+        val plain = CanonicalJson.encode(record).toByteArray(Charsets.UTF_8)
         try {
             val sealed = try {
                 wrap.seal(aad, plain)
@@ -484,6 +559,47 @@ internal fun <T> markingMigration(flag: AtomicBoolean, block: () -> T): T {
         return block()
     } finally {
         flag.set(previous)
+    }
+}
+
+/**
+ * The device-level marker of an unreadable legacy store (R431, item 3). Set when the import finds the legacy store unreadable; cleared only
+ * by a successful import (or by a copy that already exists). While it is set, a read or a first write without a copy answers
+ * `legacy_store_unreadable`, never `absent`. It holds no key material; the file is one byte in the no-backup directory.
+ */
+internal class LegacyUnreadableMarker(private val files: VaultFiles) {
+    fun present(): Boolean = try {
+        files.read(NAME) != null
+    } catch (_: Exception) {
+        true
+    }
+
+    fun set() = files.write(NAME, byteArrayOf(1))
+
+    fun clear() = files.delete(NAME)
+
+    companion object {
+        const val NAME = "legacy_store_unreadable.v1"
+    }
+}
+
+/**
+ * The marker after a first-run import (R431, item 3): set when the legacy store is unreadable; cleared by a successful import or an existing
+ * copy. A confirmed absence leaves the marker as it is, so a device that was once unreadable does not answer `absent`.
+ */
+internal fun applyImportMarker(marker: LegacyUnreadableMarker, code: ShellImportCode) {
+    when (code) {
+        ShellImportCode.LEGACY_UNREADABLE -> try {
+            marker.set()
+        } catch (_: IOException) {
+            // Not set: the bridge still answers no absence, because the outcome is LEGACY_UNREADABLE for this process.
+        }
+        ShellImportCode.IMPORT_OK, ShellImportCode.EXISTS -> try {
+            marker.clear()
+        } catch (_: IOException) {
+            // A copy exists, so the bridge answers from the copy.
+        }
+        else -> Unit
     }
 }
 
@@ -647,8 +763,15 @@ internal class ShellImportFlow(
             }
         }
         val profile = if (index >= 0) profiles?.optJSONObject(index) else null
-        val derived = profile?.optString("privateKeyArmor", "")?.let { addressOf(it) }
-        if (profile == null || derived == null || !derived.equals(eoa, ignoreCase = true)) {
+        // §25.52N.6, §25.52R.5 (暂定): a matching profile without its privateKeyArmor is import_failed; a key that derives another address
+        // is address_mismatch (§25.52K.5).
+        val armor = profile?.optString("privateKeyArmor", "").orEmpty()
+        if (profile == null || armor.isEmpty()) {
+            outcome.set(ImportOutcome.NOT_DONE)
+            return ShellImportCode.IMPORT_FAILED
+        }
+        val derived = addressOf(armor)
+        if (derived == null || !derived.equals(eoa, ignoreCase = true)) {
             outcome.set(ImportOutcome.NOT_DONE)
             return ShellImportCode.ADDRESS_MISMATCH
         }
@@ -664,16 +787,42 @@ internal class ShellImportFlow(
     }
 }
 
+/** The codes that refuse a request before it is processed: the ack has `ok: false` and an `error` (§25.28.3). */
+private val REFUSAL_CODES = setOf("origin_refused", "too_large", "migrating", "write_failed")
+
 /**
- * The bridge logic of the page's `shellRecordRead` and `shellRecordWrite` (§25.52D.6, §25.52D.7, §25.52E, §25.52K.4, §25.52L). Any other
- * type, including `shellRecordMigrationState` (§25.52L.6), is `bad_request`. The checks run in the order the spec gives: origin, reqId,
- * fields, size, the record's own checks, the account, the migration state, and the revision. Each request gets exactly one response.
+ * The ack envelope of a page-record answer (§25.28.3, R431): `{type: "ack", reqId, ok: true, result: {code, ...}}` for an answer that was
+ * processed, `{type: "ack", reqId, ok: false, error}` for a refusal or an error. A `bad_request` with path names is processed (it carries the
+ * names in `result`); one without names is a refusal. `error` answers carry their sub-code as the `error` value. No separate event is sent.
+ */
+internal fun shellAck(reqId: Any, code: String, fields: ShellReplyFields): JSONObject {
+    val out = JSONObject().put("type", "ack").put("reqId", reqId)
+    val sub = fields.firstOrNull { it.first == "sub" }?.second as? String
+    val refused = when (code) {
+        "error" -> true
+        in REFUSAL_CODES -> true
+        "bad_request" -> fields.none { it.first == "names" }
+        else -> false
+    }
+    if (refused) {
+        val error = if (code == "error") sub ?: "error" else code
+        return out.put("ok", false).put("error", error)
+    }
+    val result = JSONObject().put("code", code)
+    for ((k, v) in fields) if (k != "sub") result.put(k, v ?: JSONObject.NULL)
+    return out.put("ok", true).put("result", result)
+}
+
+/**
+ * The bridge logic of the page's `shellRecordRead` and `shellRecordWrite` (§25.52D.6, §25.52D.7, §25.52E, §25.52K.4, §25.52L, §25.52O.5,
+ * §25.52S). The checks run in the order §25.52O.5 gives. Each request gets exactly one ack. `shellRecordMigrationState` is not a page command
+ * (§25.52L.6): any other type is `bad_request`.
  */
 internal class ShellRecordBridge(
     private val account: () -> ShellRecordAccount,
     private val migrating: () -> Boolean,
-    private val migrationState: () -> String,
     private val outcome: () -> ImportOutcome?,
+    private val legacyMarker: () -> Boolean = { false },
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -684,11 +833,7 @@ internal class ShellRecordBridge(
         val rawId = body.opt("reqId")
         val idOk = ShellRecordPolicy.reqIdValid(rawId)
         val echo: Any = if (idOk) rawId!! else JSONObject.NULL
-        val reply: (String, ShellReplyFields) -> JSONObject = { code, extra ->
-            val out = JSONObject().put("type", "shellRecordResult").put("reqId", echo).put("code", code)
-            for ((k, v) in extra) out.put(k, v ?: JSONObject.NULL)
-            out
-        }
+        val reply: (String, ShellReplyFields) -> JSONObject = { code, fields -> shellAck(echo, code, fields) }
 
         if (origin != ShellOrigin.EMBEDDED_PAGE) return reply("origin_refused", emptyList())
         if (!idOk) return reply("bad_request", emptyList())
@@ -698,14 +843,10 @@ internal class ShellRecordBridge(
             "shellRecordWrite" -> ShellRecordPolicy.WRITE_FIELDS
             else -> return reply("bad_request", emptyList())
         }
-        val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }.sorted()
-        if (extra.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(extra)))
+        val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
+        if (extra.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(extra.sortedWith(UTF8_ORDER))))
 
-        return when (type) {
-            "shellRecordRead" -> read(reply)
-            "shellRecordWrite" -> write(body, requestBytes, nativeWrite, reply)
-            else -> reply("bad_request", emptyList())
-        }
+        return if (type == "shellRecordRead") read(reply) else write(body, requestBytes, nativeWrite, reply)
     }
 
     private fun read(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
@@ -713,27 +854,33 @@ internal class ShellRecordBridge(
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
         if (migrating()) return reply("migrating", emptyList())
         if (acc is ShellRecordAccount.Ready) {
-            val current: JSONObject?
-            try {
-                current = acc.store.read()
+            val current: JSONObject? = try {
+                acc.store.read()
             } catch (_: IOException) {
                 return reply("error", listOf("sub" to "record_unreadable"))
             }
-            if (current != null) {
-                val rev = current.opt("rev")
-                if (rev !is Int) return reply("error", listOf("sub" to "record_unreadable"))
-                ShellRecordPolicy.stripPgpForRead(current)
-                val out = reply(
-                    "ok",
-                    listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
-                )
-                if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) {
-                    return reply("too_large", emptyList())
-                }
-                return out
+            if (current == null) return absentOrError(reply)
+            val rev = current.opt("rev") as? Int ?: return reply("error", listOf("sub" to "record_unreadable"))
+            ShellRecordPolicy.stripPgpForRead(current)
+            val out = reply(
+                "ok",
+                listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
+            )
+            if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
+            // §25.52S.3: a schema 2 copy without the EOA private key is answered as needs_native_recovery; the page stops there.
+            if (current.optInt("schemaVersion", -1) >= ShellRecordPolicy.WALLET_SCHEMA_MIN &&
+                !ShellRecordPolicy.anyProfileHoldsEoaKey(current)
+            ) {
+                return reply("error", listOf("sub" to "needs_native_recovery"))
             }
+            return out
         }
-        // No copy. `absent` is answered only when the legacy store is confirmed absent (§25.52K.4).
+        return absentOrError(reply)
+    }
+
+    /** No copy. `absent` only when the legacy store is confirmed absent and no device marker says it was unreadable (§25.52K.4, R431). */
+    private fun absentOrError(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
+        if (legacyMarker()) return reply("error", listOf("sub" to "legacy_store_unreadable"))
         return when (outcome()) {
             null -> reply("migrating", emptyList())
             ImportOutcome.ABSENT -> reply("absent", emptyList())
@@ -753,12 +900,10 @@ internal class ShellRecordBridge(
         val rev = record.opt("rev")
         if (rev !is Int) return reply("bad_request", emptyList())
 
-        // The record's own checks (§25.52D.7, §25.52L.9): the PGP header and the forbidden paths first, then key-shaped content.
+        // §25.52O.5 step 2: PGP private material is refused first.
         ShellRecordPolicy.preWriteRefusal(record)?.let { (code, names) ->
             return if (names.isEmpty()) reply(code, emptyList()) else reply(code, listOf("names" to JSONArray(names)))
         }
-        val keyShaped = ShellRecordPolicy.keyShapedIn(record)
-        if (keyShaped.isNotEmpty()) return reply("key_shaped_content", listOf("names" to JSONArray(keyShaped)))
 
         val acc = account()
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "locked"))
@@ -774,7 +919,7 @@ internal class ShellRecordBridge(
             }
         }
 
-        // W fields (§25.52F.5, §25.52L.4): a stored copy with W fields takes only schema 2 writes, and a write with W fields needs schema 2.
+        // §25.52O.5 step 3: W fields need schema 2, and a stored copy with W fields takes only schema 2 writes (§25.52F.5, §25.52L.4).
         val schema = record.opt("schemaVersion")
         val storedWallet = current?.let { ShellRecordPolicy.walletIn(it) }.orEmpty()
         if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
@@ -785,12 +930,18 @@ internal class ShellRecordBridge(
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(wallet)))
         }
+
+        // §25.52O.5 steps 4 and 5: key-shaped content first, then the whitelist (§25.52N.4).
+        val keyShaped = ShellRecordPolicy.keyShapedIn(record)
+        if (keyShaped.isNotEmpty()) return reply("key_shaped_content", listOf("names" to JSONArray(keyShaped)))
         val violations = ShellRecordPolicy.whitelistViolations(record)
         if (violations.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(violations)))
 
+        // Step 6: migrating. Step 7: the revision. The first write carries rev 0 (§25.52E.3).
         if (migrating()) return reply("migrating", emptyList())
         if (current == null) {
             // No copy yet: the first write only once the import has settled the state (§25.52K.4). Never a new wallet on a failure.
+            if (legacyMarker()) return reply("error", listOf("sub" to "legacy_store_unreadable"))
             when (outcome()) {
                 null -> return reply("migrating", emptyList())
                 ImportOutcome.ABSENT -> if (store == null) return reply("error", listOf("sub" to "no_key"))
@@ -799,17 +950,20 @@ internal class ShellRecordBridge(
             }
         }
         val target = store ?: return reply("error", listOf("sub" to "no_key"))
-
-        // The revision check comes first (§25.52H.2). The first write carries rev 0 (§25.52E.3).
         val currentRev = (current?.opt("rev") as? Int) ?: 0
         if (rev != currentRev) return reply("conflict", listOf("currentRev" to currentRev))
 
+        // Step 9: the wallet-field merge (§25.52H.2, §25.52S.4).
         val merge = ShellRecordPolicy.mergeWallet(record, current ?: JSONObject(), ready?.eoa.orEmpty(), replaceWallet = nativeWrite)
         if (merge.names.isNotEmpty()) {
             return reply(
                 "conflict",
                 listOf("currentRev" to currentRev, "reason" to merge.reason, "names" to JSONArray(merge.names)),
             )
+        }
+        // §25.52P.4: a schema 2 copy must hold the EOA private key after the merge; otherwise the write is refused and nothing is stored.
+        if (schema >= ShellRecordPolicy.WALLET_SCHEMA_MIN && !ShellRecordPolicy.anyProfileHoldsEoaKey(merge.record)) {
+            return reply("wallet_fields_missing", listOf("names" to JSONArray(listOf(ShellRecordPolicy.W_PROFILE_PATH))))
         }
         val next = currentRev + 1
         val toStore = merge.record.put("rev", next)
@@ -872,6 +1026,7 @@ object BeamioShellRecordImport {
             outcome = ShellRecordState.outcome,
         )
         val code = flow.run(eoa, wallet, pgp)
+        applyImportMarker(markerOf(app), code)
         if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) ShellRecordState.bound.set(eoa)
         return code
     }
@@ -879,9 +1034,13 @@ object BeamioShellRecordImport {
     private fun bridge(context: Context): ShellRecordBridge = ShellRecordBridge(
         account = { accountOf(context) },
         migrating = { ShellRecordState.migrationPending.get() },
-        migrationState = { migrationStateOf(context) },
         outcome = { ShellRecordState.outcome.get() },
+        legacyMarker = { markerOf(context.applicationContext).present() },
     )
+
+    /** The device-level marker, in the same no-backup directory as the page copies (R431). */
+    internal fun markerOf(app: Context): LegacyUnreadableMarker =
+        LegacyUnreadableMarker(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))
 
     private fun accountOf(context: Context): ShellRecordAccount {
         val app = context.applicationContext

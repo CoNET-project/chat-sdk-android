@@ -28,8 +28,8 @@ class ShellRecordR424Test {
             .put("schemaVersion", 1)
             .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("data", JSONObject().put("privateKeyArmor", "x"))))
         val resp = bridgeWithoutAccount().handle(ShellOrigin.EMBEDDED_PAGE, write("t16", record), 200)
-        assertEquals("key_shaped_content", resp.getString("code"))
-        assertEquals(listOf("profiles[*].data.privateKeyArmor"), resp.getJSONArray("names").names())
+        assertEquals("key_shaped_content", resp.v().getString("code"))
+        assertEquals(listOf("profiles[*].data.privateKeyArmor"), resp.v().getJSONArray("names").names())
     }
 
     @Test
@@ -39,8 +39,8 @@ class ShellRecordR424Test {
             .put("schemaVersion", 1)
             .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("data", JSONObject().put("mnemonic", "m"))))
         val resp = bridgeWithoutAccount().handle(ShellOrigin.EMBEDDED_PAGE, write("t17", record), 200)
-        assertEquals("key_shaped_content", resp.getString("code"))
-        assertEquals(listOf("profiles[*].data.mnemonic"), resp.getJSONArray("names").names())
+        assertEquals("key_shaped_content", resp.v().getString("code"))
+        assertEquals(listOf("profiles[*].data.mnemonic"), resp.v().getJSONArray("names").names())
     }
 
     // ---- account slot (§25.52B.6), with the documented fallback ----
@@ -98,7 +98,7 @@ class ShellRecordR424Test {
     fun removeWalletDropsTheWalletFieldsAndKeepsTheRestOfTheCopy() {
         val record = walletRecord().put("walletVault", JSONObject().put("mnemonic", "M"))
         ShellRecordPolicy.removeWallet(record)
-        assertFalse(record.has("mnemonic"))
+        assertFalse(record.has("mnemonicPhrase"))
         assertFalse("an emptied walletVault goes too", record.has("walletVault"))
         val profile = record.getJSONArray("profiles").getJSONObject(0)
         assertFalse(profile.has("privateKeyArmor"))
@@ -118,8 +118,8 @@ class ShellRecordR424Test {
         removal.remove()
         assertFalse(removal.present())
         val after = store.read()!!
-        assertEquals(2, after.getInt("rev"))
-        assertFalse(after.has("mnemonic"))
+        assertEquals(2, after.v().getInt("rev"))
+        assertFalse(after.has("mnemonicPhrase"))
         assertEquals("a", after.getJSONArray("profiles").getJSONObject(0).getString("emailAddr"))
     }
 
@@ -149,7 +149,7 @@ class ShellRecordR424Test {
         assertEquals("ok", engine.unregister().code.wire)
         assertNull(files.read(markerFileName()))
         assertNull(files.read(stagedFileName()))
-        assertFalse(pageStore.read()!!.has("mnemonic"))
+        assertFalse(pageStore.read()!!.has("mnemonicPhrase"))
     }
 
     @Test
@@ -168,7 +168,7 @@ class ShellRecordR424Test {
         assertEquals("unregister_refused", engine.unregister().code.wire)
         assertNotNull(files.read(markerFileName()))
         assertNotNull(files.read(stagedFileName()))
-        assertTrue(pageStore.read()!!.has("mnemonic"))
+        assertTrue(pageStore.read()!!.has("mnemonicPhrase"))
     }
 
     @Test
@@ -210,7 +210,6 @@ class ShellRecordR424Test {
     private fun bridgeWithoutAccount() = ShellRecordBridge(
         account = { ShellRecordAccount.Unknown },
         migrating = { false },
-        migrationState = { "none" },
         outcome = { ImportOutcome.ABSENT },
     )
 
@@ -220,7 +219,7 @@ class ShellRecordR424Test {
     private fun walletRecord(): JSONObject = JSONObject()
         .put("rev", 1)
         .put("schemaVersion", 2)
-        .put("mnemonic", "M")
+        .put("mnemonicPhrase", "M")
         .put(
             "profiles",
             JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("emailAddr", "a").put("privateKeyArmor", "EOA")),

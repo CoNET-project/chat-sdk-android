@@ -50,17 +50,17 @@ class PgpMigrationVectorsTest {
         assertEquals(36, cases.length())
         assertEquals(42, (0 until cases.length()).sumOf { cases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(6, doc.getJSONArray("pwaEventCases").length())
-        assertEquals(19, doc.getJSONArray("shellRecordCases").length())
-        assertEquals(7, doc.getJSONArray("pageReadCases").length())
+        assertEquals(46, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(8, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
-        assertEquals(4, doc.getJSONArray("pageRefuseCases").length())
+        assertEquals(5, doc.getJSONArray("pageRefuseCases").length())
         assertEquals(8, doc.getJSONArray("walletMergeCases").length())
         assertEquals(7, sourceCases.length())
         // r3bg (§25.52I.10): 8 unregister cases (9 steps), 7 migration-state cases, and 8 import cases (in ShellRecordVectorsTest).
-        assertEquals(8, unregisterCases.length())
-        assertEquals(9, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
+        assertEquals(12, unregisterCases.length())
+        assertEquals(13, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(7, migrationStateCases.length())
-        assertEquals(8, doc.getJSONArray("importCases").length())
+        assertEquals(9, doc.getJSONArray("importCases").length())
     }
 
     @Test
@@ -139,7 +139,19 @@ class PgpMigrationVectorsTest {
         return failures
     }
 
+    /** The page copy of the vector's `W` (UG-09 to UG-12): the EOA private key and the mnemonic phrase of the account. */
+    private fun seedWallet(wrap: NativeTestWrap, files: NativeTestFiles) {
+        SealedPageRecordStore(wrap, files, "$ACCOUNT:default").write(
+            JSONObject()
+                .put("rev", 1)
+                .put("schemaVersion", 2)
+                .put("mnemonicPhrase", "M")
+                .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA"))),
+        )
+    }
+
     private fun seed(given: JSONObject, wrap: NativeTestWrap, files: NativeTestFiles) {
+        if (given.optBoolean("W")) seedWallet(wrap, files)
         given.optJSONObject("N")?.let { n ->
             val k = PgpMigrationKeys.byLabel(n.getString("fp"))
             SealedStagedStore(wrap, files, ACCOUNT, WORKSPACE).write(StagedItem(ACCOUNT, k.fp, k.priv))
@@ -241,6 +253,7 @@ class PgpMigrationVectorsTest {
             val engine = migrationEngine(
                 files, wrap, legacy, ChainAnswer.Unavailable, faults, recovery,
                 eoa = eoa, busy = f.optBoolean("busy"),
+                wallet = PageWalletRemoval(SealedPageRecordStore(wrap, files, "$ACCOUNT:default")),
             )
             var result: MigrationResult? = null
             var interrupted = false
@@ -256,6 +269,10 @@ class PgpMigrationVectorsTest {
             if (gotCode != wantCode) stepFailures += "code $gotCode != $wantCode"
             if (interrupted != expect.getBoolean("interrupted")) stepFailures += "interrupted $interrupted"
             stepFailures += stateMismatches(expect.getJSONObject("state"), legacy != null, wrap, files)
+            expect.getJSONObject("state").opt("W")?.let { want ->
+                val hasWallet = SealedPageRecordStore(wrap, files, "$ACCOUNT:default").read()?.let { ShellRecordPolicy.walletIn(it).isNotEmpty() } ?: false
+                if (hasWallet != want) stepFailures += "W $hasWallet != $want"
+            }
             if (stepFailures.isNotEmpty()) failures += "step ${i + 1}: " + stepFailures.joinToString("; ")
         }
         return failures
@@ -368,7 +385,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bh (§25.52L.12, `9e7e6301…0c7f`). */
-        const val PINNED_SHA256 = "9e7e6301e9e04c6848efb5409fae4fcba2bef8e489929bafea077152dc400c7f"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bo (§25.52S.6, `87880d8d…48c3`). */
+        const val PINNED_SHA256 = "87880d8dbf844d626bbc1958d869eb4b3d6c7935507a3f2473fc36f6148748c3"
     }
 }
