@@ -1,6 +1,5 @@
 package network.conet.chat.nativekey
 
-import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -12,6 +11,9 @@ import org.junit.Test
  * The r3br items (spec §25.52V): a residual PGP public field is stripped on every read and left in the store (AK-21), and a native write that
  * carries a PGP public field is `bad_request` with the path names, even with `nativeWrite` (AK-22).
  */
+// The record tests use a key-derived account (25.52N.9 Q1); see DerivedAccount.
+private val ACCOUNT: String = DerivedAccount.ADDRESS
+
 class ShellRecordR442Test {
     private fun residualRecord(): JSONObject = JSONObject()
         .put("rev", 1)
@@ -22,7 +24,7 @@ class ShellRecordR442Test {
             JSONArray().put(
                 JSONObject()
                     .put("keyID", ACCOUNT)
-                    .put("privateKeyArmor", "EOA")
+                    .put("privateKeyArmor", DerivedAccount.KEY)
                     .put("chatManager", JSONObject().put("router", "r").put("pgpKey", JSONObject().put("publicKey", "P").put("keyID", "K"))),
             ),
         )
@@ -71,7 +73,7 @@ class ShellRecordR442Test {
                 JSONArray().put(
                     JSONObject()
                         .put("keyID", ACCOUNT)
-                        .put("privateKeyArmor", "EOA")
+                        .put("privateKeyArmor", DerivedAccount.KEY)
                         .put("chatManager", JSONObject().put("pgpKey", JSONObject().put("publicKey", "PUB").put("keyID", "K"))),
                 ),
             )

@@ -1,6 +1,5 @@
 package network.conet.chat.nativekey
 
-import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -15,13 +14,16 @@ import java.util.concurrent.atomic.AtomicReference
  * for a found legacy record); the write guard holds writes until a read has completed (§25.52W.3); a marker or a pointer without a record
  * holds writes; and the residual PGP public positions the Android reader lists are stripped on read (§25.52V.3).
  */
+// The record tests use a key-derived account (25.52N.9 Q1); see DerivedAccount.
+private val ACCOUNT: String = DerivedAccount.ADDRESS
+
 class ShellRecordR445Test {
     private fun v(resp: JSONObject) = resp.v()
 
     private fun writeReq(reqId: String, rev: Int = 0): JSONObject = JSONObject()
         .put("type", "shellRecordWrite")
         .put("reqId", reqId)
-        .put("record", JSONObject().put("rev", rev).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA"))))
+        .put("record", JSONObject().put("rev", rev).put("schemaVersion", 2).put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", DerivedAccount.KEY))))
 
     private fun bridge(store: SealedPageRecordStore, outcome: ImportOutcome?, flags: DeviceFlags = NoDeviceFlags) = ShellRecordBridge(
         account = { ShellRecordAccount.Ready(store, ACCOUNT) },
@@ -136,7 +138,7 @@ class ShellRecordR445Test {
                 JSONArray().put(
                     JSONObject()
                         .put("keyID", ACCOUNT)
-                        .put("privateKeyArmor", "EOA")
+                        .put("privateKeyArmor", DerivedAccount.KEY)
                         .put("publicKeyArmor", "EOA-PUBLIC")
                         .put("chatManager", JSONObject().put("router", "R").put("pgpKey", JSONObject().put("publicKey", "P").put("keyID", "K").put("routes", "RT")))
                         .put("pgpKey", JSONObject().put("publicKeyArmor", "PA").put("publicKeyObj", JSONObject()))
@@ -172,6 +174,6 @@ class ShellRecordR445Test {
         assertEquals("R", profile.getJSONObject("chatManager").getString("router"))
         assertEquals("n", record.getJSONObject("beamio").getString("accountName"))
         assertTrue(chatData.getBoolean("online"))
-        assertEquals("EOA", profile.getString("privateKeyArmor"))
+        assertEquals(DerivedAccount.KEY, profile.getString("privateKeyArmor"))
     }
 }

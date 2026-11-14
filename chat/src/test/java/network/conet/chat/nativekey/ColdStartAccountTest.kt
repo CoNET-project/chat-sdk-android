@@ -16,15 +16,15 @@ import org.junit.Test
  * the storage and the key, and drops the bound account that lives in memory.
  */
 class ColdStartAccountTest {
-    private val a1 = "0x" + "a1".repeat(20)
-    private val a2 = "0x" + "b2".repeat(20)
+    private val a1 = DerivedAccount.ADDRESS
+    private val a2 = DerivedAccount.ADDRESS2
     private val wrap = NativeTestWrap()
     private val device = NativeTestFiles()
 
     private fun storeOf(eoa: String): SealedPageRecordStore = SealedPageRecordStore(wrap, device, eoa.lowercase() + ":default")
 
     private fun heldRecord(rev: Int, eoa: String): JSONObject = JSONObject().put("rev", rev).put("schemaVersion", 2)
-        .put("profiles", JSONArray().put(JSONObject().put("keyID", eoa).put("privateKeyArmor", "EOA")))
+        .put("profiles", JSONArray().put(JSONObject().put("keyID", eoa).put("privateKeyArmor", if (eoa == a2) DerivedAccount.KEY2 else DerivedAccount.KEY)))
         .put("mnemonicPhrase", "M")
 
     /** One process: the account resolution as the shell runs it under G0 (no vault record), with [bound] as this process's import. */

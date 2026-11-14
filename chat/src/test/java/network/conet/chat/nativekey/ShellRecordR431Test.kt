@@ -1,6 +1,5 @@
 package network.conet.chat.nativekey
 
-import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -15,6 +14,9 @@ import java.io.File
  * pointer (§25.52T.3, §25.52T.4), the device-level marker (§25.52T.5, §25.52T.6), and the canonical JSON of the stored copy (§25.52M.4).
  * The ack vectors (AK-01 to AK-16) run in ShellRecordAckVectorsTest.
  */
+// The record tests use a key-derived account (25.52N.9 Q1); see DerivedAccount.
+private val ACCOUNT: String = DerivedAccount.ADDRESS
+
 class ShellRecordR431Test {
     private fun store(files: NativeTestFiles = NativeTestFiles()) = SealedPageRecordStore(NativeTestWrap(), files, "$ACCOUNT:default")
 
@@ -32,7 +34,7 @@ class ShellRecordR431Test {
         .put("rev", rev)
         .put("schemaVersion", 2)
         .put("mnemonicPhrase", "M")
-        .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", "EOA")))
+        .put("profiles", JSONArray().put(JSONObject().put("keyID", ACCOUNT).put("privateKeyArmor", DerivedAccount.KEY)))
 
     // ---- the ack envelope (§25.52T.2) ----
 
