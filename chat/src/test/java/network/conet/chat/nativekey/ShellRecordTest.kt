@@ -218,6 +218,17 @@ class ShellRecordTest {
         assertFalse("the generic bridge never sends the page record", module.contains("BeamioShellRecordImport.handle("))
     }
 
+    @Test
+    fun everySuccessfulReadIsAnnotatedWalletFieldsRedacted() {
+        // §25.52F.4: the read answer is annotated, so the page never reads a missing W field as absent (RD-07).
+        val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
+        store.write(JSONObject().put("rev", 1).put("schemaVersion", 1).put("profiles", JSONArray().put(JSONObject().put("emailAddr", "a"))))
+        val bridge = ShellRecordBridge(account = { ShellRecordAccount.Ready(store) }, migrating = { false }, migrationState = { "none" })
+        val resp = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r9"), 40)
+        assertEquals("ok", resp.getString("code"))
+        assertTrue(resp.getBoolean("walletFieldsRedacted"))
+    }
+
     private fun fileNameOf(accountKey: String): String {
         val bare = accountKey.substringBefore(':').removePrefix("0x")
         return "page.v1.$bare.${accountKey.substringAfter(':')}.rec"

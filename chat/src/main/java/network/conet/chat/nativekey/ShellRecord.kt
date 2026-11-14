@@ -448,12 +448,13 @@ internal class ShellRecordBridge(
         if (current == null) return reply("absent", emptyList())
         val rev = current.opt("rev")
         if (rev !is Int) return reply("error", listOf("sub" to "record_unreadable"))
-        val redacted = ShellRecordPolicy.stripForRead(current)
+        ShellRecordPolicy.stripForRead(current)
+        // Every successful read is annotated (§25.52F.4). The page treats a missing W field as redacted, not as absent (RD-07).
         val out = reply(
             "ok",
             listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
         )
-        if (redacted) out.put("walletFieldsRedacted", true)
+        out.put("walletFieldsRedacted", true)
         if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
         return out
     }
