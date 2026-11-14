@@ -216,6 +216,9 @@ class BridgeKeyAuditTest {
                 // The W-class type check on write (walletTypeRefusal, 25.52AF.3 rule 1): it tests that the value is an object or array, and never
                 // returns it.
                 "if (objectOrArray(profile.opt(\"privateKeyArmor\"))) names += W_PROFILE_PATH",
+                // The form check on write (walletFormRefusal, 25.52N.9 Q1, F2 condition 4): it reads the string only to test its form and its derived
+                // address against keyID, and never returns it.
+                "val armor = profile.opt(\"privateKeyArmor\")",
             ),
         )
 
@@ -225,6 +228,9 @@ class BridgeKeyAuditTest {
         val pendingRuling: Map<String, List<String>> = mapOf(
             "ShellRecord.kt" to listOf(
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
+                // walletAccountMismatch (25.52AG.2 (b), r3ch/r3cj): a profile not of the account that carries privateKeyArmor (null included) is a
+                // conflict. The presence is tested, the value is never read or echoed. Pending the owner's confirmation of the category.
+                "if (!profile.optString(\"keyID\", \"\").equals(account, ignoreCase = true) && profile.has(\"privateKeyArmor\")) mismatch = true",
                 // accountHoldsEoaKey (25.52P.4) is also called on the merged record at the write check (ShellRecord, after mergeWallet): that record
                 // holds the page payload, so this line is pending like the other payload reads (audit of 00537c5). Its other callers read the
                 // stored record only.

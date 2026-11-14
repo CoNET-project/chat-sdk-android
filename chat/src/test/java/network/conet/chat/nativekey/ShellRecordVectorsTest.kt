@@ -1,7 +1,5 @@
 package network.conet.chat.nativekey
 
-import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
-import network.conet.chat.nativekey.PgpMigrationKeys.OTHER
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -18,19 +16,23 @@ import java.util.concurrent.atomic.AtomicReference
  * page's rules. The SDK cannot run the page's code, so they are checked here against a reference of the same rules, and the
  * native half of PW (the pre-write refusal) is checked against the bridge. The PWA must run the same vectors on its side.
  */
+// The test accounts of the vectors, through the sidecar (25.52AL.3): key A and key B, generated per run.
+private val ACCOUNT: String = VectorSidecar.ACCOUNT
+private val OTHER: String = VectorSidecar.OTHER
+
 class ShellRecordVectorsTest {
     private val bytes = File(
         System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json",
     ).readBytes()
-    private val doc = JSONObject(String(bytes, Charsets.UTF_8))
+    private val doc = VectorSidecar.map(JSONObject(String(bytes, Charsets.UTF_8)))
 
     @Test
     fun theShellRecordGroupsMatchTheSpec() {
-        assertEquals(46, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(47, doc.getJSONArray("shellRecordCases").length())  // r3cj: TR-47 added
         assertEquals(12, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
         assertEquals(5, doc.getJSONArray("pageRefuseCases").length())
-        assertEquals(8, doc.getJSONArray("walletMergeCases").length())
+        assertEquals(13, doc.getJSONArray("walletMergeCases").length())
         assertEquals(5, doc.getJSONArray("formatCases").length())
         assertEquals(2, doc.getJSONArray("canonicalCases").length())
     }

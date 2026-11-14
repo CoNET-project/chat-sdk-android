@@ -20,10 +20,13 @@ import java.io.File
  * and that the judgement the window channel gives for the same request is `absent`, which the chat channel would share.
  */
 class GateExceptionTest {
-    private val doc = JSONObject(
-        String(
-            File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readBytes(),
-            Charsets.UTF_8,
+    // The vectors through the sidecar (25.52AL.3): placeholders of the profiles are mapped to test keys for this run only.
+    private val doc = VectorSidecar.map(
+        JSONObject(
+            String(
+                File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readBytes(),
+                Charsets.UTF_8,
+            ),
         ),
     )
 
@@ -211,7 +214,7 @@ class GateExceptionTest {
 
     companion object {
         /** The vectors' account `a1`, written as a 40-digit address, so that the copy's file name is the one the store makes. */
-        val A1 = "0x" + "a1".repeat(20)
+        val A1 = VectorSidecar.ACCOUNT
         val A2 = "0x" + "b2".repeat(20)
         val COPY_NAME = "page.v1.${A1.removePrefix("0x")}.default.rec"
 
@@ -219,7 +222,7 @@ class GateExceptionTest {
             { eoa -> SealedPageRecordStore(wrap, files, eoa.lowercase() + ":default") }
 
         fun heldRecord(eoa: String): JSONObject = JSONObject().put("rev", 2).put("schemaVersion", 2)
-            .put("profiles", JSONArray().put(JSONObject().put("keyID", eoa).put("privateKeyArmor", "EOA")))
+            .put("profiles", JSONArray().put(JSONObject().put("keyID", eoa).put("privateKeyArmor", VectorSidecar.ARMOR_OF_ACCOUNT)))
             .put("mnemonicPhrase", "M")
 
         /** The vectors name the account `a1`; this maps that label to [A1] wherever it is a quoted value. */

@@ -50,22 +50,23 @@ class PgpMigrationVectorsTest {
         assertEquals(36, cases.length())
         assertEquals(42, (0 until cases.length()).sumOf { cases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(6, doc.getJSONArray("pwaEventCases").length())
-        assertEquals(46, doc.getJSONArray("shellRecordCases").length())
+        assertEquals(47, doc.getJSONArray("shellRecordCases").length())  // r3cj: TR-47 added
         assertEquals(12, doc.getJSONArray("pageReadCases").length())
         assertEquals(2, doc.getJSONArray("pageWriteCases").length())
         assertEquals(5, doc.getJSONArray("pageRefuseCases").length())
-        assertEquals(8, doc.getJSONArray("walletMergeCases").length())
+        assertEquals(13, doc.getJSONArray("walletMergeCases").length())
         assertEquals(7, sourceCases.length())
         // r3bg (§25.52I.10): 8 unregister cases (9 steps), 7 migration-state cases, and 8 import cases (in ShellRecordVectorsTest).
         assertEquals(12, unregisterCases.length())
         assertEquals(13, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(7, migrationStateCases.length())
-        assertEquals(9, doc.getJSONArray("importCases").length())
+        assertEquals(10, doc.getJSONArray("importCases").length())  // r3cj: IM-10 added
         // r3bz (§25.52AD.7): GX-01 to GX-10b (11 cases). r3by (§25.52AC.8): DL-01 to DL-09 (9 cases) and DL-10a, DL-10b (2 cases).
         assertEquals(11, doc.getJSONArray("gateExceptionCases").length())
         assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
         assertEquals(2, doc.getJSONArray("pageRecordDeleteCases").length())
-        assertEquals(254, doc.getJSONObject("selfCheck").getInt("runs"))
+        // r3cf (25.52AH): the self-check has 259 steps (it had 254 before the r3cf vectors).
+        assertEquals(261, doc.getJSONObject("selfCheck").getInt("runs"))
     }
 
     @Test
@@ -390,7 +391,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3bz (§25.52AD.7, `0769d01a…667e`). */
-        const val PINNED_SHA256 = "0769d01ac10b7fa19e5da08ede287f4dbb6a06bc131bbbd20d42d57e0e97667e"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3cf (§25.52AH, `0ab9f2ab…10fb`; r3bz was `0769d01a…667e`). */
+        const val PINNED_SHA256 = "59b17696e2439ff4c4ddb5c19457783acbe1a95201225fb0a24c7c1333e57aba"
     }
 }

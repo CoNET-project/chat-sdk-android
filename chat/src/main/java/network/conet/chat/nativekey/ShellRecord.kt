@@ -285,6 +285,9 @@ internal object ShellRecordPolicy {
 
     private val CANONICAL_PGP_HEADER: String = canonicalText(PGP_HEADER)
 
+    /** The form the page writes a private key in: `0x` and 64 lower-case hex digits (§25.52N.9 Q1). */
+    private val CANONICAL_KEY_ARMOR = Regex("0x[0-9a-f]{64}")
+
     private val HEX_KEY = Regex("[0-9a-fA-F]{64}")
 
     /**
@@ -321,6 +324,46 @@ internal object ShellRecordPolicy {
             }
         }
         return names.toList()
+    }
+
+    /**
+     * The form check on write (§25.52N.9 Q1, F2 condition 4), for the profile whose keyID is the account only (the exact W path, 25.52N.3). A
+     * `privateKeyArmor` that is a string must be the canonical form (`0x` and 64 lower-case hex digits) and must derive that keyID. Otherwise
+     * bad_request, naming the path, nothing echoed. A null or a non-string scalar is not judged here (25.52AF.3 rule 4). Without a known account the
+     * check does not apply.
+     */
+    fun walletFormRefusal(record: JSONObject, account: String): List<String> {
+        if (account.isEmpty()) return emptyList()
+        val names = sortedSetOf<String>()
+        record.optJSONArray("profiles")?.let { profiles ->
+            for (i in 0 until profiles.length()) {
+                val profile = profiles.optJSONObject(i) ?: continue
+                val keyId = profile.optString("keyID", "")
+                if (!keyId.equals(account, ignoreCase = true)) continue
+                val armor = profile.opt("privateKeyArmor")
+                if (armor !is String) continue
+                val valid = CANONICAL_KEY_ARMOR.matches(armor) && addressOfArmor(armor)?.equals(keyId, ignoreCase = true) == true
+                if (!valid) names += W_PROFILE_PATH
+            }
+        }
+        return names.toList()
+    }
+
+    /**
+     * 25.52AG.2 (r3ch, r3cj): a profile whose keyID is not the account, and which carries a `privateKeyArmor` (a null value included: the key is
+     * present), is a conflict with reason `w_account_unmatched`. The names are the W path. Nothing is written, and no value is echoed. This applies to
+     * native writes too (it is not the merge's rule). Without a known account it does not apply.
+     */
+    fun walletAccountMismatch(record: JSONObject, account: String): List<String> {
+        if (account.isEmpty()) return emptyList()
+        var mismatch = false
+        record.optJSONArray("profiles")?.let { profiles ->
+            for (i in 0 until profiles.length()) {
+                val profile = profiles.optJSONObject(i) ?: continue
+                if (!profile.optString("keyID", "").equals(account, ignoreCase = true) && profile.has("privateKeyArmor")) mismatch = true
+            }
+        }
+        return if (mismatch) listOf(W_PROFILE_PATH) else emptyList()
     }
 
     /** True for a key name of §25.52O.2: `privateKey*`, `mnemonic*`, `pgpPassphrase*`, `pgpPrivate*`, `duplicateCode*`, or an exact name. */
@@ -1145,6 +1188,15 @@ internal class ShellRecordBridge(
         val currentRev = (current?.opt("rev") as? Int) ?: 0
         if (rev != currentRev) return reply("conflict", listOf("currentRev" to currentRev))
 
+        // §25.52AG.2 (b): a profile not of the account that carries privateKeyArmor is a conflict (w_account_unmatched), for native writes too.
+        val mismatch = ShellRecordPolicy.walletAccountMismatch(record, ready?.eoa.orEmpty())
+        if (mismatch.isNotEmpty()) {
+            return reply(
+                "conflict",
+                listOf("currentRev" to currentRev, "reason" to "w_account_unmatched", "names" to JSONArray(mismatch)),
+            )
+        }
+
         // Step 9: the wallet-field merge (§25.52H.2, §25.52S.4).
         val merge = ShellRecordPolicy.mergeWallet(record, current ?: JSONObject(), ready?.eoa.orEmpty(), replaceWallet = nativeWrite)
         if (merge.names.isNotEmpty()) {
@@ -1153,6 +1205,11 @@ internal class ShellRecordBridge(
                 listOf("currentRev" to currentRev, "reason" to merge.reason, "names" to JSONArray(merge.names)),
             )
         }
+        // §25.52N.9 Q1 (F2 condition 4): after the merge conflicts (§25.52H.2), a string privateKeyArmor of the account's profile must be the canonical form
+        // and derive its keyID; otherwise bad_request, naming the path.
+        // §25.52N.9 Q1 (F2 condition 4): a string privateKeyArmor must be the canonical form and derive its profile's keyID.
+        val formRefusal = ShellRecordPolicy.walletFormRefusal(record, ready?.eoa.orEmpty())
+        if (formRefusal.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(formRefusal)))
         // §25.52P.4: a schema 2 copy must hold the EOA private key after the merge; otherwise the write is refused and nothing is stored.
         if (schema >= ShellRecordPolicy.WALLET_SCHEMA_MIN && !ShellRecordPolicy.accountHoldsEoaKey(merge.record, ready?.eoa.orEmpty())) {
             return reply("wallet_fields_missing", listOf("names" to JSONArray(listOf(ShellRecordPolicy.W_PROFILE_PATH))))

@@ -3316,6 +3316,34 @@
           }
         }
       }
+    },
+    {
+      "id": "TR-47",
+      "title": "r3cj（AJ.4，R634 第 2 条）：读回时记录残留 PGP 私钥头（未剥离路径）：error（record_unreadable），不返回记录，存储不变",
+      "kind": "read",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "mnemonicPhrase": "M",
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "emailAddr": "BEGIN PGP PRIVATE KEY"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "error",
+        "sub": "record_unreadable"
+      }
     }
   ],
   "migrationStateCases": [
@@ -4228,7 +4256,7 @@
     },
     {
       "id": "WM-08",
-      "title": "D6：W 字段所在档案的 keyID 与账户不匹配：conflict（reason w_account_unmatched）",
+      "title": "D6（r3ch，R628 恢复 r3bh）：W 字段所在档案的 keyID 与账户不匹配：conflict（w_account_unmatched），原生为主，页面值不写入、不回显",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4284,6 +4312,245 @@
             "mnemonicPhrase": "M"
           }
         }
+      }
+    },
+    {
+      "id": "WM-09",
+      "title": "r3ch（R628）：首次写入（原生尚无 W），另一档案 keyID 与账户不匹配而携带 privateKeyArmor：conflict（w_account_unmatched），整条不写入",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "m9",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a"
+            },
+            {
+              "keyID": "zz",
+              "privateKeyArmor": "OTHER"
+            }
+          ],
+          "mnemonicPhrase": "M"
+        }
+      },
+      "expect": {
+        "code": "conflict",
+        "currentRev": 1,
+        "reason": "w_account_unmatched",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "m9",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "emailAddr": "a"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-10",
+      "title": "r3cf（AF.3 第 1 条）：mnemonicPhrase 为对象（包装形式 {ct, eoa, iv, kdf, mode, salt, v}）：bad_request，names 为 mnemonicPhrase，存储不变",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonicPhrase": "M"
+        }
+      },
+      "req": {
+        "reqId": "m10",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a",
+              "privateKeyArmor": "EOA"
+            }
+          ],
+          "mnemonicPhrase": {
+            "ct": "x",
+            "eoa": "a1",
+            "iv": "i",
+            "kdf": "k",
+            "mode": "m",
+            "salt": "s",
+            "v": 1
+          }
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "mnemonicPhrase"
+        ],
+        "reqId": "m10",
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "emailAddr": "a",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        }
+      }
+    },
+    {
+      "id": "WM-11",
+      "title": "r3cf（AF.3 第 1 条）：首次写入，profiles[*].privateKeyArmor 为数组（keyID 匹配）：bad_request，names 为 profiles[*].privateKeyArmor，不写入",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "m11",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "emailAddr": "a",
+              "privateKeyArmor": [
+                "EOA"
+              ]
+            }
+          ],
+          "mnemonicPhrase": "M"
+        }
+      },
+      "expect": {
+        "code": "bad_request",
+        "names": [
+          "profiles[*].privateKeyArmor"
+        ],
+        "reqId": "m11",
+        "store": null
+      }
+    },
+    {
+      "id": "WM-12",
+      "title": "r3cf（AF.3 第 2 条）：privateKeyArmorWrap 下为包装形式对象（{v, mode, eoa, kdf, salt, iv, ct}）：key_shaped_content，只记路径名",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "m12",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "privateKeyArmorWrap": {
+                "v": 1,
+                "mode": "m",
+                "eoa": "a1",
+                "kdf": "k",
+                "salt": "s",
+                "iv": "i",
+                "ct": "c"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].privateKeyArmorWrap"
+        ],
+        "reqId": "m12",
+        "store": null
+      }
+    },
+    {
+      "id": "WM-13",
+      "title": "r3cf（AF.3 第 3 条，判定顺序）：同一写入中 privateKeyArmorWrap（键形态）与 mnemonicPhrase 对象并存：先键形态，返回 key_shaped_content，names 只列 privateKeyArmorWrap",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1"
+      },
+      "store": null,
+      "req": {
+        "reqId": "m13",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA",
+              "privateKeyArmorWrap": {
+                "ct": "c"
+              }
+            }
+          ],
+          "mnemonicPhrase": {
+            "ct": "x",
+            "v": 1
+          }
+        }
+      },
+      "expect": {
+        "code": "key_shaped_content",
+        "names": [
+          "profiles[*].privateKeyArmorWrap"
+        ],
+        "reqId": "m13",
+        "store": null
       }
     }
   ],
@@ -4923,6 +5190,42 @@
                 }
               }
             }
+          }
+        }
+      ]
+    },
+    {
+      "id": "IM-10",
+      "title": "r3cj（AJ.4，R634 第 2 条）：首次导入时旧记录残留 PGP 私钥头（未剥离路径）：import_failed（outcome not_done，读回 import_not_done），旧存储保留，不写入",
+      "init": {
+        "store": null,
+        "legacy": {
+          "state": "found",
+          "recordAddr": "A1",
+          "record": {
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "BEGIN PGP PRIVATE KEY",
+                "privateKeyArmor": "EOA"
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        },
+        "derivedAddr": "A1"
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "import_failed",
+            "store": null,
+            "read": {
+              "code": "error",
+              "sub": "import_not_done"
+            },
+            "legacyKept": true
           }
         }
       ]
@@ -7739,7 +8042,7 @@
     "busy"
   ],
   "selfCheck": {
-    "runs": 254,
+    "runs": 261,
     "result": "pass"
   }
 }

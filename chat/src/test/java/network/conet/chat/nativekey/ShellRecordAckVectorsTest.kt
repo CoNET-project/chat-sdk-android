@@ -1,6 +1,5 @@
 package network.conet.chat.nativekey
 
-import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -10,8 +9,11 @@ import java.io.File
  * The ack group of the vectors (spec r3bp §25.52T.8: AK-01 to AK-16). Each case sets the legacy reader state (`legacy`), the account pointer
  * and the device marker (`pointer`, `marker`), then sends the request through the bridge and compares the ack.
  */
+// The test account of the vectors, through the sidecar (25.52AL.3).
+private val ACCOUNT: String = VectorSidecar.ACCOUNT
+
 class ShellRecordAckVectorsTest {
-    private val doc = JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8))
+    private val doc = VectorSidecar.map(JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8)))
 
     @Test
     fun theAckGroupHasTwentyEightCases() {
