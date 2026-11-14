@@ -44,7 +44,7 @@ internal object NativeDerivation {
 
     /** W4 fragment key = HKDF(R_proto, "frag|" + decimal(seq) + "|" + prevCid, 32), with prevCid used as given (§25.43.5). */
     fun fragmentKey(rProto: ByteArray, seq: Int, prevCid: String): ByteArray =
-        ConetChatCryptoUtil.hkdf(rProto, "frag|$seq|$prevCid", 32)
+        ConetChatCryptoUtil.fragmentKey(rProto, seq, prevCid)
 
     /** The C5 result: the four children only (§25.43.6). The root is not part of it. */
     class Subkeys(val kId: ByteArray, val kIdx: ByteArray, val dek: ByteArray, val kcv: String)

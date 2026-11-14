@@ -732,8 +732,7 @@ class BeamioConetChatHistoryStore(
         val batch = HistoryBatch.order(pending.entries)
         val fresh = ArrayList<Pair<IndexRecord, String>>()
         for (e in batch) {
-            val fragKey = ConetChatCryptoUtil.hkdf(masterKey, "frag|$seq|$prevCid", 32)
-            val cipher = ConetChatCryptoUtil.aesGcmEncrypt(fragKey, e.body.toByteArray(Charsets.UTF_8))
+            val cipher = encryptFragment(masterKey, seq, prevCid, e.body)
             val cid = ConetChatCryptoUtil.keccakUtf8Hex(cipher)
             fresh.add(IndexRecord(seq, cid, prevCid, e.ts, e.peer, e.dir, e.key, e.body.take(80)) to cipher)
             seq += 1
@@ -1036,8 +1035,7 @@ class BeamioConetChatHistoryStore(
         val masterKey = master ?: return null
         val cipher = fetchVerified(rec.cid) ?: return null
         return try {
-            val k = ConetChatCryptoUtil.hkdf(masterKey, "frag|${rec.seq}|${rec.prevCid}", 32)
-            val body = String(ConetChatCryptoUtil.aesGcmDecrypt(k, cipher), Charsets.UTF_8)
+            val body = decryptFragment(masterKey, rec.seq, rec.prevCid, cipher)
             Entry(rec.seq, rec.ts, rec.peer, rec.dir, rec.sendId, body).also { plain[rec.cid] = it }
         } catch (e: Exception) {
             log("warn", "[history] record decrypt failed seq=${rec.seq} cid=${shortCid(rec.cid)}")
@@ -1249,6 +1247,14 @@ class BeamioConetChatHistoryStore(
         private const val TAG = "BeamioConetHistory"
         private const val FRAGMENT_GENESIS_INFO = "frag-genesis"
         private const val PENDING_KEY_INFO = "pending-enc"
+
+        /** Encrypts one fragment body with its key (§25.43.5); returns the base64 cipher that is uploaded. The write path uses only this. */
+        internal fun encryptFragment(master: ByteArray, seq: Int, prevCid: String, body: String): String =
+            ConetChatCryptoUtil.aesGcmEncrypt(ConetChatCryptoUtil.fragmentKey(master, seq, prevCid), body.toByteArray(Charsets.UTF_8))
+
+        /** Decrypts one fragment cipher (base64) with its key. The read path uses only this. */
+        internal fun decryptFragment(master: ByteArray, seq: Int, prevCid: String, cipherB64: String): String =
+            String(ConetChatCryptoUtil.aesGcmDecrypt(ConetChatCryptoUtil.fragmentKey(master, seq, prevCid), cipherB64), Charsets.UTF_8)
         private const val BACKFILL_BATCH = 20
 
         /** Concurrent IPFS fetch+decrypt workers for restore / global read. */

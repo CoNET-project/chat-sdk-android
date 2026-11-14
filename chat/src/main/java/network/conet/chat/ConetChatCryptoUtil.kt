@@ -11,6 +11,12 @@ import javax.crypto.spec.SecretKeySpec
  * and none of these functions touches the EOA private key.
  */
 internal object ConetChatCryptoUtil {
+    /**
+     * The fragment key (§25.43.5, W4): HKDF(master, "frag|seq|prevCid", 32). The one derivation for the history write, the history read and W4
+     * (NativeDerivation.fragmentKey). Changing it in one place changes all three.
+     */
+    fun fragmentKey(master: ByteArray, seq: Int, prevCid: String): ByteArray = hkdf(master, "frag|$seq|$prevCid", 32)
+
     private val random = SecureRandom()
 
     // ---- keccak256 (Ethereum, original 0x01 padding — not SHA3-256) ---------------
