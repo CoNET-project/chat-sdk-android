@@ -1108,8 +1108,10 @@ object BeamioConetChatModule {
         val vault = NativeWallet.vault(ctx)
         val eoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
         if (eoa == null) { ack(reqId, false, error = "not_ready"); return }
+        // A vault that cannot be unlocked is a storage-derived failure: not_ready (spec 25.52CS.2, T-133-05). `locked` is the passcode lock only,
+        // which Android does not have (25.52GQ.3a), so it is not answered here.
         val key = vault.unlock()
-        if (key == null) { ack(reqId, false, error = "locked"); return }
+        if (key == null) { ack(reqId, false, error = "not_ready"); return }
         var armorBytes: ByteArray? = null
         try {
             val armor = NativeWallet.pgpFor(ctx, eoa).armorForMove()

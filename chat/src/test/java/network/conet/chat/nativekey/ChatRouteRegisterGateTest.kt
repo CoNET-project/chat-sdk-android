@@ -14,7 +14,10 @@ import java.io.File
 class ChatRouteRegisterGateTest {
     private val name = "chatRouteRegister"
 
-    /** NR-13: G0 is no_key, and the payload is not read. */
+    /**
+     * NR-13: G0 is no_key, and the payload is not read. Unit-layer coverage: the gate function is called directly, not through the module's
+     * dispatch, so "the payload is not read" is not proven by this test (reviewer 76357584, db617be point 2).
+     */
     @Test
     fun g0AnswersNoKeyWithoutReadingThePayload() {
         assertEquals("no_key", NoKeyGate.answerFor(name, NoKeyGate.Gate.G0))
@@ -27,11 +30,11 @@ class ChatRouteRegisterGateTest {
     }
 
     /**
-     * NR-15 (`locked`, the passcode lock of 25.22.4): Android has no passcode layer, and the SDK has no passcode-lock answer for this name
-     * (NoKeyGate has no passcodeLockedAnswer). NR-15 therefore has no Android code path here; it is a recorded gap, not a pass.
+     * NR-15 (`locked`, the passcode lock of 25.22.4): platform not applicable on Android (spec r3pi, 25.52GQ.3a). Android has no passcode layer
+     * and no `locked` state; its equivalent is the storage lock's not_ready (T-133-05). Recorded as not applicable, not as a failure.
      */
     @Test
-    fun nr15IsARecordedGapBecauseAndroidHasNoPasscodeLock() {
+    fun nr15IsNotApplicableOnAndroid() {
         assertEquals(null, NoKeyGate.lockedAnswer("no-such-command", NativeWalletVault.State.Locked("x")))
     }
 
