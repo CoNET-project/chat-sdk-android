@@ -29,7 +29,7 @@ object NoKeyGate {
 
     /**
      * The command families of §25.22.4 that answer `locked` while the passcode state is locked, by the bridge names they map to in
-     * negative-tests-v1 (r3dz). Not here: the retired names (25.52BZ.3, `not_supported` in every state), pgpSign (unknown, 25.52BP.1), W5
+     * negative-tests-v2 (r3dz). Not here: the retired names (25.52BZ.3, `not_supported` in every state), pgpSign (unknown, 25.52BP.1), W5
      * (no bridge name, 25.52AR.3), and N1–N4 and identityReady (no mapping in the vector yet, 25.52BZ.5).
      */
     val LOCKED_FAMILY_COMMANDS: Set<String> =

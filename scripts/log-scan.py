@@ -137,7 +137,7 @@ def main():
     ap.add_argument("--allow")
     ap.add_argument("--report")
     ap.add_argument("--source", action="append", default=[], metavar="ID=PATH")
-    ap.add_argument("--canonical", help="negative-tests-v1.json: the canonical ids of logScan.patterns (25.52CG.3)")
+    ap.add_argument("--canonical", help="negative-tests-v2.json: the canonical ids of logScan.patterns (25.52CG.3)")
     args = ap.parse_args()
 
     spec = load_json(args.patterns)

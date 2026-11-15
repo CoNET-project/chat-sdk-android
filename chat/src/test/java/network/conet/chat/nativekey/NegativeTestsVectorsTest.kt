@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, the v2 copy, negative-tests-v2 r3pq; sha256 86b836ef…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v2.json`, the v2 copy, negative-tests-v2 r3pq; sha256 86b836ef…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -24,7 +24,7 @@ import java.security.MessageDigest
  * locked state the SDK has; Android has no passcode API, 25.52BZ.4 and the receipt).
  */
 class NegativeTestsVectorsTest {
-    private val bytes = File("../spec/negative-tests-v1.json").readBytes()
+    private val bytes = File("../spec/negative-tests-v2.json").readBytes()
     private val v = JSONObject(String(bytes, Charsets.UTF_8))
 
     /** The cases that are not run here, with the reason. Each is a pending ruling, a vector gap, or a surface run elsewhere. */
