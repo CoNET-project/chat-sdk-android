@@ -140,37 +140,6 @@ class NegativeTestsVectorsTest {
         assertEquals(mapped, NoKeyGate.LOCKED_FAMILY_COMMANDS)
     }
 
-    @org.junit.Test
-    fun passcodeLockedCasesAnswerLockedForTheMappedFamiliesAndTheRestAsTheVectorSays() {
-        // Skipped, not passing: the passcode-lock answers (T-130-16 to T-130-19 and the rest of the group) are not applicable on Android
-        // (no passcode layer) and await the interface ruling (R2094, with NR-15; PM R2096). Not rewritten to pass.
-        org.junit.Assume.assumeTrue("passcode-lock answers: awaiting the interface ruling (R2094, NR-15); not applicable on Android", false)
-        val locked = lockedState()
-        assertTrue("the record is locked", locked is NativeWalletVault.State.Locked)
-        for (c in cases("passcodeLocked")) {
-            val id = c.getString("id")
-            if (pending.containsKey(id)) continue
-            val expect = c.getString("expect")
-            val commands = c.optJSONArray("commands")
-            when (expect) {
-                "locked" -> {
-                    val name = (0 until commands!!.length()).map { commands.getString(it) }.single()
-                    assertEquals(id, "locked", NoKeyGate.lockedAnswer(name, locked))
-                }
-                "unknown_command" -> {
-                    // T-130-14 (25.52BP.1): pgpSign is not a bridge name; the lock does not change that.
-                    assertFalse(id, BridgeCommandTable.isRegistered("pgpSign"))
-                    assertNull(id, NoKeyGate.lockedAnswer("pgpSign", locked))
-                }
-                "not_supported" -> {
-                    // T-130-15 (25.52BZ.3): a retired name is not_supported in every state, the lock included.
-                    assertEquals(id, NoKeyGate.Route.NOT_SUPPORTED, NoKeyGate.route("walletTransferOnce"))
-                    assertNull(id, NoKeyGate.lockedAnswer("walletTransferOnce", locked))
-                }
-            }
-        }
-    }
-
     @Test
     fun theLogScanPositiveControlNamesThePatternTheVectorExpects() {
         // T-131-control: the scanner must hit an injected pattern. The scan itself runs on device logs (scripts/log-scan.py, see the receipt).
@@ -215,7 +184,8 @@ class NegativeTestsVectorsTest {
     }
 
     /**
-     * PM R2099, interface r3pk (spec 25.52GQ.3b): the passcode-group cases that do not apply on Android (no passcode layer). They are listed here
+     * PM R2099, R2101, interface r3pk (spec 25.52GQ.3b): the passcode-group cases and NR-15 that do not apply on Android (no passcode layer). They are
+     * excluded explicitly (not counted as failures, not silently skipped), and replaced by T-133-01 to T-133-15, T-133-19 and T-133-C4. They are listed here
      * with their replacement, not silently skipped. Each replacement must exist in the storage-lock group (storageLocked). The mapping of
      * T-130-01 to T-130-13 onto T-133-01 to T-133-12 is the interface seat's range statement, applied in order; the interface seat to confirm.
      */
