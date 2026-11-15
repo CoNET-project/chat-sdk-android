@@ -277,6 +277,14 @@ object BeamioConetChatModule {
             }
             val state = NativeWallet.vault(context).state()
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
+            // clear_pending set (strictly read): clearIdentity finishes the interrupted clear in G0 and G1 (25.26.4c 第 3a 項, 25.52Y.21 (a),
+            // gate-state G0-CLR-PENDING and G1-CLR-PENDING, no-key NK-CP1). Without the marker, the gate answers as before (G0 no_key, G1 not_ready).
+            if (type == "clearIdentity" && gate != NoKeyGate.Gate.G2 &&
+                ClearFlagFiles(pageRecordFiles(context)).clearPendingStrict()
+            ) {
+                clearIdentity(reqId)
+                return
+            }
             // 25.52BZ.4 (r3dz): the locked check of the gate step, after the name check and before the parameters and the no_key or not_ready
             // answers. No payload is read.
             NoKeyGate.lockedAnswer(type, state)?.let { code ->

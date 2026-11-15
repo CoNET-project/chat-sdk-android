@@ -31,24 +31,25 @@ class GateStateVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22", sha256Hex(bytes))
+        assertEquals("d5b9c948672ec1cde8a04c05f04be18aeaa04c375af81918cbb48a846f7c19a7", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        // r3dm: 133 cases (G0 32, G1 101). G1 allowed commands 66 (pgpSign removed, 25.52BP.1); init 3; shell-layer not gated 26; rejected names 8.
-        assertEquals(132, cases.length())
+        // Canonical spec pack (R2190 segment 6): 146 cases (G0 34, G1 109, G2 3); counts.g1Commands 67, g1Init 10, shell-layer not gated 26,
+        // shell rejects 8.
+        assertEquals(146, cases.length())
         val counts = v.getJSONObject("counts")
-        assertEquals(132, counts.getInt("cases"))
-        assertEquals(65, counts.getInt("g1Commands"))
-        assertEquals(3, counts.getInt("g1Init"))
+        assertEquals(146, counts.getInt("cases"))
+        assertEquals(67, counts.getInt("g1Commands"))
+        assertEquals(10, counts.getInt("g1Init"))
         assertEquals(26, counts.getInt("shellNotGatedCases"))
         assertEquals(8, counts.getInt("shellRejectCases"))
         var g0 = 0
         var g1 = 0
         for (i in 0 until cases.length()) if (cases.getJSONObject(i).getString("state") == "G0") g0++ else g1++
-        assertEquals(32, g0)
-        assertEquals(100, g1)
+        assertEquals(34, g0)
+        assertEquals(112, g1)
     }
 
     @Test
@@ -89,7 +90,11 @@ class GateStateVectorsTest {
                 else -> {
                     // 25.52CK.3 (r3ek): the inner layer answers unknown_command for these names, before the gate, in every state. A shell row's
                     // expect is the outer layer's (no_key, not_ready), so for those rows only the inner answer is checked.
-                    val code = if (command in innerUnknown) {
+                    // W2 to W4 and the W5 signMessage name are not bridge names (25.52DP.1, 25.52AR.3): unknown_command before the gate.
+                    val code = if (command == "clearIdentity" && gate != NoKeyGate.Gate.G2 && c.optBoolean("clearPending")) {
+                        // 25.26.4c 第 3a 項: with clear_pending set, clearIdentity finishes the interrupted clear in G0 and G1 (no wallet here: ok).
+                        "ok"
+                    } else if (command in innerUnknown || NoKeyGate.route(command) == NoKeyGate.Route.UNKNOWN_NAME) {
                         assertFalse("$id: $command is not a bridge name", BridgeCommandTable.isRegistered(command))
                         BridgeCommandTable.UNKNOWN_COMMAND
                     } else if (gate == NoKeyGate.Gate.G1 && command == "init") {
