@@ -203,6 +203,10 @@ class NegativeTestsVectorsTest {
         val storageIds = cases("storageLocked").map { it.getString("id") }.toSet()
         for (id in excluded) assertTrue("$id is in passcodeLocked", id in passcodeIds)
         assertEquals(setOf("T-130-14", "T-130-15"), passcodeIds - excluded.toSet())
+        // T-130-04 is a nativeOnly entry of the passcode group, explicitly excluded (GQ.3b 第 4 条), replaced by T-133-C4.
+        val passcodeNative = v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("id") } }
+        assertTrue("T-130-04 is a passcode nativeOnly case", "T-130-04" in passcodeNative)
+        assertTrue("T-130-04 is explicitly excluded", "T-130-04" in replacements.keys)
         // T-133-C4 is a nativeOnly entry of the storage-lock group (refusal not_ready, no signature output).
         val storageNative = v.getJSONObject("storageLocked").getJSONArray("nativeOnly").let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("id") } }
         for ((from, to) in replacements) assertTrue("$from replaced by $to, which exists in storageLocked", to in storageIds || to in storageNative)
@@ -210,7 +214,10 @@ class NegativeTestsVectorsTest {
             cases("storageLocked").single { it.getString("id") == "T-133-05" }.getString("expect"))
     }
 
-    /** T-130-14 (pgpSign, unknown_command) applies on both platforms: the name is not a bridge name, so it is refused before any gate. */
+    /**
+     * T-130-14 (pgpSign, unknown_command) applies on both platforms: the name is not a bridge name, so it is refused before any gate.
+     * Unit layer: this checks the vector's expectation against BridgeCommandTable, not a run through the module's dispatch (as for NR-13, NR-14).
+     */
     @Test
     fun t13014PgpSignIsUnknownCommandOnBothPlatforms() {
         val c = cases("passcodeLocked").single { it.getString("id") == "T-130-14" }
@@ -218,7 +225,10 @@ class NegativeTestsVectorsTest {
         assertFalse("pgpSign is not a bridge name", BridgeCommandTable.isRegistered("pgpSign"))
     }
 
-    /** T-130-15 (walletTransferOnce, not_supported) applies on both platforms: retired, not_supported in every state. */
+    /**
+     * T-130-15 (walletTransferOnce, not_supported) applies on both platforms: retired, not_supported in every state.
+     * Unit layer: the gate function is called directly, not through the module's dispatch.
+     */
     @Test
     fun t13015WalletTransferOnceIsNotSupportedInEveryState() {
         val c = cases("passcodeLocked").single { it.getString("id") == "T-130-15" }
