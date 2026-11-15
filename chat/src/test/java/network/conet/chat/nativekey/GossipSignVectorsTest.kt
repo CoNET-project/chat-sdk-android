@@ -45,10 +45,10 @@ class GossipSignVectorsTest {
 
     @Test
     fun caseCountsMatchTheVector() {
-        assertEquals(23, cases.length())
+        assertEquals(33, cases.length())
         val ok = (0 until cases.length()).count { cases.getJSONObject(it).getString("expect") == "ok" }
-        assertEquals(9, ok)
-        assertEquals(14, cases.length() - ok)
+        assertEquals(13, ok)
+        assertEquals(20, cases.length() - ok)
     }
 
     @Test
@@ -57,6 +57,14 @@ class GossipSignVectorsTest {
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
             val id = c.getString("id")
+            // FX.1, FY.1 (R-1 to R-10): the request fields are checked before any signature, as the command does.
+            val request = c.optJSONObject("request") ?: JSONObject()
+            val pageDeferAck = c.optJSONObject("context")?.optBoolean("pageDeferAck", false) ?: false
+            val refusal = SignRequestRule.check(c.getString("kind"), request, pageDeferAck)
+            if (refusal != null) {
+                assertEquals("$id code", c.getString("code"), refusal)
+                continue
+            }
             val out = NativeMessageSigner.sign(vault, c.getString("kind"), messageOf(c))
             if (c.getString("expect") == "ok") {
                 assertEquals("$id code", "ok", out.code)

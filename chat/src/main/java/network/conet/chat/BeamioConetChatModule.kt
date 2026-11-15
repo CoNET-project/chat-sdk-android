@@ -36,6 +36,7 @@ import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
 import network.conet.chat.nativekey.MigrationResult
 import network.conet.chat.nativekey.migrationAccountOfName
+import network.conet.chat.nativekey.SignRequestRule
 import network.conet.chat.nativekey.orphanSweepMayRun
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
@@ -1130,6 +1131,13 @@ object BeamioConetChatModule {
         val kind = body.optString("kind", "")
         val message = body.optString("message", null) ?: run {
             ack(reqId, false, error = "bad_request")
+            return
+        }
+        // FX.1, FY.1 (r3hy, 25.52FU.1): the request fields are checked before any signature. The page's deferAck comes from init.
+        val pageDeferAck = currentSession()?.deferAck == true
+        SignRequestRule.check(kind, body, pageDeferAck)?.let { refusal ->
+            BridgeCommandTable.countCommandRejected()
+            ack(reqId, false, error = refusal)
             return
         }
         val out = NativeMessageSigner.sign(NativeWallet.vault(ctx), kind, message.toByteArray(Charsets.UTF_8))
