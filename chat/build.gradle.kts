@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.18-r1841qa"
+version = "0.2.19-r1841qa"
 
 android {
     namespace = "network.conet.chat"
@@ -34,6 +34,8 @@ android {
             "WALLET_CREDENTIAL_QA",
             (project.findProperty("chatWalletCredentialQa")?.toString() == "true").toString(),
         )
+        // The artifact version as a build constant (spec 25.52Y.45, PM R2054): the SDK reports it as hello.sdkVersion; a test compares them.
+        buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

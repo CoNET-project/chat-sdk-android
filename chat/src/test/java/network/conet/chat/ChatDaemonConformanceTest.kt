@@ -45,7 +45,9 @@ class ChatDaemonConformanceTest {
             if (cap == BeamioConetChatProtocol.WALLET_CREDENTIAL_CAPABILITY) continue
             assertTrue("$cap is not a spec capability", cap in all)
         }
-        assertTrue(Regex("""^\d+\.\d+\.\d+$""").matches(result.getString("sdkVersion")))
+        // spec 25.52Y.45: hello.sdkVersion is this build's artifact version (with its suffix), not a vector literal.
+        assertEquals(BuildConfig.VERSION_NAME, result.getString("sdkVersion"))
+        assertEquals(BuildConfig.VERSION_NAME, BeamioConetChatProtocol.SDK_VERSION)
     }
 
     @Test
