@@ -1,0 +1,527 @@
+{
+  "file": "chat-route-decision-vectors.v1.json",
+  "spec": "spec §25.29（能力位缺失）、§25.28.9（定案）、ack 信封（§25.19.2 I-3 与 §25.28.3 更正）、reqId（§25.28.3；r3eq 增 §25.52CO.3、§25.52CQ.1 的整数字面形式）、EOA 口令（§25.28.4）（r3k，2026-11-13）",
+  "generator": "gen-chat-route-decision-vectors.mjs",
+  "testKeyNote": "全部为合成数据。EOA 由 BIP-39 公开测试助记词派生（abandon×11 about）。备份明文为占位文本，不是 PGP 私钥。禁止用于生产。",
+  "eoa": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+  "canonicalPasswordFormat": "\"0x\" + 64 位小写十六进制（ASCII，66 字节）。来源：PWA beamio.ts:1156、1256 的 acc.signingKey.privateKey；ethers 为小写。",
+  "backupFormat": "base64(iv ‖ ct ‖ tag)，AES-256-GCM，密钥 = SHA-256(UTF-8(口令))，与 §25.28.4 相同。IV 固定为测试值。",
+  "canonicalBackupSample": {
+    "ivHex": "0102030405060708090a0b0c",
+    "plaintextPlaceholder": "SYNTHETIC-PLACEHOLDER-NOT-A-KEY",
+    "base64": "AQIDBAUGBwgJCgsMUnjIcPDglcHCtBY3cRrtAskiW9GohHn34IiPVVt+uW+W6oh0fBXZn6q7/0iaFTw="
+  },
+  "ackEnvelopeRule": {
+    "success": "{type:\"ack\", reqId, ok:true, result:{...}}。result 为对象。不得含 code 与顶层数据字段。",
+    "failure": "{type:\"ack\", reqId, ok:false, error:\"<码>\"}。不得含 result。",
+    "reqIdEchoFailure": "reqId 不合格时：{type:\"ack\", reqId:null, ok:false, error:\"bad_request\"}"
+  },
+  "A_ack": [
+    {
+      "id": "A-1",
+      "desc": "成功：数据在 result 中；无 code 字段",
+      "ack": {
+        "type": "ack",
+        "reqId": "r-1",
+        "ok": true,
+        "result": {
+          "wallet": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+          "keyID": "6629DED57B806861",
+          "publicKeyArmored": "LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FYXZaVDFSWUpLd1lCQkFIYVJ3OEJBUWRBbVBOTFJaeCtEY05SUEVWc2dVOHY0a003eU8rQUZUcWQKQXV0a2dRVlJ3NC9ORTFOWlRpMVFSMUJMUlZsSlJDMUJMVEF3TURIQ3dCTUVFeFlLQUlVRmdtcjJVOVVECkN3a0hDUkFpQlJQOFRNenNna1VVQUFBQUFBQWNBQ0J6WVd4MFFHNXZkR0YwYVc5dWN5NXZjR1Z1Y0dkdwphbk11YjNKbjF3N253bzJVRUZabkJHbDl2b1pJRE5RNjJJOE55QVF2cnJzUkpxZkVlamtGRlFvSURnd0UKRmdBQ0FRSVpBUUtiQXdJZUFSWWhCRWlJeDZXd1RZc1kwN1kyN0NJRkUveE16T3lDQUFEQXpnRC9UOXlZCjdaK3p2MGE1dXFoejl2ZXlkOUR5NTQ5RlVnWGU0RVNOUDYyVlRaSUEvQXptd2pjbkVua1ZqaXdTSEVwUQpFYVpwVkdLRUJGa2s4cFNhYkFvQlpuY0J6amdFYXZaVDFSSUtLd1lCQkFHWFZRRUZBUUVIUVArVHpKWnkKYkxKN0xHRzljTGwrb0U2N0twY1hETzM1N3RpdUNEdFc0SThFQXdFSUI4SytCQmdXQ2dCd0JZSnE5bFBWCkNSQWlCUlA4VE16c2drVVVBQUFBQUFBY0FDQnpZV3gwUUc1dmRHRjBhVzl1Y3k1dmNHVnVjR2R3YW5NdQpiM0puSkRJVnN6ODVZRVRMUEJjVDVDTFV5MW11RHo3cVRFWU4yMzdYUU5pczE3QUNtd3dXSVFSSWlNZWwKc0UyTEdOTzJOdXdpQlJQOFRNenNnZ0FBanRnQS9pYm5hRHNLa0ZKOERpVVkxak4rek5DNm1HYzJMRE02CnhxMnpTMmY2K2RMbUFRREkxaEd4ZEVjUjlxNllIV3hwbXN1c0hiYVRXWXpPYjZPWXc3RFp4MUxERGc9PQo9OS80cwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg==",
+          "encrypKeyArmored": "AAECAwQFBgcICQoLkXGxfZXlF8ZuniyPNzoXYuKSEroqsR5UFD9OszWPxiILuuGC4loU7GHnROyQhG8nwqXMGb/uNvhroSEYsMHSMtwOnXz+nQJIkQ/IhM/N/z5RruAQsSlyPmCnnF4tOkaLo7zlwEzvTjwHg2E9kHU4DaUCplq7MoYF5CJ/m8RzXj6QmMuqeEW7JMS2E1ZWO5QWaHjd0cx05mOrTXK3pfFYy/fB0hrC9kefvtvLdcQMMcwDC4+5kdKKIyhb4oKWq37eFeJ+eQ/5/d5w+Ai11xp/CoVsBxszstcTGdpVom0UEQ1cfLUuhDGPFvrRVxs1ye7YlA6ePM04AKY1rMlYr0K11aOnorQnDYNaRtter/GK9QOqmePNRyOxYaaZ5BMW2a3nJ9DXAxDxlntWuzNBAxQpOrQ00ObweyQR7JtrPjuNv2RajuQ/HQnDDy3B+Kfb6xh8Bdiha44QZwutsSaLWS2QiEsx3HWhVgKg1vSsEJeBD+zwQGolL9ZtpKVYNwQH83s1GpdNSh/yD7bU3YUw/TXrPDdhsCRsxdBf6NrUXoXr7isvYPOFfaJ6V5v7Oewo9qEjk/pgJoac/TnR6tkhXHlvhGwzMRfmSVmhNodwtjDLCYv2CUAfytvJmGK+Wookk6olFKaT+dVX26cwsbmCsCys8PBNCYPK34aio/AeNap4kKaRaxtgm7UuoUnQw8G7NdwikzSq18PnXsmNKi+GBWMVt67NEbW42JFJbE7Hdb5aR9LOodDmOE0gg+fRfZNtlqzsEMvth/bqeQqAttu+gD74xmYIeEV15yMBH/rQ2zW7fd7ez6CiDodeehHiRY3YRN7RY2HHTawie1nMWBMJQg8lwBSrMQ+of8yw8MiBc+h0/+rjK9xIXYA8n2dwOlQMvhCvqRmRPAtL1CktwTIzvNfRNWbvnWh0iMTiFwPbsgsq8WxevXUkYkF1o3KcXNL2cEA9aeESk8qmLpSKdHlf3ppogfuZffFu9dwlKBL4YOYDfj7xiqmKcvqNKo1oYjGWL1LZ+95Yl5kdsaFJZSNBp+4N7x1C7HFEBTC21DwVkjeUA63cBglXbp7o061eZ7R61v351TQ5aGBXaQ2ckWdhMxBTq9hcAodl0hu4d6ui8oYEYN1bJJUjevDZimSt1Cv2CbVdfq/2jl5Uv/uREVrZ0tcdgXibWwJppfj0aOY2T2meh+RCkhubXsDBCoByq80nMFO1HstnYYuCB5HF0m6RQ0gM",
+          "routeKeyID": "SYN-ROUTE-KEYID-0001",
+          "timestamp": 1800000000000,
+          "nonce": "0xa1b2c3d4e5f60718293a4b5c6d7e8f90",
+          "signature": "0xb143651dc72d2bf7f47f46cd5c9cc10e582d3abb9f821e60c82b12e2d4b0823e3d8de54435bc6d8da83402cdba02541e07c30bd87e961e16f1f66f9ec27e1fa61c"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "A-2",
+      "desc": "失败：用 error 给出码",
+      "ack": {
+        "type": "ack",
+        "reqId": "r-2",
+        "ok": false,
+        "error": "sig_rejected"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "A-3",
+      "desc": "旧写法（顶层数据加 code）：禁止",
+      "ack": {
+        "type": "ack",
+        "reqId": "r-3",
+        "ok": true,
+        "code": "ok",
+        "wallet": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+        "keyID": "6629DED57B806861",
+        "publicKeyArmored": "LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FYXZaVDFSWUpLd1lCQkFIYVJ3OEJBUWRBbVBOTFJaeCtEY05SUEVWc2dVOHY0a003eU8rQUZUcWQKQXV0a2dRVlJ3NC9ORTFOWlRpMVFSMUJMUlZsSlJDMUJMVEF3TURIQ3dCTUVFeFlLQUlVRmdtcjJVOVVECkN3a0hDUkFpQlJQOFRNenNna1VVQUFBQUFBQWNBQ0J6WVd4MFFHNXZkR0YwYVc5dWN5NXZjR1Z1Y0dkdwphbk11YjNKbjF3N253bzJVRUZabkJHbDl2b1pJRE5RNjJJOE55QVF2cnJzUkpxZkVlamtGRlFvSURnd0UKRmdBQ0FRSVpBUUtiQXdJZUFSWWhCRWlJeDZXd1RZc1kwN1kyN0NJRkUveE16T3lDQUFEQXpnRC9UOXlZCjdaK3p2MGE1dXFoejl2ZXlkOUR5NTQ5RlVnWGU0RVNOUDYyVlRaSUEvQXptd2pjbkVua1ZqaXdTSEVwUQpFYVpwVkdLRUJGa2s4cFNhYkFvQlpuY0J6amdFYXZaVDFSSUtLd1lCQkFHWFZRRUZBUUVIUVArVHpKWnkKYkxKN0xHRzljTGwrb0U2N0twY1hETzM1N3RpdUNEdFc0SThFQXdFSUI4SytCQmdXQ2dCd0JZSnE5bFBWCkNSQWlCUlA4VE16c2drVVVBQUFBQUFBY0FDQnpZV3gwUUc1dmRHRjBhVzl1Y3k1dmNHVnVjR2R3YW5NdQpiM0puSkRJVnN6ODVZRVRMUEJjVDVDTFV5MW11RHo3cVRFWU4yMzdYUU5pczE3QUNtd3dXSVFSSWlNZWwKc0UyTEdOTzJOdXdpQlJQOFRNenNnZ0FBanRnQS9pYm5hRHNLa0ZKOERpVVkxak4rek5DNm1HYzJMRE02CnhxMnpTMmY2K2RMbUFRREkxaEd4ZEVjUjlxNllIV3hwbXN1c0hiYVRXWXpPYjZPWXc3RFp4MUxERGc9PQo9OS80cwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg==",
+        "encrypKeyArmored": "AAECAwQFBgcICQoLkXGxfZXlF8ZuniyPNzoXYuKSEroqsR5UFD9OszWPxiILuuGC4loU7GHnROyQhG8nwqXMGb/uNvhroSEYsMHSMtwOnXz+nQJIkQ/IhM/N/z5RruAQsSlyPmCnnF4tOkaLo7zlwEzvTjwHg2E9kHU4DaUCplq7MoYF5CJ/m8RzXj6QmMuqeEW7JMS2E1ZWO5QWaHjd0cx05mOrTXK3pfFYy/fB0hrC9kefvtvLdcQMMcwDC4+5kdKKIyhb4oKWq37eFeJ+eQ/5/d5w+Ai11xp/CoVsBxszstcTGdpVom0UEQ1cfLUuhDGPFvrRVxs1ye7YlA6ePM04AKY1rMlYr0K11aOnorQnDYNaRtter/GK9QOqmePNRyOxYaaZ5BMW2a3nJ9DXAxDxlntWuzNBAxQpOrQ00ObweyQR7JtrPjuNv2RajuQ/HQnDDy3B+Kfb6xh8Bdiha44QZwutsSaLWS2QiEsx3HWhVgKg1vSsEJeBD+zwQGolL9ZtpKVYNwQH83s1GpdNSh/yD7bU3YUw/TXrPDdhsCRsxdBf6NrUXoXr7isvYPOFfaJ6V5v7Oewo9qEjk/pgJoac/TnR6tkhXHlvhGwzMRfmSVmhNodwtjDLCYv2CUAfytvJmGK+Wookk6olFKaT+dVX26cwsbmCsCys8PBNCYPK34aio/AeNap4kKaRaxtgm7UuoUnQw8G7NdwikzSq18PnXsmNKi+GBWMVt67NEbW42JFJbE7Hdb5aR9LOodDmOE0gg+fRfZNtlqzsEMvth/bqeQqAttu+gD74xmYIeEV15yMBH/rQ2zW7fd7ez6CiDodeehHiRY3YRN7RY2HHTawie1nMWBMJQg8lwBSrMQ+of8yw8MiBc+h0/+rjK9xIXYA8n2dwOlQMvhCvqRmRPAtL1CktwTIzvNfRNWbvnWh0iMTiFwPbsgsq8WxevXUkYkF1o3KcXNL2cEA9aeESk8qmLpSKdHlf3ppogfuZffFu9dwlKBL4YOYDfj7xiqmKcvqNKo1oYjGWL1LZ+95Yl5kdsaFJZSNBp+4N7x1C7HFEBTC21DwVkjeUA63cBglXbp7o061eZ7R61v351TQ5aGBXaQ2ckWdhMxBTq9hcAodl0hu4d6ui8oYEYN1bJJUjevDZimSt1Cv2CbVdfq/2jl5Uv/uREVrZ0tcdgXibWwJppfj0aOY2T2meh+RCkhubXsDBCoByq80nMFO1HstnYYuCB5HF0m6RQ0gM",
+        "routeKeyID": "SYN-ROUTE-KEYID-0001",
+        "timestamp": 1800000000000,
+        "nonce": "0xa1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "signature": "0xb143651dc72d2bf7f47f46cd5c9cc10e582d3abb9f821e60c82b12e2d4b0823e3d8de54435bc6d8da83402cdba02541e07c30bd87e961e16f1f66f9ec27e1fa61c"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "top_level_data_and_code"
+      }
+    },
+    {
+      "id": "A-4",
+      "desc": "失败时带 result：禁止",
+      "ack": {
+        "type": "ack",
+        "reqId": "r-4",
+        "ok": false,
+        "error": "bad_request",
+        "result": {
+          "wallet": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
+          "keyID": "6629DED57B806861",
+          "publicKeyArmored": "LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FYXZaVDFSWUpLd1lCQkFIYVJ3OEJBUWRBbVBOTFJaeCtEY05SUEVWc2dVOHY0a003eU8rQUZUcWQKQXV0a2dRVlJ3NC9ORTFOWlRpMVFSMUJMUlZsSlJDMUJMVEF3TURIQ3dCTUVFeFlLQUlVRmdtcjJVOVVECkN3a0hDUkFpQlJQOFRNenNna1VVQUFBQUFBQWNBQ0J6WVd4MFFHNXZkR0YwYVc5dWN5NXZjR1Z1Y0dkdwphbk11YjNKbjF3N253bzJVRUZabkJHbDl2b1pJRE5RNjJJOE55QVF2cnJzUkpxZkVlamtGRlFvSURnd0UKRmdBQ0FRSVpBUUtiQXdJZUFSWWhCRWlJeDZXd1RZc1kwN1kyN0NJRkUveE16T3lDQUFEQXpnRC9UOXlZCjdaK3p2MGE1dXFoejl2ZXlkOUR5NTQ5RlVnWGU0RVNOUDYyVlRaSUEvQXptd2pjbkVua1ZqaXdTSEVwUQpFYVpwVkdLRUJGa2s4cFNhYkFvQlpuY0J6amdFYXZaVDFSSUtLd1lCQkFHWFZRRUZBUUVIUVArVHpKWnkKYkxKN0xHRzljTGwrb0U2N0twY1hETzM1N3RpdUNEdFc0SThFQXdFSUI4SytCQmdXQ2dCd0JZSnE5bFBWCkNSQWlCUlA4VE16c2drVVVBQUFBQUFBY0FDQnpZV3gwUUc1dmRHRjBhVzl1Y3k1dmNHVnVjR2R3YW5NdQpiM0puSkRJVnN6ODVZRVRMUEJjVDVDTFV5MW11RHo3cVRFWU4yMzdYUU5pczE3QUNtd3dXSVFSSWlNZWwKc0UyTEdOTzJOdXdpQlJQOFRNenNnZ0FBanRnQS9pYm5hRHNLa0ZKOERpVVkxak4rek5DNm1HYzJMRE02CnhxMnpTMmY2K2RMbUFRREkxaEd4ZEVjUjlxNllIV3hwbXN1c0hiYVRXWXpPYjZPWXc3RFp4MUxERGc9PQo9OS80cwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg==",
+          "encrypKeyArmored": "AAECAwQFBgcICQoLkXGxfZXlF8ZuniyPNzoXYuKSEroqsR5UFD9OszWPxiILuuGC4loU7GHnROyQhG8nwqXMGb/uNvhroSEYsMHSMtwOnXz+nQJIkQ/IhM/N/z5RruAQsSlyPmCnnF4tOkaLo7zlwEzvTjwHg2E9kHU4DaUCplq7MoYF5CJ/m8RzXj6QmMuqeEW7JMS2E1ZWO5QWaHjd0cx05mOrTXK3pfFYy/fB0hrC9kefvtvLdcQMMcwDC4+5kdKKIyhb4oKWq37eFeJ+eQ/5/d5w+Ai11xp/CoVsBxszstcTGdpVom0UEQ1cfLUuhDGPFvrRVxs1ye7YlA6ePM04AKY1rMlYr0K11aOnorQnDYNaRtter/GK9QOqmePNRyOxYaaZ5BMW2a3nJ9DXAxDxlntWuzNBAxQpOrQ00ObweyQR7JtrPjuNv2RajuQ/HQnDDy3B+Kfb6xh8Bdiha44QZwutsSaLWS2QiEsx3HWhVgKg1vSsEJeBD+zwQGolL9ZtpKVYNwQH83s1GpdNSh/yD7bU3YUw/TXrPDdhsCRsxdBf6NrUXoXr7isvYPOFfaJ6V5v7Oewo9qEjk/pgJoac/TnR6tkhXHlvhGwzMRfmSVmhNodwtjDLCYv2CUAfytvJmGK+Wookk6olFKaT+dVX26cwsbmCsCys8PBNCYPK34aio/AeNap4kKaRaxtgm7UuoUnQw8G7NdwikzSq18PnXsmNKi+GBWMVt67NEbW42JFJbE7Hdb5aR9LOodDmOE0gg+fRfZNtlqzsEMvth/bqeQqAttu+gD74xmYIeEV15yMBH/rQ2zW7fd7ez6CiDodeehHiRY3YRN7RY2HHTawie1nMWBMJQg8lwBSrMQ+of8yw8MiBc+h0/+rjK9xIXYA8n2dwOlQMvhCvqRmRPAtL1CktwTIzvNfRNWbvnWh0iMTiFwPbsgsq8WxevXUkYkF1o3KcXNL2cEA9aeESk8qmLpSKdHlf3ppogfuZffFu9dwlKBL4YOYDfj7xiqmKcvqNKo1oYjGWL1LZ+95Yl5kdsaFJZSNBp+4N7x1C7HFEBTC21DwVkjeUA63cBglXbp7o061eZ7R61v351TQ5aGBXaQ2ckWdhMxBTq9hcAodl0hu4d6ui8oYEYN1bJJUjevDZimSt1Cv2CbVdfq/2jl5Uv/uREVrZ0tcdgXibWwJppfj0aOY2T2meh+RCkhubXsDBCoByq80nMFO1HstnYYuCB5HF0m6RQ0gM",
+          "routeKeyID": "SYN-ROUTE-KEYID-0001",
+          "timestamp": 1800000000000,
+          "nonce": "0xa1b2c3d4e5f60718293a4b5c6d7e8f90",
+          "signature": "0xb143651dc72d2bf7f47f46cd5c9cc10e582d3abb9f821e60c82b12e2d4b0823e3d8de54435bc6d8da83402cdba02541e07c30bd87e961e16f1f66f9ec27e1fa61c"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "reason": "result_on_failure"
+      }
+    },
+    {
+      "id": "A-5",
+      "desc": "失败时用 code 代替 error：禁止",
+      "ack": {
+        "type": "ack",
+        "reqId": "r-5",
+        "ok": false,
+        "code": "bad_request"
+      },
+      "expect": {
+        "valid": false,
+        "reason": "code_instead_of_error"
+      }
+    }
+  ],
+  "A_successExampleSource": "chat-route-register-vectors.v1.json PV-1（合成）",
+  "B_reqId": {
+    "rule": "字符串 1–64 字节，字符 0x20–0x7E，不 trim；整数 0–(2^53−1)，以 JSON 整数字面形式（无小数部分、无指数部分、无负号）；原样回传；其他类型 bad_request（reqId 为 null）。r3eq（§25.52CO.3、§25.52CQ.1）。r3et：结构化入口（对象 body）按 JS 数值语义（§25.52CT.3）",
+    "cases": [
+      {
+        "id": "B-1",
+        "description": "字符串 \"r-1\"",
+        "entry": "json-text",
+        "value": "r-1",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-2",
+        "description": "字符串 64 字节",
+        "entry": "json-text",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-3",
+        "description": "字符串 65 字节",
+        "entry": "json-text",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-4",
+        "description": "空字符串",
+        "entry": "json-text",
+        "value": "",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-5",
+        "description": "含换行",
+        "entry": "json-text",
+        "value": "a\nb",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-6",
+        "description": "含非 ASCII（UTF-8 多字节）",
+        "entry": "json-text",
+        "value": "请求",
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-7",
+        "description": "整数 0（PWA 现行 reqId: 0）",
+        "entry": "json-text",
+        "value": 0,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-8",
+        "description": "整数 2^53−1",
+        "entry": "json-text",
+        "value": 9007199254740991,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-9",
+        "description": "整数 2^53（超出安全范围）",
+        "entry": "json-text",
+        "value": 9007199254740992,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-10",
+        "description": "浮点数 1.5",
+        "entry": "json-text",
+        "value": 1.5,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-11",
+        "description": "布尔值",
+        "entry": "json-text",
+        "value": true,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-12",
+        "description": "对象",
+        "entry": "json-text",
+        "value": {
+          "id": 1
+        },
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-13",
+        "description": "缺失",
+        "entry": "absent",
+        "value": null,
+        "jsonLiteral": null,
+        "valueAbsent": true,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-14",
+        "description": "JSON 字面 1.0（小数形式；数值等于整数 1）：不是整数字面形式，reqId:null, bad_request",
+        "entry": "json-text",
+        "value": null,
+        "jsonLiteral": "1.0",
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-15",
+        "description": "JSON 字面 1e0（指数形式；数值等于整数 1）：不是整数字面形式，reqId:null, bad_request",
+        "entry": "json-text",
+        "value": null,
+        "jsonLiteral": "1e0",
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-16",
+        "description": "JSON 字面 9007199254740991（2^53−1，上限，整数字面）：合法，原样回传",
+        "entry": "json-text",
+        "value": null,
+        "jsonLiteral": "9007199254740991",
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-17",
+        "description": "JSON 字面 9007199254740992（2^53，超出上限，整数字面）：bad_request",
+        "entry": "json-text",
+        "value": null,
+        "jsonLiteral": "9007199254740992",
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-18",
+        "description": "JSON 字面 -1（负整数）：bad_request",
+        "entry": "json-text",
+        "value": null,
+        "jsonLiteral": "-1",
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-19",
+        "description": "结构化入口（对象 body）：reqId 为 JS 数值 1.0（即 1）：合法，回传 1",
+        "entry": "structured",
+        "value": 1,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": true
+        }
+      },
+      {
+        "id": "B-20",
+        "description": "结构化入口（对象 body）：reqId 为 JS 数值 2^53：bad_request",
+        "entry": "structured",
+        "value": 9007199254740992,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      },
+      {
+        "id": "B-21",
+        "description": "结构化入口（对象 body）：reqId 为 JS 数值 -1：bad_request",
+        "entry": "structured",
+        "value": -1,
+        "jsonLiteral": null,
+        "valueAbsent": false,
+        "expect": {
+          "ok": false
+        }
+      }
+    ]
+  },
+  "C_password": {
+    "rule": "\"0x\" + 64 位小写十六进制；其他形式不得用作口令",
+    "cases": [
+      {
+        "id": "C-1",
+        "description": "规范形式：\"0x\" + 64 位小写十六进制（PWA 的 acc.signingKey.privateKey）",
+        "passwordString": "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
+        "passwordBytesSha256": "d453284cf002ae197df5411e35b06d2a7d409e27e45e1d21dc736fabe3190970",
+        "formatValid": true,
+        "canonicalBackupDecryptsWithThisString": true,
+        "expect": {
+          "formatValid": true,
+          "canonicalBackupDecrypts": true
+        }
+      },
+      {
+        "id": "C-2",
+        "description": "十六进制大写",
+        "passwordString": "0x1AB42CC412B618BDEA3A599E3C9BAE199EBF030895B039E9DB1E30DAFB12B727",
+        "passwordBytesSha256": "2eee89184e14ac1f625737e39c7f09a2417141f1e41e76e90bb7759323fa6da4",
+        "formatValid": false,
+        "canonicalBackupDecryptsWithThisString": false,
+        "expect": {
+          "formatValid": false,
+          "canonicalBackupDecrypts": false
+        }
+      },
+      {
+        "id": "C-3",
+        "description": "缺少 0x 前缀",
+        "passwordString": "1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
+        "passwordBytesSha256": "162ab0f6e4b17c7135d6e4495dc61b3c909db730a5effd2ae59226374e52a5ea",
+        "formatValid": false,
+        "canonicalBackupDecryptsWithThisString": false,
+        "expect": {
+          "formatValid": false,
+          "canonicalBackupDecrypts": false
+        }
+      },
+      {
+        "id": "C-4",
+        "description": "63 位十六进制",
+        "passwordString": "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b72",
+        "passwordBytesSha256": "753ce17c33aaf8baf64bc10cd4fad0466fcf7744bb16ebd519b9d55c3004bd3f",
+        "formatValid": false,
+        "canonicalBackupDecryptsWithThisString": false,
+        "expect": {
+          "formatValid": false,
+          "canonicalBackupDecrypts": false
+        }
+      },
+      {
+        "id": "C-5",
+        "description": "0X 大写前缀",
+        "passwordString": "0X1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727",
+        "passwordBytesSha256": "9e1fb1421c2f53f4ff6c6501eb8d791fff12697eef47b696cb8888295d66ea74",
+        "formatValid": false,
+        "canonicalBackupDecryptsWithThisString": false,
+        "expect": {
+          "formatValid": false,
+          "canonicalBackupDecrypts": false
+        }
+      },
+      {
+        "id": "C-6",
+        "description": "末尾换行",
+        "passwordString": "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727\n",
+        "passwordBytesSha256": "df35d1dad8fd1df90091f96cd28abd4731debc948e50afb6171a7e82d831526c",
+        "formatValid": false,
+        "canonicalBackupDecryptsWithThisString": false,
+        "expect": {
+          "formatValid": false,
+          "canonicalBackupDecrypts": false
+        }
+      }
+    ]
+  },
+  "D_capabilityState": {
+    "rule": "壳构建（buildKind=shell）或桥可用即为壳；壳内永不进入页内持钥路径。identity.native-keys.v1 与 identity.route-register.native.v1 独立判定。缺 identity.native-keys.v1 时不发送任何载荷。",
+    "cases": [
+      {
+        "id": "D-1",
+        "desc": "浏览器（非壳构建，无桥）",
+        "input": {
+          "buildKind": "web",
+          "bridge": false,
+          "caps": []
+        },
+        "expect": {
+          "chatMode": "browser",
+          "nativeChatStarted": false,
+          "pageHoldsKey": true,
+          "routeRegisterPath": "page_signing_browser_exception",
+          "payloadSent": "page_only",
+          "uiState": "browser_chat"
+        }
+      },
+      {
+        "id": "D-2",
+        "desc": "壳，桥可用，声明两个能力位",
+        "input": {
+          "buildKind": "shell",
+          "bridge": true,
+          "caps": [
+            "identity.native-keys.v1",
+            "identity.route-register.native.v1"
+          ]
+        },
+        "expect": {
+          "chatMode": "native",
+          "nativeChatStarted": true,
+          "pageHoldsKey": false,
+          "routeRegisterPath": "native_chatRouteRegister",
+          "payloadSent": "public_fields_only",
+          "uiState": "native_chat"
+        }
+      },
+      {
+        "id": "D-3",
+        "desc": "壳，桥可用，旧壳（无能力位）",
+        "input": {
+          "buildKind": "shell",
+          "bridge": true,
+          "caps": []
+        },
+        "expect": {
+          "chatMode": "unavailable",
+          "nativeChatStarted": false,
+          "pageHoldsKey": false,
+          "routeRegisterPath": "native_unavailable_no_fallback",
+          "payloadSent": "none",
+          "uiState": "chat_unavailable"
+        }
+      },
+      {
+        "id": "D-4",
+        "desc": "壳，桥可用，声明 identity.native-keys.v1 但未声明路由能力位",
+        "input": {
+          "buildKind": "shell",
+          "bridge": true,
+          "caps": [
+            "identity.native-keys.v1"
+          ]
+        },
+        "expect": {
+          "chatMode": "native",
+          "nativeChatStarted": true,
+          "pageHoldsKey": false,
+          "routeRegisterPath": "native_unavailable_no_fallback",
+          "payloadSent": "public_fields_only",
+          "uiState": "native_chat"
+        }
+      },
+      {
+        "id": "D-5",
+        "desc": "壳构建，但桥不可用（不得回退为页内持钥）",
+        "input": {
+          "buildKind": "shell",
+          "bridge": false,
+          "caps": []
+        },
+        "expect": {
+          "chatMode": "unavailable",
+          "nativeChatStarted": false,
+          "pageHoldsKey": false,
+          "routeRegisterPath": "native_unavailable_no_fallback",
+          "payloadSent": "none",
+          "uiState": "chat_unavailable"
+        }
+      }
+    ]
+  }
+}

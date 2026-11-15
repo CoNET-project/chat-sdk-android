@@ -131,6 +131,12 @@ class BridgeKeyAuditTest {
 
         // Listed reads that take no value from a bridge payload. Each line is the trimmed source line; repeats are counted.
         val allowed: Map<String, List<String>> = mapOf(
+            // chatRouteRegister (spec 25.28.3, PM R2085): the refusal list of the request fields the page may not send. Membership only;
+            // no value is read from the payload.
+            "ChatRouteRegister.kt" to listOf(
+                "\"wallet\", \"message\", \"signature\", \"timestamp\", \"nonce\", \"encrypKeyArmored\", \"privateKeyHex\", \"pgpPrivateArmorSha256\",",
+                "\"pgpPrivateArmored\", \"pgpPrivateKeyArmored\",",
+            ),
             // walletCredential (spec 25.52Y.38 第 1 项 (a), 第 3 项 (e); r3nv 第 5 项): the single exception for the native-to-page output of the
             // recovery phrase, which is the phrase's output field and its kind name. It is not a read from a bridge payload. The bridge
             // does not register the name until the shell trust gate and capability bit are in place.
