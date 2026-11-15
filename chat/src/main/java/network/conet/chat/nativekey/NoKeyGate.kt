@@ -41,7 +41,7 @@ object NoKeyGate {
 
     /** The locked check of the gate step (25.52BZ.4): `locked` for a family command while the record is locked, else null. No payload is read. */
     fun lockedAnswer(command: String, state: NativeWalletVault.State): String? =
-        if (state is NativeWalletVault.State.Locked && command in LOCKED_FAMILY_COMMANDS) LOCKED else null
+        if (state is NativeWalletVault.State.Locked && command in LOCKED_FAMILY_COMMANDS) NOT_READY else null
 
     /** Table C (§25.24): retired X-21 commands. They answer `not_supported` in every state. */
     val RETIRED: Set<String> = setOf("walletTransferOnce", "walletTransferStatus", "walletTransferSwitched")

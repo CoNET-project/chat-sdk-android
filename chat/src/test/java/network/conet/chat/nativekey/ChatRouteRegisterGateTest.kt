@@ -39,13 +39,11 @@ class ChatRouteRegisterGateTest {
     }
 
     /**
-     * A storage-locked record for W5. The lock family now includes W5 (the v2 vector, PM R2096), so lockedAnswer returns `locked`. The spec
-     * (25.52CS.2, T-133-05) answers a storage-derived lock with not_ready; that conflict is open with the interface seat and PM, and this test
-     * records the current behaviour rather than the spec answer. Gate G1 is unchanged.
+     * A storage-locked record for W5 answers not_ready, once (spec 25.52CS.2, 25.52GQ.3b; T-133-05). `locked` is the passcode lock only (iOS).
      */
     @Test
-    fun aStorageLockedRecordAnswersLockedForW5ConflictOpen() {
-        assertEquals("locked", NoKeyGate.lockedAnswer(name, NativeWalletVault.State.Locked("marker_mismatch")))
+    fun aStorageLockedRecordAnswersNotReadyForW5() {
+        assertEquals("not_ready", NoKeyGate.lockedAnswer(name, NativeWalletVault.State.Locked("marker_mismatch")))
         assertEquals(NoKeyGate.Gate.G1, NoKeyGate.gateOf(NativeWalletVault.State.Locked("marker_mismatch"), sessionReady = false))
     }
 

@@ -213,4 +213,48 @@ class NegativeTestsVectorsTest {
         assertEquals(8, pending.size)
         assertNotNull(pending["T-control-sign"])
     }
+
+    /**
+     * PM R2099, interface r3pk (spec 25.52GQ.3b): the passcode-group cases that do not apply on Android (no passcode layer). They are listed here
+     * with their replacement, not silently skipped. Each replacement must exist in the storage-lock group (storageLocked). The mapping of
+     * T-130-01 to T-130-13 onto T-133-01 to T-133-12 is the interface seat's range statement, applied in order; the interface seat to confirm.
+     */
+    @Test
+    fun androidExclusionsAreListedAndHaveReplacements() {
+        val excluded = listOf("T-130-01", "T-130-02", "T-130-03", "T-130-05", "T-130-06", "T-130-07", "T-130-08", "T-130-09", "T-130-10",
+            "T-130-11", "T-130-12", "T-130-13", "T-130-16", "T-130-17", "T-130-18", "T-130-19")
+        val replacements = mapOf(
+            "T-130-01" to "T-133-01", "T-130-02" to "T-133-02", "T-130-03" to "T-133-03", "T-130-05" to "T-133-04", "T-130-06" to "T-133-05",
+            "T-130-07" to "T-133-06", "T-130-08" to "T-133-07", "T-130-09" to "T-133-08", "T-130-10" to "T-133-09", "T-130-11" to "T-133-10",
+            "T-130-12" to "T-133-11", "T-130-13" to "T-133-12", "T-130-16" to "T-133-13", "T-130-17" to "T-133-14", "T-130-18" to "T-133-15",
+            "T-130-19" to "T-133-19", "T-130-04" to "T-133-C4",
+        )
+        val passcodeIds = cases("passcodeLocked").map { it.getString("id") }.toSet()
+        val storageIds = cases("storageLocked").map { it.getString("id") }.toSet()
+        for (id in excluded) assertTrue("$id is in passcodeLocked", id in passcodeIds)
+        assertEquals(setOf("T-130-14", "T-130-15"), passcodeIds - excluded.toSet())
+        // T-133-C4 is a nativeOnly entry of the storage-lock group (refusal not_ready, no signature output).
+        val storageNative = v.getJSONObject("storageLocked").getJSONArray("nativeOnly").let { a -> (0 until a.length()).map { a.getJSONObject(it).getString("id") } }
+        for ((from, to) in replacements) assertTrue("$from replaced by $to, which exists in storageLocked", to in storageIds || to in storageNative)
+        assertEquals("T-133-05 is the not_ready replacement of the W5 lock", "not_ready",
+            cases("storageLocked").single { it.getString("id") == "T-133-05" }.getString("expect"))
+    }
+
+    /** T-130-14 (pgpSign, unknown_command) applies on both platforms: the name is not a bridge name, so it is refused before any gate. */
+    @Test
+    fun t13014PgpSignIsUnknownCommandOnBothPlatforms() {
+        val c = cases("passcodeLocked").single { it.getString("id") == "T-130-14" }
+        assertEquals(c.getString("expect"), "unknown_command")
+        assertFalse("pgpSign is not a bridge name", BridgeCommandTable.isRegistered("pgpSign"))
+    }
+
+    /** T-130-15 (walletTransferOnce, not_supported) applies on both platforms: retired, not_supported in every state. */
+    @Test
+    fun t13015WalletTransferOnceIsNotSupportedInEveryState() {
+        val c = cases("passcodeLocked").single { it.getString("id") == "T-130-15" }
+        assertEquals(c.getString("expect"), "not_supported")
+        for (gate in listOf(NoKeyGate.Gate.G0, NoKeyGate.Gate.G1, NoKeyGate.Gate.G2)) {
+            assertEquals("walletTransferOnce in $gate", NoKeyGate.NOT_SUPPORTED, NoKeyGate.answerFor("walletTransferOnce", gate))
+        }
+    }
 }
