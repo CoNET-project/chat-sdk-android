@@ -342,16 +342,6 @@ object BeamioConetChatModule {
 
     // ---- init / routes / nodes -----------------------------------------------------
 
-    /** PM R1841: the nodes rule of init, read from the payload and this device's stored roster (see [InitNodesGate]). */
-    private fun initNodesUnavailable(ctx: Context, payload: JSONObject): Boolean {
-        val raw = payload.optJSONArray("nodes")
-        return InitNodesGate.unavailable(
-            nodesKeyPresent = raw != null,
-            payloadNodeCount = raw?.length() ?: 0,
-            storedNodeCount = if (raw == null) BeamioChatPgpStore.loadSiNodes(ctx).size else 0,
-        )
-    }
-
     private fun handleInit(body: JSONObject) {
         val reqId = echoId(body)
         val ctx = appContext ?: return
@@ -385,13 +375,13 @@ object BeamioConetChatModule {
                 ack(reqId, false, error = "address_mismatch")
                 return
             }
-        }
-        // PM R1841: no roster (an empty nodes array, or no nodes key and none stored on this device) answers nodes_unavailable. No ready, and the
-        // session keeps the nodes it has. The EOA checks above have already run.
-        if (initNodesUnavailable(ctx, payload)) {
-            Log.w(TAG, "init refused: nodes_unavailable (no roster in the payload or on this device); no ready, nodes unchanged (PM R1841)")
-            ack(reqId, false, error = InitNodesGate.NODES_UNAVAILABLE)
-            return
+            // R1841 / Y.29 / Y.32: the nodes rule of the G1 identity-only init, after the EOA check. A refusal is not ready, and the
+            // session is not changed. G2 init is not under this rule (§25.52GJ).
+            InitNodesGate.errorOf(InitNodesGate.verdict(payload) { BeamioChatPgpStore.loadSiNodes(ctx).size })?.let { code ->
+                Log.w(TAG, "init refused in G1: $code (nodes rule, Y.29/Y.32); no ready, nodes unchanged")
+                ack(reqId, false, error = code)
+                return
+            }
         }
         // A listen started without the page (call push) for this wallet: the page
         // takes it over as it is. No reconnect, and the messages it holds unconfirmed
