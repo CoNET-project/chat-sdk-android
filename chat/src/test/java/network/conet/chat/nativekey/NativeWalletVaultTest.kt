@@ -209,9 +209,24 @@ class NativeWalletVaultTest {
         assertNull(restarted.unlock())
     }
 
+    /** r3nw 第 4 项: the commit record is written last, so a crash after the marker is still uncommitted and is rolled back. */
     @Test
-    fun crashAfterTheMarkerLeavesAUsableWallet() {
+    fun crashAfterTheMarkerIsRolledBackBecauseTheCommitIsLast() {
         val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.MARK }
+        val wrap = NativeTestWrap()
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
+        files.crashAfterWrite = null
+
+        val restarted = vault(wrap, files)
+        assertTrue(restarted.state() is State.NoKey)
+        assertFalse(files.map.containsKey(NativeWalletVault.REC))
+        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+    }
+
+    /** A crash after the commit record leaves a usable wallet; the intent is removed on the next start. */
+    @Test
+    fun crashAfterTheCommitLeavesAUsableWallet() {
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.COMMIT }
         val wrap = NativeTestWrap()
         assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
         files.crashAfterWrite = null
@@ -219,6 +234,7 @@ class NativeWalletVaultTest {
         val restarted = vault(wrap, files)
         assertEquals(eoaA, (restarted.state() as State.Ready).eoa)
         assertArrayEquals(keyA, restarted.unlock())
+        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
     }
 
     // ---- F. damaged storage locks instead of deleting ------------------------------------

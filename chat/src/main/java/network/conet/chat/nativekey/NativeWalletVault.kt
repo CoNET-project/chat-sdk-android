@@ -43,15 +43,15 @@ class NativeWalletVault(
     private val files: VaultFiles,
 ) {
     sealed class State {
-        /** No record: nothing to sign with. The user imports natively. */
+        /** No record: nothing to sign with. The user imports or creates natively. */
         object NoKey : State()
 
-        /** A record exists, passed readback, and belongs to [eoa]. */
+        /** A record exists, can be opened, and belongs to [eoa]. */
         class Ready(val eoa: String) : State()
 
         /**
-         * A record exists but cannot be used. [reason] is a code, never key material. `rollback_pending` (spec §25.52Y.42 第 4 項 (c), (e))
-         * means an import could not be rolled back; the account is unavailable and no import is offered.
+         * A record exists but cannot be used. [reason] is a code, never key material. `rollback_pending` (spec §25.25.5) means an import
+         * could not be rolled back: the account is unavailable and no import is offered.
          */
         class Locked(val reason: String) : State()
     }
@@ -77,26 +77,23 @@ class NativeWalletVault(
     }
 
     /**
-     * Startup reconciliation (spec §25.52Y.42 第 4 项 (c), (d), (f)), run before any read. It only acts on an import intent record:
-     * with a completion marker it removes the intent; without one it removes the records the intent registered and then the intent.
-     * An intent that says the key pre-existed, or that cannot be read, deletes nothing and reports the account as pending. A key or
-     * phrase with no intent is never touched here. Returns false while a pending rollback remains.
+     * Startup reconciliation (spec §25.52Y.42 第 4 项, r3nw): run before any read, and it only acts on the intent record.
+     * - No intent: nothing to do. A key or phrase with no intent is existing data and is never removed.
+     * - An intent that cannot be read or opened: nothing is removed; returns false (rollback_pending).
+     * - A commit record present: the import completed; only the intent is removed.
+     * - No commit record: the import did not complete; remove what the intent registered (the marker, the key record, the phrase record
+     *   if planned, and the intent). A failed removal returns false and the intent stays for the next start.
      */
     private fun reconcile(): Boolean {
         val raw = files.read(INTENT) ?: return true
-        val intent = Intent.parse(raw)
-        if (intent == null || intent.keyPreexisted) return false
-        val rec = files.read(REC)
-        val mark = files.read(MARK)
-        val mnem = files.read(MNEM)
-        if (mark != null) {
-            // A committed import: the marker must match what is stored. A mismatch is damage, not a rollback: keep everything.
-            if (rec == null || !mark.contentEquals(markerOf(rec, mnem))) return false
-            // A leftover committed intent is harmless: the next start removes it. A failed removal does not lock the account.
+        val intent = readIntent(raw) ?: return false
+        val commit = files.read(COMMIT)
+        if (commit != null) {
+            if (readCommit(commit, intent.eoa) == null) return false
+            // A leftover intent of a completed import is harmless; a failed removal does not lock the account.
             runCatching { files.delete(INTENT) }
             return true
         }
-        // Not committed: remove only what this intent registered, then the intent.
         return try {
             files.delete(MARK)
             files.delete(REC)
@@ -108,6 +105,14 @@ class NativeWalletVault(
         }
     }
 
+    /**
+     * The marker rule (spec §25.52Y.42 第 4 项 (g)). With a marker it must equal the digest of the stored records. Without one, a record
+     * that has no phrase record is a key-only record from before the marker rule, and it is accepted as it is: its AEAD tag and address
+     * check still bind it, and nothing is written. A phrase record without a marker is damage.
+     */
+    private fun markerOk(rec: ByteArray, mark: ByteArray?, mnem: ByteArray?): Boolean =
+        if (mark == null) mnem == null else mark.contentEquals(markerOf(rec, mnem))
+
     /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). */
     @Synchronized
     fun state(): State {
@@ -116,40 +121,39 @@ class NativeWalletVault(
         val mark = files.read(MARK)
         val mnem = files.read(MNEM)
         if (rec == null) {
-            // A marker or phrase without a key record cannot be used. Only the marker is removed (it is not key material).
+            // A marker or phrase without a key record cannot be used. A bare marker is removed (it is not key material).
             if (mark != null) runCatching { files.delete(MARK) }
             return if (mnem != null) State.Locked("record_missing") else State.NoKey
         }
-        if (mark == null) return State.Locked("marker_missing")
-        if (!mark.contentEquals(markerOf(rec, mnem))) return State.Locked("marker_mismatch")
+        if (!markerOk(rec, mark, mnem)) return State.Locked(if (mark == null) "marker_missing" else "marker_mismatch")
         val opened = openRecord(rec) ?: return State.Locked("unreadable")
         opened.key.fill(0)
         return State.Ready(opened.eoa)
     }
 
-    /** A fresh copy of the key for a confirmed record. The caller must zero it after use. */
+    /** A fresh copy of the key for a usable record. The caller must zero it after use. */
     @Synchronized
     fun unlock(): ByteArray? {
         if (!reconcile()) return null
         val rec = files.read(REC) ?: return null
-        val mark = files.read(MARK) ?: return null
+        val mark = files.read(MARK)
         val mnem = files.read(MNEM)
-        if (!mark.contentEquals(markerOf(rec, mnem))) return null
+        if (!markerOk(rec, mark, mnem)) return null
         return openRecord(rec)?.key
     }
 
     /**
      * Stores [key] for [eoa] after checks: canonical EOA, 32-byte valid scalar, derived address equal to
-     * [eoa], no existing record, readback, marker. [key] is only read; the caller zeroes it.
+     * [eoa], nothing stored yet, readback, marker. [key] is only read; the caller zeroes it.
      */
     @Synchronized
     fun importKey(eoa: String, key: ByteArray, source: String = SOURCE_NATIVE_IMPORT): Import =
         store(eoa, key, source, phrase = null)
 
     /**
-     * Stores [key] for [eoa] and, in the same import, the recovery phrase sealed under the same wrapping key (spec §25.52Y.42).
-     * [phrase] must already be the canonical form ([MnemonicDerivation.canonicalPhrase]) and must derive [key]; otherwise nothing is stored.
-     * The phrase is never logged or returned from here.
+     * Stores [key] for [eoa] and the recovery phrase sealed under the same wrapping key (spec §25.52Y.42). [phrase] must be the canonical
+     * form ([MnemonicDerivation.canonicalPhrase]) and must derive [key]; otherwise nothing is stored. The phrase is never logged or
+     * returned from here.
      */
     @Synchronized
     fun importMnemonicKey(eoa: String, key: ByteArray, phrase: String, source: String = SOURCE_NATIVE_IMPORT): Import {
@@ -168,22 +172,20 @@ class NativeWalletVault(
     }
 
     /**
-     * The recovery phrase of the confirmed record (spec §25.52Y.42 第 5 项, §25.52Y.38 第 3 项 (e)). [MnemonicRead.Missing] when no phrase
-     * was stored (a key-only account, or one from before §25.52Y.42); [MnemonicRead.Unavailable] when the phrase cannot be read or does not
+     * The recovery phrase of the usable record (spec §25.52Y.42 第 5 项, §25.52Y.38 第 3 项 (e)). [MnemonicRead.Missing] when no phrase was
+     * stored (a key-only account, or one from before §25.52Y.42); [MnemonicRead.Unavailable] when the phrase cannot be read or does not
      * derive the record's key and address. The caller must not log the phrase.
      */
     @Synchronized
     fun mnemonicOf(): MnemonicRead {
         if (!reconcile()) return MnemonicRead.Unavailable
         val rec = files.read(REC) ?: return MnemonicRead.Unavailable
-        val mark = files.read(MARK) ?: return MnemonicRead.Unavailable
+        val mark = files.read(MARK)
         val mnem = files.read(MNEM)
-        if (mnem == null) {
-            return if (mark.contentEquals(markerOf(rec, null))) MnemonicRead.Missing else MnemonicRead.Unavailable
-        }
-        if (!mark.contentEquals(markerOf(rec, mnem))) return MnemonicRead.Unavailable
+        if (!markerOk(rec, mark, mnem)) return MnemonicRead.Unavailable
         val opened = openRecord(rec) ?: return MnemonicRead.Unavailable
         try {
+            if (mnem == null) return MnemonicRead.Missing
             val phrase = openMnemonic(mnem, opened.eoa) ?: return MnemonicRead.Unavailable
             val derived = MnemonicDerivation.deriveKey(phrase) ?: return MnemonicRead.Unavailable
             try {
@@ -198,9 +200,10 @@ class NativeWalletVault(
     }
 
     /**
-     * Import (spec §25.52Y.42 第 4 项 (a), (b)): the intent record first, then the key record, then the phrase record if planned, the
-     * readback, the marker last, and the intent removed after the commit. A failure removes what this call registered; if that removal
-     * fails the intent stays, and the next start reports `rollback_pending`.
+     * Import (spec §25.52Y.42 第 4 项, r3nw). The four records (key, phrase, marker, commit) and the intent must all be absent first; any
+     * that is present or cannot be read refuses the import and writes nothing. Then the intent, the key record, the phrase record if
+     * planned, the readback, the marker, and the commit record last; the intent is removed after the commit. A failure removes what this
+     * call registered; a failed removal keeps the intent, so the next start reports rollback_pending.
      */
     private fun store(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
         if (!isCanonicalEoa(eoa)) return Import.BAD_EOA
@@ -213,11 +216,19 @@ class NativeWalletVault(
             is State.Locked -> return Import.RECORD_EXISTS
             State.NoKey -> Unit
         }
-        val intent = Intent(eoa, keyPreexisted = false, mnemonicPlanned = phrase != null, startedAt = System.currentTimeMillis())
+        // Precheck (r3nw 第 4 项 (i)): none of the four files may exist or be unreadable.
+        for (name in listOf(REC, MNEM, MARK, COMMIT, INTENT)) {
+            val present = try {
+                files.read(name) != null
+            } catch (e: Exception) {
+                true
+            }
+            if (present) return Import.RECORD_EXISTS
+        }
         try {
-            files.write(INTENT, intent.encode())
+            files.write(INTENT, encodeIntent(eoa, mnemonicPlanned = phrase != null))
         } catch (e: Exception) {
-            return Import.STORE_FAILED
+            return rollbackAndReport(Import.STORE_FAILED, mnemonicPlanned = phrase != null)
         }
         val rec = try {
             encodeRecord(eoa, source, wrap.seal(aad(eoa), key))
@@ -250,30 +261,33 @@ class NativeWalletVault(
         if (!confirmed || !phraseConfirmed) return rollbackAndReport(Import.READBACK_FAILED, mnemonicPlanned = phrase != null)
         try {
             files.write(MARK, markerOf(rec, mnem))
+            files.write(COMMIT, encodeCommit(eoa))
         } catch (e: Exception) {
             return rollbackAndReport(Import.STORE_FAILED, mnemonicPlanned = phrase != null)
         }
-        // The import is committed. A failed removal of the intent is left for the next start (reconciliation keeps it harmless).
+        // Committed. A failed removal of the intent is left for the next start.
         runCatching { files.delete(INTENT) }
         return Import.OK
     }
 
-    /** Removes what this import registered, then the intent. Any removal that fails keeps the intent, so the state is rollback_pending. */
+    /** Removes what this import registered, then the intent. Any removal that fails keeps the intent: the next start retries and reports rollback_pending. */
     private fun rollbackAndReport(code: Import, mnemonicPlanned: Boolean): Import {
         try {
+            files.delete(COMMIT)
             files.delete(MARK)
             files.delete(REC)
             if (mnemonicPlanned) files.delete(MNEM)
             files.delete(INTENT)
         } catch (e: Exception) {
-            // Leave the intent: the next start retries the rollback and reports rollback_pending until it succeeds.
+            // Keep the intent for the retry.
         }
         return code
     }
 
-    /** Removes the record, the marker, the phrase and the wrapping key. Used on logout or when the wallet is removed. */
+    /** Removes the records, the markers, the intent and the wrapping key. Used on logout or when the wallet is removed. */
     @Synchronized
     fun forget() {
+        runCatching { files.delete(COMMIT) }
         runCatching { files.delete(MARK) }
         runCatching { files.delete(REC) }
         runCatching { files.delete(MNEM) }
@@ -281,35 +295,64 @@ class NativeWalletVault(
         runCatching { wrap.deleteKey() }
     }
 
-    private class Intent(val eoa: String, val keyPreexisted: Boolean, val mnemonicPlanned: Boolean, val startedAt: Long) {
-        fun encode(): ByteArray = JSONObject()
-            .put("intent", RECORD_VERSION)
+    private class Intent(val eoa: String, val mnemonicPlanned: Boolean)
+
+    /** The intent: `eoa` in clear (it selects the AAD), and the body sealed under the intent AAD. */
+    private fun encodeIntent(eoa: String, mnemonicPlanned: Boolean): ByteArray {
+        val body = JSONObject()
             .put("eoa", eoa)
-            .put("keyPreexisted", keyPreexisted)
             .put("mnemonicPlanned", mnemonicPlanned)
-            .put("startedAt", startedAt)
+            .put("startedAt", System.currentTimeMillis())
+            .put("phase", "begun")
             .toString()
             .toByteArray(Charsets.UTF_8)
+        return JSONObject()
+            .put("intent", RECORD_VERSION)
+            .put("eoa", eoa)
+            .put("sealed", ConetChatCryptoUtil.toHex(wrap.seal(intentAad(eoa), body)))
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+    }
 
-        companion object {
-            fun parse(raw: ByteArray): Intent? {
-                return try {
-                    val o = JSONObject(String(raw, Charsets.UTF_8))
-                    if (o.optInt("intent", 0) != RECORD_VERSION) {
-                        null
-                    } else {
-                        val eoa = o.optString("eoa", "")
-                        if (!isCanonicalEoa(eoa)) null
-                        else Intent(eoa, o.getBoolean("keyPreexisted"), o.getBoolean("mnemonicPlanned"), o.getLong("startedAt"))
-                    }
-                } catch (e: Exception) {
-                    null
-                }
-            }
+    private fun readIntent(raw: ByteArray): Intent? {
+        return try {
+            val o = JSONObject(String(raw, Charsets.UTF_8))
+            if (o.optInt("intent", 0) != RECORD_VERSION) return null
+            val eoa = o.optString("eoa", "")
+            if (!isCanonicalEoa(eoa)) return null
+            val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
+            val body = wrap.open(intentAad(eoa), sealed) ?: return null
+            val b = JSONObject(String(body, Charsets.UTF_8))
+            if (b.optString("eoa", "") != eoa || b.optString("phase", "") != "begun") return null
+            Intent(eoa, b.getBoolean("mnemonicPlanned"))
+        } catch (e: Exception) {
+            null
         }
     }
 
-    /** The phrase from a sealed mnemonic record for [eoa], or null. The caller must not log it. */
+    private fun encodeCommit(eoa: String): ByteArray {
+        val body = JSONObject().put("eoa", eoa).put("committedAt", System.currentTimeMillis()).toString().toByteArray(Charsets.UTF_8)
+        return JSONObject()
+            .put("commit", RECORD_VERSION)
+            .put("eoa", eoa)
+            .put("sealed", ConetChatCryptoUtil.toHex(wrap.seal(commitAad(eoa), body)))
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+    }
+
+    private fun readCommit(raw: ByteArray, eoa: String): String? {
+        return try {
+            val o = JSONObject(String(raw, Charsets.UTF_8))
+            if (o.optInt("commit", 0) != RECORD_VERSION || o.optString("eoa", "") != eoa) return null
+            val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
+            val body = wrap.open(commitAad(eoa), sealed) ?: return null
+            if (JSONObject(String(body, Charsets.UTF_8)).optString("eoa", "") != eoa) null else eoa
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** The phrase from a sealed phrase record for [eoa], or null. The caller must not log it. */
     private fun openMnemonic(mnem: ByteArray, eoa: String): String? {
         return try {
             val o = JSONObject(String(mnem, Charsets.UTF_8))
@@ -367,8 +410,10 @@ class NativeWalletVault(
         const val MARK = "wallet.v1.ok"
         /** The sealed recovery phrase (spec §25.52Y.42), written only by a phrase import. */
         const val MNEM = "wallet.v1.mnem"
-        /** The import intent (spec §25.52Y.42 第 4 项 (a)). It is not part of the marker digest. */
+        /** The import intent (spec §25.52Y.42 第 4 项, r3nw). It is not part of the marker digest. */
         const val INTENT = "wallet.v1.intent"
+        /** The commit record, written last (spec §25.52Y.42 第 4 项, r3nw). */
+        const val COMMIT = "wallet.v1.commit"
         const val RECORD_VERSION = 1
         const val SOURCE_NATIVE_IMPORT = "native_import"
         const val SOURCE_NATIVE_CREATE = "native_create"
@@ -376,6 +421,9 @@ class NativeWalletVault(
 
         /** Hardware-layer AAD (spec 25.17.5): binds the record to its EOA. */
         fun aad(eoa: String): ByteArray = "beamio-native-wallet-v1|h|$eoa".toByteArray(Charsets.UTF_8)
+
+        fun intentAad(eoa: String): ByteArray = "beamio-native-wallet-v1|i|$eoa".toByteArray(Charsets.UTF_8)
+        fun commitAad(eoa: String): ByteArray = "beamio-native-wallet-v1|c|$eoa".toByteArray(Charsets.UTF_8)
 
         /** AAD of the sealed recovery phrase (spec §25.52Y.42 第 3 项 (b)). */
         fun mnemAad(eoa: String): ByteArray = "beamio-native-wallet-v1|m|$eoa".toByteArray(Charsets.UTF_8)

@@ -164,7 +164,9 @@ object NativeAccountCreate {
             val key = MnemonicDerivation.deriveKey(phrase) ?: return Result(Code.WRITE_FAILED)
             try {
                 val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.WRITE_FAILED)
-                return when (vault.importKey(eoa, key, NativeWalletVault.SOURCE_NATIVE_CREATE)) {
+                // r3nw 第 1 项 (PM R1872): the account keeps the phrase its entropy spells (12 words, m/44'/60'/0'/0/0); the phrase is sealed
+                // beside the key and is never returned from here.
+                return when (vault.importMnemonicKey(eoa, key, phrase, NativeWalletVault.SOURCE_NATIVE_CREATE)) {
                     NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                         Result(Code.ALREADY_EXISTS)

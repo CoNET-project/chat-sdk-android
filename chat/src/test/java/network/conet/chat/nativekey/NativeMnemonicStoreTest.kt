@@ -7,10 +7,9 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import network.conet.chat.ConetChatCryptoUtil
-import org.json.JSONObject
 
 /**
  * The sealed recovery phrase (spec §25.52Y.42) and the walletCredential answer (§25.52Y.38 第 3 项). The phrase is the public BIP-39
@@ -265,34 +264,25 @@ class NativeMnemonicStoreTest {
         assertEquals(cred.getString("eoa"), addr.getString("eoa"))
     }
 
-    /** U-A17: a record with no marker and no intent is existing data. It is kept through every read path, byte for byte. */
+    /**
+     * U-A17 (PM R1878): a key record with no marker and no intent is a wallet from before the marker rule. It is usable as it is:
+     * the record opens and its address matches. Nothing is deleted or written, and the file bytes do not change.
+     */
     @Test
-    fun existingRecordWithoutMarkerOrIntentIsKeptThroughEveryPath() {
+    fun existingRecordWithoutMarkerOrIntentIsUsableAndKeptThroughEveryPath() {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap()
         vault(wrap, files).importKey(eoa, keyOf(phrase))
         files.map.remove(NativeWalletVault.MARK)
+        files.map.remove(NativeWalletVault.COMMIT)
         val before = files.map.mapValues { it.value.copyOf() }
         val v = vault(wrap, files)
-        assertEquals("marker_missing", (v.state() as State.Locked).reason)
-        assertNull(v.unlock())
-        assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
-        assertEquals("unavailable", (WalletCredential.answer(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Refused).code)
+        assertEquals(eoa, (v.state() as State.Ready).eoa)
+        assertArrayEquals(keyOf(phrase), v.unlock())
+        assertTrue(v.mnemonicOf() is MnemonicRead.Missing)
+        assertEquals("eoa_key", (WalletCredential.answer(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("credentialKind"))
+        assertEquals(eoa, (WalletCredential.eoaAddress(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("eoa"))
         assertEquals(before.keys, files.map.keys)
-        for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
-    }
-
-    /** An intent that says the key pre-existed deletes nothing and reports rollback_pending. */
-    @Test
-    fun preexistingKeyIntentDeletesNothingAndReportsPending() {
-        val files = NativeTestFiles()
-        val wrap = NativeTestWrap()
-        vault(wrap, files).importKey(eoa, keyOf(phrase))
-        files.map[NativeWalletVault.INTENT] = "{\"intent\":1,\"eoa\":\"$eoa\",\"keyPreexisted\":true,\"mnemonicPlanned\":false,\"startedAt\":1}".toByteArray(Charsets.UTF_8)
-        val before = files.map.mapValues { it.value.copyOf() }
-        val v = vault(wrap, files)
-        assertEquals("rollback_pending", (v.state() as State.Locked).reason)
-        assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
     }
 
@@ -308,45 +298,32 @@ class NativeMnemonicStoreTest {
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
     }
 
-    /** A committed import whose intent removal failed: the intent is harmless, the account stays usable, the next start removes it. */
+    /** A committed import whose intent removal did not happen (a crash after the commit record): the account is usable and the next start removes the intent. */
     @Test
     fun committedImportWithALeftoverIntentStaysUsable() {
-        val files = NativeTestFiles()
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.COMMIT }
         val wrap = NativeTestWrap()
-        vault(wrap, files).importMnemonicKey(eoa, keyOf(phrase), phrase)
-        files.map[NativeWalletVault.INTENT] = "{\"intent\":1,\"eoa\":\"$eoa\",\"keyPreexisted\":false,\"mnemonicPlanned\":true,\"startedAt\":1}".toByteArray(Charsets.UTF_8)
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importMnemonicKey(eoa, keyOf(phrase), phrase) }
+        files.crashAfterWrite = null
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
         val v = vault(wrap, files)
         assertEquals(eoa, (v.state() as State.Ready).eoa)
         assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
         assertTrue(v.mnemonicOf() is MnemonicRead.Stored)
     }
 
-    /** A rollback whose removal fails keeps the intent: the account is rollback_pending, and it is retried and cleared on the next start. */
+    /** A crash after the key record leaves an intent and an uncommitted record: the next start rolls it back and the account is free to import again. */
     @Test
-    fun failedRollbackIsRetriedOnNextStart() {
-        val files = NativeTestFiles()
+    fun uncommittedImportIsRolledBackOnTheNextStart() {
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.REC }
         val wrap = NativeTestWrap()
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importMnemonicKey(eoa, keyOf(phrase), phrase) }
+        files.crashAfterWrite = null
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
         val v = vault(wrap, files)
-        // The phrase write fails, then the intent cannot be removed during the rollback (the record removal succeeds).
-        files.failWrite = NativeWalletVault.MNEM
-        assertEquals(Import.STORE_FAILED, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
-        assertTrue(files.map.containsKey(NativeWalletVault.INTENT) == false)
-        // A leftover intent with the record still there is pending, then cleared once the removal works.
-        files.failWrite = null
-        files.map[NativeWalletVault.INTENT] = "{\"intent\":1,\"eoa\":\"$eoa\",\"keyPreexisted\":false,\"mnemonicPlanned\":true,\"startedAt\":1}".toByteArray(Charsets.UTF_8)
-        files.map[NativeWalletVault.REC] = wrapRecordOf(wrap, eoa, keyOf(phrase))
-        files.map[NativeWalletVault.MNEM] = "{\"record\":1,\"eoa\":\"$eoa\",\"sealed\":\"00\"}".toByteArray(Charsets.UTF_8)
-        assertTrue(vault(wrap, files).state() is State.NoKey)
+        assertTrue(v.state() is State.NoKey)
         assertFalse(files.map.containsKey(NativeWalletVault.REC))
         assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        assertEquals(Import.OK, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
     }
-
-    private fun wrapRecordOf(wrap: NativeTestWrap, eoa: String, key: ByteArray): ByteArray =
-        JSONObject()
-            .put("record", 1)
-            .put("eoa", eoa)
-            .put("source", "native_import")
-            .put("sealed", ConetChatCryptoUtil.toHex(wrap.seal(NativeWalletVault.aad(eoa), key)))
-            .toString()
-            .toByteArray(Charsets.UTF_8)
 }
