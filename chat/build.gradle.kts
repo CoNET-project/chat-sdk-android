@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.20-r1841qa"
+version = "0.2.21-r1841qa"
 
 android {
     namespace = "network.conet.chat"
