@@ -12,7 +12,6 @@ import org.json.JSONObject
  *  - a phrase account whose phrase cannot be read answers `unavailable`, never the key.
  *
  * `walletEoaAddress` answers only the address, derived from the stored key, checked against the record (spec §25.52Y.42 第 5 项 (c)).
- * The two answers do not replace each other: the key appears only in the `walletCredential` `eoa_key` answer.
  *
  * Neither is registered on the bridge. The shell trust gate (§25.52Y.38 第 2 项) and the capability bit `wallet.credential.v1` come first.
  */
@@ -20,7 +19,6 @@ object WalletCredential {
     const val NO_KEY = "no_key"
     const val UNAVAILABLE = "unavailable"
     const val KIND_MNEMONIC = "mnemonic"
-    const val KIND_EOA_KEY = "eoa_key"
 
     sealed class Answer {
         /** The `result` of an ok ack. */
@@ -43,7 +41,8 @@ object WalletCredential {
                     JSONObject().put("eoa", state.eoa).put("credentialKind", KIND_MNEMONIC)
                         .put("mnemonic", read.phrase),
                 )
-            is NativeWalletVault.MnemonicRead.Missing -> eoaKeyAnswer(vault, state.eoa)
+            // W-L5 (spec 25.52Y.42 第 8 项 (8e), PM R1895): a key-only account answers unavailable. No key is returned on any path.
+            is NativeWalletVault.MnemonicRead.Missing -> Answer.Refused(UNAVAILABLE)
             is NativeWalletVault.MnemonicRead.Unavailable -> Answer.Refused(UNAVAILABLE)
         }
     }
@@ -60,17 +59,5 @@ object WalletCredential {
             key.fill(0)
         }
         return Answer.Ok(JSONObject().put("eoa", state.eoa))
-    }
-
-    /** The compatibility answer for a key-only account (spec §25.52Y.42 第 5 项 (b)). The key is returned only after it derives [eoa]. */
-    private fun eoaKeyAnswer(vault: NativeWalletVault, eoa: String): Answer {
-        val key = vault.unlock() ?: return Answer.Refused(UNAVAILABLE)
-        try {
-            if (WalletAddress.fromPrivateKey(key) != eoa) return Answer.Refused(UNAVAILABLE)
-            val hex = "0x" + key.joinToString("") { "%02x".format(it) }
-            return Answer.Ok(JSONObject().put("eoa", eoa).put("credentialKind", KIND_EOA_KEY).put("eoaPrivateKey", hex))
-        } finally {
-            key.fill(0)
-        }
     }
 }

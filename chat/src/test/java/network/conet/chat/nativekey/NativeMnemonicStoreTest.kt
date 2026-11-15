@@ -202,7 +202,9 @@ class NativeMnemonicStoreTest {
         val s = upgraded.state()
         assertEquals(eoa, (s as State.Ready).eoa)
         assertTrue(upgraded.mnemonicOf() is MnemonicRead.Missing)
-        assertEquals("eoa_key", (WalletCredential.answer(upgraded, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("credentialKind"))
+        // W-L5: a key-only account answers walletCredential unavailable, and the address path still works.
+        assertEquals("unavailable", (WalletCredential.answer(upgraded, NoKeyGate.Gate.G1) as WalletCredential.Answer.Refused).code)
+        assertEquals(eoa, (WalletCredential.eoaAddress(upgraded, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("eoa"))
         assertEquals(before.keys, files.map.keys)
         for ((name, bytes) in before) assertArrayEquals("$name changed on upgrade", bytes, files.map[name])
     }
@@ -222,23 +224,18 @@ class NativeMnemonicStoreTest {
         for ((name, bytes) in before) assertArrayEquals("$name changed on restart", bytes, files.map[name])
     }
 
-    /** U-A14: a key-only account answers walletCredential with eoaPrivateKey, no phrase field; the key derives the record's address. */
+    /** W-L5 (spec 25.52Y.42 第 8 项 (8e), PM R1895): a key-only account answers walletCredential unavailable; no key and no {eoa}. */
     @Test
-    fun keyOnlyAccountAnswersTheKeyWithoutAPhrase() {
+    fun keyOnlyAccountWalletCredentialIsUnavailableAndGivesNoKey() {
         val v = vault(NativeTestWrap(), NativeTestFiles())
         v.importKey(eoa, keyOf(phrase))
-        val r = (WalletCredential.answer(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result
-        assertEquals("eoa_key", r.getString("credentialKind"))
-        assertFalse(r.has("mnemonic"))
-        val hex = r.getString("eoaPrivateKey")
-        assertTrue(hex.startsWith("0x") && hex.length == 66)
-        val back = hex.substring(2).chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        assertEquals(eoa, WalletAddress.fromPrivateKey(back))
-        assertEquals(eoa, r.getString("eoa"))
-        // G2 gets the same answer.
-        assertTrue(WalletCredential.answer(v, NoKeyGate.Gate.G2) is WalletCredential.Answer.Ok)
+        for (gate in listOf(NoKeyGate.Gate.G1, NoKeyGate.Gate.G2)) {
+            val a = WalletCredential.answer(v, gate) as WalletCredential.Answer.Refused
+            assertEquals("unavailable", a.code)
+        }
     }
 
+    /** W-L4 (r3ny): walletEoaAddress answers only the address in G1 and in G2 (unchanged). */
     /** U-A15: walletEoaAddress answers only the address, in G1 and G2; G0 is no_key; it never carries the key. */
     @Test
     fun walletEoaAddressAnswersOnlyTheAddress() {
@@ -252,16 +249,16 @@ class NativeMnemonicStoreTest {
         assertEquals("no_key", (WalletCredential.eoaAddress(v, NoKeyGate.Gate.G0) as WalletCredential.Answer.Refused).code)
     }
 
-    /** U-A16: a 32-byte-key device whose page copy was cleared: walletCredential and walletEoaAddress give the same address. */
+    /** U-A16: a 32-byte-key device whose page copy was cleared: walletCredential is unavailable (W-L5) and walletEoaAddress gives the address. */
     @Test
     fun clearedKeyOnlyDeviceGivesTheSameAddressOnBothPaths() {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()
         vault(wrap, files).importKey(eoa, keyOf(phrase))
         val restarted = vault(wrap, files)
-        val cred = (WalletCredential.answer(restarted, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result
+        assertEquals("unavailable", (WalletCredential.answer(restarted, NoKeyGate.Gate.G1) as WalletCredential.Answer.Refused).code)
         val addr = (WalletCredential.eoaAddress(restarted, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result
-        assertEquals(cred.getString("eoa"), addr.getString("eoa"))
+        assertEquals(eoa, addr.getString("eoa"))
     }
 
     /**
@@ -280,7 +277,7 @@ class NativeMnemonicStoreTest {
         assertEquals(eoa, (v.state() as State.Ready).eoa)
         assertArrayEquals(keyOf(phrase), v.unlock())
         assertTrue(v.mnemonicOf() is MnemonicRead.Missing)
-        assertEquals("eoa_key", (WalletCredential.answer(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("credentialKind"))
+        assertEquals("unavailable", (WalletCredential.answer(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Refused).code)
         assertEquals(eoa, (WalletCredential.eoaAddress(v, NoKeyGate.Gate.G1) as WalletCredential.Answer.Ok).result.getString("eoa"))
         assertEquals(before.keys, files.map.keys)
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
