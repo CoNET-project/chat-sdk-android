@@ -36,6 +36,7 @@ import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
 import network.conet.chat.nativekey.MigrationResult
 import network.conet.chat.nativekey.migrationAccountOfName
+import network.conet.chat.nativekey.orphanSweepMayRun
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.ChatRouteRegister
@@ -175,10 +176,13 @@ object BeamioConetChatModule {
         if (appContext == null) {
             // r3rh 第 1 项 (PY.8 第 5 项): the redo is local-only and runs synchronously before the first command. If it fails, the wallet and
             // identity commands answer not_ready until a redo succeeds (see dispatch).
+            // The marker is read before the redo, which clears it on success. The orphan sweep is for an interrupted clear only.
+            val interrupted = orphanSweepMayRun(ClearFlagFiles(pageRecordFiles(ctxIn)))
+            val noAccount = recoveryAccountOf(ctxIn) == null
             retryClearRedo(ctxIn)
-            // r3rh 第 2 项 (PY.8 第 7 项): with no account, the orphan sweep runs in the background. It never blocks start-up or a command; an
-            // offline or failed chain check skips the account until the next start-up.
-            if (recoveryAccountOf(ctxIn) == null) {
+            // r3rh 第 2 项 (PY.8 第 7 项): with no account and an interrupted clear, the orphan sweep runs in the background. It never blocks
+            // start-up or a command; an offline or failed chain check skips the account until the next start-up.
+            if (interrupted && noAccount) {
                 pgpMigrateWorker.execute { runCatching { sweepOrphanMigrations(ctxIn) }.onFailure { Log.w(TAG, "orphan sweep skipped") } }
             }
         }

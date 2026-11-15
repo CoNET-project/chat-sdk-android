@@ -268,4 +268,21 @@ class ClearIdentityTest {
         assertNull("the native PGP record is not a migration record", migrationAccountOfName("pgp.v1.a1b2.rec"))
         assertNull("wallet files are not migration records", migrationAccountOfName("wallet.v1.rec"))
     }
+
+    @Test
+    fun theOrphanSweepRunsOnlyWhenAnInterruptedClearIsMarked() {
+        val absent = NativeTestFiles()
+        assertFalse("no marker, no sweep", orphanSweepMayRun(ClearFlagFiles(absent)))
+
+        val marked = NativeTestFiles()
+        marked.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        assertTrue("an interrupted clear is marked", orphanSweepMayRun(ClearFlagFiles(marked)))
+
+        val unreadable = object : VaultFiles {
+            override fun read(name: String): ByteArray? = throw java.io.IOException("unreadable")
+            override fun write(name: String, bytes: ByteArray) = Unit
+            override fun delete(name: String) = Unit
+        }
+        assertFalse("an unreadable marker counts as not set", orphanSweepMayRun(ClearFlagFiles(unreadable)))
+    }
 }

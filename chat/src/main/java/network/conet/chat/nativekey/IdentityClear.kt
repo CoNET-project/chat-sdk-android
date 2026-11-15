@@ -34,6 +34,13 @@ internal class ClearFlagFiles(private val files: VaultFiles) {
         false
     }
 
+    /** Strict read for the orphan sweep (PY.8 第 7 项): set only when readable and present. Unreadable counts as not set, so nothing is swept. */
+    fun clearPendingStrict(): Boolean = try {
+        files.read(CLEAR_PENDING) != null
+    } catch (_: Exception) {
+        false
+    }
+
     fun setClearPending(): Boolean = writeChecked(CLEAR_PENDING)
 
     /** Native-internal only (PY.11): set by the native save-recovery-phrase confirmation or after a successful recovery. */
@@ -75,6 +82,12 @@ internal object RecoveryBackupConfirmation {
 
     fun isConfirmed(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).recoveryBackupConfirmed()
 }
+
+/**
+ * Whether the orphan sweep may be started (PY.8 第 7 项, r3rh): only when an interrupted clear is marked (clear_pending set, strictly read).
+ * It must be read before the start-up redo, which clears the marker on success.
+ */
+internal fun orphanSweepMayRun(flags: ClearFlagFiles): Boolean = flags.clearPendingStrict()
 
 /**
  * The account of a migration record file (`pgp.v1.mig.<40 hex>.<workspace>.{n,m,last}`), as a lower-case `0x` address, or null for any other
