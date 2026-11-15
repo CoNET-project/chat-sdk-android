@@ -9,7 +9,7 @@ import java.io.File
 /**
  * Runs every `init` case of the gate-state vector file through the rules the module applies (PM R1861; spec §25.52Y.29,
  * §25.52Y.32, §25.52GJ): the EOA check first (NoKeyGate.initAnswer), then, in G1 only, the nodes verdict (InitNodesGate).
- * The Keychain roster is taken from the case id: an id ending in `-KC` means the device stores nodes.
+ * The Keychain roster is the case's `keychainNodes` field.
  * It runs only when GATE_STATE_VECTORS names the canonical file (the 146-case version, sha256 d5b9c948...). The repo copy in
  * ../spec is an older 132-case version without the G1-INIT-NODES-* cases, so it is not used here.
  */
@@ -36,7 +36,7 @@ class InitVectorsTest {
             val actual = when {
                 eoaAnswer != "ok" -> "address_mismatch"
                 state == "G1" -> {
-                    val stored = if (id.endsWith("-KC")) 1 else 0
+                    val stored = if (c.optBoolean("keychainNodes", false)) 1 else 0
                     InitNodesGate.errorOf(InitNodesGate.verdict(payload) { stored }) ?: "ok"
                 }
                 else -> "ok" // G2: the nodes rule does not apply (§25.52GJ; G2-INIT-MATCH has no nodes key and expects ok)

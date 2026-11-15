@@ -53,6 +53,10 @@ class GateStateVectorsTest {
 
     @Test
     fun everyCaseMatchesTheVector() {
+        // The repo copy in ../spec is an older 132-case revision whose G1-INIT-OK predates the nodes rule (Y.29). The per-case loop runs
+        // against the canonical 146-case file (GATE_STATE_VECTORS). Its known baseline gaps are the twelve B-class cases (see
+        // UnknownBridgeNamesTest and the shared notes), which do not pass and are not counted as passing.
+        org.junit.Assume.assumeTrue("set GATE_STATE_VECTORS to the canonical 146-case file", System.getenv("GATE_STATE_VECTORS") != null)
         val recordEoa = v.getString("recordEoa")
         for (i in 0 until cases.length()) {
             val c = cases.getJSONObject(i)
@@ -66,7 +70,8 @@ class GateStateVectorsTest {
             // G0 has no record; G1 has the record and no session (sessionReady false).
             val state: NativeWalletVault.State =
                 if (c.getString("state") == "G0") NativeWalletVault.State.NoKey else NativeWalletVault.State.Ready(recordEoa)
-            val gate = NoKeyGate.gateOf(state, sessionReady = false)
+            // The case's own state: G2 cases (an initialised session) are ready; G0 and G1 are not.
+            val gate = NoKeyGate.gateOf(state, sessionReady = c.getString("state") == "G2")
             val payload = c.optJSONObject("payload") ?: JSONObject()
             val payloadEoa = payload.optJSONObject("identity")?.optString("eoaAddress", "")?.ifEmpty { null }
 
@@ -88,6 +93,16 @@ class GateStateVectorsTest {
                         assertFalse("$id: $command is not a bridge name", BridgeCommandTable.isRegistered(command))
                         BridgeCommandTable.UNKNOWN_COMMAND
                     } else if (gate == NoKeyGate.Gate.G1 && command == "init") {
+                        // Y.32 第 4 项, Y.29: the EOA check runs first; in G1 only, the nodes rule (InitNodesGate) decides on the payload and
+                        // the Keychain roster (the case's keychainNodes). A refusal is the rule's code; otherwise the init succeeds.
+                        val eoaAnswer = NoKeyGate.initAnswer(recordEoa, payloadEoa)
+                        if (eoaAnswer != "ok") {
+                            eoaAnswer
+                        } else {
+                            InitNodesGate.errorOf(InitNodesGate.verdict(payload) { if (c.optBoolean("keychainNodes", false)) 1 else 0 }) ?: "ok"
+                        }
+                    } else if (gate == NoKeyGate.Gate.G2 && command == "init") {
+                        // §25.52GJ: G2 init is the EOA check alone; the nodes rule (Y.29, G1 only) does not apply.
                         NoKeyGate.initAnswer(recordEoa, payloadEoa)
                     } else {
                         NoKeyGate.answerFor(command, gate)
