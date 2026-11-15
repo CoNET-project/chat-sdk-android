@@ -25,7 +25,14 @@ object NoKeyGate {
 
     enum class Gate { G0, G1, G2 }
 
-    enum class Route { PASS, NO_KEY, NOT_SUPPORTED, WALLET_STATUS, PASSCODE_STATUS }
+    enum class Route { PASS, NO_KEY, NOT_SUPPORTED, UNKNOWN_NAME, WALLET_STATUS, PASSCODE_STATUS }
+
+    /**
+     * W2 `deriveLocalKeys`, W3 `protocolKeys` and W4 `fragmentKeys` are not bridge names (25.52DP.1, r3fp; the vectors NK-W2 to NK-W4 and G1-NK-W2
+     * to G1-NK-W4). W5 `signMessage` (kinds selfAuth and so on) has no bridge name (25.52AR.3; NK-W5a to NK-W5g). All of them answer
+     * `unknown_command` before the gate, in every state, and the payload is not read.
+     */
+    val NOT_BRIDGE: Set<String> = setOf("deriveLocalKeys", "protocolKeys", "fragmentKeys", "signMessage")
 
     /**
      * The command families of §25.22.4 that answer `locked` while the passcode state is locked, by the bridge names they map to in
@@ -56,6 +63,7 @@ object NoKeyGate {
     /** Where a name goes before the gate is applied. The name is the only input. */
     fun route(command: String): Route = when {
         command in RETIRED -> Route.NOT_SUPPORTED
+        command in NOT_BRIDGE -> Route.UNKNOWN_NAME
         command == "walletStatus" -> Route.WALLET_STATUS
         command == "passcodeStatus" -> Route.PASSCODE_STATUS
         command in PASS_THROUGH -> Route.PASS

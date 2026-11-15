@@ -26,6 +26,7 @@ class NoKeyRejectVectorsTest {
     private fun codeFor(command: String): String = when (NoKeyGate.route(command)) {
         NoKeyGate.Route.NO_KEY -> "no_key"
         NoKeyGate.Route.NOT_SUPPORTED -> "not_supported"
+        NoKeyGate.Route.UNKNOWN_NAME -> "unknown_command"
         else -> "not-a-rejection"
     }
 
@@ -55,17 +56,22 @@ class NoKeyRejectVectorsTest {
     }
 
     @Test
-    fun everyNoKeyEntryRoutesToNoKey() {
-        // 54 entries answer no_key: every wallet and chat name (pgpSign is not in the table, 25.52BP.1).
+    fun everyNoKeyEntryRoutesToItsExpectedCode() {
+        // 54 entries: each one's expectCode is the code its route implies. Most answer no_key; the names that are not bridge
+        // names (W2 to W4, the W5 signMessage kinds) answer unknown_command before the gate (25.52DP.1, 25.52AR.3).
         var n = 0
+        var unknown = 0
         for (list in listOf(v.getJSONArray("walletCommands"), v.getJSONArray("chatCommands"))) {
             for (i in 0 until list.length()) {
                 val c = list.getJSONObject(i)
-                assertEquals(c.getString("id"), "no_key", codeFor(c.getString("command")))
+                val expected = c.getString("expectCode")
+                assertEquals(c.getString("id"), expected, codeFor(c.getString("command")))
+                if (expected == "unknown_command") unknown++
                 n++
             }
         }
         assertEquals(54, n)
+        assertEquals(10, unknown)
     }
 
     @Test
@@ -95,7 +101,8 @@ class NoKeyRejectVectorsTest {
     fun signKindsAndPasscodeModesDoNotChangeTheAnswer() {
         // The route takes the name only, so a kind or mode can never produce a different code.
         for (kind in listOf("selfAuth", "pointerEip712", "chatRouteRegister", "envelope", "group", "voice", "gossip")) {
-            assertEquals("signMessage kind=$kind", "no_key", codeFor("signMessage"))
+            // W5 has no bridge name (25.52AR.3; NK-W5a to NK-W5g): unknown_command, whatever the kind.
+            assertEquals("signMessage kind=$kind", "unknown_command", codeFor("signMessage"))
             assertTrue(kind.isNotEmpty())
         }
         for (mode in listOf("enable", "change", "disable", "unlock")) {

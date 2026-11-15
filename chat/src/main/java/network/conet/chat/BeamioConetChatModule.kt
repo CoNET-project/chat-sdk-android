@@ -254,6 +254,11 @@ object BeamioConetChatModule {
             ack(echoId(body), false, error = network.conet.chat.x21.X21Retired.ERROR)
             return
         }
+        // W2 to W4 are not bridge names (25.52DP.1): unknown_command before the gate, in every state. The payload is not read.
+        if (route == NoKeyGate.Route.UNKNOWN_NAME) {
+            ack(echoId(body), false, error = BridgeCommandTable.UNKNOWN_COMMAND)
+            return
+        }
         // Allowed names keep their normal semantics. Everything else is gated by the state of the native record and
         // of this session (25.26.4c): G0 no_key, G1 not_ready (init checks the EOA in dispatch), G2 as before. The
         // payload is not read for any refused name.
