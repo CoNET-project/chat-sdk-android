@@ -67,8 +67,15 @@ internal object NativeOpenRules {
      * `nativeAccountCreateOpen` (§25.46.10, §25.52Z.2). [account] is the value of the `account` field (`null` when absent).
      * Missing or malformed `account` is `bad_request`, checked with the input, before the host is asked.
      */
-    fun accountCreateOpen(fields: Collection<String>, reqId: Any?, account: Any?, gate: NoKeyGate.Gate, host: Host): Reply =
-        decide(fields, reqId, host, gate, allowed = ACCOUNT_CREATE_FIELDS, account = account, accountRequired = true)
+    fun accountCreateOpen(
+        fields: Collection<String>,
+        reqId: Any?,
+        account: Any?,
+        gate: NoKeyGate.Gate,
+        host: Host,
+        guardDenial: String? = null,
+    ): Reply =
+        decide(fields, reqId, host, gate, allowed = ACCOUNT_CREATE_FIELDS, account = account, accountRequired = true, guardDenial = guardDenial)
 
     /** `true` when [account] is a BeamioTag or a canonical EOA address (§25.52Z.2). */
     fun isValidAccount(account: Any?): Boolean {
@@ -84,6 +91,7 @@ internal object NativeOpenRules {
         allowed: Set<String>,
         account: Any? = null,
         accountRequired: Boolean = false,
+        guardDenial: String? = null,
     ): Reply {
         if (fields.any { it in CREDENTIAL_FIELDS }) return Reply(KEY_REFUSED)
         if (fields.any { it !in allowed }) return Reply(BAD_REQUEST)
@@ -91,6 +99,8 @@ internal object NativeOpenRules {
         val id = reqId ?: return Reply(BAD_REQUEST)
         if (!host.registered()) return Reply(NOT_SUPPORTED)
         if (gate != null && gate != NoKeyGate.Gate.G0) return Reply(NOT_AVAILABLE)
+        // The create guard (AccountCreateGuard): a create that is not allowed never opens the page; the diagnostic code stays in the SDK.
+        if (guardDenial != null) return Reply(NOT_AVAILABLE)
         return if (host.open(id)) {
             Reply(null, page = if (accountRequired) PAGE_OPENED else null)
         } else {

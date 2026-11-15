@@ -1,0 +1,80 @@
+package network.conet.chat.nativekey
+
+import android.content.Context
+
+/** The state of the native key (the vault): none, readable, or present but unreadable. */
+internal enum class KeyState { NONE, READABLE, UNREADABLE }
+
+/**
+ * The inputs of the account-create gate. Primitive values only, so the decision is a pure function and can be tested without a device.
+ * [legacyReport] is the last value reported by the shell (`found`, `absent`, `unreadable`), or `null` when none could be read.
+ */
+internal data class CreateGuardInputs(
+    val key: KeyState,
+    val legacyReport: String?,
+    val legacyUnreadable: Boolean,
+    val pointer: Boolean,
+    val pageCopy: Boolean,
+    val migrating: Boolean,
+)
+
+/**
+ * The data-safety gate of account creation (PM ruling, §25.46.5, §25.52W.4, §25.52T.3, §25.52U.6). Creating a new wallet must never
+ * overwrite a wallet held elsewhere. A create is allowed only when the legacy store is confirmed empty, no account pointer is set, no native
+ * key exists, no page copy exists, and no migration or write is pending.
+ *
+ * The refusal is answered on the bridge as the existing `not_available` (§25.46.10) and the page is not opened. The diagnostic codes below
+ * are logged inside the SDK only; they never reach the page, and the page-visible state is driven by the read side (PM ruling).
+ */
+internal object AccountCreateGuard {
+    const val MIGRATING = "migrating"
+    const val NEEDS_NATIVE_RECOVERY = "needs_native_recovery"
+    const val POINTER_SET = "pointer_set"
+    const val REPLICA_PRESENT = "replica_present"
+
+    /** Diagnostic code of the refusal, or `null` when a create may proceed. Order: key first, then migration, then the pointer and copies. */
+    fun denial(i: CreateGuardInputs): String? = when {
+        i.key == KeyState.UNREADABLE -> NEEDS_NATIVE_RECOVERY
+        i.key == KeyState.READABLE -> REPLICA_PRESENT
+        i.migrating || i.legacyUnreadable || i.legacyReport != "absent" -> MIGRATING
+        i.pointer -> POINTER_SET
+        i.pageCopy -> REPLICA_PRESENT
+        else -> null
+    }
+
+    /** A page copy file (§25.52AD.2): `page.v1.<address>.<name>.rec`. Any unreadable directory counts as present (fail closed). */
+    private val PAGE_COPY = Regex("^page\\.v1\\..*\\.rec$")
+
+    /** Reads the live inputs from the device. Every read that fails is the closed value (unknown key, pointer and copy present). */
+    fun inputsFor(context: Context): CreateGuardInputs {
+        val files = pageRecordFiles(context)
+        val flags = DeviceFlagFiles(files)
+        val key = try {
+            when (NativeWallet.vault(context).state()) {
+                is NativeWalletVault.State.NoKey -> KeyState.NONE
+                is NativeWalletVault.State.Ready -> KeyState.READABLE
+                else -> KeyState.UNREADABLE
+            }
+        } catch (_: Exception) {
+            KeyState.UNREADABLE
+        }
+        val report = try {
+            files.read(ClearFlagFiles.LEGACY_REPORT)?.toString(Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+        val pageCopy = try {
+            files.names().any { PAGE_COPY.matches(it) }
+        } catch (_: Exception) {
+            true
+        }
+        return CreateGuardInputs(
+            key = key,
+            legacyReport = report,
+            legacyUnreadable = flags.legacyUnreadable(),
+            pointer = flags.accountPointer(),
+            pageCopy = pageCopy,
+            migrating = ShellRecordState.migrationPending.get(),
+        )
+    }
+}

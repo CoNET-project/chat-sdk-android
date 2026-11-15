@@ -42,6 +42,7 @@ import network.conet.chat.nativekey.eraseBackupFlagsOfUnknownAccount
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.ChatRouteRegister
+import network.conet.chat.nativekey.AccountCreateGuard
 import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.nativekey.InitNodesGate
 import network.conet.chat.nativekey.ShellRecordPolicy
@@ -1211,7 +1212,11 @@ object BeamioConetChatModule {
             if (gate == null) {
                 NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
             } else {
-                NativeOpenRules.accountCreateOpen(fields, reqId, body.opt("account"), gate, NativeOpenRules.accountHost)
+                // Data-safety gate (AccountCreateGuard): only a G0 create can be allowed, and only when the legacy store is confirmed empty,
+                // no pointer, no native key, no page copy, and no migration pending. A denial is logged with its code only.
+                val denial = if (gate == NoKeyGate.Gate.G0) ctx?.let { AccountCreateGuard.denial(AccountCreateGuard.inputsFor(it)) } else null
+                denial?.let { Log.w(TAG, "nativeAccountCreateOpen refused: $it") }
+                NativeOpenRules.accountCreateOpen(fields, reqId, body.opt("account"), gate, NativeOpenRules.accountHost, denial)
             }
         }
     }
