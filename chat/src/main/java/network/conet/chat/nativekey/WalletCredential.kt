@@ -7,8 +7,8 @@ import org.json.JSONObject
  *
  * `walletCredential`:
  *  - an account with a stored recovery phrase answers the phrase (kind: mnemonic; no key field);
- *  - a key-only account (a legacy device, or one whose page copy was cleared) answers its EOA private key (`credentialKind = "eoa_key"`;
- *    no phrase field). The key is derived back to the record's address first; a mismatch or an unreadable record answers `unavailable`;
+ *  - a key-only account (a legacy device, or one whose page copy was cleared) answers `unavailable` (W-L5, PM R1895). No private key is
+ *    returned on any path;
  *  - a phrase account whose phrase cannot be read answers `unavailable`, never the key.
  *
  * `walletEoaAddress` answers only the address, derived from the stored key, checked against the record (spec §25.52Y.42 第 5 项 (c)).
