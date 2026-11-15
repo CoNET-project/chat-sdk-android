@@ -229,7 +229,7 @@ class BridgeKeyAuditTest {
             // and the capability bit come first). Listed so a new occurrence fails; not counted as T-50 passing; owner review pending (R1861).
             "WalletCredential.kt" to listOf(
                 "const val KIND_MNEMONIC = \"mnemonic\"",
-                ".put(\"mnemonic\", read.phrase)",
+                ".put(\"mnemonic\", read.phrase),",
             ),
             "ShellRecord.kt" to listOf(
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
