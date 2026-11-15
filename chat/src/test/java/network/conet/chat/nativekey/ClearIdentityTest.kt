@@ -257,4 +257,15 @@ class ClearIdentityTest {
         assertEquals(IdentityClearCode.OK, s.build().clear())
         assertFalse("no PGP record, so (1c) is not evaluated", s.log.contains("pgpSource"))
     }
+
+    @Test
+    fun aMigrationRecordNameGivesItsAccountOnlyForTheThreeRecordKinds() {
+        val hex = "a".repeat(40)
+        assertEquals("0x$hex", migrationAccountOfName("pgp.v1.mig.$hex.default.n"))
+        assertEquals("0x$hex", migrationAccountOfName("pgp.v1.mig.$hex.default.m"))
+        assertEquals("0x$hex", migrationAccountOfName("pgp.v1.mig.$hex.default.last"))
+        assertNull("a short address is not a record", migrationAccountOfName("pgp.v1.mig.abc.default.n"))
+        assertNull("the native PGP record is not a migration record", migrationAccountOfName("pgp.v1.a1b2.rec"))
+        assertNull("wallet files are not migration records", migrationAccountOfName("wallet.v1.rec"))
+    }
 }

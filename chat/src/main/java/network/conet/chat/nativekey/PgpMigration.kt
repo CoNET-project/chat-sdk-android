@@ -554,6 +554,12 @@ internal class PgpMigrationEngine(
         markerGone && stagedGone && lastCodeGone
     } ?: false
 
+    /**
+     * The C.3 check for an account that holds no active pointer (PY.8 第 7 项; R2169 第 3 项 (i)): a legacy copy L, or a registered chain
+     * backup. P is not part of this check. Unreadable or failed checks count as not met.
+     */
+    fun orphanSource(): Boolean = runCatching { legacy.read() != null || recovery.chainRegistered() }.getOrDefault(false)
+
     /** The migration's page wallet fields (W), removed last in (3) (PY.8 第 1 项 (3), r3qy). */
     fun clearMigrationWallet(): Boolean = lock.tryRun(eoa) {
         val removed = runCatching { wallet.remove() }.isSuccess
@@ -827,6 +833,10 @@ object BeamioPgpMigrationImport {
     /** Identity clear, step (3): the removal for [eoa] (see [PgpMigrationEngine.clearErase]). */
     fun clearMigrationRecords(context: Context, eoa: String): Boolean =
         engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearMigrationRecords() == true
+
+    /** PY.8 第 7 项: the C.3 check for an orphaned account (see [PgpMigrationEngine.orphanSource]). */
+    fun orphanSourceOk(context: Context, account: String): Boolean =
+        engine(context, account, PgpMigrationPolicy.WORKSPACE, null)?.orphanSource() == true
 
     fun clearMigrationWallet(context: Context, eoa: String): Boolean =
         engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearMigrationWallet() == true

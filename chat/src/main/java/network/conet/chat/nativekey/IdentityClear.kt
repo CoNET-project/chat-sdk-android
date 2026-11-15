@@ -77,6 +77,15 @@ internal object RecoveryBackupConfirmation {
 }
 
 /**
+ * The account of a migration record file (`pgp.v1.mig.<40 hex>.<workspace>.{n,m,last}`), as a lower-case `0x` address, or null for any other
+ * name. Used by the start-up redo when no account is known (PY.8 第 7 项).
+ */
+internal fun migrationAccountOfName(name: String): String? {
+    val m = Regex("""^pgp\.v1\.mig\.([0-9a-f]{40})\.[A-Za-z0-9_-]+\.(n|m|last)$""").find(name) ?: return null
+    return "0x" + m.groupValues[1]
+}
+
+/**
  * Deletes one file and checks that it is gone. A delete that reports nothing is confirmed by reading the file back. Any exception
  * or a file still present is a failure.
  */

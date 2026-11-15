@@ -35,6 +35,7 @@ import network.conet.chat.nativekey.VaultFiles
 import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
 import network.conet.chat.nativekey.MigrationResult
+import network.conet.chat.nativekey.migrationAccountOfName
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.ChatRouteRegister
@@ -173,9 +174,12 @@ object BeamioConetChatModule {
         val ctxIn = context.applicationContext
         if (appContext == null) {
             // 25.52PY.8 第 5 项: the first command after the process starts finishes an interrupted clear before anything else.
-            runCatching { identityClear(ctxIn, recoveryAccountOf(ctxIn)).redoIfInterrupted() }
-                .onSuccess { code -> code?.let { Log.i(TAG, "identity clear redo result=$it") } }
-                .onFailure { Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}") }
+            // The redo may run the C.3 chain check of an orphaned account, so it runs on the worker, not the main thread.
+            pgpMigrateWorker.execute {
+                runCatching { identityClear(ctxIn, recoveryAccountOf(ctxIn)).redoIfInterrupted() }
+                    .onSuccess { code -> code?.let { Log.i(TAG, "identity clear redo result=$it") } }
+                    .onFailure { Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}") }
+            }
         }
         appContext = ctxIn
         emitFn = emit
@@ -885,7 +889,8 @@ object BeamioConetChatModule {
                 // (3), PY.8 第 1 项 (3) and r3qy: the migration records (M, N, lastCode) come first, and W is removed only after they all
                 // succeeded (M.2). The native PGP envelopes do not depend on that order. If the migration records fail, no W is removed and the
                 // backup flag stays, so the redo can finish the records first. Every step that runs is attempted.
-                val migrationRecordsOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationRecords(ctx, it) } ?: true
+                // With no account, the orphaned migration records are swept (PY.8 第 7 项, R2169 第 3 项 (i)); otherwise only this account's.
+                val migrationRecordsOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationRecords(ctx, it) } ?: sweepOrphanMigrations(ctx)
                 val nativePgpOk = NativeWallet.migrationNames(ctx).filter { it.startsWith("pgp.v1.") }
                     .map { eraseChecked(vaultFiles, it) }.all { it }
                 if (!migrationRecordsOk) {
@@ -896,11 +901,12 @@ object BeamioConetChatModule {
                     val keystoreOk = BeamioChatWalletKeyStore.clear(ctx)
                     val pgpOk = BeamioChatPgpStore.clearKeepingLegacy(ctx)
                     val migrationWalletOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationWallet(ctx, it) } ?: true
-                    // PY.10/PY.11 and r3qv: the recovery-backup flag goes with W only. A failure of the PGP envelopes does not decide the flag
-                    // (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
-                    val wOk = vaultOk && pagesOk && keystoreOk && pgpOk && migrationWalletOk
+                    // PY.10/PY.11 and r3qv: the recovery-backup flag goes with W only. A failure of the PGP page copy or the PGP envelopes does
+                    // not decide the flag (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
+                    // r3rd (R2168 (b)): the PGP page copy (pgpOk) is not part of W; it is still removed in (3), after (1a) and (1c).
+                    val wOk = vaultOk && pagesOk && keystoreOk && migrationWalletOk
                     val flagOk = wOk && flags.clearRecoveryBackupConfirmed()
-                    wOk && flagOk && nativePgpOk
+                    wOk && flagOk && pgpOk && nativePgpOk
                 }
             },
             eraseInbox = { BeamioConetChatInboxStore.clear(ctx) },
@@ -914,6 +920,43 @@ object BeamioConetChatModule {
                 pointerOk && addressOk
             },
         )
+    }
+
+    /**
+     * PY.8 第 7 项 (r3rd, R2169 (i)): with no account, sweep the migration records of accounts that hold no active pointer and no W. Each
+     * account gets the C.3 check (L or a chain backup; not P). A passing account is removed in M → N → lastCode order; a refused one is kept.
+     * Only codes and counts are logged, never an account value. Returns false when a removal failed (clear_incomplete; the redo continues).
+     */
+    private fun sweepOrphanMigrations(ctx: Context): Boolean {
+        val pointerSet = try {
+            pageRecordFiles(ctx).read(DeviceFlagFiles.POINTER) != null
+        } catch (_: Exception) {
+            return false
+        }
+        val activeAddress = try {
+            pageRecordFiles(ctx).read(DeviceFlagFiles.ADDRESS)?.toString(Charsets.UTF_8)?.lowercase()
+        } catch (_: Exception) {
+            return false
+        }
+        // A pointer with no readable address cannot tell which account is active, so nothing is swept.
+        if (pointerSet && activeAddress == null) return true
+        val accounts = NativeWallet.migrationNames(ctx).mapNotNull { migrationAccountOfName(it) }.distinct()
+        var removed = 0
+        var kept = 0
+        var failed = false
+        for (account in accounts) {
+            if (account == activeAddress) {
+                kept++
+                continue
+            }
+            if (!BeamioPgpMigrationImport.orphanSourceOk(ctx, account)) {
+                kept++
+                continue
+            }
+            if (BeamioPgpMigrationImport.clearMigrationRecords(ctx, account)) removed++ else failed = true
+        }
+        Log.i(TAG, "orphan migration sweep removed=$removed kept=$kept failed=$failed")
+        return !failed
     }
 
     /**
