@@ -42,8 +42,9 @@ internal class NativeTestWrap : KeyWrap {
         }
     }
 
-    override fun deleteKey() {
+    override fun deleteKey(): Boolean {
         secret = newKey()
+        return true
     }
 
     private fun newKey(): SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()

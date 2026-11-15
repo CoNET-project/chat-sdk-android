@@ -84,7 +84,10 @@ internal object BeamioConetChatInboxStore {
 
     fun list(context: Context): List<Entry> = synchronized(lock) { readAll(context) }
 
-    fun clear(context: Context) {
-        synchronized(lock) { file(context).delete() }
+    /** True only when the inbox file is gone (spec 25.52PY.8 (4)). */
+    fun clear(context: Context): Boolean = synchronized(lock) {
+        val f = file(context)
+        runCatching { f.delete() }
+        !f.exists()
     }
 }

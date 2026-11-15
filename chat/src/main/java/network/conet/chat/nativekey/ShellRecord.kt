@@ -861,11 +861,11 @@ class AndroidPageRecordKeyWrap(private val alias: String = KEY_ALIAS) : KeyWrap 
         }
     }
 
-    override fun deleteKey() {
-        try {
-            keyStore().deleteEntry(alias)
-        } catch (_: Exception) {
-        }
+    override fun deleteKey(): Boolean = try {
+        keyStore().deleteEntry(alias)
+        !keyStore().containsAlias(alias)
+    } catch (_: Exception) {
+        false
     }
 
     companion object {

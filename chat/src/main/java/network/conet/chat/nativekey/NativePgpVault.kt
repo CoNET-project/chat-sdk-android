@@ -190,11 +190,20 @@ internal class NativePgpVault(
         return NativePgp.signDocument(secret, unlocked.passphrase, domainLabel(purposeId), message, sigType)
     }
 
-    /** Removes this slot's record and marker. Other accounts and the other slot are not touched. */
+    /** Removes this slot's record and marker. Other accounts and the other slot are not touched. True only when both are gone (PY.8 (3)). */
     @Synchronized
-    fun forget() {
-        runCatching { files.delete(mark) }
-        runCatching { files.delete(rec) }
+    fun forget(): Boolean {
+        val markGone = eraseChecked(files, mark)
+        val recGone = eraseChecked(files, rec)
+        return markGone && recGone
+    }
+
+    /** True when this slot holds a record or marker (or cannot be read: unknown counts as present). */
+    @Synchronized
+    fun hasRecord(): Boolean = try {
+        files.read(rec) != null || files.read(mark) != null
+    } catch (_: Exception) {
+        true
     }
 
     /** The identity of the record in this slot: uppercase master fingerprint and first subkey key ID. Null if none. */

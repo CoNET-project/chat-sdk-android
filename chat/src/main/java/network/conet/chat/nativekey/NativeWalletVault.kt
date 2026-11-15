@@ -15,8 +15,8 @@ interface KeyWrap {
     /** Returns the plaintext, or `null` when authentication fails or the wrapping key is gone. */
     fun open(aad: ByteArray, sealed: ByteArray): ByteArray?
 
-    /** Removes the wrapping key. Records sealed under it can no longer be opened. */
-    fun deleteKey()
+    /** Removes the wrapping key. Records sealed under it can no longer be opened. True only when the key is gone. */
+    fun deleteKey(): Boolean
 }
 
 /** Record and marker storage. [write] must be all-or-nothing (temp file and rename on the device). */
@@ -312,15 +312,14 @@ class NativeWalletVault(
         return code
     }
 
-    /** Removes the records, the markers, the intent and the wrapping key. Used on logout or when the wallet is removed. */
+    /**
+     * Removes the records, the markers, the intent and the wrapping key. Returns true only when every file is gone and the key is
+     * removed (spec 25.52PY.8 (3)). A false result means the caller must not report the clear as finished.
+     */
     @Synchronized
-    fun forget() {
-        runCatching { files.delete(COMMIT) }
-        runCatching { files.delete(MARK) }
-        runCatching { files.delete(REC) }
-        runCatching { files.delete(MNEM) }
-        runCatching { files.delete(INTENT) }
-        runCatching { wrap.deleteKey() }
+    fun forget(): Boolean {
+        val filesGone = listOf(COMMIT, MARK, REC, MNEM, INTENT).map { eraseChecked(files, it) }.all { it }
+        return filesGone && wrap.deleteKey()
     }
 
     private class Intent(val eoa: String, val mnemonicPlanned: Boolean)

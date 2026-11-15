@@ -69,11 +69,11 @@ class AndroidKeyWrap(private val alias: String = KEY_ALIAS) : KeyWrap {
         }
     }
 
-    override fun deleteKey() {
-        try {
-            keyStore().deleteEntry(alias)
-        } catch (_: Exception) {
-        }
+    override fun deleteKey(): Boolean = try {
+        keyStore().deleteEntry(alias)
+        !keyStore().containsAlias(alias)
+    } catch (_: Exception) {
+        false
     }
 
     companion object {
@@ -121,6 +121,10 @@ object NativeWallet {
     /** The directory the vault and the PGP migration store their sealed files in (same wrap key). */
     internal fun migrationFiles(context: Context): VaultFiles =
         AndroidVaultFiles(File(context.applicationContext.filesDir, DIR))
+
+    /** The file names in the vault directory (for the identity clear, which must find PGP records without an account). */
+    internal fun migrationNames(context: Context): List<String> =
+        (migrationFiles(context) as? AndroidVaultFiles)?.names().orEmpty()
 
     fun vault(context: Context): NativeWalletVault =
         instance ?: synchronized(this) {

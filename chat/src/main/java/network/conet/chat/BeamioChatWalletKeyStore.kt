@@ -75,11 +75,16 @@ object BeamioChatWalletKeyStore {
         }
     }
 
-    fun clear(context: Context) {
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
-        try {
-            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS)
-        } catch (_: Exception) {
-        }
+    /** True only when the preferences are committed and the wrapping key is gone (spec 25.52PY.8 (3)). */
+    fun clear(context: Context): Boolean {
+        val prefsOk = runCatching {
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        }.getOrDefault(false)
+        val keyOk = runCatching {
+            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            ks.deleteEntry(KEY_ALIAS)
+            !ks.containsAlias(KEY_ALIAS)
+        }.getOrDefault(false)
+        return prefsOk && keyOk
     }
 }
