@@ -181,4 +181,40 @@ class NativeMnemonicStoreTest {
         assertArrayEquals(NativeWalletVault.markerOf(rec, null), files.map[NativeWalletVault.MARK])
         assertNull(files.map[NativeWalletVault.MNEM])
     }
+
+    /**
+     * Upgrade keeps the wallet (PM R1865; spec 25.52Y.40 第 5 项 U-A1, U-A2): the files written before this change (a key record and its
+     * marker) are read by the new code byte for byte unchanged, the address is the same, and no phrase is generated.
+     */
+    @Test
+    fun upgradeOfAKeyOnlyWalletLeavesFilesAndAddressUnchanged() {
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        // The pre-change device: key record and marker only.
+        assertEquals(Import.OK, vault(wrap, files).importKey(eoa, keyOf(phrase)))
+        val before = files.map.mapValues { it.value.copyOf() }
+        // The upgraded app opens the same files (a new vault over the same store).
+        val upgraded = vault(wrap, files)
+        val s = upgraded.state()
+        assertEquals(eoa, (s as State.Ready).eoa)
+        assertTrue(upgraded.mnemonicOf() is MnemonicRead.Missing)
+        assertEquals("unavailable", (WalletCredential.answer(upgraded, NoKeyGate.Gate.G1) as WalletCredential.Answer.Refused).code)
+        assertEquals(before.keys, files.map.keys)
+        for ((name, bytes) in before) assertArrayEquals("$name changed on upgrade", bytes, files.map[name])
+    }
+
+    /** U-A2: a phrase-imported wallet keeps its phrase and address across a restart (a new vault over the same files). */
+    @Test
+    fun phraseWalletSurvivesARestartWithTheSameAddress() {
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        assertEquals(Import.OK, vault(wrap, files).importMnemonicKey(eoa, keyOf(phrase), phrase))
+        val before = files.map.mapValues { it.value.copyOf() }
+        val restarted = vault(wrap, files)
+        assertEquals(eoa, (restarted.state() as State.Ready).eoa)
+        val read = restarted.mnemonicOf() as MnemonicRead.Stored
+        assertEquals(phrase, read.phrase)
+        assertEquals(eoa, read.eoa)
+        for ((name, bytes) in before) assertArrayEquals("$name changed on restart", bytes, files.map[name])
+    }
 }
