@@ -13,7 +13,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, registered revision r3el; sha256 f71ddd75…). Each case the SDK can run on
+ * The negative tests of spec §25.22 (`spec/negative-tests-v1.json`, the v2 copy, negative-tests-v2 r3pg; sha256 5ee70340…). Each case the SDK can run on
  * Android is run here. A case that cannot run is listed in [pending] with its reason: it is not a pass. The test fails if the pending set changes.
  * The vector file is a byte copy of the interface file and is not edited.
  *
@@ -57,8 +57,8 @@ class NegativeTestsVectorsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("f71ddd75b225b79d81716e0fc16fef88f8a783c4ea56221b6ca9c87fc61e4689", sha)
-        assertEquals(33, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
+        assertEquals("5ee70340fc73d47bc0a369d109bf56622c4fca645ebbe16146761d8b2e593328", sha)
+        assertEquals(37, cases("bridgeSource").size + cases("pgpFixedDomain").size + cases("importPolicy").size +
             cases("passcodeLocked").size + cases("logScan").size)
         assertEquals(1, v.getJSONObject("passcodeLocked").getJSONArray("nativeOnly").length())
     }
@@ -172,7 +172,7 @@ class NegativeTestsVectorsTest {
     fun theLogScanPositiveControlNamesThePatternTheVectorExpects() {
         // T-131-control: the scanner must hit an injected pattern. The scan itself runs on device logs (scripts/log-scan.py, see the receipt).
         val log = v.getJSONObject("logScan")
-        assertEquals("T-131-control（扫描器必须命中一条注入的模式）", log.getString("positiveControl"))
+        assertEquals("control（扫描器必须命中一条注入的模式）", log.getString("positiveControl"))
         assertTrue(log.getJSONArray("patterns").length() > 0)
         val control = cases("logScan").single { it.getString("id") == "T-131-control" }
         assertEquals(listOf("wallet-private-key-hex"), (0 until control.getJSONArray("expect").length()).map { control.getJSONArray("expect").getString(it) })
