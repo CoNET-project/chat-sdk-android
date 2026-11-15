@@ -57,6 +57,18 @@ class ClearCheckTest {
     }
 
     @Test
+    fun aWalletWithOnlyWFieldsIsNotRefusedHere() {
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        val result = migrationEngine(
+            files, wrap, null, ChainAnswer.Absent,
+            recovery = FixedRecovery(p = false, chain = false),
+            wallet = FixedWallet(present = true),
+        ).clearCheck(pgpRecordPresent = false)
+        assertEquals("W is gated by recovery_backup_confirmed (1b), not by C.3", MigrationCode.OK, result.code)
+    }
+
+    @Test
     fun withNothingToCheckTheCheckPasses() {
         val wrap = NativeTestWrap()
         val files = NativeTestFiles()

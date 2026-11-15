@@ -534,7 +534,9 @@ internal class PgpMigrationEngine(
         } catch (_: IOException) {
             true
         }
-        val needsSource = markerPresent || stagedPresent || wallet.present() || pgpRecordPresent
+        // W is not part of this check: its gate is recovery_backup_confirmed (PY.10), in IdentityClear (1b). L, P and the chain backup are
+        // not W's recovery source, so a wallet with W only does not need one here.
+        val needsSource = markerPresent || stagedPresent || pgpRecordPresent
         if (!needsSource || hasRecoverySource()) MigrationResult(MigrationCode.OK) else MigrationResult(MigrationCode.UNREGISTER_REFUSED)
     } ?: MigrationResult(MigrationCode.BUSY)
 
