@@ -297,59 +297,77 @@ class NativeWalletVault(
 
     private class Intent(val eoa: String, val mnemonicPlanned: Boolean)
 
-    /** The intent: `eoa` in clear (it selects the AAD), and the body sealed under the intent AAD. */
+    /**
+     * The intent (r3ny, spec §25.52Y.42 第 4 项 (g)): UTF-8 JSON `{"v":1,"kind":"intent","eoa","sealed"}`. The sealed payload is
+     * `{"v":1,"eoa","mnemonicPlanned","startedAt","phase":"begun"}` (startedAt is UTC to the second) under the intent AAD.
+     */
     private fun encodeIntent(eoa: String, mnemonicPlanned: Boolean): ByteArray {
         val body = JSONObject()
+            .put("v", RECORD_VERSION)
             .put("eoa", eoa)
             .put("mnemonicPlanned", mnemonicPlanned)
-            .put("startedAt", System.currentTimeMillis())
+            .put("startedAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
             .put("phase", "begun")
             .toString()
             .toByteArray(Charsets.UTF_8)
-        return JSONObject()
-            .put("intent", RECORD_VERSION)
-            .put("eoa", eoa)
-            .put("sealed", ConetChatCryptoUtil.toHex(wrap.seal(intentAad(eoa), body)))
-            .toString()
-            .toByteArray(Charsets.UTF_8)
+        return envelope("intent", eoa, wrap.seal(intentAad(eoa), body))
     }
 
     private fun readIntent(raw: ByteArray): Intent? {
         return try {
-            val o = JSONObject(String(raw, Charsets.UTF_8))
-            if (o.optInt("intent", 0) != RECORD_VERSION) return null
-            val eoa = o.optString("eoa", "")
-            if (!isCanonicalEoa(eoa)) return null
-            val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
-            val body = wrap.open(intentAad(eoa), sealed) ?: return null
+            val env = openEnvelope(raw, "intent") ?: return null
+            val body = wrap.open(intentAad(env.eoa), env.sealed) ?: return null
             val b = JSONObject(String(body, Charsets.UTF_8))
-            if (b.optString("eoa", "") != eoa || b.optString("phase", "") != "begun") return null
-            Intent(eoa, b.getBoolean("mnemonicPlanned"))
+            if (b.optInt("v", 0) != RECORD_VERSION || b.optString("eoa", "") != env.eoa) return null
+            if (b.optString("phase", "") != "begun") return null
+            Intent(env.eoa, b.getBoolean("mnemonicPlanned"))
         } catch (e: Exception) {
             null
         }
     }
 
+    /** The commit record (r3ny): `{"v":1,"kind":"commit","eoa","sealed"}`; the payload is `{"v":1,"eoa","committedAt"}`. */
     private fun encodeCommit(eoa: String): ByteArray {
-        val body = JSONObject().put("eoa", eoa).put("committedAt", System.currentTimeMillis()).toString().toByteArray(Charsets.UTF_8)
-        return JSONObject()
-            .put("commit", RECORD_VERSION)
+        val body = JSONObject()
+            .put("v", RECORD_VERSION)
             .put("eoa", eoa)
-            .put("sealed", ConetChatCryptoUtil.toHex(wrap.seal(commitAad(eoa), body)))
+            .put("committedAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
             .toString()
             .toByteArray(Charsets.UTF_8)
+        return envelope("commit", eoa, wrap.seal(commitAad(eoa), body))
     }
 
     private fun readCommit(raw: ByteArray, eoa: String): String? {
         return try {
-            val o = JSONObject(String(raw, Charsets.UTF_8))
-            if (o.optInt("commit", 0) != RECORD_VERSION || o.optString("eoa", "") != eoa) return null
-            val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
-            val body = wrap.open(commitAad(eoa), sealed) ?: return null
-            if (JSONObject(String(body, Charsets.UTF_8)).optString("eoa", "") != eoa) null else eoa
+            val env = openEnvelope(raw, "commit") ?: return null
+            if (env.eoa != eoa) return null
+            val body = wrap.open(commitAad(eoa), env.sealed) ?: return null
+            val b = JSONObject(String(body, Charsets.UTF_8))
+            if (b.optInt("v", 0) != RECORD_VERSION || b.optString("eoa", "") != eoa) null else eoa
         } catch (e: Exception) {
             null
         }
+    }
+
+    private class Envelope(val eoa: String, val sealed: ByteArray)
+
+    private fun envelope(kind: String, eoa: String, sealed: ByteArray): ByteArray =
+        JSONObject()
+            .put("v", RECORD_VERSION)
+            .put("kind", kind)
+            .put("eoa", eoa)
+            .put("sealed", ConetChatCryptoUtil.toHex(sealed))
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+
+    /** Parses an envelope of the given kind. Returns null for any other version, kind, or a malformed EOA or sealed field. */
+    private fun openEnvelope(raw: ByteArray, kind: String): Envelope? {
+        val o = JSONObject(String(raw, Charsets.UTF_8))
+        if (o.optInt("v", 0) != RECORD_VERSION || o.optString("kind", "") != kind) return null
+        val eoa = o.optString("eoa", "")
+        if (!isCanonicalEoa(eoa)) return null
+        val sealed = ConetChatCryptoUtil.hexToBytes(o.optString("sealed", "")) ?: return null
+        return Envelope(eoa, sealed)
     }
 
     /** The phrase from a sealed phrase record for [eoa], or null. The caller must not log it. */

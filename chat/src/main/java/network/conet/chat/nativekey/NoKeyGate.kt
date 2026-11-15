@@ -23,6 +23,9 @@ object NoKeyGate {
     const val NOT_READY_G1_UNINITIALIZED = "g1_uninitialized"
     const val NOT_READY_UNREADABLE = "unreadable"
 
+    /** Vault lock reasons that answer `unavailable` on walletStatus (spec §25.52Y.42 第 4 项 (k) (1), (2)). */
+    private val UNAVAILABLE_LOCK_REASONS: Set<String> = setOf("rollback_pending", "marker_mismatch")
+
     enum class Gate { G0, G1, G2 }
 
     enum class Route { PASS, NO_KEY, NOT_SUPPORTED, WALLET_STATUS, PASSCODE_STATUS }
@@ -104,7 +107,12 @@ object NoKeyGate {
         // R1841 / spec §25.52Y.39 第 9 项: the G1 answer carries why it is not ready. A readable record that is not initialised is
         // `g1_uninitialized`; a record that cannot be read (a locked or storage-derived state) is `unreadable`. The field is only on
         // `not_ready`; with no field the page treats the state as unreadable (fail-closed).
-        Gate.G1 -> JSONObject().put("status", NOT_READY).put("notReadyReason", notReadyReasonOf(state))
+        // r3ny (spec §25.52Y.42 第 4 项 (k)): a damaged marker and a rollback that is pending are `unavailable`; an unreadable store is `not_ready`.
+        Gate.G1 -> if (state is NativeWalletVault.State.Locked && state.reason in UNAVAILABLE_LOCK_REASONS) {
+            JSONObject().put("status", "unavailable")
+        } else {
+            JSONObject().put("status", NOT_READY).put("notReadyReason", notReadyReasonOf(state))
+        }
         Gate.G2 -> when (state) {
             is NativeWalletVault.State.Ready ->
                 JSONObject().put("status", "unlocked").put("accountKey", accountKeyOf(state.eoa))
