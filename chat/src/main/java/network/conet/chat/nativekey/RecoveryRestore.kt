@@ -119,19 +119,13 @@ internal class RecoveryEngine(
         // Cooldown (§25.42.7): no read and no decrypt while it lasts.
         val wait = RecoveryBackoff.remainingSeconds(failures, clock.nowMs())
         if (wait > 0) return RecoveryOutcome.backoff(wait)
-        // Step 4: the current registry, then the pre-migration registry (only for the name lookup, 4.1).
+        // Step 4: the current registry only. The pre-migration registry is deprecated (R1451, r3jz): path B does not query it, so
+        // no legacy_record is produced and a name with no current record is not_found, whatever the old registry holds (B-06, B-12).
         val record = try {
             registry.byAccountName(name)
         } catch (_: Exception) {
             return RecoveryOutcome.fail("network_error")
-        } ?: run {
-            val legacy = try {
-                registry.legacyByAccountName(name)
-            } catch (_: Exception) {
-                return RecoveryOutcome.fail("network_error")
-            }
-            return RecoveryOutcome.fail(if (legacy != null) "legacy_record" else "not_found")
-        }
+        } ?: return RecoveryOutcome.fail("not_found")
         val pw = StandardCharsets.UTF_8.encode(java.nio.CharBuffer.wrap(password))
         val passwordBytes = ByteArray(pw.remaining())
         pw.get(passwordBytes)
