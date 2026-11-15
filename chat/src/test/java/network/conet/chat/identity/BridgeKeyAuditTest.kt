@@ -131,6 +131,13 @@ class BridgeKeyAuditTest {
 
         // Listed reads that take no value from a bridge payload. Each line is the trimmed source line; repeats are counted.
         val allowed: Map<String, List<String>> = mapOf(
+            // walletCredential (spec 25.52Y.38 第 1 项 (a), 第 3 项 (e); r3nv 第 5 项): the single exception for the native-to-page output of the
+            // recovery phrase, which is the phrase's output field and its kind name. It is not a read from a bridge payload. The bridge
+            // does not register the name until the shell trust gate and capability bit are in place.
+            "WalletCredential.kt" to listOf(
+                "const val KIND_MNEMONIC = \"mnemonic\"",
+                ".put(\"mnemonic\", read.phrase),",
+            ),
             "BeamioConetChatModule.kt" to listOf(
                 // Read, but unreachable: validate(INIT) refuses these names first (A4 finding F1). Removal belongs to P-IMP-PGP.
                 "pgpArmorInInit = id.optString(\"pgpPrivateKeyArmored\", \"\")",
@@ -224,13 +231,6 @@ class BridgeKeyAuditTest {
         // privateKeyArmor (mergeWallet). 25.52AE.1 row 507 requires such a profile to be bad_request naming the path, and not merged; the current
         // behaviour is to be verified before this line can move to category b.
         val pendingRuling: Map<String, List<String>> = mapOf(
-            // walletCredential (spec 25.52Y.38 第 1 项 (a), 第 3 项 (e)): the native-to-page output of the recovery phrase, a W-class value, and the
-            // kind name it carries. It is an output, not a read from a bridge payload. Not registered on the bridge yet (the shell trust gate
-            // and the capability bit come first). Listed so a new occurrence fails; not counted as T-50 passing; owner review pending (R1861).
-            "WalletCredential.kt" to listOf(
-                "const val KIND_MNEMONIC = \"mnemonic\"",
-                ".put(\"mnemonic\", read.phrase),",
-            ),
             "ShellRecord.kt" to listOf(
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
                 // walletAccountMismatch (25.52AG.2 (b), r3ch/r3cj): a profile not of the account that carries privateKeyArmor (null included) is a
