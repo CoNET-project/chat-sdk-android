@@ -118,17 +118,26 @@ object NativeImport {
         val key = MnemonicDerivation.deriveKey(raw) ?: return Result(Code.INVALID_MNEMONIC)
         try {
             val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.INVALID_KEY)
-            return importDerived(eoa, key, expectedEoa, vault)
+            // spec §25.52Y.42: the phrase is stored, sealed, in the same write as the key (new imports only).
+            val phrase = MnemonicDerivation.canonicalPhrase(raw) ?: return Result(Code.INVALID_MNEMONIC)
+            return importDerived(eoa, key, expectedEoa, vault, phrase = phrase)
         } finally {
             key.fill(0)
         }
     }
 
-    private fun importDerived(eoa: String, key: ByteArray, expectedEoa: String?, vault: NativeWalletVault): Result {
+    private fun importDerived(
+        eoa: String,
+        key: ByteArray,
+        expectedEoa: String?,
+        vault: NativeWalletVault,
+        phrase: String? = null,
+    ): Result {
         if (expectedEoa != null && !expectedEoa.equals(eoa, ignoreCase = true)) {
             return Result(Code.ADDRESS_MISMATCH)
         }
-        return when (vault.importKey(eoa, key)) {
+        val imported = if (phrase == null) vault.importKey(eoa, key) else vault.importMnemonicKey(eoa, key, phrase)
+        return when (imported) {
             NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
             NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                 Result(Code.ALREADY_EXISTS)

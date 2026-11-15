@@ -224,6 +224,13 @@ class BridgeKeyAuditTest {
         // privateKeyArmor (mergeWallet). 25.52AE.1 row 507 requires such a profile to be bad_request naming the path, and not merged; the current
         // behaviour is to be verified before this line can move to category b.
         val pendingRuling: Map<String, List<String>> = mapOf(
+            // walletCredential (spec 25.52Y.38 第 1 项 (a), 第 3 项 (e)): the native-to-page output of the recovery phrase, a W-class value, and the
+            // kind name it carries. It is an output, not a read from a bridge payload. Not registered on the bridge yet (the shell trust gate
+            // and the capability bit come first). Listed so a new occurrence fails; not counted as T-50 passing; owner review pending (R1861).
+            "WalletCredential.kt" to listOf(
+                "const val KIND_MNEMONIC = \"mnemonic\"",
+                ".put(\"mnemonic\", read.phrase)",
+            ),
             "ShellRecord.kt" to listOf(
                 "if (profiles.optJSONObject(i)?.has(\"privateKeyArmor\") == true && i != pageSlot) unmatched += W_PROFILE_PATH",
                 // walletAccountMismatch (25.52AG.2 (b), r3ch/r3cj): a profile not of the account that carries privateKeyArmor (null included) is a

@@ -65,6 +65,16 @@ internal object MnemonicDerivation {
         }
     }
 
+    /**
+     * The phrase in the form the vault stores (spec §25.52Y.42): the same word rule as [deriveKey] (trim, lower-case, NFKD per word,
+     * single spaces). Null when the word count is not valid. The phrase is not checked against the checksum here; [deriveKey] does that.
+     */
+    fun canonicalPhrase(raw: String): String? {
+        val text = raw.trim { it in ASCII_WS }.lowercase()
+        val words = words(text) ?: return null
+        return words.joinToString(" ")
+    }
+
     /** Splits on JS whitespace, NFKD-normalises each word, and checks the word count. */
     private fun words(text: String): List<String>? {
         val out = ArrayList<String>()
