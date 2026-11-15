@@ -1,7 +1,6 @@
 package network.conet.chat.nativekey
 
 import network.conet.chat.ConetChatCryptoUtil
-import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -116,6 +115,5 @@ class ChatRouteRegisterVectorsTest {
                 .put("publicKeyArmored", "AAAA").put("routeKeyID", "R").put(name, "x")
             assertEquals(name, "bad_request", (ChatRouteRegister.parse(req) as ChatRouteRegister.Parsed.Refused).code)
         }
-        assertEquals(JSONArray::class.java, JSONArray::class.java)
     }
 }
