@@ -326,4 +326,92 @@ class NativeMnemonicStoreTest {
         assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
         assertEquals(Import.OK, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
     }
+
+    /**
+     * Native create (PM R1872, spec 25.52Y.42 第 2 (b) 项, r3nz 第 2 项): the account is made from the phrase its entropy spells. The phrase
+     * derives the account's EOA m/44'/60'/0'/0/0 (so the stored phrase restores the key); the phrase is sealed; the result holds only the address.
+     */
+    @Test
+    fun createSealsThePhraseAndTheDerivedAddressIsTheReturnedAccount() {
+        for (seed in 0 until 6) {
+            val entropy = ByteArray(16) { (it * 7 + seed * 31 + 3).toByte() }
+            val files = NativeTestFiles()
+            val v = vault(NativeTestWrap(), files)
+            val r = NativeAccountCreate.create(v, entropy.copyOf())
+            assertEquals("seed $seed", NativeAccountCreate.Code.OK, r.code)
+            val eoaOut = r.eoa!!
+            val phrase = NativeAccountCreate.phraseOf(entropy)
+            assertEquals("seed $seed: 12 words", 12, phrase.split(" ").size)
+            // The phrase derives the address that was created and recorded.
+            val derived = MnemonicDerivation.deriveKey(phrase)!!
+            assertEquals("seed $seed: phrase derives the recorded EOA", eoaOut, WalletAddress.fromPrivateKey(derived))
+            derived.fill(0)
+            // The phrase is sealed, not stored in the clear, and reads back as the recorded account's phrase.
+            assertTrue("seed $seed: phrase record stored", files.map.containsKey(NativeWalletVault.MNEM))
+            val read = v.mnemonicOf()
+            assertTrue("seed $seed: phrase readable", read is MnemonicRead.Stored)
+            assertEquals(phrase, (read as MnemonicRead.Stored).phrase)
+            assertEquals(eoaOut, read.eoa)
+            // The result carries only the address: no phrase, no key.
+            assertFalse("seed $seed: result has no phrase", r.toString().contains(phrase))
+            for ((name, stored) in files.map) {
+                assertFalse("seed $seed: $name holds the phrase in the clear",
+                    String(stored, Charsets.ISO_8859_1).contains(phrase))
+            }
+        }
+    }
+
+    /** T-IU3 (r3nz, §25.52Y.42 第 13 项): an intent envelope that cannot be parsed deletes nothing, reports rollback_pending, and the slot is unavailable. */
+    @Test
+    fun unparseableIntentEnvelopeDeletesNothingAndIsUnavailable() {
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        vault(wrap, files).importKey(eoa, keyOf(phrase))
+        files.map.remove(NativeWalletVault.COMMIT)
+        files.map[NativeWalletVault.INTENT] = "{not an envelope".toByteArray(Charsets.UTF_8)
+        val before = files.map.mapValues { it.value.copyOf() }
+        val v = vault(wrap, files)
+        assertEquals("rollback_pending", (v.state() as State.Locked).reason)
+        assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
+        assertEquals("unavailable", (NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state())).getString("status"))
+        assertEquals(before.keys, files.map.keys)
+        for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
+    }
+
+    /** T-IU4 (r3nz): a valid intent whose commit envelope cannot be opened is treated as uncommitted: rollback_pending, unavailable, nothing deleted. */
+    @Test
+    fun intentWithAnUnopenableCommitIsUncommittedAndNothingIsDeleted() {
+        val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.COMMIT }
+        val wrap = NativeTestWrap()
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importMnemonicKey(eoa, keyOf(phrase), phrase) }
+        files.crashAfterWrite = null
+        // The commit file is there but its sealed body does not open (tampered).
+        files.map[NativeWalletVault.COMMIT] = "{\"v\":1,\"kind\":\"commit\",\"eoa\":\"$eoa\",\"sealed\":\"00\"}".toByteArray(Charsets.UTF_8)
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+        val before = files.map.mapValues { it.value.copyOf() }
+        val v = vault(wrap, files)
+        assertEquals("rollback_pending", (v.state() as State.Locked).reason)
+        assertEquals("unavailable", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
+        assertEquals(before.keys, files.map.keys)
+        for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
+    }
+
+    /**
+     * T-IU6 (r3nz): an existing key record with no marker, no intent and no commit is usable, and nothing is changed. The intent-pending
+     * case above locks the whole vault (one account per vault), so this case is checked on its own; a combined case needs a ruling.
+     */
+    @Test
+    fun existingUnmarkedKeyRecordIsUsableWithNoIntentAndNoCommit() {
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        vault(wrap, files).importKey(eoa, keyOf(phrase))
+        files.map.remove(NativeWalletVault.MARK)
+        files.map.remove(NativeWalletVault.COMMIT)
+        val before = files.map.mapValues { it.value.copyOf() }
+        val v = vault(wrap, files)
+        assertEquals(eoa, (v.state() as State.Ready).eoa)
+        assertEquals("not_ready", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
+    }
 }
