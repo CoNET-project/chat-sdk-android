@@ -137,6 +137,8 @@ class BridgeKeyAuditTest {
             "WalletCredential.kt" to listOf(
                 "const val KIND_MNEMONIC = \"mnemonic\"",
                 ".put(\"mnemonic\", read.phrase),",
+                ".put(\"mnemonic\", read.phrase).put(\"blob\", blob))",
+                "return ok(echo, JSONObject().put(\"eoa\", eoa).put(\"credentialKind\", WalletCredential.KIND_MNEMONIC).put(\"mnemonic\", phrase))",
             ),
             "BeamioConetChatModule.kt" to listOf(
                 // Read, but unreachable: validate(INIT) refuses these names first (A4 finding F1). Removal belongs to P-IMP-PGP.

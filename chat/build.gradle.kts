@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.17-r1841qa"
+version = "0.2.18-r1841qa"
 
 android {
     namespace = "network.conet.chat"
@@ -26,6 +26,13 @@ android {
             "boolean",
             "HISTORY_WRITES",
             (project.findProperty("chatDisableHistoryWrites")?.toString() != "true").toString(),
+        )
+        // QA-only capability (spec 25.52Y.44, PM R2042): the SDK declares wallet.credential.v1 only in a QA candidate built with
+        // -PchatWalletCredentialQa=true. Without the property the bit is not declared (production unchanged).
+        buildConfigField(
+            "boolean",
+            "WALLET_CREDENTIAL_QA",
+            (project.findProperty("chatWalletCredentialQa")?.toString() == "true").toString(),
         )
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

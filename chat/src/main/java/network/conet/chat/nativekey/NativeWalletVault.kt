@@ -174,6 +174,31 @@ class NativeWalletVault(
     }
 
     /**
+     * The shell's blob of a recovery phrase (spec 25.52Y.38 第 6 项 (b), (c)): the phrase sealed under the hardware wrap, with the blob AAD of
+     * the account. Android has no passcode layer, so this is the device-key form only. The blob is opaque to the page and is usable only on
+     * this device and for this account.
+     */
+    @Synchronized
+    fun sealBlob(eoa: String, phrase: ByteArray): String? = try {
+        if (!isCanonicalEoa(eoa)) null else ConetChatCryptoUtil.toHex(wrap.seal(blobAad(eoa), phrase))
+    } catch (e: Exception) {
+        null
+    }
+
+    /** The phrase of a blob for [eoa], or null when it does not open under that account's AAD. The caller must not log it. */
+    @Synchronized
+    fun openBlob(eoa: String, blobHex: String): String? {
+        if (!isCanonicalEoa(eoa)) return null
+        val sealed = ConetChatCryptoUtil.hexToBytes(blobHex) ?: return null
+        val plain = wrap.open(blobAad(eoa), sealed) ?: return null
+        return try {
+            String(plain, Charsets.UTF_8)
+        } finally {
+            plain.fill(0)
+        }
+    }
+
+    /**
      * The recovery phrase of the usable record (spec §25.52Y.42 第 5 项, §25.52Y.38 第 3 项 (e)). [MnemonicRead.Missing] when no phrase was
      * stored (a key-only account, or one from before §25.52Y.42); [MnemonicRead.Unavailable] when the phrase cannot be read or does not
      * derive the record's key and address. The caller must not log the phrase.
@@ -445,6 +470,9 @@ class NativeWalletVault(
 
         fun intentAad(eoa: String): ByteArray = "beamio-native-wallet-v1|i|$eoa".toByteArray(Charsets.UTF_8)
         fun commitAad(eoa: String): ByteArray = "beamio-native-wallet-v1|c|$eoa".toByteArray(Charsets.UTF_8)
+
+        /** AAD of the shell's blob (spec 25.52Y.38 第 6 项 (b)). */
+        fun blobAad(eoa: String): ByteArray = "beamio-native-wallet-v1|b|$eoa".toByteArray(Charsets.UTF_8)
 
         /** AAD of the sealed recovery phrase (spec §25.52Y.42 第 3 项 (b)). */
         fun mnemAad(eoa: String): ByteArray = "beamio-native-wallet-v1|m|$eoa".toByteArray(Charsets.UTF_8)

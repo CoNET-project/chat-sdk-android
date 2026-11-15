@@ -34,7 +34,13 @@ object BeamioConetChatProtocol {
         "history.local.v1",
         "history.page.v1",
         "layout.cache.v1",
-    )
+    ) + listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA })
+
+    /**
+     * The window-channel capability for walletCredential (spec 25.52Y.38 第 2 项 (e), 25.52Y.44; PM R2042). Declared only in a QA build
+     * (-PchatWalletCredentialQa=true). The shell's manifest must carry it too; the SDK checks its own declaration before it answers.
+     */
+    const val WALLET_CREDENTIAL_CAPABILITY = "wallet.credential.v1"
 
     /** `hello` answer (`ack.result`). */
     fun helloResult(): JSONObject = JSONObject()

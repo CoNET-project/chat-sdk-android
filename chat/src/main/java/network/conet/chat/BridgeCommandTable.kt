@@ -3,6 +3,7 @@ package network.conet.chat
 import network.conet.chat.localread.NativeHistoryDelete
 import network.conet.chat.nativekey.NoKeyGate
 import java.util.concurrent.atomic.AtomicInteger
+import network.conet.chat.nativekey.WalletCredentialBridge
 import network.conet.chat.nativekey.WalletEoaAddressBridge
 
 /**
@@ -58,7 +59,7 @@ internal object BridgeCommandTable {
      * Names answered on the window channel behind the origin boundary (not the chat channel): `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c);
      * PM R1907). They are not in [DISPATCH], so the chat channel answers them `unknown_command`.
      */
-    val WINDOW_CHANNEL: Set<String> = setOf(WalletEoaAddressBridge.NAME)
+    val WINDOW_CHANNEL: Set<String> = setOf(WalletEoaAddressBridge.NAME, WalletCredentialBridge.NAME)
 
     /** True when [name] is a name the module answers. A name that is not registered is answered `unknown_command` before the gate. */
     fun isRegistered(name: String): Boolean =

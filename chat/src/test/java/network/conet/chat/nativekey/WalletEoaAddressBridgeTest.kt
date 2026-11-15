@@ -96,11 +96,11 @@ class WalletEoaAddressBridgeTest {
         assertTrue(WalletEoaAddressBridge.NAME in BridgeCommandTable.WINDOW_CHANNEL)
     }
 
-    /** walletCredential is not registered on either channel (PM R1907 (2)). */
+    /** walletCredential is never on the chat channel; on the window channel it is served only behind the SDK's declaration (PM R2048). */
     @Test
-    fun walletCredentialIsNotRegisteredOnAnyChannel() {
+    fun walletCredentialIsNotOnTheChatChannel() {
         assertFalse(BridgeCommandTable.isRegistered("walletCredential"))
-        assertFalse("walletCredential" in BridgeCommandTable.WINDOW_CHANNEL)
+        assertTrue("walletCredential" in BridgeCommandTable.WINDOW_CHANNEL)
     }
 
     private fun publicBridge(vault: NativeWalletVault?, gate: NoKeyGate.Gate = NoKeyGate.Gate.G1): ShellRecordBridge {
@@ -156,7 +156,7 @@ class WalletEoaAddressBridgeTest {
     fun thePublicEntryDelegatesToTheBridgeThatServesTheName() {
         val source = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText(Charsets.UTF_8)
         assertTrue("the public handle delegates to the bridge", source.contains("bridge(context).handle(origin, body, requestBytes)"))
-        assertTrue("the bridge supplies the wallet lookup", source.contains("walletEoaAddress = {"))
+        assertTrue("the bridge supplies the wallet lookup", source.contains("walletEoaAddress = walletCurrent(context)"))
         assertTrue("the bridge answers walletEoaAddress before the unknown-action refusal",
             source.indexOf("WalletEoaAddressBridge.NAME") < source.indexOf("else -> return reply(\"unknown_command\""))
     }

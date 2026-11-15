@@ -35,8 +35,16 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("protocolVersion"), result.getInt("protocolVersion"))
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
-        assertEquals(strings(android.getJSONArray("capabilities")), strings(result.getJSONArray("capabilities")))
-        for (cap in BeamioConetChatProtocol.CAPABILITIES) assertTrue("$cap is not a spec capability", cap in all)
+        // The shared vector lists the production capabilities. A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44;
+        // PM R2048); the vector has no QA variant yet, so that one bit is added here only when this build is a QA build.
+        val expected = strings(android.getJSONArray("capabilities")) +
+            (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList())
+        assertEquals(expected, strings(result.getJSONArray("capabilities")))
+        for (cap in BeamioConetChatProtocol.CAPABILITIES) {
+            // The QA-only bit is not in the shared vector yet (see above); every other declared name must be a spec capability.
+            if (cap == BeamioConetChatProtocol.WALLET_CREDENTIAL_CAPABILITY) continue
+            assertTrue("$cap is not a spec capability", cap in all)
+        }
         assertTrue(Regex("""^\d+\.\d+\.\d+$""").matches(result.getString("sdkVersion")))
     }
 

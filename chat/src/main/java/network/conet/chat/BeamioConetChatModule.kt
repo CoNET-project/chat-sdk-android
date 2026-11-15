@@ -342,6 +342,12 @@ object BeamioConetChatModule {
 
     // ---- init / routes / nodes -----------------------------------------------------
 
+    /**
+     * The API base an `init` payload leaves in the session (PM R2043): a non-blank `apiBaseUrl` in the payload overrides; a blank or absent one
+     * keeps [current] (the session default, `https://beamio.ca/api`).
+     */
+    internal fun resolveApiBase(payload: JSONObject, current: String): String = payload.optString("apiBaseUrl", "").ifBlank { current }
+
     private fun handleInit(body: JSONObject) {
         val reqId = echoId(body)
         val ctx = appContext ?: return
@@ -431,7 +437,7 @@ object BeamioConetChatModule {
         s.conetRpcUrl = payload.optString("conetRpcUrl", "").ifBlank { s.conetRpcUrl }
         s.ipfsBaseUrl = payload.optString("ipfsBaseUrl", "").ifBlank { s.ipfsBaseUrl }
         s.ipfsWriteBaseUrl = payload.optString("ipfsWriteBaseUrl", "")
-        s.apiBaseUrl = payload.optString("apiBaseUrl", "").ifBlank { s.apiBaseUrl }
+        s.apiBaseUrl = resolveApiBase(payload, s.apiBaseUrl)
         s.chatIndexRegistryAddress = payload.optString("chatIndexRegistryAddress", "")
             .ifBlank { s.chatIndexRegistryAddress }
         if (payload.has("chainId")) s.chainId = payload.optInt("chainId", s.chainId)

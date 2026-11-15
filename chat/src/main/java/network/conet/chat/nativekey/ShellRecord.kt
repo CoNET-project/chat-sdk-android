@@ -1045,6 +1045,10 @@ internal class ShellRecordBridge(
     private val flags: DeviceFlags = NoDeviceFlags,
     /** The vault and the gate for walletEoaAddress (PM R1921). Null means the name is not served by this bridge. */
     private val walletEoaAddress: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
+    /** The vault and the gate for walletCredential (PM R2048). Null means the name is not served by this bridge. */
+    private val walletCredential: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
+    /** The SDK's own declaration of wallet.credential.v1 (spec 25.52Y.38 第 2 项 (e)): true only in a QA build. */
+    private val walletCredentialDeclared: Boolean = WalletCredentialBridge.sdkDeclares(),
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -1065,6 +1069,11 @@ internal class ShellRecordBridge(
         if (type == WalletEoaAddressBridge.NAME) {
             val current = walletEoaAddress ?: return reply("unknown_command", emptyList())
             return WalletEoaAddressBridge.answer(originAllowed = true, body = body, current = current)
+        }
+        // walletCredential (spec 25.52Y.38, 25.52Y.44; PM R2048): the SDK's declaration is checked inside (not_trusted, before any read).
+        if (type == WalletCredentialBridge.NAME) {
+            val current = walletCredential ?: return reply("unknown_command", emptyList())
+            return WalletCredentialBridge.answer(walletCredentialDeclared, body, current)
         }
 
         val allowed = when (type) {
@@ -1451,11 +1460,15 @@ object BeamioShellRecordImport {
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),
-        walletEoaAddress = {
-            val vault = NativeWallet.vault(context)
-            vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
-        },
+        walletEoaAddress = walletCurrent(context),
+        walletCredential = walletCurrent(context),
     )
+
+    /** The vault and the gate of the account on this device (shared by walletEoaAddress and walletCredential). */
+    private fun walletCurrent(context: Context): () -> Pair<NativeWalletVault, NoKeyGate.Gate> = {
+        val vault = NativeWallet.vault(context)
+        vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
+    }
 
     /** The device-level flags, in the same no-backup directory as the page copies (§25.52T). */
     internal fun flagsOf(app: Context): DeviceFlags = DeviceFlagFiles(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))

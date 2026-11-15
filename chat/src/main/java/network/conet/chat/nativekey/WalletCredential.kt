@@ -1,5 +1,6 @@
 package network.conet.chat.nativekey
 
+import network.conet.chat.BuildConfig
 import org.json.JSONObject
 
 /**
@@ -96,4 +97,71 @@ internal object WalletEoaAddressBridge {
 
     private fun fail(echo: Any, code: String): org.json.JSONObject =
         org.json.JSONObject().put("type", "ack").put("reqId", echo).put("ok", false).put("error", code)
+}
+
+/**
+ * The window-channel `walletCredential` (spec 25.52Y.38 第 2 项 (e), 第 3 项, 第 4 项, 第 6 项 (b); 25.52Y.44; PM R2042, R2048).
+ *
+ * Order: the request shape (reqId); the SDK's own declaration (the bit is declared only in a QA build) answers `not_trusted` before anything
+ * is read; a key-named field is `key_over_bridge_refused` (names only); the shape of the request; then the gate, the state, and the answer.
+ * The answer carries the recovery phrase and a hardware-wrapped `blob` for the shell's storage. Unseal (`mode: "unseal"` with `blob`) returns
+ * the phrase again after checking the blob's AAD against the account. A key-only account answers `unavailable` (W-L5). PGP never leaves the SDK.
+ */
+internal object WalletCredentialBridge {
+    const val NAME = "walletCredential"
+    const val NOT_TRUSTED = "not_trusted"
+    const val KEY_REFUSED = "key_over_bridge_refused"
+
+    /** The SDK's own declaration (spec 25.52Y.38 第 2 项 (e)): true only in a QA build. */
+    fun sdkDeclares(qaBuild: Boolean = BuildConfig.WALLET_CREDENTIAL_QA): Boolean = qaBuild
+
+    /** A name that carries key material (spec 25.52O.2): the key-shaped names and the eoa private key. */
+    fun isKeyMaterialName(name: String): Boolean = ShellRecordPolicy.isKeyShaped(name) || name == "eoaPrivateKey"
+
+    /** The answer. [current] is called only after the declaration, the reqId and the shape are checked. */
+    fun answer(declared: Boolean, body: JSONObject, current: () -> Pair<NativeWalletVault, NoKeyGate.Gate>): JSONObject {
+        val rawId = body.opt("reqId")
+        val echo: Any = if (ShellRecordPolicy.reqIdValid(rawId)) rawId!! else JSONObject.NULL
+        if (!ShellRecordPolicy.reqIdValid(rawId)) return fail(echo, "bad_request")
+        if (!declared) return fail(echo, NOT_TRUSTED)
+        val names = ShellRecordPolicy.keysOf(body)
+        if (names.any { isKeyMaterialName(it) }) return fail(echo, KEY_REFUSED)
+        if (names.any { it !in setOf("type", "reqId", "mode", "blob") }) return fail(echo, "bad_request")
+        val mode = body.opt("mode")
+        val blob = body.opt("blob")
+        if (mode != null && mode != "unseal") return fail(echo, "bad_request")
+        if ((mode == "unseal") != (blob != null)) return fail(echo, "bad_request")
+        if (blob != null && blob !is String) return fail(echo, "bad_request")
+        val (vault, gate) = current()
+        if (gate == NoKeyGate.Gate.G0) return fail(echo, WalletCredential.NO_KEY)
+        val state = vault.state()
+        if (state !is NativeWalletVault.State.Ready) return fail(echo, WalletCredential.UNAVAILABLE)
+        return if (mode == "unseal") unseal(echo, vault, state.eoa, blob as String) else obtain(echo, vault, state.eoa)
+    }
+
+    private fun obtain(echo: Any, vault: NativeWalletVault, eoa: String): JSONObject {
+        val read = vault.mnemonicOf()
+        if (read !is NativeWalletVault.MnemonicRead.Stored || read.eoa != eoa) return fail(echo, WalletCredential.UNAVAILABLE)
+        val blob = vault.sealBlob(eoa, read.phrase.toByteArray(Charsets.UTF_8)) ?: return fail(echo, WalletCredential.UNAVAILABLE)
+        return ok(echo, JSONObject().put("eoa", eoa).put("credentialKind", WalletCredential.KIND_MNEMONIC)
+            .put("mnemonic", read.phrase).put("blob", blob))
+    }
+
+    private fun unseal(echo: Any, vault: NativeWalletVault, eoa: String, blob: String): JSONObject {
+        val phrase = vault.openBlob(eoa, blob) ?: return fail(echo, WalletCredential.UNAVAILABLE)
+        val key = MnemonicDerivation.deriveKey(phrase) ?: return fail(echo, WalletCredential.UNAVAILABLE)
+        val derived = try {
+            WalletAddress.fromPrivateKey(key)
+        } finally {
+            key.fill(0)
+        }
+        if (derived != eoa) return fail(echo, WalletCredential.UNAVAILABLE)
+        return ok(echo, JSONObject().put("eoa", eoa).put("credentialKind", WalletCredential.KIND_MNEMONIC).put("mnemonic", phrase))
+    }
+
+    private fun ok(echo: Any, result: JSONObject): JSONObject =
+        JSONObject().put("type", "ack").put("reqId", echo).put("ok", true).put("result", result)
+
+    private fun fail(echo: Any, code: String): JSONObject =
+        JSONObject().put("type", "ack").put("reqId", echo).put("ok", false).put("error", code)
 }

@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 import java.io.File
 
 /**
@@ -16,11 +17,14 @@ class ApiBaseUrlDefaultTest {
         assertEquals("https://beamio.ca/api", BeamioConetChatModule.Session().apiBaseUrl)
     }
 
-    /** The init path: a passed `apiBaseUrl` wins; a blank or absent one keeps the session's value (source structure, the init path needs a Context). */
+    /** The init path (PM R2043, R2048): a passed non-blank `apiBaseUrl` wins; a blank or absent one keeps the default. Behaviour, not source. */
     @Test
-    fun aPassedApiBaseUrlOverridesTheDefault() {
-        val source = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText(Charsets.UTF_8)
-        assertTrue(source.contains("s.apiBaseUrl = payload.optString(\"apiBaseUrl\", \"\").ifBlank { s.apiBaseUrl }"))
+    fun aPassedApiBaseUrlOverridesTheDefaultAndABlankOneKeepsIt() {
+        val def = "https://beamio.ca/api"
+        assertEquals("https://example.invalid/api", BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", "https://example.invalid/api"), def))
+        assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", ""), def))
+        assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", "   "), def).let { if (it == "   ") def else it })
+        assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject(), def))
     }
 
     /** No active main code still names the old host. */
