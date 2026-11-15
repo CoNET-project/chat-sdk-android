@@ -942,6 +942,12 @@ object BeamioConetChatModule {
         // A pointer with no readable address cannot tell which account is active, so nothing is swept.
         if (pointerSet && activeAddress == null) return true
         val accounts = NativeWallet.migrationNames(ctx).mapNotNull { migrationAccountOfName(it) }.distinct()
+        // PY.8 第 7 项: only accounts with no W are swept. With no account, W cannot be attributed to one, so the sweep runs only when no W
+        // material is present at all. W present, or unreadable (the answer unknown), keeps every account (fail closed; nothing is removed).
+        if (holdsWallet(ctx, NativeWallet.migrationFiles(ctx), pageRecordFiles(ctx)) != false) {
+            Log.i(TAG, "orphan migration sweep skipped: wallet material present or unknown, kept=${accounts.size}")
+            return true
+        }
         var removed = 0
         var kept = 0
         var failed = false
