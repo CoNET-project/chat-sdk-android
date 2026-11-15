@@ -34,6 +34,7 @@ import network.conet.chat.nativekey.AndroidVaultFiles
 import network.conet.chat.nativekey.VaultFiles
 import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
+import network.conet.chat.nativekey.MigrationResult
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.ChatRouteRegister
@@ -172,7 +173,7 @@ object BeamioConetChatModule {
         val ctxIn = context.applicationContext
         if (appContext == null) {
             // 25.52PY.8 第 5 项: the first command after the process starts finishes an interrupted clear before anything else.
-            runCatching { identityClear(ctxIn).redoIfInterrupted() }
+            runCatching { identityClear(ctxIn, recoveryAccountOf(ctxIn)).redoIfInterrupted() }
                 .onSuccess { code -> code?.let { Log.i(TAG, "identity clear redo result=$it") } }
                 .onFailure { Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}") }
         }
@@ -827,23 +828,22 @@ object BeamioConetChatModule {
             // (1a), 25.52PY.8 第 1 项: the C.3 check runs when an account exists. `unregister` checks N and M (§25.52I.8). Anything but `ok`
             // removes nothing.
             val eoa = recoveryAccountOf(ctx)
-            // PY.12 (PM R2162): the native PGP record is erased only after the C.3 check passes. With no account the record cannot be
-            // checked, so any PGP record left in the vault refuses the clear.
-            if (eoa == null && NativeWallet.migrationNames(ctx).any { it.startsWith("pgp.v1.") }) {
-                ack(reqId, false, error = IdentityClearCode.UNREGISTER_REFUSED)
-                return@execute
+            val pgpPresent = NativeWallet.migrationNames(ctx).any { it.startsWith("pgp.v1.") }
+            // (1a) and (1c), PY.8 第 1 项 and PY.12: the recovery check, with no removal before clear_pending. An account is needed to check
+            // N, M and the PGP record; without one, a PGP record left in the vault cannot be checked and refuses the clear.
+            val check = when {
+                eoa != null -> runCatching { BeamioPgpMigrationImport.clearCheck(ctx, eoa, pgpPresent) }
+                    .getOrElse { MigrationResult(MigrationCode.UNREGISTER_REFUSED) }
+                pgpPresent -> MigrationResult(MigrationCode.UNREGISTER_REFUSED)
+                else -> MigrationResult(MigrationCode.OK)
             }
-            if (eoa != null) {
-                val migration = runCatching { BeamioPgpMigrationImport.unregister(ctx, eoa).code }
-                    .getOrElse { MigrationCode.UNREGISTER_REFUSED }
-                if (migration != MigrationCode.OK) {
-                    ack(reqId, false, error = migration.wire)
-                    return@execute
-                }
+            if (check.code != MigrationCode.OK) {
+                ack(reqId, false, error = check.code.wire)
+                return@execute
             }
             // (1b) and (2) to (8): the erase with the recovery flag, clear_pending and the ordered steps (PY.8, PY.10). A storage error is a code,
             // never ok (PY.3).
-            val code = runCatching { identityClear(ctx).clear() }.getOrElse { IdentityClearCode.CLEAR_INCOMPLETE }
+            val code = runCatching { identityClear(ctx, eoa).clear() }.getOrElse { IdentityClearCode.CLEAR_INCOMPLETE }
             main.post { finishClearIdentity(reqId, code) }
         }
     }
@@ -870,7 +870,7 @@ object BeamioConetChatModule {
      * The erase of the identity over the app's stores (25.52PY.8). Page records and the device flags share the no-backup
      * directory `page_record_v1` (the same directory as ShellRecord's flagsOf). The native PGP record and L are not erased.
      */
-    private fun identityClear(ctx: Context): IdentityClear {
+    private fun identityClear(ctx: Context, eoa: String?): IdentityClear {
         val page = pageRecordFiles(ctx)
         val flags = ClearFlagFiles(page)
         val vault = NativeWallet.vault(ctx)
@@ -880,13 +880,16 @@ object BeamioConetChatModule {
             flags = flags,
             holdsWallet = { holds() },
             eraseWallet = {
-                // (3): W, the page copies and the native PGP record (PY.12 decided by PM R2162; L stays). Every step is attempted.
+                // (3): W, the page copies, the migration records of this account, and the native PGP records (PY.12, PM R2162). L stays.
+                // Every step is attempted.
                 val vaultOk = vault.forget()
                 val pagesOk = page.names().filter { !isFlagFile(it) }.map { eraseChecked(page, it) }.all { it }
                 val keystoreOk = BeamioChatWalletKeyStore.clear(ctx)
                 val pgpOk = BeamioChatPgpStore.clearKeepingLegacy(ctx)
-                val nativePgpOk = NativeWallet.pgp(ctx).forget()
-                val walletDone = vaultOk && pagesOk && keystoreOk && pgpOk && nativePgpOk
+                val nativePgpOk = NativeWallet.migrationNames(ctx).filter { it.startsWith("pgp.v1.") }
+                    .map { eraseChecked(vaultFiles, it) }.all { it }
+                val migrationOk = eoa?.let { BeamioPgpMigrationImport.clearErase(ctx, it) } ?: true
+                val walletDone = vaultOk && pagesOk && keystoreOk && pgpOk && nativePgpOk && migrationOk
                 // PY.10/PY.11 (r3qs): the recovery-backup flag goes with W, once every W deletion has succeeded.
                 walletDone && flags.clearRecoveryBackupConfirmed()
             },
