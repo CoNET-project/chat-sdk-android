@@ -144,7 +144,15 @@ object NativeAccountCreate {
         val app = context.applicationContext
         worker.execute {
             val result = try {
-                create(NativeWallet.vault(app))
+                // The guard runs again at confirm (review 76706f6d): the legacy report, pointer, page copies or key may have changed since
+                // the page opened. A denial writes nothing and answers write_failed, the only code that says nothing was stored.
+                val denial = AccountCreateGuard.denial(AccountCreateGuard.inputsFor(app))
+                // The denial code is not logged here: this file is under the no-log rule (KeyPathGuardTest).
+                if (denial != null) {
+                    Result(Code.WRITE_FAILED)
+                } else {
+                    create(NativeWallet.vault(app))
+                }
             } catch (_: Exception) {
                 Result(Code.WRITE_FAILED)
             }
