@@ -18,9 +18,18 @@ class ClearIdentityTest {
         var inbox = true
         var legacy = true
         var pointer = true
+        var migrationOk = true
+        var pgpPresent = false
+        var pgpSource = true
 
         fun build(): IdentityClear = IdentityClear(
             flags = ClearFlagFiles(files),
+            migrationCheck = { migrationOk },
+            pgpRecordPresent = { pgpPresent },
+            pgpSourceAvailable = {
+                log += "pgpSource"
+                pgpSource
+            },
             holdsWallet = {
                 log += "holds"
                 holds
@@ -213,5 +222,39 @@ class ClearIdentityTest {
         files.failDelete = null
         assertTrue(eraseChecked(files, "x"))
         assertTrue("an absent file is gone", eraseChecked(files, "x"))
+    }
+
+    @Test
+    fun aMigrationRefusalChangesNothing() {
+        val files = NativeTestFiles()
+        val s = Steps(files).apply { holds = false; migrationOk = false }
+        assertEquals(IdentityClearCode.UNREGISTER_REFUSED, s.build().clear())
+        assertTrue("a migration refusal is decided before any step is recorded", s.log.isEmpty())
+        assertFalse(files.map.containsKey(ClearFlagFiles.CLEAR_PENDING))
+    }
+
+    @Test
+    fun aNativePgpRecordWithoutARecoverySourceRefusesBeforeAnyWrite() {
+        val files = NativeTestFiles()
+        val s = Steps(files).apply { holds = false; pgpPresent = true; pgpSource = false }
+        assertEquals(IdentityClearCode.UNREGISTER_REFUSED, s.build().clear())
+        assertEquals("(1c) is checked before clear_pending, and nothing is erased", listOf("holds", "pgpSource"), s.log)
+        assertFalse(files.map.containsKey(ClearFlagFiles.CLEAR_PENDING))
+    }
+
+    @Test
+    fun aNativePgpRecordWithARecoverySourceProceedsToTheErase() {
+        val files = NativeTestFiles()
+        val s = Steps(files).apply { holds = false; pgpPresent = true; pgpSource = true }
+        assertEquals(IdentityClearCode.OK, s.build().clear())
+        assertTrue(s.log.contains("wallet:pending=true"))
+    }
+
+    @Test
+    fun withoutAPgpRecordTheSourceCheckIsSkipped() {
+        val files = NativeTestFiles()
+        val s = Steps(files).apply { holds = false; pgpPresent = false; pgpSource = false }
+        assertEquals(IdentityClearCode.OK, s.build().clear())
+        assertFalse("no PGP record, so (1c) is not evaluated", s.log.contains("pgpSource"))
     }
 }

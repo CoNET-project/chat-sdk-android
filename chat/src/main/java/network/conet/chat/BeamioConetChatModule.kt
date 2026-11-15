@@ -827,22 +827,9 @@ object BeamioConetChatModule {
         pgpMigrateWorker.execute {
             // (1a), 25.52PY.8 第 1 项: the C.3 check runs when an account exists. `unregister` checks N and M (§25.52I.8). Anything but `ok`
             // removes nothing.
+            // (1a) to (1c) and (2) to (8), PY.8 and PY.12: the refusals come before any write (identityClear). A storage error is a code, never
+            // ok (PY.3).
             val eoa = recoveryAccountOf(ctx)
-            val pgpPresent = NativeWallet.migrationNames(ctx).any { it.startsWith("pgp.v1.") }
-            // (1a) and (1c), PY.8 第 1 项 and PY.12: the recovery check, with no removal before clear_pending. An account is needed to check
-            // N, M and the PGP record; without one, a PGP record left in the vault cannot be checked and refuses the clear.
-            val check = when {
-                eoa != null -> runCatching { BeamioPgpMigrationImport.clearCheck(ctx, eoa, pgpPresent) }
-                    .getOrElse { MigrationResult(MigrationCode.UNREGISTER_REFUSED) }
-                pgpPresent -> MigrationResult(MigrationCode.UNREGISTER_REFUSED)
-                else -> MigrationResult(MigrationCode.OK)
-            }
-            if (check.code != MigrationCode.OK) {
-                ack(reqId, false, error = check.code.wire)
-                return@execute
-            }
-            // (1b) and (2) to (8): the erase with the recovery flag, clear_pending and the ordered steps (PY.8, PY.10). A storage error is a code,
-            // never ok (PY.3).
             val code = runCatching { identityClear(ctx, eoa).clear() }.getOrElse { IdentityClearCode.CLEAR_INCOMPLETE }
             main.post { finishClearIdentity(reqId, code) }
         }
@@ -876,8 +863,23 @@ object BeamioConetChatModule {
         val vault = NativeWallet.vault(ctx)
         val vaultFiles = NativeWallet.migrationFiles(ctx)
         fun holds(): Boolean? = holdsWallet(ctx, vaultFiles, page)
+        // (1a): N and M, the migration's own check, with no removal (PY.8 第 1 项).
+        val migrationCheck = {
+            eoa == null || runCatching { BeamioPgpMigrationImport.clearCheck(ctx, eoa, false).code == MigrationCode.OK }
+                .getOrDefault(false)
+        }
+        // (1c): a native PGP record needs a recovery source, L, P readable, or a chain backup (PY.12). With no account there is no such
+        // source, so a record left in the vault refuses the clear.
+        val pgpRecordPresent = { NativeWallet.migrationNames(ctx).any { it.startsWith("pgp.v1.") } }
+        val pgpSourceAvailable = {
+            eoa != null && runCatching { BeamioPgpMigrationImport.clearCheck(ctx, eoa, true).code == MigrationCode.OK }
+                .getOrDefault(false)
+        }
         return IdentityClear(
             flags = flags,
+            migrationCheck = migrationCheck,
+            pgpRecordPresent = pgpRecordPresent,
+            pgpSourceAvailable = pgpSourceAvailable,
             holdsWallet = { holds() },
             eraseWallet = {
                 // (3): W, the page copies, the migration records of this account, and the native PGP records (PY.12, PM R2162). L stays.

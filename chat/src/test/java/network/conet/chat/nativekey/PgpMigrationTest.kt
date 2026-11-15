@@ -305,7 +305,7 @@ class PgpMigrationTest {
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
         assertFalse("logout must not clear the whole PGP store, which holds L", module.contains("BeamioChatPgpStore.clear(ctx)"))
         assertTrue(module.contains("BeamioChatPgpStore.clearKeepingLegacy(ctx)"))
-        assertTrue("the recovery check runs before any removal", module.contains("BeamioPgpMigrationImport.clearCheck(ctx, eoa, pgpPresent)"))
+        assertTrue("the recovery check runs before any removal", module.contains("BeamioPgpMigrationImport.clearCheck(ctx, eoa, false)") && module.contains("BeamioPgpMigrationImport.clearCheck(ctx, eoa, true)"))
         val store = File("src/main/java/network/conet/chat/BeamioChatPgpStore.kt").readText()
         val start = store.indexOf("fun clearKeepingLegacy(")
         assertTrue("clearKeepingLegacy exists", start >= 0)

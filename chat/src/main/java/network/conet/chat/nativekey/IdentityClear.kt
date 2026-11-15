@@ -90,21 +90,32 @@ internal fun eraseChecked(files: VaultFiles, name: String): Boolean {
 }
 
 /**
- * The erasure of the identity (PY.8). The steps are injected, so the order and the failure rule can be tested without the platform.
+ * The erasure of the identity (PY.8, PY.12). The steps are injected, so the order and the failure rule can be tested without the platform.
  *
- *  (1a) the C.3 recovery check (N or M present) is run by the caller before [clear]; it is not repeated here.
- *  (1b) W (the mnemonic record, K, the EOA private-key copy, the page copies) may be deleted only when `recovery_backup_confirmed`
- *       is true. Unreadable storage cannot confirm that no W exists, so it is refused (`unregister_refused`).
+ *  (1a) the C.3 check for N and M, run by [migrationCheck] (true when it passes). No removal.
+ *  (1b) W (the mnemonic record, K, the EOA private-key copy, the page copies) may be deleted only when `recovery_backup_confirmed` is
+ *       true. Unreadable storage cannot confirm that no W exists, so it is refused (`unregister_refused`).
+ *  (1c) when a native PGP record (`pgp.v1.<account>.*`) exists, a recovery source must exist: L, P readable, or a chain backup
+ *       ([pgpSourceAvailable]). Without a record, (1c) passes. Refused as `unregister_refused`.
  *  (2)  set `clear_pending` before any deletion.
- *  (3)  erase the wallet keys and the page copies. (4) erase the inbox. (5) report the legacy store absent, after (3) and (4).
- *  (6)  clear the account pointer (and the account address with it), the last deletion. The backup flag goes with it.
+ *  (3)  erase the wallet keys, the page copies, the migration records and the native PGP records; L is kept. The recovery-backup flag is
+ *       cleared once every W item succeeded (r3qv).
+ *  (4)  erase the inbox. (5) report the legacy value absent, after (3) and (4), with no W left.
+ *  (6)  clear the account pointer and its address, the last deletion.
  *  (7)  clear `clear_pending`. (8) `ok`, reported by the caller only after this.
  *
  * A failed step in (3) to (6) returns `clear_incomplete`; the pointer and `clear_pending` are kept and [redo] resumes from (3).
- * Every step is idempotent. The native PGP record (`pgp.v1.<account>.*`) and L are never erased here (PY.12 and I.9).
+ * Every step is idempotent. The native PGP record is erased in (3) only after (1c) (PY.12). L is never erased (I.9).
+ * The refusals (1a) to (1c) come before any write, so a refused clear changes no state.
  */
 internal class IdentityClear(
     private val flags: ClearFlagFiles,
+    /** (1a): true when the migration check passes (N and M), false when it refuses. */
+    private val migrationCheck: () -> Boolean = { true },
+    /** True when a native PGP record exists for the account (or anywhere in the vault). */
+    private val pgpRecordPresent: () -> Boolean = { false },
+    /** (1c): true when a recovery source exists for the PGP record (L, P readable, or a chain backup). */
+    private val pgpSourceAvailable: () -> Boolean = { true },
     /** True when W may exist, false when none does, null when the storage cannot be read. */
     private val holdsWallet: () -> Boolean?,
     private val eraseWallet: () -> Boolean,
@@ -112,17 +123,19 @@ internal class IdentityClear(
     private val reportLegacyAbsent: () -> Boolean,
     private val clearPointer: () -> Boolean,
 ) {
-    /** Steps (1b) and (2) to (8). Returns the code only. */
+    /** Steps (1a), (1b), (1c) and (2) to (8). Returns the code only. */
     fun clear(): String {
+        if (!migrationCheck()) return IdentityClearCode.UNREGISTER_REFUSED
         val holds = holdsWallet() ?: return IdentityClearCode.UNREGISTER_REFUSED
         if (holds && !flags.recoveryBackupConfirmed()) return IdentityClearCode.UNREGISTER_REFUSED
+        if (pgpRecordPresent() && !pgpSourceAvailable()) return IdentityClearCode.UNREGISTER_REFUSED
         if (!flags.setClearPending()) return IdentityClearCode.CLEAR_INCOMPLETE
         return redo()
     }
 
     /**
-     * Start-up redo (PY.8 第 5 项): when `clear_pending` is set and no wallet key is held, finish steps (3) to (7). Returns null when
-     * nothing was interrupted, else the code.
+     * Start-up redo (PY.8 第 5 项): when `clear_pending` is set and no wallet key is held, finish steps (3) to (7). The refusals were
+     * already decided before `clear_pending` was set, so they are not repeated. Returns null when nothing was interrupted.
      */
     fun redoIfInterrupted(): String? {
         if (!flags.clearPending()) return null
