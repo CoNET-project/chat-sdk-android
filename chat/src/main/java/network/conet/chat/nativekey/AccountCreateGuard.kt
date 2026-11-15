@@ -23,6 +23,9 @@ internal data class CreateGuardInputs(
  * overwrite a wallet held elsewhere. A create is allowed only when the legacy store is confirmed empty, no account pointer is set, no native
  * key exists, no page copy exists, and no migration or write is pending.
  *
+ * Not atomic: the guard is checked at open and again at confirm, but the write itself follows the check. A change between the last check and
+ * the write is not covered by this gate. This residual window is recorded in the SDK receipt (review 76706f6d, residual risk 2).
+ *
  * The refusal is answered on the bridge as the existing `not_available` (§25.46.10) and the page is not opened. The diagnostic codes below
  * are logged inside the SDK only; they never reach the page, and the page-visible state is driven by the read side (PM ruling).
  */
@@ -31,6 +34,18 @@ internal object AccountCreateGuard {
     const val NEEDS_NATIVE_RECOVERY = "needs_native_recovery"
     const val POINTER_SET = "pointer_set"
     const val REPLICA_PRESENT = "replica_present"
+
+    /** Denial code when the inputs cannot be read at all (closed fallback). */
+    const val INPUTS_UNREADABLE = "inputs_unreadable"
+
+    /**
+     * The gate read with a closed fallback: any exception while reading the inputs is a denial, never a create. Used by the open path.
+     */
+    fun denialOrClosed(read: () -> CreateGuardInputs): String? = try {
+        denial(read())
+    } catch (_: Exception) {
+        INPUTS_UNREADABLE
+    }
 
     /** Diagnostic code of the refusal, or `null` when a create may proceed. Order: key first, then migration, then the pointer and copies. */
     fun denial(i: CreateGuardInputs): String? = when {

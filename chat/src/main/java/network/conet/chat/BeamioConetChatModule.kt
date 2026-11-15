@@ -1176,7 +1176,13 @@ object BeamioConetChatModule {
         val fields = body.keys().asSequence().map { it.toString() }.toList()
         NativeOpenRules.firstCredentialField(fields)?.let { Log.w(TAG, "$type refused field: $it") }
         val reqId = PgpDecryptInbound.reqIdOf(body)
-        emitEvent(NativeOpenRules.ackPayload(reqId, decide(fields, reqId)))
+        // Any exception on the open path is a closed answer: the page is not left open by a failed decision (review 76706f6d).
+        val reply = try {
+            decide(fields, reqId)
+        } catch (_: Exception) {
+            NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
+        }
+        emitEvent(NativeOpenRules.ackPayload(reqId, reply))
     }
 
     /** `nativeImportOpen` (spec 25.25.1, r3x N-01 to N-07, N-11, N-12, N-15): only opens the native import page. */
@@ -1208,13 +1214,24 @@ object BeamioConetChatModule {
         NativeAccountCreateHost.events = { payload -> emitEvent(payload) }
         nativeOpenAck(body, "nativeAccountCreateOpen") { fields, reqId ->
             // handleCommand sets appContext before dispatch. Without it the gate cannot be read, so the page is not opened.
-            val gate = ctx?.let { NoKeyGate.gateOf(NativeWallet.vault(it).state(), NativeSessionState.isReady()) }
+            // An unreadable gate or vault is a closed answer (not_available), never a page (review 76706f6d).
+            val gate = ctx?.let {
+                try {
+                    NoKeyGate.gateOf(NativeWallet.vault(it).state(), NativeSessionState.isReady())
+                } catch (_: Exception) {
+                    null
+                }
+            }
             if (gate == null) {
                 NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
             } else {
                 // Data-safety gate (AccountCreateGuard): only a G0 create can be allowed, and only when the legacy store is confirmed empty,
                 // no pointer, no native key, no page copy, and no migration pending. A denial is logged with its code only.
-                val denial = if (gate == NoKeyGate.Gate.G0) ctx?.let { AccountCreateGuard.denial(AccountCreateGuard.inputsFor(it)) } else null
+                val denial = if (gate == NoKeyGate.Gate.G0) {
+                    ctx?.let { AccountCreateGuard.denialOrClosed { AccountCreateGuard.inputsFor(it) } }
+                } else {
+                    null
+                }
                 denial?.let { Log.w(TAG, "nativeAccountCreateOpen refused: $it") }
                 NativeOpenRules.accountCreateOpen(fields, reqId, body.opt("account"), gate, NativeOpenRules.accountHost, denial)
             }

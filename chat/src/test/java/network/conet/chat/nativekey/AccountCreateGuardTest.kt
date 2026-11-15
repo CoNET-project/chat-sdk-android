@@ -52,6 +52,26 @@ class AccountCreateGuardTest {
     }
 
     @Test
+    fun anUnreadableInputIsAClosedDenialNotACreate() {
+        // Any exception while reading the inputs denies the create (review 76706f6d, open-path item).
+        assertEquals(AccountCreateGuard.INPUTS_UNREADABLE, AccountCreateGuard.denialOrClosed { throw IllegalStateException("io") })
+        assertNull(AccountCreateGuard.denialOrClosed { inputs() })
+    }
+
+    @Test
+    fun anUnreadableInputOnTheOpenPathNeverOpensThePage() {
+        var opened = 0
+        NativeAccountCreateHost.launcher = { opened++; true }
+        val r = NativeOpenRules.accountCreateOpen(
+            listOf("type", "reqId", "account"), "N-U", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost,
+            guardDenial = AccountCreateGuard.INPUTS_UNREADABLE,
+        )
+        assertEquals("not_available", r.error)
+        assertEquals(0, opened)
+        NativeAccountCreateHost.launcher = null
+    }
+
+    @Test
     fun aRefusedCreateNeverOpensThePage() {
         // The bridge answer is the existing not_available, the host is not called, and no result is sent (PM ruling).
         var opened = 0
