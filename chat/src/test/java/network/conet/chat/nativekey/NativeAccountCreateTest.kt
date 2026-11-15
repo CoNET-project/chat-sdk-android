@@ -55,7 +55,7 @@ class NativeAccountCreateTest {
     fun g0OpensTheRegisteredPageAndAnswersOk() {
         var opened = 0
         NativeAccountCreateHost.launcher = { opened++; true }
-        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "A-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
+        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "A-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
         assertTrue(r.ok)
         assertEquals(1, opened)
     }
@@ -65,7 +65,7 @@ class NativeAccountCreateTest {
         var opened = 0
         NativeAccountCreateHost.launcher = { opened++; true }
         for (g in listOf(NoKeyGate.Gate.G1, NoKeyGate.Gate.G2)) {
-            val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "A-1", g, NativeOpenRules.accountHost)
+            val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "A-1", "alice", g, NativeOpenRules.accountHost)
             assertEquals("not_available", r.error)
         }
         assertEquals(0, opened)
@@ -75,7 +75,7 @@ class NativeAccountCreateTest {
     fun anUnregisteredPageIsNotSupportedInEveryGate() {
         NativeAccountCreateHost.launcher = null
         for (g in NoKeyGate.Gate.values()) {
-            val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "A-1", g, NativeOpenRules.accountHost)
+            val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "A-1", "alice", g, NativeOpenRules.accountHost)
             assertEquals("not_supported", r.error)
         }
     }
@@ -85,12 +85,12 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.launcher = { false }
         assertEquals(
             "not_available",
-            NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "A-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
+            NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "A-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
         )
         NativeAccountCreateHost.launcher = { throw IllegalStateException("no activity") }
         assertEquals(
             "not_available",
-            NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "A-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
+            NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "A-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
         )
     }
 
@@ -99,7 +99,7 @@ class NativeAccountCreateTest {
     @Test
     fun anExtraFieldIsBadRequest() {
         NativeAccountCreateHost.launcher = { true }
-        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "mode"), "A-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
+        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "mode", "account"), "A-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
         assertEquals("bad_request", r.error)
     }
 
@@ -108,7 +108,7 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.launcher = { true }
         for (field in listOf("password", "privateKeyHex", "mnemonic", "recoveryCode")) {
             val r = NativeOpenRules.accountCreateOpen(
-                listOf("type", "reqId", "extra", field), "A-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost,
+                listOf("type", "reqId", "extra", field, "account"), "A-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost,
             )
             assertEquals("key_over_bridge_refused", r.error)
         }
@@ -119,11 +119,43 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.launcher = { true }
         assertEquals(
             "bad_request",
-            NativeOpenRules.accountCreateOpen(listOf("type"), null, NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
+            NativeOpenRules.accountCreateOpen(listOf("type", "account"), null, "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost).error,
         )
-        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId"), "N-1", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
+        val r = NativeOpenRules.accountCreateOpen(listOf("type", "reqId", "account"), "N-1", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
         assertEquals("N-1", NativeOpenRules.ackPayload("N-1", r).get("reqId"))
         assertTrue(NativeOpenRules.ackPayload("N-1", r).getBoolean("ok"))
+    }
+
+    @Test
+    fun anAccountIsRequiredAndMustBeABeamioTagOrACanonicalEoa() {
+        // §25.52Z.2: BeamioTag 1 to 64 visible ASCII, not starting with 0x; EOA 0x plus 40 lowercase hex. Else bad_request.
+        NativeAccountCreateHost.launcher = { true }
+        val fields = listOf("type", "reqId", "account")
+        val good = listOf("alice", "0x9858effd232b4033e47d90003d41ec34ecaeda94", "a".repeat(64))
+        for (acc in good) {
+            val r = NativeOpenRules.accountCreateOpen(fields, "N-A", acc, NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
+            assertTrue(acc, r.ok)
+        }
+        val bad: List<Any?> = listOf(
+            null, "", "a".repeat(65), "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "0x1234", "0xabc", "has space", 42,
+        )
+        for (acc in bad) {
+            val r = NativeOpenRules.accountCreateOpen(fields, "N-A", acc, NoKeyGate.Gate.G0, NativeOpenRules.accountHost)
+            assertEquals(acc.toString(), "bad_request", r.error)
+        }
+    }
+
+    @Test
+    fun aSuccessfulOpenAcksPageOpenedAndTheOtherCommandsDoNot() {
+        NativeAccountCreateHost.launcher = { true }
+        val ok = NativeOpenRules.accountCreateOpen(
+            listOf("type", "reqId", "account"), "N-P", "alice", NoKeyGate.Gate.G0, NativeOpenRules.accountHost,
+        )
+        val payload = NativeOpenRules.ackPayload("N-P", ok)
+        assertEquals("opened", payload.getString("page"))
+        assertFalse(payload.has("error"))
+        val refused = NativeOpenRules.ackPayload("N-R", NativeOpenRules.Reply("not_available"))
+        assertFalse(refused.has("page"))
     }
 
     // ---- T-239: generation, write, readback, rollback ---------------------------------------

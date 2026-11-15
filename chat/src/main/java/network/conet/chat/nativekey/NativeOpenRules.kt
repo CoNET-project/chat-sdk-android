@@ -30,6 +30,13 @@ internal object NativeOpenRules {
 
     private val ALLOWED_FIELDS: Set<String> = setOf("type", "reqId")
 
+    /** `nativeAccountCreateOpen` takes `{type, reqId, account}` (spec §25.52Z.2, r3bv). */
+    private val ACCOUNT_CREATE_FIELDS: Set<String> = setOf("type", "reqId", "account")
+
+    /** BeamioTag: 1 to 64 visible ASCII characters, not starting with `0x`. EOA: `0x` plus 40 lowercase hex digits. */
+    private val BEAMIO_TAG = Regex("^[\\x21-\\x7E]{1,64}$")
+    private val CANONICAL_EOA_ACCOUNT = Regex("^0x[0-9a-f]{40}$")
+
     /** One page's host. [open] is called only when the decision needs it. */
     internal interface Host {
         /** `false` means the shell never registered this page: `not_supported`. */
@@ -39,34 +46,68 @@ internal object NativeOpenRules {
         fun open(reqId: Any): Boolean
     }
 
-    /** The decision. [error] is `null` for ok. */
-    internal class Reply(val error: String?) {
+    /**
+     * The decision. [error] is `null` for ok. [page] is set only by `nativeAccountCreateOpen` when it opened the page
+     * (`opened`), so the ack carries `page` (spec §25.52Z, accountAckPage).
+     */
+    internal class Reply(val error: String?, val page: String? = null) {
         val ok: Boolean get() = error == null
     }
 
     /** The first credential field name, for the log line only. */
     fun firstCredentialField(fields: Collection<String>): String? = fields.firstOrNull { it in CREDENTIAL_FIELDS }
 
-    fun importOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply = decide(fields, reqId, host, gate = null)
+    fun importOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply =
+        decide(fields, reqId, host, gate = null, allowed = ALLOWED_FIELDS)
 
-    fun recoveryOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply = decide(fields, reqId, host, gate = null)
+    fun recoveryOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply =
+        decide(fields, reqId, host, gate = null, allowed = ALLOWED_FIELDS)
 
-    fun accountCreateOpen(fields: Collection<String>, reqId: Any?, gate: NoKeyGate.Gate, host: Host): Reply =
-        decide(fields, reqId, host, gate)
+    /**
+     * `nativeAccountCreateOpen` (§25.46.10, §25.52Z.2). [account] is the value of the `account` field (`null` when absent).
+     * Missing or malformed `account` is `bad_request`, checked with the input, before the host is asked.
+     */
+    fun accountCreateOpen(fields: Collection<String>, reqId: Any?, account: Any?, gate: NoKeyGate.Gate, host: Host): Reply =
+        decide(fields, reqId, host, gate, allowed = ACCOUNT_CREATE_FIELDS, account = account, accountRequired = true)
 
-    private fun decide(fields: Collection<String>, reqId: Any?, host: Host, gate: NoKeyGate.Gate?): Reply {
+    /** `true` when [account] is a BeamioTag or a canonical EOA address (§25.52Z.2). */
+    fun isValidAccount(account: Any?): Boolean {
+        val s = account as? String ?: return false
+        return CANONICAL_EOA_ACCOUNT.matches(s) || (!s.startsWith("0x") && BEAMIO_TAG.matches(s))
+    }
+
+    private fun decide(
+        fields: Collection<String>,
+        reqId: Any?,
+        host: Host,
+        gate: NoKeyGate.Gate?,
+        allowed: Set<String>,
+        account: Any? = null,
+        accountRequired: Boolean = false,
+    ): Reply {
         if (fields.any { it in CREDENTIAL_FIELDS }) return Reply(KEY_REFUSED)
-        if (fields.any { it !in ALLOWED_FIELDS }) return Reply(BAD_REQUEST)
+        if (fields.any { it !in allowed }) return Reply(BAD_REQUEST)
+        if (accountRequired && !isValidAccount(account)) return Reply(BAD_REQUEST)
         val id = reqId ?: return Reply(BAD_REQUEST)
         if (!host.registered()) return Reply(NOT_SUPPORTED)
         if (gate != null && gate != NoKeyGate.Gate.G0) return Reply(NOT_AVAILABLE)
-        return if (host.open(id)) Reply(null) else Reply(NOT_AVAILABLE)
+        return if (host.open(id)) {
+            Reply(null, page = if (accountRequired) PAGE_OPENED else null)
+        } else {
+            Reply(NOT_AVAILABLE)
+        }
     }
 
-    /** The ack the module emits: `{type, reqId, ok}`, with `error` only when not ok. `reqId` is echoed as sent, or `null`. */
+    const val PAGE_OPENED = "opened"
+
+    /**
+     * The ack the module emits: `{type, reqId, ok}`, with `error` only when not ok, and `page` only when the account page
+     * opened. `reqId` is echoed as sent, or `null`.
+     */
     fun ackPayload(reqId: Any?, reply: Reply): JSONObject {
         val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", reply.ok)
         reply.error?.let { payload.put("error", it) }
+        reply.page?.let { payload.put("page", it) }
         return payload
     }
 

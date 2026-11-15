@@ -1211,7 +1211,7 @@ object BeamioConetChatModule {
             if (gate == null) {
                 NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
             } else {
-                NativeOpenRules.accountCreateOpen(fields, reqId, gate, NativeOpenRules.accountHost)
+                NativeOpenRules.accountCreateOpen(fields, reqId, body.opt("account"), gate, NativeOpenRules.accountHost)
             }
         }
     }

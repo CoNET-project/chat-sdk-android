@@ -76,6 +76,7 @@ class NativeOpenVectorsTest {
             "nativeAccountCreateOpen" -> NativeOpenRules.accountCreateOpen(
                 fields,
                 reqId,
+                req.opt("account"),
                 checkNotNull(gate) { "the account create case has no keyState" },
                 NativeOpenRules.accountHost,
             )
@@ -124,14 +125,14 @@ class NativeOpenVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         // r3x (spec §25.46.10): N-20 to N-28 added to the r3t cases N-01 to N-19.
-        assertEquals("b2dd8a4c5635ae0b06ec87f17806763276e64135ff461c84b28422643ee19975", sha256Hex(bytes))
+        assertEquals("8dc1afafd964e4cd8f20f16039732486f7fc58df58ce4cd08d2643e55163108e", sha256Hex(bytes))
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        assertEquals(28, cases.length())
-        assertEquals(28, v.getJSONObject("counts").getInt("cases"))
-        assertEquals(9, (0 until cases.length()).count { cases.getJSONObject(it).getString("group") == "E" })
+        assertEquals(42, cases.length())
+        assertEquals(42, v.getJSONObject("counts").getInt("cases"))
+        assertEquals(23, (0 until cases.length()).count { cases.getJSONObject(it).getString("group") == "E" })
     }
 
     @Test
@@ -179,10 +180,10 @@ class NativeOpenVectorsTest {
             "N-03" to none, "N-04" to none, "N-06" to none, "N-07" to none, "N-09" to none,
             "N-11" to none, "N-12" to none, "N-13" to none, "N-14" to none, "N-15" to none,
             "N-21" to none, "N-23" to none, "N-24" to none, "N-25" to none, "N-26" to none,
-            "N-27" to none, "N-28" to none,
+            "N-27" to none, "N-28" to none, "N-29" to none, "N-30" to none,
             "N-10" to (import + recovery),
         )
-        assertEquals(28, expected.size)
+        assertEquals(30, expected.size)
         for ((id, want) in expected) {
             resetHosts()
             run(caseOf(id))
