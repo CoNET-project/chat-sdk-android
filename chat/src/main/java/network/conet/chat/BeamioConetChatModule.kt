@@ -973,8 +973,11 @@ object BeamioConetChatModule {
         val accounts = NativeWallet.migrationNames(ctx).mapNotNull { migrationAccountOfName(it) }.distinct()
         // PY.8 第 7 项: only accounts with no W are swept. With no account, W cannot be attributed to one, so the sweep runs only when no W
         // material is present at all. W present, or unreadable (the answer unknown), keeps every account (fail closed; nothing is removed).
-        if (holdsWallet(ctx, NativeWallet.migrationFiles(ctx), pageRecordFiles(ctx)) != false) {
-            Log.i(TAG, "orphan migration sweep skipped: wallet material present or unknown, kept=${accounts.size}")
+        val wallet = holdsWallet(ctx, NativeWallet.migrationFiles(ctx), pageRecordFiles(ctx))
+        if (wallet != false) {
+            // R2172: a diagnostic code and the kept count only, never an account value.
+            val code = if (wallet == null) "orphan_sweep_wallet_unknown" else "orphan_sweep_wallet_present"
+            Log.i(TAG, "$code kept=${accounts.size}")
             return true
         }
         var removed = 0
