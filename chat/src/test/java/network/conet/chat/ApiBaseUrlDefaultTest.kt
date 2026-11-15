@@ -23,7 +23,7 @@ class ApiBaseUrlDefaultTest {
         val def = "https://beamio.ca/api"
         assertEquals("https://example.invalid/api", BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", "https://example.invalid/api"), def))
         assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", ""), def))
-        assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", "   "), def).let { if (it == "   ") def else it })
+        assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject().put("apiBaseUrl", "   "), def))
         assertEquals(def, BeamioConetChatModule.resolveApiBase(JSONObject(), def))
     }
 
