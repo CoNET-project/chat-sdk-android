@@ -2,8 +2,6 @@ package network.conet.chat.nativekey
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,33 +44,47 @@ class ChatRouteDecisionVectorsTest {
         assertEquals(21, checked)
     }
 
-    /** A: the ack envelope. Success: type, reqId, ok true and result, no code. Failure: type, reqId, ok false and error, no result, no code. */
+    /**
+     * A: the ack envelope, driven by A_ack. Each case's `ack` is checked against the rule: success carries `result` and no `code` or
+     * `error`; failure carries a string `error` and no `result` and no `code`. A case without `expect` is valid unless its
+     * description marks it as forbidden ("禁止"). A case with `reason` must also give that reason.
+     */
     @Test
-    fun ackEnvelopeShapeMatchesTheRule() {
-        val ok = WalletEoaAddressBridge.answer(originAllowed = true, body = JSONObject().put("type", "walletEoaAddress").put("reqId", "r-1")) {
-            val files = NativeTestFiles()
-            val v = NativeWalletVault(NativeTestWrap(), files)
-            v.importKey("0x9858effd232b4033e47d90003d41ec34ecaeda94", MnemonicDerivation.deriveKey("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")!!)
-            v to NoKeyGate.Gate.G1
+    fun ackEnvelopeCasesFollowTheRule() {
+        val cases = resource("chat-route-decision-vectors.v1.json").getJSONArray("A_ack")
+        assertEquals(5, cases.length())
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val id = c.getString("id")
+            val ack = c.getJSONObject("ack")
+            val expectValid = c.optJSONObject("expect")?.getBoolean("valid") ?: !c.getString("desc").contains("禁止")
+            val reason = ackViolation(ack)
+            assertEquals("$id valid", expectValid, reason == null)
+            c.optJSONObject("expect")?.optString("reason", "")?.takeIf { it.isNotEmpty() }?.let { assertEquals("$id reason", it, reason) }
         }
-        assertTrue(ok.getBoolean("ok"))
-        assertEquals("r-1", ok.getString("reqId"))
-        assertNotNull(ok.optJSONObject("result"))
-        assertFalse("no code on success", ok.has("code"))
-        assertFalse("no error on success", ok.has("error"))
+    }
 
-        val refused = WalletEoaAddressBridge.answer(originAllowed = false, body = JSONObject().put("type", "walletEoaAddress").put("reqId", "r-2")) {
-            throw AssertionError("not read for a refused origin")
+    /** Returns the reason an ack breaks the envelope rule, or null when it follows the rule. */
+    private fun ackViolation(ack: JSONObject): String? {
+        if (ack.optString("type") != "ack") return "not_ack"
+        return if (ack.getBoolean("ok")) {
+            when {
+                ack.has("code") -> {
+                    val extra = ack.keys().asSequence().any { it !in setOf("type", "reqId", "ok", "code") }
+                    if (extra) "top_level_data_and_code" else "code_on_success"
+                }
+                ack.has("error") -> "error_on_success"
+                !ack.has("result") -> "no_result"
+                else -> null
+            }
+        } else {
+            when {
+                ack.has("result") -> "result_on_failure"
+                ack.has("code") -> "code_instead_of_error"
+                !ack.has("error") || ack.opt("error") !is String -> "no_error"
+                else -> null
+            }
         }
-        assertFalse(refused.getBoolean("ok"))
-        assertEquals("origin_refused", refused.getString("error"))
-        assertFalse("no result on failure", refused.has("result"))
-        assertFalse("no code on failure", refused.has("code"))
-
-        val invalid = originRefused(JSONObject().put("type", "x").put("reqId", JSONObject.NULL))
-        assertNull("a reqId that is not valid is echoed as null", invalid.opt("reqId").takeUnless { it == JSONObject.NULL })
-        assertFalse(invalid.getBoolean("ok"))
-        assertFalse(invalid.has("result"))
     }
 
     /** C: the password is the canonical form; the canonical bytes hash matches the vector, and non-canonical forms do not open the backup. */
