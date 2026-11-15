@@ -9,7 +9,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3ek, sha256 6ec280f7…2d8; NK-W6b pgpDecrypt removed, 25.52CK.1).
+ * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3ek, sha256 369883a3…cac5; NK-W6b pgpDecrypt removed, 25.52CK.1).
  *
  * The routing decision is [NoKeyGate.route], which is what the module calls before any dispatch. The vectors list
  * 25 wallet names and 29 chat names that must answer `no_key` (54 entries; pgpSign is not in the table, 25.52BP.1), and 3 retired X-21 names that must answer
@@ -32,7 +32,7 @@ class NoKeyRejectVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         // r3x (spec §25.46.10, AL-7): nativeAccountCreateOpen joins the allowed list. The r3h file (b3bda74a…8a597) is withdrawn.
-        assertEquals("6ec280f7b1afe018cf608ca8f438dc83c6531620a6e650e086959559718f32d8", sha256Hex(bytes))
+        assertEquals("369883a3298604ea0285acad1f0fcb747c9bf994bee595d099d04fbe5fc6cac5", sha256Hex(bytes))
     }
 
     @Test

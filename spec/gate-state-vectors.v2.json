@@ -1,0 +1,1823 @@
+{
+  "file": "gate-state-vectors.v2.json",
+  "spec": "门控状态向量（gate-state）：外层门控与内层应答的期望。版本 v2。判定字段与期望以接口规格现行版为准；本描述不含规格编号。",
+  "revision": "版本 v2：由版本 v1 去除描述字段中的内部编号得到。判定字段、输入与期望均未改动。变更记录见接口规格的修订行。",
+  "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
+  "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")；记录 EOA 由此派生。不是真实钱包，禁止用于生产。",
+  "recordEoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+  "states": {
+    "G0": "设备无原生钥记录。no_key。",
+    "G1": "设备有原生钥记录，本会话未成功 init。not_ready。",
+    "G2": "已成功 init，EOA 与记录一致。既有行为，不在本向量内。"
+  },
+  "order": [
+    "1. 退役的三个命令名：not_supported（所有状态）。",
+    "2. 允许清单（hello、pause、resume、destroy、nativeImportOpen）与状态查询（walletStatus、passcodeStatus）：按本向量的 cases。",
+    "3. G0：其余一律 no_key，不读 payload。",
+    "4. G1：init 核对 EOA，一致则 ok 并进入 G2，不一致或缺失则 address_mismatch；其余一律 not_ready，不读 payload。",
+    "5. G2：既有行为。",
+    "6. shellNotGated（13 名）：G0、G1 各一例，期望不被门控拒绝（不返回 no_key 或 not_ready）。不规定应答码，应答由各壳动作实现。",
+    "7. 壳层拒绝 4 名（notifyVoiceMicReady、queryIncomingCallOutcome、startNativeVoiceMic、cacheCallerAvatars）：G0 回 no_key，G1 回 not_ready，不读 payload。",
+    "8. setNativeChatPgpSecrets 已删除：不在本向量内。旧调用按本规格的未知命令规则应答 unknown_command。",
+    "9. 本向量的 SH 与 NG 行为外层（壳层）门控应答。内层命令集合另见 innerUnknown。"
+  ],
+  "shellGated": [
+    "prepareSystemCall",
+    "cancelPreparedSystemCall",
+    "startSystemCall",
+    "reportIncomingSystemCall",
+    "endSystemCall",
+    "clearOfflineChatAlerts",
+    "notifyBackgroundChat",
+    "postPgpCiphertext",
+    "setNativeVoiceRelayNodes",
+    "setNativeSiNodeRoster",
+    "chatModuleSignResponse",
+    "bindPushIdentity",
+    "registerPushDeviceHttp",
+    "saveRecoveryQrToPhotos",
+    "scanRecoveryQr"
+  ],
+  "shellNotGated": [
+    "consoleLog",
+    "startPhysicalCardBind",
+    "cancelPhysicalCardBind",
+    "saveFile",
+    "scanQr",
+    "requestCameraCapture",
+    "requestPhotoPicker",
+    "webContentReady",
+    "openURL",
+    "openInAppBrowser",
+    "queryInstalledApps",
+    "applyEmbeddedPwaUpdate",
+    "publishAppState"
+  ],
+  "innerUnknown": {
+    "rule": "内层收到以下名称时，应答 {type:\"ack\", reqId, ok:false, error:\"unknown_command\"}，恰好一次，G0、G1、G2 均然，先于门控。这些名称为外层动作、已删除的来电类名称，或规格中无桥接名的名称。本清单与外层门控行互不替代。",
+    "expect": "unknown_command",
+    "states": [
+      "G0",
+      "G1",
+      "G2"
+    ],
+    "names": [
+      "bindPushIdentity",
+      "cacheCallerAvatars",
+      "cancelPreparedSystemCall",
+      "chatModuleSignResponse",
+      "clearOfflineChatAlerts",
+      "endSystemCall",
+      "identity.provision",
+      "notifyBackgroundChat",
+      "notifyVoiceMicReady",
+      "postPgpCiphertext",
+      "prepareSystemCall",
+      "queryIncomingCallOutcome",
+      "registerPushDeviceHttp",
+      "reportIncomingSystemCall",
+      "saveRecoveryQrToPhotos",
+      "scanRecoveryQr",
+      "setNativeSiNodeRoster",
+      "setNativeVoiceRelayNodes",
+      "startNativeVoiceMic",
+      "startPhysicalCardBind",
+      "startSystemCall"
+    ]
+  },
+  "cases": [
+    {
+      "id": "G1-NK-W2",
+      "state": "G1",
+      "command": "deriveLocalKeys",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W3",
+      "state": "G1",
+      "command": "protocolKeys",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W4",
+      "state": "G1",
+      "command": "fragmentKeys",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5a",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "selfAuth",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5b",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "pointerEip712",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5c",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "chatRouteRegister",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5d",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "envelope",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5e",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "group",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5f",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "voice",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W5g",
+      "state": "G1",
+      "command": "signMessage",
+      "kind": "gossip",
+      "payload": {},
+      "expect": {
+        "code": "unknown_command",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W6c",
+      "state": "G1",
+      "command": "pgpDecryptInbound",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-W7",
+      "state": "G1",
+      "command": "ephemeralSign",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-C1",
+      "state": "G1",
+      "command": "historySign",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-C2",
+      "state": "G1",
+      "command": "gossipSign",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-C5",
+      "state": "G1",
+      "command": "deriveSubkeys",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N0",
+      "state": "G1",
+      "command": "walletAddress",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N1",
+      "state": "G1",
+      "command": "walletSignTypedData",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N2",
+      "state": "G1",
+      "command": "walletSignMessage",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N3",
+      "state": "G1",
+      "command": "walletSendTransaction",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N3b",
+      "state": "G1",
+      "command": "walletTransfer",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-N4",
+      "state": "G1",
+      "command": "walletSignUserOp",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-PC1",
+      "state": "G1",
+      "command": "passcodeRun",
+      "mode": "enable",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-PC2",
+      "state": "G1",
+      "command": "passcodeRun",
+      "mode": "change",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-PC3",
+      "state": "G1",
+      "command": "passcodeRun",
+      "mode": "disable",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-PC4",
+      "state": "G1",
+      "command": "passcodeRun",
+      "mode": "unlock",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K2",
+      "state": "G1",
+      "command": "provisionIdentity",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K3",
+      "state": "G1",
+      "command": "setNodes",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K4",
+      "state": "G1",
+      "command": "setRoutes",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K5",
+      "state": "G1",
+      "command": "nodesResponse",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K6",
+      "state": "G1",
+      "command": "send",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K7",
+      "state": "G1",
+      "command": "sendGroup",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K8",
+      "state": "G1",
+      "command": "ackInbound",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K9",
+      "state": "G1",
+      "command": "mailboxCommand",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K10",
+      "state": "G1",
+      "command": "ownMailboxCommand",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K11",
+      "state": "G1",
+      "command": "issueGroupTombstone",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K12",
+      "state": "G1",
+      "command": "issueGroupRoster",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K13",
+      "state": "G1",
+      "command": "historyRead",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K14",
+      "state": "G1",
+      "command": "historyLoad",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K15",
+      "state": "G1",
+      "command": "historyAppend",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K16",
+      "state": "G1",
+      "command": "historyListConversations",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K17",
+      "state": "G1",
+      "command": "voiceListen",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K18",
+      "state": "G1",
+      "command": "voiceFrame",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K19",
+      "state": "G1",
+      "command": "voiceUnlisten",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K20",
+      "state": "G1",
+      "command": "queryPresence",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K21",
+      "state": "G1",
+      "command": "queryNativeWake",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K22",
+      "state": "G1",
+      "command": "clearIdentity",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K23",
+      "state": "G1",
+      "command": "historyOpenConversation",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K24",
+      "state": "G1",
+      "command": "historyLoadOlder",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K25",
+      "state": "G1",
+      "command": "historyReportLayout",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K26",
+      "state": "G1",
+      "command": "historyClearCache",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K27",
+      "state": "G1",
+      "command": "historyFullSync",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K28",
+      "state": "G1",
+      "command": "historyImportBatch",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-K29",
+      "state": "G1",
+      "command": "historyVerifyImport",
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-X1",
+      "state": "G1",
+      "command": "walletTransferOnce",
+      "payload": {},
+      "expect": {
+        "code": "not_supported",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-X2",
+      "state": "G1",
+      "command": "walletTransferStatus",
+      "payload": {},
+      "expect": {
+        "code": "not_supported",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-X3",
+      "state": "G1",
+      "command": "walletTransferSwitched",
+      "payload": {},
+      "expect": {
+        "code": "not_supported",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-S1",
+      "state": "G1",
+      "command": "walletStatus",
+      "payload": {},
+      "expect": {
+        "status": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-NK-S2",
+      "state": "G1",
+      "command": "passcodeStatus",
+      "payload": {},
+      "expect": {
+        "hasKey": true,
+        "set": "device-level",
+        "locked": "device-level",
+        "walletState": "present",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-1",
+      "state": "G1",
+      "command": "hello",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-2",
+      "state": "G1",
+      "command": "pause",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-3",
+      "state": "G1",
+      "command": "resume",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-4",
+      "state": "G1",
+      "command": "destroy",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-5",
+      "state": "G1",
+      "command": "nativeImportOpen",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-6",
+      "state": "G1",
+      "command": "nativeRecoveryOpen",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-AL-7",
+      "state": "G1",
+      "command": "nativeAccountCreateOpen",
+      "payload": {},
+      "expect": {
+        "code": "allowed",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-INIT-OK",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": [
+          {
+            "region": "test-region",
+            "ip_addr": "192.0.2.1",
+            "armoredPublicKey": "PLACEHOLDER-NOT-KEY-MATERIAL",
+            "nftNumber": 0,
+            "domain": "node.example.invalid"
+          }
+        ]
+      },
+      "expect": {
+        "code": "ok",
+        "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-NULL",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": null
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-STRING",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": "https://node.example.invalid"
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-STRING-ARRAY",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": [
+          "https://node.example.invalid"
+        ]
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-MISSING",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "keychainNodes": false,
+      "expect": {
+        "code": "nodes_unavailable",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-MISSING-KC",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "ok",
+        "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-EMPTY",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": []
+      },
+      "keychainNodes": false,
+      "expect": {
+        "code": "nodes_unavailable",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-EMPTY-KC",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": []
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "nodes_unavailable",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-MISMATCH",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x2222222222222222222222222222222222222222"
+        }
+      },
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-MISSING",
+      "state": "G1",
+      "command": "init",
+      "payload": {},
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MATCH",
+      "state": "G2",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MISMATCH",
+      "state": "G2",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x2222222222222222222222222222222222222222"
+        }
+      },
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MISSING",
+      "state": "G2",
+      "command": "init",
+      "payload": {},
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G0-SH-prepareSystemCall",
+      "state": "G0",
+      "command": "prepareSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-prepareSystemCall",
+      "state": "G1",
+      "command": "prepareSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-cancelPreparedSystemCall",
+      "state": "G0",
+      "command": "cancelPreparedSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-cancelPreparedSystemCall",
+      "state": "G1",
+      "command": "cancelPreparedSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-startSystemCall",
+      "state": "G0",
+      "command": "startSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-startSystemCall",
+      "state": "G1",
+      "command": "startSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-reportIncomingSystemCall",
+      "state": "G0",
+      "command": "reportIncomingSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-reportIncomingSystemCall",
+      "state": "G1",
+      "command": "reportIncomingSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-endSystemCall",
+      "state": "G0",
+      "command": "endSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-endSystemCall",
+      "state": "G1",
+      "command": "endSystemCall",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-clearOfflineChatAlerts",
+      "state": "G0",
+      "command": "clearOfflineChatAlerts",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-clearOfflineChatAlerts",
+      "state": "G1",
+      "command": "clearOfflineChatAlerts",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-notifyBackgroundChat",
+      "state": "G0",
+      "command": "notifyBackgroundChat",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-notifyBackgroundChat",
+      "state": "G1",
+      "command": "notifyBackgroundChat",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-postPgpCiphertext",
+      "state": "G0",
+      "command": "postPgpCiphertext",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-postPgpCiphertext",
+      "state": "G1",
+      "command": "postPgpCiphertext",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-setNativeVoiceRelayNodes",
+      "state": "G0",
+      "command": "setNativeVoiceRelayNodes",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-setNativeVoiceRelayNodes",
+      "state": "G1",
+      "command": "setNativeVoiceRelayNodes",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-setNativeSiNodeRoster",
+      "state": "G0",
+      "command": "setNativeSiNodeRoster",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-setNativeSiNodeRoster",
+      "state": "G1",
+      "command": "setNativeSiNodeRoster",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-chatModuleSignResponse",
+      "state": "G0",
+      "command": "chatModuleSignResponse",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-chatModuleSignResponse",
+      "state": "G1",
+      "command": "chatModuleSignResponse",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-bindPushIdentity",
+      "state": "G0",
+      "command": "bindPushIdentity",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-bindPushIdentity",
+      "state": "G1",
+      "command": "bindPushIdentity",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-registerPushDeviceHttp",
+      "state": "G0",
+      "command": "registerPushDeviceHttp",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-registerPushDeviceHttp",
+      "state": "G1",
+      "command": "registerPushDeviceHttp",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-saveRecoveryQrToPhotos",
+      "state": "G0",
+      "command": "saveRecoveryQrToPhotos",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-saveRecoveryQrToPhotos",
+      "state": "G1",
+      "command": "saveRecoveryQrToPhotos",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-SH-scanRecoveryQr",
+      "state": "G0",
+      "command": "scanRecoveryQr",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-SH-scanRecoveryQr",
+      "state": "G1",
+      "command": "scanRecoveryQr",
+      "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-CLR-PENDING",
+      "state": "G0",
+      "command": "clearIdentity",
+      "clearPending": true,
+      "payload": {},
+      "expect": {
+        "code": "ok",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-CLR-NOPENDING",
+      "state": "G0",
+      "command": "clearIdentity",
+      "clearPending": false,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-CLR-PENDING",
+      "state": "G1",
+      "command": "clearIdentity",
+      "clearPending": true,
+      "payload": {},
+      "expect": {
+        "code": "ok",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-CLR-NOPENDING",
+      "state": "G1",
+      "command": "clearIdentity",
+      "clearPending": false,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-NG-consoleLog",
+      "state": "G0",
+      "command": "consoleLog",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-consoleLog",
+      "state": "G1",
+      "command": "consoleLog",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-startPhysicalCardBind",
+      "state": "G0",
+      "command": "startPhysicalCardBind",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-startPhysicalCardBind",
+      "state": "G1",
+      "command": "startPhysicalCardBind",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-cancelPhysicalCardBind",
+      "state": "G0",
+      "command": "cancelPhysicalCardBind",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-cancelPhysicalCardBind",
+      "state": "G1",
+      "command": "cancelPhysicalCardBind",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-saveFile",
+      "state": "G0",
+      "command": "saveFile",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-saveFile",
+      "state": "G1",
+      "command": "saveFile",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-scanQr",
+      "state": "G0",
+      "command": "scanQr",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-scanQr",
+      "state": "G1",
+      "command": "scanQr",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-requestCameraCapture",
+      "state": "G0",
+      "command": "requestCameraCapture",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-requestCameraCapture",
+      "state": "G1",
+      "command": "requestCameraCapture",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-requestPhotoPicker",
+      "state": "G0",
+      "command": "requestPhotoPicker",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-requestPhotoPicker",
+      "state": "G1",
+      "command": "requestPhotoPicker",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-webContentReady",
+      "state": "G0",
+      "command": "webContentReady",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-webContentReady",
+      "state": "G1",
+      "command": "webContentReady",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-openURL",
+      "state": "G0",
+      "command": "openURL",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-openURL",
+      "state": "G1",
+      "command": "openURL",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-openInAppBrowser",
+      "state": "G0",
+      "command": "openInAppBrowser",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-openInAppBrowser",
+      "state": "G1",
+      "command": "openInAppBrowser",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-queryInstalledApps",
+      "state": "G0",
+      "command": "queryInstalledApps",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-queryInstalledApps",
+      "state": "G1",
+      "command": "queryInstalledApps",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-applyEmbeddedPwaUpdate",
+      "state": "G0",
+      "command": "applyEmbeddedPwaUpdate",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-applyEmbeddedPwaUpdate",
+      "state": "G1",
+      "command": "applyEmbeddedPwaUpdate",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-NG-publishAppState",
+      "state": "G0",
+      "command": "publishAppState",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G1-NG-publishAppState",
+      "state": "G1",
+      "command": "publishAppState",
+      "shell": true,
+      "notGated": true,
+      "payload": {},
+      "expect": {
+        "gateRefused": false,
+        "forbiddenCodes": [
+          "no_key",
+          "not_ready"
+        ]
+      }
+    },
+    {
+      "id": "G0-RJ-notifyVoiceMicReady",
+      "state": "G0",
+      "command": "notifyVoiceMicReady",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-RJ-notifyVoiceMicReady",
+      "state": "G1",
+      "command": "notifyVoiceMicReady",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-RJ-queryIncomingCallOutcome",
+      "state": "G0",
+      "command": "queryIncomingCallOutcome",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-RJ-queryIncomingCallOutcome",
+      "state": "G1",
+      "command": "queryIncomingCallOutcome",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-RJ-startNativeVoiceMic",
+      "state": "G0",
+      "command": "startNativeVoiceMic",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-RJ-startNativeVoiceMic",
+      "state": "G1",
+      "command": "startNativeVoiceMic",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-RJ-cacheCallerAvatars",
+      "state": "G0",
+      "command": "cacheCallerAvatars",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-RJ-cacheCallerAvatars",
+      "state": "G1",
+      "command": "cacheCallerAvatars",
+      "shell": true,
+      "rejectName": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    }
+  ],
+  "counts": {
+    "cases": 146,
+    "shellNotGatedCases": 26,
+    "shellRejectCases": 8,
+    "g1Commands": 67,
+    "g1Init": 10,
+    "shellGated": 15,
+    "shellNotGated": 13
+  }
+}

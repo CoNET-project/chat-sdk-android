@@ -23,7 +23,7 @@ class NativeRecoveryVectorsTest {
     @Test
     fun vectorFileIsThePinnedBatch() {
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        assertEquals("8537389d59a99e29f901edf0a044170091fa10af00fbf8cbb479b91400ac2c28", sha)
+        assertEquals("817957b9bb63fd31de9bb82f739405260ca998752b3fe7afc660601604c12b80", sha)
     }
 
     @Test

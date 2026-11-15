@@ -1,6 +1,6 @@
 {
   "file": "gossip-sign-vectors.v1.json",
-  "spec": "spec §25.23（C2 gossipSign 字节格式与信封域决定，第二十六批）",
+  "spec": "spec §25.23（C2 gossipSign 字节格式与信封域决定，第二十六批；第二版补入 §25.52FX）",
   "generator": "gen-gossip-sign-vectors.mjs",
   "scheme": "EIP-191 personal_sign over the exact UTF-8 bytes of the caller-supplied string; no domain prefix, no re-serialisation, no normalisation",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 spec §23 同一公开测试材料；不是真实钱包，禁止用于生产。",
@@ -15,6 +15,7 @@
     "reorderedAckSignsDifferently": true,
     "nfcNfdSignDifferently": true
   },
+  "contextNote": "context.pageDeferAck 为测试上下文：该页面 init 时声明的 deferAck；原生按 init 的声明判断，请求本身不带该字段（FZ.3，更正 FY.3 的措辞）。",
   "cases": [
     {
       "id": "G-1",
@@ -261,6 +262,160 @@
       "expect": "rejected",
       "code": "kind",
       "signature": null
+    },
+    {
+      "id": "R-1",
+      "name": "envelope-request-with-generation",
+      "kind": "envelope",
+      "note": "envelope 请求顶层带 inboundGeneration：签名字节与 X-1 相同",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "ok",
+      "signature": "0x5c60b4bd6dd84e7365aa50e3f100dc1597bf50c3a3847f414a9b1b8eaca595001643dbe82042572b90f4cb9755ceace2e74e3e77f6e4402a95a4e7094ba281061b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {
+        "inboundGeneration": 2
+      }
+    },
+    {
+      "id": "R-2",
+      "name": "envelope-request-missing-generation",
+      "kind": "envelope",
+      "note": "新页面（deferAck: true）的 envelope 缺 inboundGeneration：bad_request，不签名（FY.1）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {},
+      "context": {
+        "pageDeferAck": true
+      }
+    },
+    {
+      "id": "R-3",
+      "name": "group-request-generation-string",
+      "kind": "group",
+      "note": "新页面的 group，inboundGeneration 为字符串：类型不符（FY.1）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": "2"
+      },
+      "context": {
+        "pageDeferAck": true
+      }
+    },
+    {
+      "id": "R-4",
+      "name": "group-request-generation-negative",
+      "kind": "group",
+      "note": "新页面的 group，inboundGeneration 为负数（FY.1）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": -1
+      },
+      "context": {
+        "pageDeferAck": true
+      }
+    },
+    {
+      "id": "R-5",
+      "name": "group-request-generation-fraction",
+      "kind": "group",
+      "note": "新页面的 group，inboundGeneration 为小数（FY.1）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": 2.5
+      },
+      "context": {
+        "pageDeferAck": true
+      }
+    },
+    {
+      "id": "R-6",
+      "name": "gossip-request-without-generation",
+      "kind": "gossip",
+      "note": "gossip（ack）请求不带 inboundGeneration：合法（FX.1）",
+      "messageUtf8Hex": "7b22636f6d6d616e64223a22676f737369705f64656c69766572795f61636b222c2277616c6c657441646472657373223a22307833393538316337324238633744306445383546663232434633614531373861653831333935376141222c2261726d6f7248617368223a22307861626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162222c2274696d657374616d70223a313736323930303030307d",
+      "messageBytes": 198,
+      "expect": "ok",
+      "signature": "0x1e8e0e4163d54ddfd00d0e8a78bb1e0f9c2dec69ae15b32f21335bb159b20dd837d0942836502ebe4d4016d600085e6722022d98bb1c2abf5518dedf342db4351b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {}
+    },
+    {
+      "id": "R-7",
+      "name": "envelope-request-with-sendid",
+      "kind": "envelope",
+      "note": "请求顶层带 sendId：不进入签名字节（FX.2）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "ok",
+      "signature": "0x5c60b4bd6dd84e7365aa50e3f100dc1597bf50c3a3847f414a9b1b8eaca595001643dbe82042572b90f4cb9755ceace2e74e3e77f6e4402a95a4e7094ba281061b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {
+        "inboundGeneration": 2,
+        "sendId": "send-1"
+      }
+    },
+    {
+      "id": "R-8",
+      "name": "envelope-request-empty-sendid",
+      "kind": "envelope",
+      "note": "sendId 为空字符串：bad_request（FX.2）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": 2,
+        "sendId": ""
+      }
+    },
+    {
+      "id": "R-9",
+      "name": "envelope-old-page-without-generation",
+      "kind": "envelope",
+      "note": "旧页面（无 deferAck 声明）的 envelope 不带字段：照常签名，以到达时代际为准（FY.2）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "ok",
+      "signature": "0x5c60b4bd6dd84e7365aa50e3f100dc1597bf50c3a3847f414a9b1b8eaca595001643dbe82042572b90f4cb9755ceace2e74e3e77f6e4402a95a4e7094ba281061b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {},
+      "context": {
+        "pageDeferAck": false
+      }
+    },
+    {
+      "id": "R-10",
+      "name": "envelope-old-page-wrong-type-generation",
+      "kind": "envelope",
+      "note": "旧页面（无 deferAck 声明）的 envelope 带了 inboundGeneration 但类型不对：同样 bad_request（GA.2）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": "2"
+      },
+      "context": {
+        "pageDeferAck": false
+      }
     }
   ]
 }

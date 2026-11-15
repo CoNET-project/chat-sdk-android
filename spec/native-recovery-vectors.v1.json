@@ -630,7 +630,7 @@
     {
       "id": "B-03",
       "group": "B",
-      "title": "路径 B：账号名不存在（当前与迁移前注册表都无）：not_found",
+      "title": "路径 B：账号名不存在（现行注册表无记录）：not_found",
       "testIds": [
         "T-229"
       ],
@@ -733,7 +733,7 @@
     {
       "id": "B-06",
       "group": "B",
-      "title": "路径 B：只在迁移前注册表有记录：legacy_record（v1 不迁移，§25.42.6 RC-3）",
+      "title": "路径 B：现行注册表无记录；迁移前注册表已弃用、不查询，即使其中有记录也返回 not_found（r3jz，R1451）",
       "testIds": [
         "T-229"
       ],
@@ -754,7 +754,7 @@
           {
             "type": "nativeRecoveryResult",
             "reqId": "B-06",
-            "code": "legacy_record"
+            "code": "not_found"
           }
         ],
         "state": {
@@ -1474,7 +1474,7 @@
     {
       "id": "B-12",
       "group": "B",
-      "title": "路径 B：当前注册表无记录，迁移前注册表读取失败：network_error，不计数，不改变状态（§25.47.1）",
+      "title": "路径 B：现行注册表无记录；迁移前注册表已弃用、不查询（即使其读取会失败）：not_found，不计数（r3jz，R1451）",
       "testIds": [
         "T-241"
       ],
@@ -1497,7 +1497,7 @@
           {
             "type": "nativeRecoveryResult",
             "reqId": "B-12",
-            "code": "network_error"
+            "code": "not_found"
           }
         ],
         "state": {
@@ -1591,7 +1591,7 @@
     {
       "id": "B-15",
       "group": "B",
-      "title": "路径 B：只在迁移前注册表有记录：legacy_record，不清零，也不增加错误次数（§25.47.3）",
+      "title": "路径 B：现行注册表无记录；迁移前注册表已弃用、不查询：not_found，不清零，也不增加错误次数（§25.47.3，r3jz）",
       "testIds": [
         "T-241"
       ],
@@ -1616,7 +1616,7 @@
           {
             "type": "nativeRecoveryResult",
             "reqId": "B-15",
-            "code": "legacy_record"
+            "code": "not_found"
           }
         ],
         "state": {
@@ -1671,7 +1671,7 @@
     "node": "v22.23.3"
   },
   "notCovered": [
-    "迁移前注册表的读取与迁移写入（RC-3）：v1 只返回 legacy_record，不迁移。",
+    "迁移前注册表已弃用（R1451）：路径 B 不查询，legacy_record 不再产生；迁移写入（RC-3）不适用，待项目方另行裁定。",
     "恢复后 PWA 的 init 与 provisionIdentity 流程（§25.26.4c）：由 PWA 与 SDK 的既有用例覆盖。",
     "原生页的输入、剪贴板、屏幕保护与界面文案：由原生页验收覆盖。",
     "真实注册表的可用性与延迟：不访问链，由 mock 的 rpc 状态覆盖。"

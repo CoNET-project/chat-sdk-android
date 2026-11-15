@@ -92,7 +92,7 @@
       "command": "deriveLocalKeys",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -102,7 +102,7 @@
       "command": "protocolKeys",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -112,7 +112,7 @@
       "command": "fragmentKeys",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -123,7 +123,7 @@
       "kind": "selfAuth",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -134,7 +134,7 @@
       "kind": "pointerEip712",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -145,7 +145,7 @@
       "kind": "chatRouteRegister",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -156,7 +156,7 @@
       "kind": "envelope",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -167,7 +167,7 @@
       "kind": "group",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -178,7 +178,7 @@
       "kind": "voice",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -189,7 +189,7 @@
       "kind": "gossip",
       "payload": {},
       "expect": {
-        "code": "not_ready",
+        "code": "unknown_command",
         "payloadRead": false
       }
     },
@@ -676,6 +676,7 @@
         "hasKey": true,
         "set": "device-level",
         "locked": "device-level",
+        "walletState": "present",
         "payloadRead": false
       }
     },
@@ -756,11 +757,133 @@
       "payload": {
         "identity": {
           "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
-        }
+        },
+        "nodes": [
+          {
+            "region": "test-region",
+            "ip_addr": "192.0.2.1",
+            "armoredPublicKey": "PLACEHOLDER-NOT-KEY-MATERIAL",
+            "nftNumber": 0,
+            "domain": "node.example.invalid"
+          }
+        ]
       },
       "expect": {
         "code": "ok",
         "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-NULL",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": null
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-STRING",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": "https://node.example.invalid"
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-STRING-ARRAY",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": [
+          "https://node.example.invalid"
+        ]
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "bad_request",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-MISSING",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "keychainNodes": false,
+      "expect": {
+        "code": "nodes_unavailable",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-MISSING-KC",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "ok",
+        "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-EMPTY",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": []
+      },
+      "keychainNodes": false,
+      "expect": {
+        "code": "nodes_unavailable",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G1-INIT-NODES-EMPTY-KC",
+      "state": "G1",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        },
+        "nodes": []
+      },
+      "keychainNodes": true,
+      "expect": {
+        "code": "nodes_unavailable",
         "payloadRead": true
       }
     },
@@ -781,6 +904,45 @@
     {
       "id": "G1-INIT-MISSING",
       "state": "G1",
+      "command": "init",
+      "payload": {},
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MATCH",
+      "state": "G2",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa"
+        }
+      },
+      "expect": {
+        "code": "ok",
+        "session": "ready",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MISMATCH",
+      "state": "G2",
+      "command": "init",
+      "payload": {
+        "identity": {
+          "eoaAddress": "0x2222222222222222222222222222222222222222"
+        }
+      },
+      "expect": {
+        "code": "address_mismatch",
+        "payloadRead": true
+      }
+    },
+    {
+      "id": "G2-INIT-MISSING",
+      "state": "G2",
       "command": "init",
       "payload": {},
       "expect": {
@@ -1112,6 +1274,50 @@
       "state": "G1",
       "command": "scanRecoveryQr",
       "shell": true,
+      "payload": {},
+      "expect": {
+        "code": "not_ready",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-CLR-PENDING",
+      "state": "G0",
+      "command": "clearIdentity",
+      "clearPending": true,
+      "payload": {},
+      "expect": {
+        "code": "ok",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G0-CLR-NOPENDING",
+      "state": "G0",
+      "command": "clearIdentity",
+      "clearPending": false,
+      "payload": {},
+      "expect": {
+        "code": "no_key",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-CLR-PENDING",
+      "state": "G1",
+      "command": "clearIdentity",
+      "clearPending": true,
+      "payload": {},
+      "expect": {
+        "code": "ok",
+        "payloadRead": false
+      }
+    },
+    {
+      "id": "G1-CLR-NOPENDING",
+      "state": "G1",
+      "command": "clearIdentity",
+      "clearPending": false,
       "payload": {},
       "expect": {
         "code": "not_ready",
@@ -1606,11 +1812,11 @@
     }
   ],
   "counts": {
-    "cases": 132,
+    "cases": 146,
     "shellNotGatedCases": 26,
     "shellRejectCases": 8,
-    "g1Commands": 65,
-    "g1Init": 3,
+    "g1Commands": 67,
+    "g1Init": 10,
     "shellGated": 15,
     "shellNotGated": 13
   }

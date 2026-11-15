@@ -12,7 +12,7 @@ import java.security.MessageDigest
 
 /**
  * C2 `gossipSign` and the envelope/group cross-purpose rule, against `spec/gossip-sign-vectors.v1.json`
- * (sha256 429d83f0…, spec §25.23.3). Every ok case must reproduce its `signature` byte for byte. Every
+ * (sha256 de5e5d34…, spec §25.23.3). Every ok case must reproduce its `signature` byte for byte. Every
  * rejected case must return its `code`. The vector file is not edited to fit the implementation.
  */
 class GossipSignVectorsTest {
@@ -40,7 +40,7 @@ class GossipSignVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("429d83f00aba02ea49fe68e9d80e72089a8221c6445871774af131c26dc51335", sha)
+        assertEquals("de5e5d34284db8bc8903879a0ec633fd5d537aa89fdca1e8144cce329c9d4705", sha)
     }
 
     @Test

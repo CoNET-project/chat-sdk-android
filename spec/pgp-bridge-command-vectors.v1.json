@@ -3,6 +3,7 @@
   "purpose": "原生桥命令向量（spec r3q）：A 组为 §25.34 的 pgpDecryptInbound（通话 offer 的原生 PGP 解密）；C 组为 §25.35 的 P-IMP-PGP 桥接命令，结果映射到 pgp-restore-acceptance-vectors.v1.json。合成数据，只用于测试。",
   "spec": "v1.1-r3q §25.34、§25.35（测试 T-210 至 T-215）",
   "generator": "gen-pgp-bridge-command-vectors.mjs",
+  "comparison": "组比对（A 组与 C 组，本文件全部用例）：ack 与结果事件的键集合须与 expect 完全相等。expect 中的每个键须出现且值相等；expect 未列出的键不得出现（不得多出字段）。比对器须逐键比较两侧的键集合，不得只比对 expect 列出的键。缺失或多出字段均判失败。见 §25.52EC.2。",
   "sourceVectors": [
     {
       "file": "pgp-backup-compat-vectors.v1.json",
@@ -69,7 +70,8 @@
         "pgp_source_unavailable",
         "pgp_registration_missing",
         "write_failed",
-        "readback_failed"
+        "readback_failed",
+        "cancelled"
       ],
       "pgpIdentityCreateResult": [
         "ok",
@@ -1318,12 +1320,181 @@
         },
         "events": []
       }
+    },
+    {
+      "id": "C-25",
+      "group": "C",
+      "title": "只读评估在锁定态：locked，不读链，不读备份（§25.22.4、§25.52CP.2）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_locked",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-25",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-25",
+          "ok": false,
+          "error": "locked"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-26",
+      "group": "C",
+      "title": "恢复在锁定态：locked，不读 payload，不写本地，不写链（§25.22.4、§25.52CR.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_locked",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-26",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-26",
+          "ok": false,
+          "error": "locked"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-27",
+      "group": "C",
+      "title": "创建在锁定态：locked，不进入确认界面，不生成，不写链（§25.22.4、§25.52CR.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_locked",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-27",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-27"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-27",
+          "ok": false,
+          "error": "locked"
+        },
+        "events": []
+      }
+    },
+    {
+      "id": "C-28",
+      "group": "C",
+      "title": "恢复已 accepted，在途发现锁定：输出一次 pgpRestoreResult code cancelled，不带结果数据，不写本地（§25.52CZ.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-28",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "nativeFlow": [
+        "accepted 之后、本地写入之前发生锁定：本地写入 0 次"
+      ],
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-28",
+          "ok": true,
+          "result": {
+            "accepted": true
+          }
+        },
+        "events": [
+          {
+            "type": "pgpRestoreResult",
+            "reqId": "c3-c-28",
+            "code": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-29",
+      "group": "C",
+      "title": "首次建立：确认后、链写入前在途发现锁定：不写链，输出一次 pgpIdentityCreateResult code cancelled（§25.52CZ.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-29",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-29"
+      },
+      "nativeFlow": [
+        "原生确认：确认创建",
+        "accepted 之后、链写入之前发生锁定：链上写入 0 次"
+      ],
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-29",
+          "ok": true,
+          "result": {
+            "accepted": true,
+            "mode": "first"
+          }
+        },
+        "events": [
+          {
+            "type": "pgpIdentityCreateResult",
+            "reqId": "c3-c-29",
+            "code": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-30",
+      "group": "C",
+      "title": "成功后另一幂等键再次确认：身份已恢复，already_exists（ack 拒绝），不进入确认界面，不写链（§25.52EC.1）",
+      "testIds": [
+        "T-214"
+      ],
+      "gate": "G2",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-30",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-30"
+      },
+      "nativeFlow": [
+        "成功后以另一幂等键提交（链上身份已恢复）",
+        "不触发原生确认界面；链上写入 0 次"
+      ],
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-30",
+          "ok": false,
+          "error": "already_exists"
+        },
+        "events": []
+      }
     }
   ],
   "counts": {
-    "cases": 40,
+    "cases": 46,
     "A": 16,
-    "C": 24
+    "C": 30
   },
   "notCovered": [
     "decrypt_failed 的 MDC 篡改用例：需要篡改密文且保持 armor 有效，待 gopenpgp（iOS）与 bcpg（Android）互通时补充。",

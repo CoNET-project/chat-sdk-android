@@ -210,7 +210,7 @@
       },
       {
         "name": "interface/protocol/gossip-sign-vectors.v1.json",
-        "sha256": "429d83f00aba02ea49fe68e9d80e72089a8221c6445871774af131c26dc51335",
+        "sha256": "de5e5d34284db8bc8903879a0ec633fd5d537aa89fdca1e8144cce329c9d4705",
         "source": "spec 25.23.3"
       },
       {
@@ -220,17 +220,17 @@
       },
       {
         "name": "interface/protocol/mnemonic-derivation-vectors.v1.json",
-        "sha256": "ec646d4d63201059582d93620e0e7ef2bee8bbe44d5822570c2d7ce40d274230",
+        "sha256": "6bcc5c696519889195f19b744c1e355f19bd031fdb9f673750e5ccf859f8f3a4",
         "source": "spec 25.26.2"
       },
       {
         "name": "interface/protocol/no-key-reject-vectors.v1.json",
-        "sha256": "6ec280f7b1afe018cf608ca8f438dc83c6531620a6e650e086959559718f32d8",
+        "sha256": "369883a3298604ea0285acad1f0fcb747c9bf994bee595d099d04fbe5fc6cac5",
         "source": "spec 25.26.4、25.26.6（r3f）"
       },
       {
         "name": "interface/protocol/gate-state-vectors.v1.json",
-        "sha256": "3c77e9ce497a16bd5140acc7307e3b8e812ddb9b8d0bd754e038cd940e101c22",
+        "sha256": "d5b9c948672ec1cde8a04c05f04be18aeaa04c375af81918cbb48a846f7c19a7",
         "source": "spec 25.26.4c（r3g）"
       },
       {
@@ -250,23 +250,48 @@
       },
       {
         "name": "interface/protocol/chat-route-decision-vectors.v1.json",
-        "sha256": "a26a24cd0397c280295d7b86df8ea27b733682c5166f99c053f18276840d5bd9",
+        "sha256": "9f9b7e8cc8df83d29d896c84d4d75687c9fd803b2cb283155e3dcc9fd9a35c2a",
         "source": "spec 25.29.7（r3k）"
       },
       {
-        "name": "interface/protocol/negative-tests-v1.json",
-        "sha256": "f71ddd75b225b79d81716e0fc16fef88f8a783c4ea56221b6ca9c87fc61e4689",
-        "source": "spec §25.52BS（r3dp）"
+        "name": "interface/protocol/negative-tests-v2.json",
+        "sha256": "86b836ef90586a665acfe1d935e5b3e10236a4cad07e7f93ef252ef4ef82aaef",
+        "source": "spec §25.52Y.46（r3pg，R2087）"
       },
       {
         "name": "interface/protocol/table-T.v1.json",
-        "sha256": "b4085becedde13e91363bb5239be5552c80146603ebfc4fd0a167b44c349d983",
+        "sha256": "69b98a727dd85587a76b1a7e9d3a2490574abc37809d6ea27b4293affced3cf3",
         "source": "spec §25.52BY（r3dy）"
       },
       {
         "name": "interface/protocol/domain-tags-vectors.v1.json",
-        "sha256": "01a77f6514225aa4045bbefb08664ed325ab142e6faad14fb071c0511d9ff651",
+        "sha256": "0ad596aea11a0c67e42f7ec3d6c17b6af44a9e2a5e3ec7c09dc4da6bdbd30983",
         "source": "spec §25.27.9（r3ed）"
+      },
+      {
+        "name": "interface/protocol/beamioshell-channel-vectors.v1.json",
+        "sha256": "5004af6d5f63ffaa03ab8bd88c8a3c858a253011dbe370531f70335bbfd3876d",
+        "source": "spec §25.52EF（r3gf）"
+      },
+      {
+        "name": "interface/protocol/inbound-ack-vectors.v1.json",
+        "sha256": "c7382cddccaa5153c81684440b1321b0261ee30c6dc8227437161af72d340811",
+        "source": "spec §25.52EU（r3gu）"
+      },
+      {
+        "name": "interface/protocol/identity-guard-vectors.v1.json",
+        "sha256": "16856fa46d9d766826253432585fea99fef59e94bf92463c656b49f7f547ac3e",
+        "source": "spec §25.52FO（r3ho）"
+      },
+      {
+        "name": "interface/protocol/voice-ephemeral-register-vectors.v1.json",
+        "sha256": "723c2a931f7697851c49a6af5dc6e36442c251f4064dac0a927d868ae9250990",
+        "source": "spec §25.52GK.7、§25.52GL（r3ij、r3ik）"
+      },
+      {
+        "name": "interface/protocol/mailbox-probe-sign-vectors.v1.json",
+        "sha256": "85f5b914af50d8354437dfcfa22ccd7f5c059fb25d6876069fdf67cbf789864d",
+        "source": "spec §25.52GM.8（r3il）"
       },
       {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
@@ -321,7 +346,7 @@
         "specRecorded": true
       },
       {
-        "name": "interface/protocol/negative-tests-v1.json",
+        "name": "interface/protocol/negative-tests-v2.json",
         "specRecorded": true
       },
       {
@@ -330,6 +355,26 @@
       },
       {
         "name": "interface/protocol/domain-tags-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/beamioshell-channel-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/inbound-ack-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/identity-guard-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/voice-ephemeral-register-vectors.v1.json",
+        "specRecorded": true
+      },
+      {
+        "name": "interface/protocol/mailbox-probe-sign-vectors.v1.json",
         "specRecorded": true
       }
     ],

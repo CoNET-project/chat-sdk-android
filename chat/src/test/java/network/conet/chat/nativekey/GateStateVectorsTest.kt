@@ -11,7 +11,7 @@ import java.security.MessageDigest
 
 /**
  * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v1.json`
- * (r3ei, sha256 d9c6b28d…, 133 cases).
+ * (r3ei; spec v1 sha256 d5b9c948…, 146 cases; v2 34dcaf66…).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  *
  * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an

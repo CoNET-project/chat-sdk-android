@@ -10,7 +10,7 @@
   "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
   "revision": "spec r3x（允许项新增 nativeAccountCreateOpen，AL-7，§25.46.10）；spec r3f（第二十八批：三端分派名映射、清单补遗 8 条）；r3e 的哈希作废",
   "state": "no_key（原生无钱包记录）",
-  "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）",
+  "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）；不在 T 中的桥接名（NOT_BRIDGE_NAMES）先于门控返回 unknown_command（r3fz，DX.3）",
   "allowedUnderNoKey": [
     "destroy",
     "hello",
@@ -39,7 +39,7 @@
       "id": "NK-W2",
       "command": "deriveLocalKeys",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W2"
@@ -48,7 +48,7 @@
       "id": "NK-W3",
       "command": "protocolKeys",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W3"
@@ -57,7 +57,7 @@
       "id": "NK-W4",
       "command": "fragmentKeys",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W4"
@@ -67,7 +67,7 @@
       "command": "signMessage",
       "kind": "selfAuth",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=selfAuth"
@@ -77,7 +77,7 @@
       "command": "signMessage",
       "kind": "pointerEip712",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=pointerEip712"
@@ -87,7 +87,7 @@
       "command": "signMessage",
       "kind": "chatRouteRegister",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=chatRouteRegister"
@@ -97,7 +97,7 @@
       "command": "signMessage",
       "kind": "envelope",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=envelope"
@@ -107,7 +107,7 @@
       "command": "signMessage",
       "kind": "group",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=group"
@@ -117,7 +117,7 @@
       "command": "signMessage",
       "kind": "voice",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=voice"
@@ -127,7 +127,7 @@
       "command": "signMessage",
       "kind": "gossip",
       "layer": "wallet",
-      "expectCode": "no_key",
+      "expectCode": "unknown_command",
       "dataReturned": false,
       "signed": false,
       "note": "W5 kind=gossip"
@@ -593,6 +593,31 @@
       "note": "本地历史：导入校验（两端分派名）"
     }
   ],
+  "clearPendingCases": [
+    {
+      "id": "NK-CP1",
+      "command": "clearIdentity",
+      "clearPending": true,
+      "expect": {
+        "code": "ok",
+        "dataReturned": false,
+        "signed": false
+      },
+      "note": "G0 + clear_pending：重做（主路径为启动时自动重做；本例为回退，§25.26.4c 第 3a 项）"
+    },
+    {
+      "id": "NK-CP2",
+      "command": "clearIdentity",
+      "clearPending": false,
+      "expect": {
+        "code": "no_key",
+        "dataReturned": false,
+        "signed": false,
+        "events": []
+      },
+      "note": "G0 无 clear_pending：仍为 no_key（NK-K22 的对照）"
+    }
+  ],
   "retiredCommands": [
     {
       "id": "NK-X1",
@@ -628,9 +653,10 @@
       "expect": {
         "set": false,
         "locked": false,
-        "hasKey": false
+        "hasKey": false,
+        "walletState": "absent"
       },
-      "note": "状态查询，允许"
+      "note": "状态查询，允许（r3me：键集合含 walletState，GX.2、GX.5）"
     }
   ],
   "secretPayloadControls": [
@@ -663,6 +689,8 @@
     "noKeyWallet": 25,
     "noKeyChat": 29,
     "noKeyTotal": 54,
+    "expectNoKey": 44,
+    "expectUnknownCommand": 10,
     "notSupported": 3,
     "total": 57
   },
@@ -725,7 +753,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W3",
@@ -736,7 +764,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W4",
@@ -747,7 +775,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5a",
@@ -758,7 +786,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5b",
@@ -769,7 +797,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5c",
@@ -780,7 +808,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5d",
@@ -791,7 +819,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5e",
@@ -802,7 +830,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5f",
@@ -813,7 +841,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W5g",
@@ -824,7 +852,7 @@
       "ios": null,
       "android": null,
       "pwa": null,
-      "expect": "no_key"
+      "expect": "unknown_command"
     },
     {
       "id": "NK-W6c",
