@@ -363,7 +363,7 @@ class NativeMnemonicStoreTest {
 
     /** T-IU3 (r3nz, §25.52Y.42 第 13 项): an intent envelope that cannot be parsed deletes nothing, reports rollback_pending, and the slot is unavailable. */
     @Test
-    fun unparseableIntentEnvelopeDeletesNothingAndIsUnavailable() {
+    fun unparseableIntentEnvelopeDeletesNothingAndIsUnreadable() {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap()
         vault(wrap, files).importKey(eoa, keyOf(phrase))
@@ -373,7 +373,8 @@ class NativeMnemonicStoreTest {
         val v = vault(wrap, files)
         assertEquals("rollback_pending", (v.state() as State.Locked).reason)
         assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
-        assertEquals("unavailable", (NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state())).getString("status"))
+        assertEquals("not_ready", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        assertEquals("unreadable", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("notReadyReason"))
         assertEquals(before.keys, files.map.keys)
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
     }
@@ -391,7 +392,8 @@ class NativeMnemonicStoreTest {
         val before = files.map.mapValues { it.value.copyOf() }
         val v = vault(wrap, files)
         assertEquals("rollback_pending", (v.state() as State.Locked).reason)
-        assertEquals("unavailable", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        assertEquals("not_ready", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        assertEquals("unreadable", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("notReadyReason"))
         assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
         assertEquals(before.keys, files.map.keys)
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])

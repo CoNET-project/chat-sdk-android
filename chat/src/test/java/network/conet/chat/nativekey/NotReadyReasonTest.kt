@@ -34,14 +34,14 @@ class NotReadyReasonTest {
         assertEquals("unreadable", s.getString("notReadyReason"))
     }
 
-    /** r3ny (k): a damaged marker or a pending rollback is unavailable, with no reason field. */
+    /** r3oc (k): a damaged marker, a pending rollback, and an unreadable store all answer not_ready, reason unreadable (never unavailable, locked or no_key). */
     @Test
-    fun damagedMarkerAndPendingRollbackAreUnavailable() {
-        for (reason in listOf("marker_mismatch", "rollback_pending")) {
+    fun damagedMarkerAndPendingRollbackAreUnreadableNotReady() {
+        for (reason in listOf("marker_mismatch", "rollback_pending", "unreadable")) {
             val locked = NativeWalletVault.State.Locked(reason)
             val s = NoKeyGate.walletStatusFor(NoKeyGate.gateOf(locked, sessionReady = false), locked)
-            assertEquals("$reason", "unavailable", s.getString("status"))
-            assertFalse(s.has("notReadyReason"))
+            assertEquals(reason, "not_ready", s.getString("status"))
+            assertEquals(reason, "unreadable", s.getString("notReadyReason"))
         }
     }
 
