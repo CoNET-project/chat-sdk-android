@@ -882,22 +882,26 @@ object BeamioConetChatModule {
             pgpSourceAvailable = pgpSourceAvailable,
             holdsWallet = { holds() },
             eraseWallet = {
-                // (3), PY.8 第 1 项 (3) and r3qy: M, then N, then lastCode (the migration records), then the native PGP envelopes (rec and
-                // ok, after (1c)), then W last: the vault, the page copies, K, the page PGP store (kept L), and the migration's page wallet
-                // fields. Every step is attempted.
+                // (3), PY.8 第 1 项 (3) and r3qy: the migration records (M, N, lastCode) come first, and W is removed only after they all
+                // succeeded (M.2). The native PGP envelopes do not depend on that order. If the migration records fail, no W is removed and the
+                // backup flag stays, so the redo can finish the records first. Every step that runs is attempted.
                 val migrationRecordsOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationRecords(ctx, it) } ?: true
                 val nativePgpOk = NativeWallet.migrationNames(ctx).filter { it.startsWith("pgp.v1.") }
                     .map { eraseChecked(vaultFiles, it) }.all { it }
-                val vaultOk = vault.forget()
-                val pagesOk = page.names().filter { !isFlagFile(it) }.map { eraseChecked(page, it) }.all { it }
-                val keystoreOk = BeamioChatWalletKeyStore.clear(ctx)
-                val pgpOk = BeamioChatPgpStore.clearKeepingLegacy(ctx)
-                val migrationWalletOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationWallet(ctx, it) } ?: true
-                // PY.10/PY.11 and r3qv: the recovery-backup flag goes with W only. A failure of the PGP envelopes or the migration records does
-                // not decide the flag (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
-                val wOk = vaultOk && pagesOk && keystoreOk && pgpOk && migrationWalletOk
-                val flagOk = wOk && flags.clearRecoveryBackupConfirmed()
-                wOk && flagOk && nativePgpOk && migrationRecordsOk
+                if (!migrationRecordsOk) {
+                    false
+                } else {
+                    val vaultOk = vault.forget()
+                    val pagesOk = page.names().filter { !isFlagFile(it) }.map { eraseChecked(page, it) }.all { it }
+                    val keystoreOk = BeamioChatWalletKeyStore.clear(ctx)
+                    val pgpOk = BeamioChatPgpStore.clearKeepingLegacy(ctx)
+                    val migrationWalletOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationWallet(ctx, it) } ?: true
+                    // PY.10/PY.11 and r3qv: the recovery-backup flag goes with W only. A failure of the PGP envelopes does not decide the flag
+                    // (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
+                    val wOk = vaultOk && pagesOk && keystoreOk && pgpOk && migrationWalletOk
+                    val flagOk = wOk && flags.clearRecoveryBackupConfirmed()
+                    wOk && flagOk && nativePgpOk
+                }
             },
             eraseInbox = { BeamioConetChatInboxStore.clear(ctx) },
             // (5): the reported legacy value is `absent`, only after the wallet and the inbox are erased and no W remains (Y.19 第 10 项).
