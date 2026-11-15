@@ -1068,6 +1068,12 @@ internal class ShellRecordBridge(
         val acc = account()
         if (acc is ShellRecordAccount.NotReady) return reply("not_ready", emptyList())
         val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
+        // spec 25.52Y.41 第 6 项: a read that names a key-shaped field is refused as key material, with the names only and no value. Other
+        // unknown names stay bad_request.
+        if (type == "shellRecordRead") {
+            val keyNames = extra.filter { ShellRecordPolicy.isKeyShaped(it) }
+            if (keyNames.isNotEmpty()) return reply("key_over_bridge_refused", listOf("names" to JSONArray(keyNames.sortedWith(UTF8_ORDER))))
+        }
         if (extra.isNotEmpty()) return reply("bad_request", listOf("names" to JSONArray(extra.sortedWith(UTF8_ORDER))))
 
         // 25.52CF.1 (r3ef): an exception in the handler gives the fallback, once, with the reqId as sent. No detail is returned.
