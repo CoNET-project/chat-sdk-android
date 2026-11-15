@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.io.File
 
 /**
  * walletEoaAddress on the window channel (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项; PM R1907). The origin and the main frame are
@@ -100,5 +101,63 @@ class WalletEoaAddressBridgeTest {
     fun walletCredentialIsNotRegisteredOnAnyChannel() {
         assertFalse(BridgeCommandTable.isRegistered("walletCredential"))
         assertFalse("walletCredential" in BridgeCommandTable.WINDOW_CHANNEL)
+    }
+
+    private fun publicBridge(vault: NativeWalletVault?, gate: NoKeyGate.Gate = NoKeyGate.Gate.G1): ShellRecordBridge {
+        val files = NativeTestFiles()
+        return ShellRecordBridge(
+            account = { ShellRecordAccount.NotReady },
+            migrating = { false },
+            outcome = { null },
+            walletEoaAddress = vault?.let { v -> { v to gate } },
+        )
+    }
+
+    /**
+     * PM R1921: the shell's window call reaches walletEoaAddress through the bridge that BeamioShellRecordImport.handle delegates to. The
+     * request from the embedded page returns the address only. (The public entry itself needs an Android Context, which these unit tests cannot
+     * build; the delegation is checked by source below.)
+     */
+    @Test
+    fun theBridgeReturnsTheAddressOnlyForTheEmbeddedPage() {
+        val v = vaultWithKeyOnlyAccount()
+        val reply = publicBridge(v).handle(ShellOrigin.EMBEDDED_PAGE, request(), 64)
+        assertTrue(reply.getBoolean("ok"))
+        val result = reply.getJSONObject("result")
+        assertEquals(eoa, result.getString("eoa"))
+        assertEquals(1, result.length())
+    }
+
+    /** A call from any origin other than the embedded page is origin_refused, and the vault is not read. */
+    @Test
+    fun theBridgeRefusesAnOtherOriginWithoutReadingTheVault() {
+        val reply = publicBridge(null).handle(ShellOrigin.OTHER, request(), 64)
+        assertEquals("origin_refused", reply.getString("error"))
+        var read = false
+        val bridge = ShellRecordBridge(
+            account = { ShellRecordAccount.NotReady },
+            migrating = { false },
+            outcome = { null },
+            walletEoaAddress = { read = true; error("must not be read") },
+        )
+        bridge.handle(ShellOrigin.OTHER, request(), 64)
+        assertFalse("the vault was read for an other origin", read)
+    }
+
+    /** A bridge without the wallet lookup does not serve the name: it stays unknown_command, as before. */
+    @Test
+    fun aBridgeWithoutTheWalletLookupDoesNotServeTheName() {
+        val reply = publicBridge(null).handle(ShellOrigin.EMBEDDED_PAGE, request(), 64)
+        assertEquals("unknown_command", reply.getString("error"))
+    }
+
+    /** The public entry delegates to the bridge, and the bridge gets the vault and the gate from the context (source structure). */
+    @Test
+    fun thePublicEntryDelegatesToTheBridgeThatServesTheName() {
+        val source = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText(Charsets.UTF_8)
+        assertTrue("the public handle delegates to the bridge", source.contains("bridge(context).handle(origin, body, requestBytes)"))
+        assertTrue("the bridge supplies the wallet lookup", source.contains("walletEoaAddress = {"))
+        assertTrue("the bridge answers walletEoaAddress before the unknown-action refusal",
+            source.indexOf("WalletEoaAddressBridge.NAME") < source.indexOf("else -> return reply(\"unknown_command\""))
     }
 }

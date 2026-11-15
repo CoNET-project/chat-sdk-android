@@ -1043,6 +1043,8 @@ internal class ShellRecordBridge(
     private val migrating: () -> Boolean,
     private val outcome: () -> ImportOutcome?,
     private val flags: DeviceFlags = NoDeviceFlags,
+    /** The vault and the gate for walletEoaAddress (PM R1921). Null means the name is not served by this bridge. */
+    private val walletEoaAddress: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -1057,6 +1059,13 @@ internal class ShellRecordBridge(
 
         if (origin != ShellOrigin.EMBEDDED_PAGE) return reply("origin_refused", emptyList())
         if (!idOk) return reply("bad_request", emptyList())
+
+        // walletEoaAddress (spec 25.52Y.42 第 5 项 (c)): the origin is already checked above (EMBEDDED_PAGE, the main frame at the boundary).
+        // It returns the address only (PM R1907, R1912). Served here so the shell's window call reaches it (PM R1921).
+        if (type == WalletEoaAddressBridge.NAME) {
+            val current = walletEoaAddress ?: return reply("unknown_command", emptyList())
+            return WalletEoaAddressBridge.answer(originAllowed = true, body = body, current = current)
+        }
 
         val allowed = when (type) {
             "shellRecordRead" -> ShellRecordPolicy.READ_FIELDS
@@ -1442,6 +1451,10 @@ object BeamioShellRecordImport {
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),
+        walletEoaAddress = {
+            val vault = NativeWallet.vault(context)
+            vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
+        },
     )
 
     /** The device-level flags, in the same no-backup directory as the page copies (§25.52T). */

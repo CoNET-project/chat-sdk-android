@@ -74,12 +74,6 @@ internal object WalletEoaAddressBridge {
     fun originAllowed(sourceOrigin: String?, isMainFrame: Boolean): Boolean =
         isMainFrame && sourceOrigin == BeamioShellRecordImport.ALLOWED_ORIGIN
 
-    fun answerFromPage(context: android.content.Context, sourceOrigin: String?, isMainFrame: Boolean, body: org.json.JSONObject): org.json.JSONObject =
-        answer(originAllowed(sourceOrigin, isMainFrame), body) {
-            val vault = NativeWallet.vault(context)
-            vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
-        }
-
     /** The pure core. [current] is called only for an allowed origin and a well-formed request. */
     internal fun answer(
         originAllowed: Boolean,
