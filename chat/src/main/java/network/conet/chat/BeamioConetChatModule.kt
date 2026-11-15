@@ -908,8 +908,11 @@ object BeamioConetChatModule {
             eoa != null && runCatching { BeamioPgpMigrationImport.clearCheck(ctx, eoa, true).code == MigrationCode.OK }
                 .getOrDefault(false)
         }
+        // (1b), PY.10 and r3rq: the flag of the account whose W is held. With no account, W cannot be attributed, so it is not confirmed (fail closed).
+        val backupConfirmed = { eoa != null && flags.recoveryBackupConfirmed(eoa) }
         return IdentityClear(
             flags = flags,
+            backupConfirmed = backupConfirmed,
             migrationCheck = migrationCheck,
             pgpRecordPresent = pgpRecordPresent,
             pgpSourceAvailable = pgpSourceAvailable,
@@ -935,7 +938,7 @@ object BeamioConetChatModule {
                     // not decide the flag (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
                     // r3rd (R2168 (b)): the PGP page copy (pgpOk) is not part of W; it is still removed in (3), after (1a) and (1c).
                     val wOk = vaultOk && pagesOk && keystoreOk && migrationWalletOk
-                    val flagOk = wOk && flags.clearRecoveryBackupConfirmed()
+                    val flagOk = wOk && (eoa?.let { flags.clearRecoveryBackupConfirmed(it) } ?: true)
                     wOk && flagOk && pgpOk && nativePgpOk
                 }
             },
@@ -1040,11 +1043,13 @@ object BeamioConetChatModule {
         return vaultHas || pageHas || keystoreHas
     }
 
-    private fun isFlagFile(name: String): Boolean =
-        name.removeSuffix(".tmp") in setOf(
+    private fun isFlagFile(name: String): Boolean {
+        val bare = name.removeSuffix(".tmp")
+        return bare.startsWith(ClearFlagFiles.BACKUP_PREFIX) || bare in setOf(
             DeviceFlagFiles.POINTER, DeviceFlagFiles.ADDRESS, DeviceFlagFiles.LEGACY,
-            ClearFlagFiles.CLEAR_PENDING, ClearFlagFiles.BACKUP_CONFIRMED, ClearFlagFiles.LEGACY_REPORT,
+            ClearFlagFiles.CLEAR_PENDING, ClearFlagFiles.LEGACY_REPORT,
         )
+    }
 
     /** The account whose migration records logout must check: the wallet's, else the legacy copy's. Null when neither. */
     private fun recoveryAccountOf(ctx: Context): String? {

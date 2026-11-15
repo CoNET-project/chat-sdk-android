@@ -11,6 +11,10 @@ import org.junit.Test
  * failure rule and the redo are checked without the platform. The flags live in a [NativeTestFiles] that survives a "restart".
  */
 class ClearIdentityTest {
+    companion object {
+        private val EOA = "0x" + "a".repeat(40)
+    }
+
     private class Steps(val files: NativeTestFiles) {
         val log = mutableListOf<String>()
         var holds: Boolean? = true
@@ -24,6 +28,7 @@ class ClearIdentityTest {
 
         fun build(): IdentityClear = IdentityClear(
             flags = ClearFlagFiles(files),
+            backupConfirmed = { ClearFlagFiles(files).recoveryBackupConfirmed(EOA) },
             migrationCheck = { migrationOk },
             pgpRecordPresent = { pgpPresent },
             pgpSourceAvailable = {
@@ -54,7 +59,7 @@ class ClearIdentityTest {
     }
 
     private fun confirmBackup(files: NativeTestFiles) {
-        files.map[ClearFlagFiles.BACKUP_CONFIRMED] = byteArrayOf(1)
+        files.map[ClearFlagFiles.backupFlagName(EOA)] = byteArrayOf(1)
     }
 
     @Test
@@ -96,7 +101,8 @@ class ClearIdentityTest {
     @Test
     fun aDamagedBackupFlagCountsAsNotConfirmed() {
         val files = NativeTestFiles()
-        files.map[ClearFlagFiles.BACKUP_CONFIRMED] = byteArrayOf(2)
+        files.map[ClearFlagFiles.backupFlagName(EOA)] = byteArrayOf(2)
+        assertFalse("a damaged flag is not confirmed", ClearFlagFiles(files).recoveryBackupConfirmed(EOA))
         val s = Steps(files).apply { holds = true }
         assertEquals(IdentityClearCode.UNREGISTER_REFUSED, s.build().clear())
     }
@@ -198,11 +204,23 @@ class ClearIdentityTest {
     fun theRecoveryBackupFlagSetsReadsAndClears() {
         val files = NativeTestFiles()
         val flags = ClearFlagFiles(files)
-        assertFalse(flags.recoveryBackupConfirmed())
-        assertTrue(flags.setRecoveryBackupConfirmed())
-        assertTrue(flags.recoveryBackupConfirmed())
-        assertTrue(flags.clearRecoveryBackupConfirmed())
-        assertFalse(flags.recoveryBackupConfirmed())
+        assertFalse(flags.recoveryBackupConfirmed(EOA))
+        assertTrue(flags.setRecoveryBackupConfirmed(EOA))
+        assertTrue(flags.recoveryBackupConfirmed(EOA))
+        assertTrue(flags.clearRecoveryBackupConfirmed(EOA))
+        assertFalse(flags.recoveryBackupConfirmed(EOA))
+    }
+
+    @Test
+    fun theBackupFlagBelongsToOneAccountOnly() {
+        val files = NativeTestFiles()
+        val flags = ClearFlagFiles(files)
+        val other = "0x" + "b".repeat(40)
+        assertTrue(flags.setRecoveryBackupConfirmed(EOA))
+        assertTrue("the flag of the account asked for", flags.recoveryBackupConfirmed(EOA))
+        assertFalse("another account is not confirmed by it", flags.recoveryBackupConfirmed(other))
+        assertTrue(flags.clearRecoveryBackupConfirmed(other))
+        assertTrue("clearing another account keeps this one", flags.recoveryBackupConfirmed(EOA))
     }
 
     @Test

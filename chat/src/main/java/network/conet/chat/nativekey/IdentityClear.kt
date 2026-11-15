@@ -27,9 +27,11 @@ internal class ClearFlagFiles(private val files: VaultFiles) {
         true
     }
 
-    /** Unreadable or damaged counts as not confirmed (PY.10). */
-    fun recoveryBackupConfirmed(): Boolean = try {
-        files.read(BACKUP_CONFIRMED)?.contentEquals(ONE) == true
+    /**
+     * Whether the recovery-backup flag of [eoa] is set (PY.10, PY.16, r3rq: per account). Unreadable or damaged counts as not confirmed.
+     */
+    fun recoveryBackupConfirmed(eoa: String): Boolean = try {
+        files.read(backupFlagName(eoa))?.contentEquals(ONE) == true
     } catch (_: Exception) {
         false
     }
@@ -43,15 +45,18 @@ internal class ClearFlagFiles(private val files: VaultFiles) {
 
     fun setClearPending(): Boolean = writeChecked(CLEAR_PENDING)
 
-    /** Native-internal only (PY.11): set by the native save-recovery-phrase confirmation or after a successful recovery. */
-    fun setRecoveryBackupConfirmed(): Boolean = writeChecked(BACKUP_CONFIRMED)
+    /** Native-internal only (PY.11, PY.16): set for [eoa] by the save-recovery-phrase confirmation, or after a successful recovery. */
+    fun setRecoveryBackupConfirmed(eoa: String): Boolean = writeChecked(backupFlagName(eoa))
 
     /** Step (5): the last reported legacy-store value, `absent` (PY.8 (5), Y.19 第 10 项). It is not the unreadable marker. */
-    fun writeLegacyReportAbsent(): Boolean = writeChecked(LEGACY_REPORT, "absent".toByteArray(Charsets.UTF_8))
+    fun writeLegacyReportAbsent(): Boolean = writeLegacyReport("absent")
+
+    /** The last reported legacy-store value (PY.15, r3rn): `found`, `absent` or `unreadable`, as non-secret text. */
+    fun writeLegacyReport(value: String): Boolean = writeChecked(LEGACY_REPORT, value.toByteArray(Charsets.UTF_8))
 
     fun clearClearPending(): Boolean = eraseChecked(files, CLEAR_PENDING)
 
-    fun clearRecoveryBackupConfirmed(): Boolean = eraseChecked(files, BACKUP_CONFIRMED)
+    fun clearRecoveryBackupConfirmed(eoa: String): Boolean = eraseChecked(files, backupFlagName(eoa))
 
     private fun writeChecked(name: String, value: ByteArray = ONE): Boolean = try {
         files.write(name, value)
@@ -62,9 +67,13 @@ internal class ClearFlagFiles(private val files: VaultFiles) {
 
     companion object {
         const val CLEAR_PENDING = "clear_pending.v1"
-        const val BACKUP_CONFIRMED = "recovery_backup_confirmed.v1"
         const val LEGACY_REPORT = "legacy_report.v1"
+        /** The prefix of the per-account backup flags (r3rq): `recovery_backup_confirmed.<40 hex>.v1`. */
+        const val BACKUP_PREFIX = "recovery_backup_confirmed."
         private val ONE = byteArrayOf(1)
+
+        /** The file name of [eoa]'s backup flag. The address is lower-case, without the 0x prefix. */
+        fun backupFlagName(eoa: String): String = BACKUP_PREFIX + eoa.lowercase().removePrefix("0x") + ".v1"
     }
 }
 
@@ -78,15 +87,80 @@ internal fun pageRecordFiles(context: Context): AndroidVaultFiles =
  * that holds W cannot be cleared (fail closed).
  */
 object RecoveryBackupConfirmation {
-    /**
-     * Records that the user confirmed the backup of the recovery phrase (PY.11). Called by the native save-recovery-phrase page on
-     * confirm (a skip does not call it), and after a successful recovery. Returns true only when the flag is written and read back.
-     * Not a bridge command.
-     */
-    fun confirmRecoveryBackup(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).setRecoveryBackupConfirmed()
+    private val EOA = Regex("^0x[0-9a-fA-F]{40}$")
 
-    /** True only when the flag is set. Unreadable or damaged counts as not confirmed (PY.10). */
-    fun isRecoveryBackupConfirmed(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).recoveryBackupConfirmed()
+    /**
+     * Records that the user confirmed the backup of the recovery phrase of [eoa] (PY.11, PY.16, r3rq). Called by the native save-recovery-phrase
+     * page on its confirm action (a skip does not call it), and after a successful recovery. True only when the flag is written and read back.
+     * A malformed [eoa] is refused. Not a bridge command.
+     */
+    fun confirmRecoveryBackup(context: Context, eoa: String): Boolean =
+        EOA.matches(eoa) && ClearFlagFiles(pageRecordFiles(context)).setRecoveryBackupConfirmed(eoa.lowercase())
+
+    /** True only when the flag of [eoa] is set. Unreadable or damaged counts as not confirmed (PY.10). For the native UI only. */
+    fun isRecoveryBackupConfirmed(context: Context, eoa: String): Boolean =
+        EOA.matches(eoa) && ClearFlagFiles(pageRecordFiles(context)).recoveryBackupConfirmed(eoa.lowercase())
+}
+
+/**
+ * The recovery phrase handed to the native save-recovery-phrase view only (PY.14 (d), PY.16, r3rt). It is not serialisable, has no bridge
+ * route, and is cleared on [close]. The view must call [close] when it is dismissed or the backup is confirmed. The phrase is never logged.
+ */
+class BackupPhrase internal constructor(private var chars: CharArray?) : AutoCloseable {
+    /** The characters for the view. Null after [close]. Do not copy them out. */
+    fun chars(): CharArray? = chars
+
+    override fun close() {
+        chars?.fill('\u0000')
+        chars = null
+    }
+
+    override fun toString(): String = "BackupPhrase(redacted)"
+}
+
+/** The native read for the save-recovery-phrase view (PY.16, r3rq, r3rt). Public for the shell's native module; not a bridge command. */
+object RecoveryPhraseForBackup {
+    /** The only purpose this read answers. Any other value is unavailable. */
+    const val PURPOSE = "backup_display"
+
+    /**
+     * The recovery phrase of [eoa] for the backup view, or null (unavailable): a key-only account, a record that cannot be read or verified, a
+     * different account, or a purpose other than [PURPOSE]. A null result never sets the backup flag.
+     */
+    fun readMnemonicForBackupDisplay(context: Context, eoa: String, purpose: String): BackupPhrase? =
+        readBackupPhrase(eoa, purpose) { NativeWallet.vault(context).mnemonicOf() }
+}
+
+/** The purpose check comes first: another purpose never reads the vault. [read] is the vault's read, injected for the tests. */
+internal fun readBackupPhrase(eoa: String, purpose: String, read: () -> NativeWalletVault.MnemonicRead): BackupPhrase? {
+    if (purpose != RecoveryPhraseForBackup.PURPOSE) return null
+    return backupPhraseFrom(read(), eoa)
+}
+
+/** Maps the vault's read to the view handle. A phrase is returned only for the account asked for. */
+internal fun backupPhraseFrom(read: NativeWalletVault.MnemonicRead, eoa: String): BackupPhrase? {
+    val stored = read as? NativeWalletVault.MnemonicRead.Stored ?: return null
+    if (!stored.eoa.equals(eoa, ignoreCase = true)) return null
+    return BackupPhrase(stored.phrase.toCharArray())
+}
+
+/**
+ * The start-up report of the legacy store (PY.15, r3rn): found, absent or unreadable. Stored as the last report (legacy_report.v1, non-secret
+ * text, no-backup directory). Called by the shell at every start, before the WebView, synchronously. It only writes; it imports nothing.
+ */
+object LegacyStoreReport {
+    const val FOUND = "found"
+    const val ABSENT = "absent"
+    const val UNREADABLE = "unreadable"
+
+    /** Returns `ok`; `bad_request` for any other value (nothing is saved); `write_failed` when the local write cannot be read back. */
+    fun reportLegacyStore(context: Context, value: String): String = reportLegacyValue(ClearFlagFiles(pageRecordFiles(context)), value)
+}
+
+/** The report's rule, testable without a Context: only the three values are saved. */
+internal fun reportLegacyValue(flags: ClearFlagFiles, value: String): String {
+    if (value != LegacyStoreReport.FOUND && value != LegacyStoreReport.ABSENT && value != LegacyStoreReport.UNREADABLE) return "bad_request"
+    return if (flags.writeLegacyReport(value)) "ok" else "write_failed"
 }
 
 /**
@@ -138,6 +212,8 @@ internal fun eraseChecked(files: VaultFiles, name: String): Boolean {
  */
 internal class IdentityClear(
     private val flags: ClearFlagFiles,
+    /** (1b): true when the recovery-backup flag of the account whose W is held is set (PY.10). No account means not confirmed. */
+    private val backupConfirmed: () -> Boolean = { false },
     /** (1a): true when the migration check passes (N and M), false when it refuses. */
     private val migrationCheck: () -> Boolean = { true },
     /** True when a native PGP record exists for the account (or anywhere in the vault). */
@@ -155,7 +231,7 @@ internal class IdentityClear(
     fun clear(): String {
         if (!migrationCheck()) return IdentityClearCode.UNREGISTER_REFUSED
         val holds = holdsWallet() ?: return IdentityClearCode.UNREGISTER_REFUSED
-        if (holds && !flags.recoveryBackupConfirmed()) return IdentityClearCode.UNREGISTER_REFUSED
+        if (holds && !backupConfirmed()) return IdentityClearCode.UNREGISTER_REFUSED
         if (pgpRecordPresent() && !pgpSourceAvailable()) return IdentityClearCode.UNREGISTER_REFUSED
         if (!flags.setClearPending()) return IdentityClearCode.CLEAR_INCOMPLETE
         return redo()
