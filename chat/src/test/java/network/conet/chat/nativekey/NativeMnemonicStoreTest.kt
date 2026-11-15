@@ -114,13 +114,14 @@ class NativeMnemonicStoreTest {
         assertTrue(v.mnemonicOf() is MnemonicRead.Unavailable)
     }
 
-    /** A phrase record with no key record is an orphan: state() removes it. */
+    /** A phrase record with no key record and no intent is existing data: it is kept and the account is locked (spec §25.52Y.42 第 4 項 (d)). */
     @Test
-    fun orphanPhraseRecordIsRemoved() {
+    fun orphanPhraseRecordWithoutIntentIsKept() {
         val files = NativeTestFiles()
         files.map[NativeWalletVault.MNEM] = "{\"record\":1}".toByteArray(Charsets.UTF_8)
-        assertTrue(vault(NativeTestWrap(), files).state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.MNEM))
+        val s = vault(NativeTestWrap(), files).state()
+        assertEquals("record_missing", (s as State.Locked).reason)
+        assertTrue(files.map.containsKey(NativeWalletVault.MNEM))
     }
 
     /** forget() removes the phrase record with the key record. */
