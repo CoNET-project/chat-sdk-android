@@ -555,10 +555,10 @@ internal class PgpMigrationEngine(
     } ?: false
 
     /**
-     * The C.3 check for an account that holds no active pointer (PY.8 第 7 项; R2169 第 3 项 (i)): a legacy copy L, or a registered chain
-     * backup. P is not part of this check. Unreadable or failed checks count as not met.
+     * The C.3 check for an account that holds no active pointer (PY.8 第 7 项, r3rf R2170 (a)): any one of L present, P readable natively,
+     * or a registered chain backup. The same three conditions as [hasRecoverySource]. Unreadable or failed checks count as not met.
      */
-    fun orphanSource(): Boolean = runCatching { legacy.read() != null || recovery.chainRegistered() }.getOrDefault(false)
+    fun orphanSource(): Boolean = runCatching { hasRecoverySource() }.getOrDefault(false)
 
     /** The migration's page wallet fields (W), removed last in (3) (PY.8 第 1 项 (3), r3qy). */
     fun clearMigrationWallet(): Boolean = lock.tryRun(eoa) {

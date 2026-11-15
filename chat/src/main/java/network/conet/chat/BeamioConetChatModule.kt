@@ -923,8 +923,9 @@ object BeamioConetChatModule {
     }
 
     /**
-     * PY.8 第 7 项 (r3rd, R2169 (i)): with no account, sweep the migration records of accounts that hold no active pointer and no W. Each
-     * account gets the C.3 check (L or a chain backup; not P). A passing account is removed in M → N → lastCode order; a refused one is kept.
+     * PY.8 第 7 项 (r3rd, R2169 (i); r3rf, R2170 (a)): with no account, sweep the migration records of accounts that hold no active pointer and
+     * no W. Each account gets the C.3 check (any one of L, P readable natively, or a chain backup). A passing account is removed in
+     * M → N → lastCode order; a refused one is kept.
      * Only codes and counts are logged, never an account value. Returns false when a removal failed (clear_incomplete; the redo continues).
      */
     private fun sweepOrphanMigrations(ctx: Context): Boolean {
