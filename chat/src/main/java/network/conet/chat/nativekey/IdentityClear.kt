@@ -77,10 +77,16 @@ internal fun pageRecordFiles(context: Context): AndroidVaultFiles =
  * confirms through [confirm] (a skip never calls it), and a successful recovery calls it too. Until those are wired, a wallet
  * that holds W cannot be cleared (fail closed).
  */
-internal object RecoveryBackupConfirmation {
-    fun confirm(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).setRecoveryBackupConfirmed()
+object RecoveryBackupConfirmation {
+    /**
+     * Records that the user confirmed the backup of the recovery phrase (PY.11). Called by the native save-recovery-phrase page on
+     * confirm (a skip does not call it), and after a successful recovery. Returns true only when the flag is written and read back.
+     * Not a bridge command.
+     */
+    fun confirmRecoveryBackup(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).setRecoveryBackupConfirmed()
 
-    fun isConfirmed(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).recoveryBackupConfirmed()
+    /** True only when the flag is set. Unreadable or damaged counts as not confirmed (PY.10). */
+    fun isRecoveryBackupConfirmed(context: Context): Boolean = ClearFlagFiles(pageRecordFiles(context)).recoveryBackupConfirmed()
 }
 
 /**
