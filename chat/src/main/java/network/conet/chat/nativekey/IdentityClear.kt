@@ -157,6 +157,13 @@ object LegacyStoreReport {
     fun reportLegacyStore(context: Context, value: String): String = reportLegacyValue(ClearFlagFiles(pageRecordFiles(context)), value)
 }
 
+/**
+ * With no account known, every account's backup flag is removed once the wallet is erased (PM R2212 第 2 项): a later restore of the same
+ * account must not find a stale "backed up" flag. Returns false when a removal failed.
+ */
+internal fun eraseBackupFlagsOfUnknownAccount(names: List<String>, erase: (String) -> Boolean): Boolean =
+    names.filter { it.removeSuffix(".tmp").startsWith(ClearFlagFiles.BACKUP_PREFIX) }.map(erase).all { it }
+
 /** The report's rule, testable without a Context: only the three values are saved. */
 internal fun reportLegacyValue(flags: ClearFlagFiles, value: String): String {
     if (value != LegacyStoreReport.FOUND && value != LegacyStoreReport.ABSENT && value != LegacyStoreReport.UNREADABLE) return "bad_request"

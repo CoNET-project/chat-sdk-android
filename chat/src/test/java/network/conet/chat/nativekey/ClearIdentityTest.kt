@@ -303,4 +303,26 @@ class ClearIdentityTest {
         }
         assertFalse("an unreadable marker counts as not set", orphanSweepMayRun(ClearFlagFiles(unreadable)))
     }
+
+    @Test
+    fun withNoAccountEveryAccountsBackupFlagGoes() {
+        val files = NativeTestFiles()
+        val a = "0x" + "a".repeat(40)
+        val b = "0x" + "b".repeat(40)
+        ClearFlagFiles(files).setRecoveryBackupConfirmed(a)
+        ClearFlagFiles(files).setRecoveryBackupConfirmed(b)
+        files.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        assertTrue(eraseBackupFlagsOfUnknownAccount(files.map.keys.toList()) { eraseChecked(files, it) })
+        assertFalse("account a's flag is gone", ClearFlagFiles(files).recoveryBackupConfirmed(a))
+        assertFalse("account b's flag is gone", ClearFlagFiles(files).recoveryBackupConfirmed(b))
+        assertTrue("the marker is not a backup flag and stays for the redo", files.map.containsKey(ClearFlagFiles.CLEAR_PENDING))
+    }
+
+    @Test
+    fun aFailedFlagRemovalIsReported() {
+        val files = NativeTestFiles()
+        ClearFlagFiles(files).setRecoveryBackupConfirmed("0x" + "a".repeat(40))
+        files.failDelete = ClearFlagFiles.backupFlagName("0x" + "a".repeat(40))
+        assertFalse(eraseBackupFlagsOfUnknownAccount(files.map.keys.toList()) { eraseChecked(files, it) })
+    }
 }

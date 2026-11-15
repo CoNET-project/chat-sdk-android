@@ -38,6 +38,7 @@ import network.conet.chat.nativekey.MigrationResult
 import network.conet.chat.nativekey.migrationAccountOfName
 import network.conet.chat.nativekey.SignRequestRule
 import network.conet.chat.nativekey.orphanSweepMayRun
+import network.conet.chat.nativekey.eraseBackupFlagsOfUnknownAccount
 import java.io.File
 import network.conet.chat.nativekey.NativeWalletVault
 import network.conet.chat.nativekey.ChatRouteRegister
@@ -938,7 +939,9 @@ object BeamioConetChatModule {
                     // not decide the flag (r3qx); it still makes step (3) incomplete, and the redo completes those deletions.
                     // r3rd (R2168 (b)): the PGP page copy (pgpOk) is not part of W; it is still removed in (3), after (1a) and (1c).
                     val wOk = vaultOk && pagesOk && keystoreOk && migrationWalletOk
-                    val flagOk = wOk && (eoa?.let { flags.clearRecoveryBackupConfirmed(it) } ?: true)
+                    // PM R2212 第 2 项: with no account known, the flags of every account are removed (the W is gone, so none is stale).
+                    val flagOk = wOk && (eoa?.let { flags.clearRecoveryBackupConfirmed(it) }
+                        ?: eraseBackupFlagsOfUnknownAccount(page.names()) { eraseChecked(page, it) })
                     wOk && flagOk && pgpOk && nativePgpOk
                 }
             },
