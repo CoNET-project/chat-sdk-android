@@ -200,7 +200,7 @@ object HistoryBatch {
     enum class SubmitResult { OK, CONFLICT, REJECTED, ERROR }
 
     /**
-     * Relay / chain answers that mean "someone moved the head first" (CAS lost): beamio.app
+     * Relay / chain answers that mean "someone moved the head first" (CAS lost): beamio.ca
      * precheck 400 `Stale pointer nonce` / `Stale ts` / `Stale seq`, Master 409, contract revert
      * `bad nonce` / `stale ts` / `stale seq`.
      */

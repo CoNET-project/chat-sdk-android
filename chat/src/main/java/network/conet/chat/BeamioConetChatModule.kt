@@ -81,7 +81,7 @@ object BeamioConetChatModule {
         @Volatile var conetRpcUrl: String = "https://rpc1.conet.network"
         @Volatile var ipfsBaseUrl: String = "https://ipfs.conet.network/api"
         @Volatile var ipfsWriteBaseUrl: String = ""
-        @Volatile var apiBaseUrl: String = "https://beamio.app/api"
+        @Volatile var apiBaseUrl: String = "https://beamio.ca/api"
         @Volatile var chatIndexRegistryAddress: String = "0x1511Caa71081C84d8a591490D1b83879088EED72"
         @Volatile var chainId: Int = 224422
         @Volatile var history: BeamioConetChatHistoryStore? = null
