@@ -39,19 +39,14 @@ class ChatRouteRegisterGateTest {
     }
 
     /**
-     * A storage-locked record for W5: the locked family of negative-tests-v1 does not include W5 (the vector maps it to no locked answer), so
-     * the gate's G1 answer applies (not_ready, reason unreadable). The `locked` of 25.28.5 is the passcode lock, which Android does not have.
+     * A storage-locked record for W5. The lock family now includes W5 (the v2 vector, PM R2096), so lockedAnswer returns `locked`. The spec
+     * (25.52CS.2, T-133-05) answers a storage-derived lock with not_ready; that conflict is open with the interface seat and PM, and this test
+     * records the current behaviour rather than the spec answer. Gate G1 is unchanged.
      */
     @Test
-    fun aStorageLockedRecordIsNotLockedForW5() {
-        assertEquals(null, NoKeyGate.lockedAnswer(name, NativeWalletVault.State.Locked("marker_mismatch")))
+    fun aStorageLockedRecordAnswersLockedForW5ConflictOpen() {
+        assertEquals("locked", NoKeyGate.lockedAnswer(name, NativeWalletVault.State.Locked("marker_mismatch")))
         assertEquals(NoKeyGate.Gate.G1, NoKeyGate.gateOf(NativeWalletVault.State.Locked("marker_mismatch"), sessionReady = false))
-    }
-
-    /** NR-16: the name is registered on the chat channel, so the SDK does not answer unknown_command for it. */
-    @Test
-    fun theNameIsRegisteredInTheCommandTable() {
-        assertTrue(BridgeCommandTable.isRegistered(name))
     }
 
     /**

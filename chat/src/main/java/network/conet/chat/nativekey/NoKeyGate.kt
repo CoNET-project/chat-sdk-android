@@ -33,7 +33,11 @@ object NoKeyGate {
      * (no bridge name, 25.52AR.3), and N1–N4 and identityReady (no mapping in the vector yet, 25.52BZ.5).
      */
     val LOCKED_FAMILY_COMMANDS: Set<String> =
-        setOf("historySign", "gossipSign", "pgpDecryptInbound", "deriveSubkeys", "ephemeralSign", "walletAddress")
+        setOf(
+            "historySign", "gossipSign", "pgpDecryptInbound", "deriveSubkeys", "ephemeralSign", "walletAddress",
+            "walletSignTypedData", "walletSignMessage", "walletSendTransaction", "walletTransfer", "walletSignUserOp",
+            "chatRouteRegister", "pgpRestoreEvaluate", "pgpRestore", "pgpIdentityCreate",
+        )
 
     /** The locked check of the gate step (25.52BZ.4): `locked` for a family command while the record is locked, else null. No payload is read. */
     fun lockedAnswer(command: String, state: NativeWalletVault.State): String? =
