@@ -173,17 +173,14 @@ object BeamioConetChatModule {
     fun handleCommand(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {
         val ctxIn = context.applicationContext
         if (appContext == null) {
-            // 25.52PY.8 第 5 项: the first command after the process starts finishes an interrupted clear before anything else.
-            // With an account, the redo is file work only, so it runs before the first command (PY.8 第 5 項). With no account, the redo can reach
-            // the orphan sweep's chain check; it then runs on the worker. That is safe: the redo runs only when no wallet material is held, so no
-            // key can be used in the meantime.
-            val eoaAtStart = recoveryAccountOf(ctxIn)
-            val redo = {
-                runCatching { identityClear(ctxIn, eoaAtStart).redoIfInterrupted() }
-                    .onSuccess { code -> code?.let { Log.i(TAG, "identity clear redo result=$it") } }
-                    .onFailure { Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}") }
+            // r3rh 第 1 项 (PY.8 第 5 项): the redo is local-only and runs synchronously before the first command. If it fails, the wallet and
+            // identity commands answer not_ready until a redo succeeds (see dispatch).
+            retryClearRedo(ctxIn)
+            // r3rh 第 2 项 (PY.8 第 7 项): with no account, the orphan sweep runs in the background. It never blocks start-up or a command; an
+            // offline or failed chain check skips the account until the next start-up.
+            if (recoveryAccountOf(ctxIn) == null) {
+                pgpMigrateWorker.execute { runCatching { sweepOrphanMigrations(ctxIn) }.onFailure { Log.w(TAG, "orphan sweep skipped") } }
             }
-            if (eoaAtStart != null) redo() else pgpMigrateWorker.execute { redo() }
         }
         appContext = ctxIn
         emitFn = emit
@@ -258,6 +255,16 @@ object BeamioConetChatModule {
         // payload is not read for any refused name.
         if (route != NoKeyGate.Route.PASS) {
             val reqId = echoId(body)
+            // r3rh 第 1 项: while the redo is blocked, each wallet or identity command first retries the redo; it is answered only once a redo
+            // has succeeded. Otherwise it answers not_ready.
+            // clearIdentity is exempt: the page's retry of an unfinished clear must reach it (25.52PY.4, 25.26.4c 第 3a 項).
+            if (clearRedoBlocked && type != "clearIdentity") {
+                retryClearRedo(context)
+                if (clearRedoBlocked) {
+                    ack(reqId, false, error = NoKeyGate.NOT_READY)
+                    return
+                }
+            }
             val state = NativeWallet.vault(context).state()
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
             // 25.52BZ.4 (r3dz): the locked check of the gate step, after the name check and before the parameters and the no_key or not_ready
@@ -893,8 +900,9 @@ object BeamioConetChatModule {
                 // (3), PY.8 第 1 项 (3) and r3qy: the migration records (M, N, lastCode) come first, and W is removed only after they all
                 // succeeded (M.2). The native PGP envelopes do not depend on that order. If the migration records fail, no W is removed and the
                 // backup flag stays, so the redo can finish the records first. Every step that runs is attempted.
-                // With no account, the orphaned migration records are swept (PY.8 第 7 项, R2169 第 3 项 (i)); otherwise only this account's.
-                val migrationRecordsOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationRecords(ctx, it) } ?: sweepOrphanMigrations(ctx)
+                // With an account, its migration records are removed here. With no account, nothing is removed in this clear: the orphan sweep runs in
+                // the background at start-up (PY.8 第 7 项, r3rh 第 2 项).
+                val migrationRecordsOk = eoa?.let { BeamioPgpMigrationImport.clearMigrationRecords(ctx, it) } ?: true
                 val nativePgpOk = NativeWallet.migrationNames(ctx).filter { it.startsWith("pgp.v1.") }
                     .map { eraseChecked(vaultFiles, it) }.all { it }
                 if (!migrationRecordsOk) {
@@ -924,6 +932,23 @@ object BeamioConetChatModule {
                 pointerOk && addressOk
             },
         )
+    }
+
+    /** True while the last redo failed (clear_incomplete): wallet and identity commands answer not_ready until a redo succeeds (r3rh). */
+    @Volatile
+    private var clearRedoBlocked = false
+
+    /** Runs the redo again and sets [clearRedoBlocked] from its result: blocked on clear_incomplete or an exception, free otherwise. */
+    private fun retryClearRedo(ctx: Context) {
+        runCatching { identityClear(ctx, recoveryAccountOf(ctx)).redoIfInterrupted() }
+            .onSuccess { code ->
+                code?.let { Log.i(TAG, "identity clear redo result=$it") }
+                clearRedoBlocked = code == IdentityClearCode.CLEAR_INCOMPLETE
+            }
+            .onFailure {
+                Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}")
+                clearRedoBlocked = true
+            }
     }
 
     /**
