@@ -178,7 +178,7 @@ class ClearIdentityTest {
         val files = NativeTestFiles()
         files.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
         val held = Steps(files).apply { holds = true }
-        assertNull(held.build().redoIfInterrupted())
+        assertEquals("the block stays while W is held", IdentityClearCode.CLEAR_INCOMPLETE, held.build().redoIfInterrupted())
         assertTrue("nothing is erased while a wallet is held", held.log == listOf("holds"))
 
         val none = Steps(files).apply { holds = false }

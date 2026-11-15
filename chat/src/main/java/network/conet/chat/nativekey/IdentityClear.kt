@@ -161,7 +161,9 @@ internal class IdentityClear(
      */
     fun redoIfInterrupted(): String? {
         if (!flags.clearPending()) return null
-        if (holdsWallet() != false) return null
+        // r3rk: while clear_pending is set and W is held (or unreadable), the redo does not run and the block stays, until clearIdentity
+        // completes the clear. A null result is returned only when nothing was interrupted, so it is the only way the block lifts.
+        if (holdsWallet() != false) return IdentityClearCode.CLEAR_INCOMPLETE
         return redo()
     }
 
