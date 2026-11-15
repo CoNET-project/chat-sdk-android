@@ -27,6 +27,7 @@ import network.conet.chat.nativekey.PgpMigrationInterrupted
 import network.conet.chat.nativekey.PgpMigrationPolicy
 import network.conet.chat.nativekey.NativeSessionState
 import network.conet.chat.nativekey.NativeWalletVault
+import network.conet.chat.nativekey.ChatRouteRegister
 import network.conet.chat.nativekey.NoKeyGate
 import network.conet.chat.nativekey.InitNodesGate
 import network.conet.chat.nativekey.ShellRecordPolicy
@@ -329,6 +330,7 @@ object BeamioConetChatModule {
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
+            "chatRouteRegister" -> chatRouteRegisterCommand(body)
             else -> {
                 // Unreachable while the table and this dispatch agree (BridgeCommandTableTest). Answered the same way if they ever diverge.
                 Log.w(TAG, "unknown_command name=${type.take(64)}")
@@ -1089,6 +1091,55 @@ object BeamioConetChatModule {
      * the bridge answers `pgpIdentityCreateResult` with `waiting_registration` and writes nothing to the chain. An unknown
      * `reqId` gets the event with a null reqId, as the other results do.
      */
+    /**
+     * W5 `chatRouteRegister` (spec 25.28.3 to 25.28.5; PM R2085). Reached only in G2 (the gate answers no_key, not_ready and locked before this):
+     * the request is checked first, then the EOA key and the PGP armor are read from the vault, the registration is built in [ChatRouteRegister],
+     * and both byte arrays are zeroed after use. The String copies of the password and the armor cannot be zeroed on the JVM (a stated limit).
+     */
+    private fun chatRouteRegisterCommand(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        val ctx = appContext
+        val parsed = ChatRouteRegister.parse(body)
+        if (parsed !is ChatRouteRegister.Parsed.Ok) {
+            ack(reqId, false, error = (parsed as ChatRouteRegister.Parsed.Refused).code)
+            return
+        }
+        if (ctx == null) { ack(reqId, false, error = "not_ready"); return }
+        val vault = NativeWallet.vault(ctx)
+        val eoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
+        if (eoa == null) { ack(reqId, false, error = "not_ready"); return }
+        val key = vault.unlock()
+        if (key == null) { ack(reqId, false, error = "locked"); return }
+        var armorBytes: ByteArray? = null
+        try {
+            val armor = NativeWallet.pgpFor(ctx, eoa).armorForMove()
+            armorBytes = armor?.toByteArray(Charsets.UTF_8)
+            val nonceBytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+            val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+            val nonce = "0x" + nonceBytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+            val built = ChatRouteRegister.build(
+                request = parsed.request,
+                wallet = eoa,
+                eoaPrivateKey = key,
+                pgpPrivateArmor = armorBytes,
+                timestampMs = System.currentTimeMillis(),
+                nonce = nonce,
+                iv = iv,
+            )
+            when (built) {
+                is ChatRouteRegister.Built.Refused -> ack(reqId, false, error = built.code)
+                is ChatRouteRegister.Built.Ok -> ack(reqId, true, result = JSONObject()
+                    .put("wallet", built.wallet).put("keyID", built.keyID)
+                    .put("publicKeyArmored", built.publicKeyArmored).put("encrypKeyArmored", built.encrypKeyArmored)
+                    .put("routeKeyID", built.routeKeyID).put("timestamp", built.timestamp)
+                    .put("nonce", built.nonce).put("signature", built.signature))
+            }
+        } finally {
+            key.fill(0)
+            armorBytes?.fill(0)
+        }
+    }
+
     private fun pgpIdentityCreateWaiting(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         emitEvent(
