@@ -174,12 +174,16 @@ object BeamioConetChatModule {
         val ctxIn = context.applicationContext
         if (appContext == null) {
             // 25.52PY.8 第 5 项: the first command after the process starts finishes an interrupted clear before anything else.
-            // The redo may run the C.3 chain check of an orphaned account, so it runs on the worker, not the main thread.
-            pgpMigrateWorker.execute {
-                runCatching { identityClear(ctxIn, recoveryAccountOf(ctxIn)).redoIfInterrupted() }
+            // With an account, the redo is file work only, so it runs before the first command (PY.8 第 5 項). With no account, the redo can reach
+            // the orphan sweep's chain check; it then runs on the worker. That is safe: the redo runs only when no wallet material is held, so no
+            // key can be used in the meantime.
+            val eoaAtStart = recoveryAccountOf(ctxIn)
+            val redo = {
+                runCatching { identityClear(ctxIn, eoaAtStart).redoIfInterrupted() }
                     .onSuccess { code -> code?.let { Log.i(TAG, "identity clear redo result=$it") } }
                     .onFailure { Log.w(TAG, "identity clear redo failed: ${it.javaClass.simpleName}") }
             }
+            if (eoaAtStart != null) redo() else pgpMigrateWorker.execute { redo() }
         }
         appContext = ctxIn
         emitFn = emit
