@@ -1,5 +1,5 @@
 {
-  "spec": "负例测试夹具（negative-tests），版本 v1。判定字段与期望以接口规格现行版为准；本描述不含规格编号。",
+  "spec": "负例测试夹具（negative-tests），版本 v2。判定字段与期望以接口规格现行版为准；本描述不含规格编号。",
   "status": "合成数据。三端实现前以本文件为准。各端须运行同一组用例；未批准的 iOS PGP 用例标为阻塞，不得跳过。",
   "shellOrigin": "https://shell.test.invalid",
   "bridgeSource": {
