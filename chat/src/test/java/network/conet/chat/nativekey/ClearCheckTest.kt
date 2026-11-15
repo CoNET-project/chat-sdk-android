@@ -84,9 +84,18 @@ class ClearCheckTest {
         seedRecords(files, wrap)
         FileLastCodeStore(files, account, workspace).write("fingerprint_mismatch")
         val engine = migrationEngine(files, wrap, legacyA, ChainAnswer.Absent)
-        assertTrue("the erase reports success", engine.clearErase())
+        assertTrue("the migration records are removed (M, N, lastCode)", engine.clearMigrationRecords())
         assertNull(files.read(stagedFileName()))
         assertNull(files.read(markerFileName()))
         assertNull(files.read(lastCodeFileName()))
+    }
+
+    @Test
+    fun theMigrationWalletIsRemovedSeparatelyAndLast() {
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        val wallet = FixedWallet(present = true)
+        val engine = migrationEngine(files, wrap, legacyA, ChainAnswer.Absent, wallet = wallet)
+        assertTrue("the page wallet fields are removed", engine.clearMigrationWallet())
     }
 }

@@ -544,15 +544,20 @@ internal class PgpMigrationEngine(
      * Removal for the identity clear, step (3) of §25.52PY.8, run only after clear_pending is set: N (staged), M (marker), the last code and
      * the page wallet fields of this account. True only when each is gone.
      */
-    fun clearErase(): Boolean = lock.tryRun(eoa) {
+    fun clearMigrationRecords(): Boolean = lock.tryRun(eoa) {
         runCatching { marker.delete() }
         runCatching { staged.delete() }
         runCatching { lastCode.delete() }
-        val walletRemoved = runCatching { wallet.remove() }.isSuccess
         val markerGone = runCatching { marker.read() == null }.getOrDefault(false)
         val stagedGone = runCatching { staged.read() == null }.getOrDefault(false)
-        val walletGone = runCatching { !wallet.present() }.getOrDefault(false)
-        walletRemoved && markerGone && stagedGone && walletGone
+        val lastCodeGone = runCatching { lastCode.read() == null }.getOrDefault(false)
+        markerGone && stagedGone && lastCodeGone
+    } ?: false
+
+    /** The migration's page wallet fields (W), removed last in (3) (PY.8 第 1 项 (3), r3qy). */
+    fun clearMigrationWallet(): Boolean = lock.tryRun(eoa) {
+        val removed = runCatching { wallet.remove() }.isSuccess
+        removed && runCatching { !wallet.present() }.getOrDefault(false)
     } ?: false
 
     private fun hasRecoverySource(): Boolean =
@@ -820,8 +825,11 @@ object BeamioPgpMigrationImport {
         engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearCheck(pgpRecordPresent) ?: MigrationResult(MigrationCode.BAD_REQUEST)
 
     /** Identity clear, step (3): the removal for [eoa] (see [PgpMigrationEngine.clearErase]). */
-    fun clearErase(context: Context, eoa: String): Boolean =
-        engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearErase() == true
+    fun clearMigrationRecords(context: Context, eoa: String): Boolean =
+        engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearMigrationRecords() == true
+
+    fun clearMigrationWallet(context: Context, eoa: String): Boolean =
+        engine(context, eoa, PgpMigrationPolicy.WORKSPACE, null)?.clearMigrationWallet() == true
 
     /**
      * The first-run import (§25.52K.7): the legacy wallet record becomes the page wallet copy (rev 0 to 1, W fields encrypted, PGP fields
