@@ -52,6 +52,7 @@ internal class NativeTestWrap : KeyWrap {
 internal class NativeTestFiles : VaultFiles {
     val map = HashMap<String, ByteArray>()
     var failWrite: String? = null
+    var failDelete: String? = null
     var crashAfterWrite: String? = null
 
     override fun read(name: String): ByteArray? = map[name]?.copyOf()
@@ -63,6 +64,7 @@ internal class NativeTestFiles : VaultFiles {
     }
 
     override fun delete(name: String) {
+        if (failDelete == name) throw IOException("cannot remove")
         map.remove(name)
     }
 }

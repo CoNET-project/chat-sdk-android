@@ -75,6 +75,7 @@ object NativeImport {
         ALREADY_EXISTS("already_exists"),
         WRITE_FAILED("write_failed"),
         READBACK_FAILED("readback_failed"),
+        ROLLBACK_PENDING("rollback_pending"),
         CANCELLED("cancelled"),
     }
 
@@ -144,6 +145,7 @@ object NativeImport {
             NativeWalletVault.Import.ADDRESS_MISMATCH -> Result(Code.ADDRESS_MISMATCH)
             NativeWalletVault.Import.STORE_FAILED -> Result(Code.WRITE_FAILED)
             NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
+            NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.ROLLBACK_PENDING)
             NativeWalletVault.Import.BAD_KEY, NativeWalletVault.Import.BAD_EOA -> Result(Code.INVALID_KEY)
         }
     }

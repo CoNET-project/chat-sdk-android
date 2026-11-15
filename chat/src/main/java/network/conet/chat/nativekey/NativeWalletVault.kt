@@ -65,6 +65,8 @@ class NativeWalletVault(
         RECORD_EXISTS("record_exists"),
         STORE_FAILED("store_failed"),
         READBACK_FAILED("readback_failed"),
+        /** A rollback removal failed: the intent stays and the account is unavailable (spec 25.25.5, 25.52Y.42 第 4 项 (e)). */
+        ROLLBACK_PENDING("rollback_pending"),
     }
 
     private class Opened(val eoa: String, val key: ByteArray)
@@ -279,7 +281,8 @@ class NativeWalletVault(
             if (mnemonicPlanned) files.delete(MNEM)
             files.delete(INTENT)
         } catch (e: Exception) {
-            // Keep the intent for the retry.
+            // The intent stays; the next start retries and the account is rollback_pending (spec 25.52Y.42 第 4 项 (e)).
+            return Import.ROLLBACK_PENDING
         }
         return code
     }

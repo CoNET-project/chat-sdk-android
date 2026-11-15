@@ -129,6 +129,7 @@ object NativeAccountCreate {
         ALREADY_EXISTS("already_exists"),
         WRITE_FAILED("write_failed"),
         READBACK_FAILED("readback_failed"),
+        ROLLBACK_PENDING("rollback_pending"),
     }
 
     class Result(val code: Code, val eoa: String? = null)
@@ -171,6 +172,7 @@ object NativeAccountCreate {
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                         Result(Code.ALREADY_EXISTS)
                     NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
+                    NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.ROLLBACK_PENDING)
                     // Store failures roll back inside the vault. A derived key that the vault refuses is treated the same:
                     // nothing was stored.
                     NativeWalletVault.Import.STORE_FAILED, NativeWalletVault.Import.BAD_KEY,

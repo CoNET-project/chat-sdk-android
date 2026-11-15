@@ -182,6 +182,7 @@ internal class RecoveryEngine(
                         RecoveryOutcome.fail("already_exists")
                     NativeWalletVault.Import.STORE_FAILED -> RecoveryOutcome.fail("write_failed")
                     NativeWalletVault.Import.READBACK_FAILED -> RecoveryOutcome.fail("readback_failed")
+                    NativeWalletVault.Import.ROLLBACK_PENDING -> RecoveryOutcome.fail("rollback_pending")
                     NativeWalletVault.Import.ADDRESS_MISMATCH, NativeWalletVault.Import.BAD_KEY,
                     NativeWalletVault.Import.BAD_EOA -> RecoveryOutcome.fail("record_invalid")
                 }

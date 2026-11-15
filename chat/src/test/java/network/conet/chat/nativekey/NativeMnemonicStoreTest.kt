@@ -413,4 +413,32 @@ class NativeMnemonicStoreTest {
         assertEquals("not_ready", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
         for ((name, bytes) in before) assertArrayEquals("$name changed", bytes, files.map[name])
     }
+
+    /**
+     * spec 25.25.5 and 25.52Y.42 第 4 项 (c), (e): when a rollback removal fails, the import reports rollback_pending, the intent stays, and the
+     * account is unavailable (not offered for import). After the removal works, the next start rolls back and the account is free again.
+     */
+    @Test
+    fun aFailedRollbackReportsRollbackPendingAndRetriesOnTheNextStart() {
+        val files = NativeTestFiles().apply {
+            failWrite = NativeWalletVault.MNEM
+            failDelete = NativeWalletVault.REC
+        }
+        val wrap = NativeTestWrap()
+        val v = vault(wrap, files)
+        assertEquals(Import.ROLLBACK_PENDING, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+        assertEquals("rollback_pending", (v.state() as State.Locked).reason)
+        assertEquals("not_ready", NoKeyGate.walletStatusFor(NoKeyGate.gateOf(v.state(), false), v.state()).getString("status"))
+        // The import is not offered while pending.
+        assertEquals(Import.RECORD_EXISTS, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
+        // The removal works now; the next start rolls back.
+        files.failWrite = null
+        files.failDelete = null
+        val next = vault(wrap, files)
+        assertTrue(next.state() is State.NoKey)
+        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        assertFalse(files.map.containsKey(NativeWalletVault.REC))
+        assertEquals(Import.OK, next.importMnemonicKey(eoa, keyOf(phrase), phrase))
+    }
 }
