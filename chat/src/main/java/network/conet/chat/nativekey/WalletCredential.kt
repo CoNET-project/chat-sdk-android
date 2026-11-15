@@ -61,3 +61,45 @@ object WalletCredential {
         return Answer.Ok(JSONObject().put("eoa", state.eoa))
     }
 }
+
+/**
+ * The window-channel answer of `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项; PM R1907). It is registered on the window
+ * channel only, behind the same boundary as shellRecord: the source and the main frame are checked first, and a refused source is answered
+ * origin_refused without the vault being read. The chat channel does not carry this name (its table is unchanged).
+ */
+internal object WalletEoaAddressBridge {
+    const val NAME = "walletEoaAddress"
+
+    /** The origin decision (spec r3ny 第 9 项 (a)): the allowed embedded origin, in the main frame. */
+    fun originAllowed(sourceOrigin: String?, isMainFrame: Boolean): Boolean =
+        isMainFrame && sourceOrigin == BeamioShellRecordImport.ALLOWED_ORIGIN
+
+    fun answerFromPage(context: android.content.Context, sourceOrigin: String?, isMainFrame: Boolean, body: org.json.JSONObject): org.json.JSONObject =
+        answer(originAllowed(sourceOrigin, isMainFrame), body) {
+            val vault = NativeWallet.vault(context)
+            vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
+        }
+
+    /** The pure core. [current] is called only for an allowed origin and a well-formed request. */
+    internal fun answer(
+        originAllowed: Boolean,
+        body: org.json.JSONObject,
+        current: () -> Pair<NativeWalletVault, NoKeyGate.Gate>,
+    ): org.json.JSONObject {
+        if (!originAllowed) return originRefused(body)
+        val rawId = body.opt("reqId")
+        val echo: Any = if (ShellRecordPolicy.reqIdValid(rawId)) rawId!! else org.json.JSONObject.NULL
+        if (!ShellRecordPolicy.reqIdValid(rawId)) return fail(echo, "bad_request")
+        if (body.optString("type", "") != NAME) return fail(echo, "unknown_command")
+        if (ShellRecordPolicy.keysOf(body).any { it != "type" && it != "reqId" }) return fail(echo, "bad_request")
+        val (vault, gate) = current()
+        return when (val a = WalletCredential.eoaAddress(vault, gate)) {
+            is WalletCredential.Answer.Ok ->
+                org.json.JSONObject().put("type", "ack").put("reqId", echo).put("ok", true).put("result", a.result)
+            is WalletCredential.Answer.Refused -> fail(echo, a.code)
+        }
+    }
+
+    private fun fail(echo: Any, code: String): org.json.JSONObject =
+        org.json.JSONObject().put("type", "ack").put("reqId", echo).put("ok", false).put("error", code)
+}
