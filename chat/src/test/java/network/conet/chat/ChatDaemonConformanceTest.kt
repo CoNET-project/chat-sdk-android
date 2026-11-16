@@ -35,9 +35,11 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("protocolVersion"), result.getInt("protocolVersion"))
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
-        // The shared vector lists the production capabilities. A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44;
-        // PM R2048); the vector has no QA variant yet, so that one bit is added here only when this build is a QA build.
+        // The shared vector lists the production capabilities. identity.kpresent.v1 (spec 25.52X.5, 25.52Y.93) is declared in every build and is not in
+        // the shared vector yet, so it is added here after the vector names. A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项,
+        // 25.52Y.44; PM R2048); the vector has no QA variant yet, so that one bit is added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
+            listOf(BeamioConetChatProtocol.KPRESENT_CAPABILITY) +
             (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList()) +
             (if (BuildConfig.NATIVE_KEYS_QA) listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) else emptyList())
         assertEquals(expected, strings(result.getJSONArray("capabilities")))

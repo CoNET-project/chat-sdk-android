@@ -18,6 +18,7 @@ import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
 import network.conet.chat.nativekey.NativeAccountCreateHost
 import network.conet.chat.nativekey.NativeRecoveryHost
+import network.conet.chat.nativekey.NativeImportHost
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
 import network.conet.chat.nativekey.BeamioPgpMigrationImport
@@ -1321,8 +1322,12 @@ object BeamioConetChatModule {
         }
     }
 
-    /** `nativeImportOpen` (spec 25.25.1, r3x N-01 to N-07, N-11, N-12, N-15): only opens the native import page. */
+    /**
+     * `nativeImportOpen` (spec 25.25.1, r3x N-01 to N-07, N-11, N-12, N-15): opens the native import page. The page's result follows as
+     * `nativeImportResult` for this reqId (§25.52X.4). Neither the key nor the phrase passes through here.
+     */
     private fun nativeImportOpenCommand(body: JSONObject) {
+        NativeImportHost.events = { payload -> emitEvent(payload) }
         nativeOpenAck(body, "nativeImportOpen") { fields, reqId ->
             NativeOpenRules.importOpen(fields, reqId, NativeOpenRules.importHost)
         }

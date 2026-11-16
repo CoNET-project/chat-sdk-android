@@ -1,6 +1,7 @@
 package network.conet.chat.nativekey
 
 import network.conet.chat.ConetChatCryptoUtil
+import org.json.JSONObject
 import java.math.BigInteger
 
 /**
@@ -53,12 +54,50 @@ object NativeImportHost {
     @Volatile
     var launcher: (() -> Boolean)? = null
 
-    /** `true` when the page was opened. A launcher that throws counts as refused. */
-    fun open(): Boolean = try {
-        launcher?.invoke() == true
-    } catch (_: Exception) {
-        false
+    /** Set by the module, so the results go out through the chat module event envelope (§25.52X.4). */
+    @Volatile
+    internal var events: ((JSONObject) -> Unit)? = null
+
+    @Volatile
+    private var pageReqId: Any? = null
+
+    /**
+     * `nativeImportOpen`: opens the shell's page for [reqId]. `true` when the page is open. A launcher that throws counts as refused.
+     * The page's result follows as `nativeImportResult` for this reqId (see [finish]).
+     */
+    internal fun open(reqId: Any): Boolean {
+        pageReqId = reqId
+        val opened = try {
+            launcher?.invoke() == true
+        } catch (_: Exception) {
+            false
+        }
+        if (!opened) pageReqId = null
+        return opened
     }
+
+    /**
+     * One submission's result, for the open page (§25.52X.4). Every submission sends exactly one `nativeImportResult`. `eoa` is carried only
+     * by `ok` and `already_exists`, and only when the address was derived and persisted (the vault gives it only then). `ok`,
+     * `already_exists` and `cancelled` end the page; any other result keeps it open for a retry. Nothing is sent when no page is open.
+     */
+    internal fun finish(result: NativeImport.Result) {
+        val id = pageReqId ?: return
+        val payload = JSONObject()
+            .put("type", "nativeImportResult")
+            .put("reqId", id)
+            .put("code", result.code.wire)
+        if (result.code == NativeImport.Code.OK || result.code == NativeImport.Code.ALREADY_EXISTS) {
+            result.eoa?.let { payload.put("eoa", it) }
+        }
+        events?.invoke(payload)
+        if (result.code in TERMINAL) pageReqId = null
+    }
+
+    private val TERMINAL = setOf(NativeImport.Code.OK, NativeImport.Code.ALREADY_EXISTS, NativeImport.Code.CANCELLED)
+
+    /** The `reqId` of the open import page, if any. */
+    internal fun currentReqId(): Any? = pageReqId
 }
 
 /**
@@ -91,7 +130,10 @@ object NativeImport {
      *   differs is refused.
      * @param cancelled the user backed out: nothing is written and no message is shown.
      */
-    fun submit(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result {
+    fun submit(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result =
+        submitInput(raw, expectedEoa, vault, cancelled).also { NativeImportHost.finish(it) }
+
+    private fun submitInput(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean): Result {
         if (cancelled) return Result(Code.CANCELLED)
         val trimmed = raw.trim { it in ASCII_WHITESPACE }
         val hex = if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) trimmed.substring(2) else trimmed
@@ -114,7 +156,10 @@ object NativeImport {
      * key reaches the vault; the phrase is not stored, logged or returned. An invalid phrase is `invalid_mnemonic`
      * and writes nothing. After validation, the expected-address, write and readback rules are the key mode's.
      */
-    fun submitMnemonic(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result {
+    fun submitMnemonic(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result =
+        submitPhrase(raw, expectedEoa, vault, cancelled).also { NativeImportHost.finish(it) }
+
+    private fun submitPhrase(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean): Result {
         if (cancelled) return Result(Code.CANCELLED)
         val key = MnemonicDerivation.deriveKey(raw) ?: return Result(Code.INVALID_MNEMONIC)
         try {

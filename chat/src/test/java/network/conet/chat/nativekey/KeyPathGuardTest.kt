@@ -52,7 +52,7 @@ class KeyPathGuardTest {
         assertTrue(module.contains("NativeOpenRules.importOpen("))
         assertTrue(module.contains("NativeOpenRules.accountCreateOpen("))
         val rules = File("src/main/java/network/conet/chat/nativekey/NativeOpenRules.kt").readText()
-        assertTrue(rules.contains("NativeImportHost.open()"))
+        assertTrue(rules.contains("NativeImportHost.open(reqId)"))
         assertTrue(rules.contains("NativeAccountCreateHost.open(reqId)"))
         assertTrue(module.contains("\"nativeAccountCreateOpen\" -> nativeAccountCreateOpenCommand(body)"))
         // The old reply codes are gone: no_key and locked are the answers.

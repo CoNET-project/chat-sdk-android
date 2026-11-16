@@ -167,7 +167,7 @@ internal object NativeOpenRules {
     /** The shell's page for each command. A page that is not registered is `not_supported`. */
     val importHost: Host = object : Host {
         override fun registered(): Boolean = NativeImportHost.launcher != null
-        override fun open(reqId: Any): Boolean = NativeImportHost.open()
+        override fun open(reqId: Any): Boolean = NativeImportHost.open(reqId)
     }
 
     val recoveryHost: Host = object : Host {
