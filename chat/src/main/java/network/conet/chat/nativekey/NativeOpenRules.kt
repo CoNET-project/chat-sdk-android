@@ -50,7 +50,7 @@ internal object NativeOpenRules {
      * The decision. [error] is `null` for ok. [page] is set only by `nativeAccountCreateOpen` when it opened the page
      * (`opened`), so the ack carries `page` (spec §25.52Z, accountAckPage).
      */
-    internal class Reply(val error: String?, val page: String? = null) {
+    internal class Reply(val error: String?, val page: String? = null, val result: String? = null) {
         val ok: Boolean get() = error == null
     }
 
@@ -67,6 +67,11 @@ internal object NativeOpenRules {
      * `nativeAccountCreateOpen` (§25.46.10, §25.52Z.2). [account] is the value of the `account` field (`null` when absent).
      * Missing or malformed `account` is `bad_request`, checked with the input, before the host is asked.
      */
+    /**
+     * `nativeAccountCreateOpen`. [binding] is the binding lookup (§25.52Z.3, R1487), run after the gate and the guard and before the page opens.
+     * Already bound and a failed lookup answer `ok` with `page: "none"` and the result code (no page, no eoa); a confirmed absence opens the page.
+     * With no [binding] the lookup is not run (the vectors of the create checks only).
+     */
     fun accountCreateOpen(
         fields: Collection<String>,
         reqId: Any?,
@@ -74,8 +79,9 @@ internal object NativeOpenRules {
         gate: NoKeyGate.Gate,
         host: Host,
         guardDenial: String? = null,
+        binding: (() -> BindingCode)? = null,
     ): Reply =
-        decide(fields, reqId, host, gate, allowed = ACCOUNT_CREATE_FIELDS, account = account, accountRequired = true, guardDenial = guardDenial)
+        decide(fields, reqId, host, gate, allowed = ACCOUNT_CREATE_FIELDS, account = account, accountRequired = true, guardDenial = guardDenial, binding = binding)
 
     /** `true` when [account] is a BeamioTag or a canonical EOA address (§25.52Z.2). */
     fun isValidAccount(account: Any?): Boolean {
@@ -92,6 +98,7 @@ internal object NativeOpenRules {
         account: Any? = null,
         accountRequired: Boolean = false,
         guardDenial: String? = null,
+        binding: (() -> BindingCode)? = null,
     ): Reply {
         if (fields.any { it in CREDENTIAL_FIELDS }) return Reply(KEY_REFUSED)
         if (fields.any { it !in allowed }) return Reply(BAD_REQUEST)
@@ -101,6 +108,12 @@ internal object NativeOpenRules {
         if (gate != null && gate != NoKeyGate.Gate.G0) return Reply(NOT_AVAILABLE)
         // The create guard (AccountCreateGuard): a create that is not allowed never opens the page; the diagnostic code stays in the SDK.
         if (guardDenial != null) return Reply(NOT_AVAILABLE)
+        // R1487: the binding lookup answers before the page opens. Already bound and a failed lookup never open the page.
+        when (binding?.invoke()) {
+            BindingCode.ALREADY_BOUND -> return Reply(null, page = PAGE_NONE, result = BindingCode.ALREADY_BOUND.wire)
+            BindingCode.LOOKUP_UNAVAILABLE -> return Reply(null, page = PAGE_NONE, result = BindingCode.LOOKUP_UNAVAILABLE.wire)
+            BindingCode.CREATE, null -> Unit
+        }
         return if (host.open(id)) {
             Reply(null, page = if (accountRequired) PAGE_OPENED else null)
         } else {
@@ -109,6 +122,7 @@ internal object NativeOpenRules {
     }
 
     const val PAGE_OPENED = "opened"
+    const val PAGE_NONE = "none"
 
     /**
      * The ack the module emits: `{type, reqId, ok}`, with `error` only when not ok, and `page` only when the account page

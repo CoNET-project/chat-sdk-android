@@ -57,6 +57,14 @@ import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import network.conet.chat.nativekey.BeamioShellRecordImport
+import network.conet.chat.nativekey.BindingCode
+import network.conet.chat.nativekey.BindingDecision
+import network.conet.chat.nativekey.BindingDevice
+import network.conet.chat.nativekey.BindingKind
+import network.conet.chat.nativekey.ChainRegistryReader
+import network.conet.chat.nativekey.RegistryBudget
+import network.conet.chat.nativekey.RegistryRead
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -1172,7 +1180,12 @@ object BeamioConetChatModule {
      * The shared shape of the three page-open commands (spec r3t §25.41.3, r3x §25.46.10). The decision is
      * [NativeOpenRules]; this sends its ack. A refused field is logged by name only. The reqId is echoed as sent, or null.
      */
-    private fun nativeOpenAck(body: JSONObject, type: String, decide: (List<String>, Any?) -> NativeOpenRules.Reply) {
+    private fun nativeOpenAck(
+        body: JSONObject,
+        type: String,
+        resultType: String? = null,
+        decide: (List<String>, Any?) -> NativeOpenRules.Reply,
+    ) {
         val fields = body.keys().asSequence().map { it.toString() }.toList()
         NativeOpenRules.firstCredentialField(fields)?.let { Log.w(TAG, "$type refused field: $it") }
         val reqId = PgpDecryptInbound.reqIdOf(body)
@@ -1183,6 +1196,10 @@ object BeamioConetChatModule {
             NativeOpenRules.Reply(NativeOpenRules.NOT_AVAILABLE)
         }
         emitEvent(NativeOpenRules.ackPayload(reqId, reply))
+        // R1487: the result follows the ack for the same reqId (already_bound or lookup_unavailable: no eoa, no page).
+        if (resultType != null && reply.result != null) {
+            emitEvent(JSONObject().put("type", resultType).put("reqId", reqId ?: JSONObject.NULL).put("code", reply.result))
+        }
     }
 
     /** `nativeImportOpen` (spec 25.25.1, r3x N-01 to N-07, N-11, N-12, N-15): only opens the native import page. */
@@ -1212,7 +1229,12 @@ object BeamioConetChatModule {
         val ctx = appContext
         // The result follows as `nativeAccountCreateResult` for this reqId (§25.46.6). No key or phrase passes through here.
         NativeAccountCreateHost.events = { payload -> emitEvent(payload) }
-        nativeOpenAck(body, "nativeAccountCreateOpen") { fields, reqId ->
+        // The binding lookup may take up to 10 s (§25.52HI.3): the command runs off the caller's thread, and the ack follows the lookup.
+        io.execute { nativeAccountCreateOpenRun(ctx, body) }
+    }
+
+    private fun nativeAccountCreateOpenRun(ctx: Context?, body: JSONObject) {
+        nativeOpenAck(body, "nativeAccountCreateOpen", resultType = "nativeAccountCreateResult") { fields, reqId ->
             // handleCommand sets appContext before dispatch. Without it the gate cannot be read, so the page is not opened.
             // An unreadable gate or vault is a closed answer (not_available), never a page (review 76706f6d).
             val gate = ctx?.let {
@@ -1233,9 +1255,69 @@ object BeamioConetChatModule {
                     null
                 }
                 denial?.let { Log.w(TAG, "nativeAccountCreateOpen refused: $it") }
-                NativeOpenRules.accountCreateOpen(fields, reqId, body.opt("account"), gate, NativeOpenRules.accountHost, denial)
+                val account = body.opt("account") as? String
+                NativeOpenRules.accountCreateOpen(
+                    fields,
+                    reqId,
+                    body.opt("account"),
+                    gate,
+                    NativeOpenRules.accountHost,
+                    denial,
+                    binding = if (ctx != null && account != null) ({ bindingLookup(ctx, account) }) else null,
+                )
             }
         }
+    }
+
+    /**
+     * The binding lookup before a create (§25.52Z.3, §25.52HH, §25.52HI): one live read of the current registry, then the local sources (HH.2),
+     * decided by [BindingDecision]. A tag is looked up by owner; an EOA by account. Nothing is logged here except through the reader's codes.
+     */
+    private fun bindingLookup(ctx: Context, account: String): BindingCode {
+        val kind = if (account.startsWith("0x")) BindingKind.EOA else BindingKind.TAG
+        val start = System.nanoTime() / 1_000_000L
+        val deadline = RegistryBudget.deadlineFrom(start)
+        val reader = ChainRegistryReader()
+        val reg = try {
+            if (kind == BindingKind.EOA) reader.readAccount(account, deadline) else reader.readOwner(account, deadline)
+        } catch (_: Exception) {
+            RegistryRead.Invalid("rpc_error")
+        }
+        val total = System.nanoTime() / 1_000_000L - start
+        val (local, device) = bindingLocalSources(ctx, if (kind == BindingKind.EOA) account else null)
+        return BindingDecision.decideFromRead(kind, reg, total, local, device)
+    }
+
+    /**
+     * The local sources of the binding lookup (HH.2): a positive source is the account's page copy (K) or the native key of the account; an
+     * unreadable store or vault is fail-closed. For a tag the account is not known, so the page copies and the native key say only whether K exists.
+     */
+    private fun bindingLocalSources(ctx: Context, eoa: String?): Pair<network.conet.chat.nativekey.LocalSource, BindingDevice> {
+        val app = ctx.applicationContext
+        val vault = try {
+            NativeWallet.vault(app).state()
+        } catch (_: Exception) {
+            null
+        }
+        val keyReady = vault is network.conet.chat.nativekey.NativeWalletVault.State.Ready && (eoa == null || vault.eoa.equals(eoa, ignoreCase = true))
+        val vaultUnreadable = vault == null || vault is network.conet.chat.nativekey.NativeWalletVault.State.Locked
+        var copyPositive = false
+        var copyUnreadable = false
+        try {
+            if (eoa != null) {
+                copyPositive = BeamioShellRecordImport.storeFor(app, eoa).read() != null
+            } else {
+                copyPositive = network.conet.chat.nativekey.AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")).names().isNotEmpty()
+            }
+        } catch (_: Exception) {
+            copyUnreadable = true
+        }
+        val local = when {
+            keyReady || copyPositive -> network.conet.chat.nativekey.LocalSource.POSITIVE
+            vaultUnreadable || copyUnreadable -> network.conet.chat.nativekey.LocalSource.UNREADABLE
+            else -> network.conet.chat.nativekey.LocalSource.NONE
+        }
+        return local to BindingDevice(kPresent = keyReady || copyPositive, walletRecord = keyReady)
     }
 
     private val pgpRestoreWorker = Executors.newSingleThreadExecutor()
