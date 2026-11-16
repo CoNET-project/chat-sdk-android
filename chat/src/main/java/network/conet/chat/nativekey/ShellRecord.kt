@@ -655,8 +655,11 @@ internal class SealedPageRecordStore(
         }
     }
 
-    /** Removes the sealed file of this account. Used when the copy cannot be read at the unregister (see [PageWalletRemoval]). */
-    fun erase() = files.delete(name)
+    /**
+     * Removes the sealed file of this account. Returns true only when the file is confirmed gone; a removal that does not take effect
+     * returns false (never a silent success, 25.52Y.84). The caller reports `clear_incomplete` for a false result.
+     */
+    fun erase(): Boolean = eraseChecked(files, name)
 
     /** Replaces the whole record in one step. Throws [IOException] on any failure, and the earlier record is unchanged. */
     fun write(record: JSONObject) {
@@ -806,7 +809,7 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
  * The flags after a first-run import (§25.52T.4, §25.52T.5, §25.52T.6): an unreadable legacy store sets the marker while no pointer exists;
  * a confirmed absence clears it; a successful import sets the pointer and clears the marker; an existing copy clears the marker.
  */
-internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode) {
+internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode): ShellImportCode = try {
     when (code) {
         ShellImportCode.LEGACY_UNREADABLE -> if (!flags.accountPointer()) flags.setLegacyUnreadable()
         ShellImportCode.ABSENT -> flags.clearLegacyUnreadable()
@@ -817,6 +820,21 @@ internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode) {
         ShellImportCode.EXISTS -> flags.clearLegacyUnreadable()
         else -> Unit
     }
+    code
+} catch (_: IOException) {
+    // A flag that does not take effect means the import is not finished: import_failed on the wire, never a success (25.52Y.84).
+    ShellImportCode.IMPORT_FAILED
+}
+
+/**
+ * Clears the legacy marker. A clear that does not take effect is `clear_incomplete` (25.52Y.84): the marker stays and the next read retries.
+ * Null when the clear took effect.
+ */
+internal fun clearLegacyCode(flags: DeviceFlags): String? = try {
+    flags.clearLegacyUnreadable()
+    null
+} catch (_: IOException) {
+    "clear_incomplete"
 }
 
 /**
@@ -1187,7 +1205,8 @@ internal class ShellRecordBridge(
                 // §25.52I.2: PGP fields never reach the page. A PGP header that survives the strip, at any path, fails the read closed
                 // (F2 condition 2). The error is an SDK choice pending the interface owner's ruling; the device flags are not touched.
                 if (ShellRecordPolicy.hasPgpHeader(current)) return reply("error", listOf("sub" to "record_unreadable"))
-                repairFlags(current, acc.eoa, valid = judgement == null)
+                // A flag that does not take effect is not silently repaired: the read answers the mapped code (25.52Y.84), and the next read retries.
+                repairFlags(current, acc.eoa, valid = judgement == null)?.let { return reply("error", listOf("sub" to it)) }
                 val out = reply(
                     "ok",
                     listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
@@ -1201,17 +1220,19 @@ internal class ShellRecordBridge(
     }
 
     /** The flags a readable record sets: the marker is cleared, and an empty pointer is repaired when a profile matches (§25.52U.5). */
-    private fun repairFlags(record: JSONObject, eoa: String, valid: Boolean) {
+    private fun repairFlags(record: JSONObject, eoa: String, valid: Boolean): String? {
         try {
-            if (valid) flags.clearLegacyUnreadable()
+            if (valid) clearLegacyCode(flags)?.let { return it }
             if (!flags.accountPointer() && ShellRecordPolicy.matchingProfiles(record, eoa).isNotEmpty()) flags.setAccountPointer()
             // R488: a readable record that holds the account's key persists the address, which the cold start restores.
             if (valid && ShellRecordPolicy.accountHoldsEoaKey(record, eoa) && flags.accountAddress() != eoa.lowercase()) {
                 flags.setAccountAddress(eoa)
             }
         } catch (_: IOException) {
-            // The flags are not critical for a readable record: the next read repairs them.
+            // A flag write that does not take effect: write_failed (25.52Y.84). The next read repairs it.
+            return "write_failed"
         }
+        return null
     }
 
     /**
@@ -1229,7 +1250,8 @@ internal class ShellRecordBridge(
         return when (outcome()) {
             null -> reply("migrating", emptyList())
             ImportOutcome.ABSENT -> {
-                flags.clearLegacyUnreadable()
+                // The absence is not confirmed while the marker stays: a clear that does not take effect answers clear_incomplete (25.52Y.84).
+                clearLegacyCode(flags)?.let { return reply("error", listOf("sub" to it)) }
                 // r3rv (KR-01): a readable keystore key with no copy is replicated from that key; the read still answers absent.
                 if (acc is ShellRecordAccount.Ready && acc.nativeKeyPresent) replica?.invoke(acc.eoa)
                 reply("absent", emptyList())
@@ -1609,8 +1631,8 @@ object BeamioShellRecordImport {
             pgpStep = { e, src -> BeamioPgpMigrationImport.run(app, e, source = src) },
             outcome = ShellRecordState.outcome,
         )
-        val code = flow.run(eoa, wallet, pgp)
-        applyImportMarker(flagsOf(app), code)
+        // A flag that does not take effect turns the import into import_failed (applyImportMarker), never a success.
+        val code = applyImportMarker(flagsOf(app), flow.run(eoa, wallet, pgp))
         if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) {
             ShellRecordState.bound.set(eoa)
             // R488: the binding survives a cold start, so the shell does not have to bind again on every start.

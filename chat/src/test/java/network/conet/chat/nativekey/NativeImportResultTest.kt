@@ -98,7 +98,7 @@ class NativeImportResultTest {
         val result = NativeImport.submit("zz", null, NativeWalletVault(NativeTestWrap(), NativeTestFiles()))
 
         assertEquals(Code.INVALID_FORMAT, result.code)
-        val e = assertOneEvent("invalid_format")
+        val e = assertOneEvent("bad_request")
         assertFalse(e.has("eoa"))
         assertEquals("r4", NativeImportHost.currentReqId())
     }
@@ -109,8 +109,44 @@ class NativeImportResultTest {
         val result = NativeImport.submit(keyAHex, eoaB, NativeWalletVault(NativeTestWrap(), NativeTestFiles()))
 
         assertEquals(Code.ADDRESS_MISMATCH, result.code)
-        val e = assertOneEvent("address_mismatch")
+        val e = assertOneEvent("import_failed")
         assertFalse(e.has("eoa"))
+    }
+
+    /** A key that is zero (outside the curve order) is an invalid key: `bad_request` on the wire (25.52Y.97 第 2 条), nothing written. */
+    @Test
+    fun anInvalidKeyIsBadRequestOnTheWireAndWritesNothing() {
+        openPage("r8")
+        val files = NativeTestFiles()
+        val result = NativeImport.submit("0".repeat(64), null, NativeWalletVault(NativeTestWrap(), files))
+
+        assertEquals(Code.INVALID_KEY, result.code)
+        assertOneEvent("bad_request")
+        assertTrue("nothing is written", files.map.isEmpty())
+        assertEquals("r8", NativeImportHost.currentReqId())
+    }
+
+    /** 25.52Y.95 第 2 条, 25.52Y.97: every result is one of the five spec codes. */
+    @Test
+    fun everyResultUsesOnlyTheSpecCodes() {
+        val allowed = setOf("ok", "already_exists", "import_failed", "cancelled", "bad_request")
+        val expected = mapOf(
+            Code.OK to "ok",
+            Code.ALREADY_EXISTS to "already_exists",
+            Code.CANCELLED to "cancelled",
+            Code.INVALID_FORMAT to "bad_request",
+            Code.INVALID_KEY to "bad_request",
+            Code.INVALID_MNEMONIC to "bad_request",
+            Code.ADDRESS_MISMATCH to "import_failed",
+            Code.WRITE_FAILED to "import_failed",
+            Code.READBACK_FAILED to "import_failed",
+            Code.ROLLBACK_PENDING to "import_failed",
+        )
+        for (code in Code.values()) {
+            val wire = NativeImportHost.eventCode(code)
+            assertTrue("$code maps into the spec table: $wire", wire in allowed)
+            assertEquals(expected[code], wire)
+        }
     }
 
     @Test

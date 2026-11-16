@@ -130,7 +130,7 @@ class BridgeCommandTableTest {
     @Test
     fun everyRegisteredNameIsInTheReferenceTable() {
         val t = tableT()
-        assertEquals(67, t.size)
+        assertEquals(68, t.size) // 25.52Y.95 第 1 条: T1 13 names (accountCleanupOld), total 68
         val exact = BridgeCommandTable.DISPATCH + BridgeCommandTable.DECIDED_BEFORE_DISPATCH + BridgeCommandTable.GATE_STATUS + NoKeyGate.RETIRED
         // 25.52AW.3, BG.4, BP.1: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); chatRouteRegister (W5, 25.28.3, PM R2085)
         // makes 54; the page-record names are in T too.

@@ -18,10 +18,11 @@
   },
   "counts": {
     "T0": 55,
-    "T1": 12,
-    "total": 67
+    "T1": 13,
+    "total": 68
   },
   "names": [
+    "accountCleanupOld",
     "ackInbound",
     "chatRouteRegister",
     "clearIdentity",
@@ -91,6 +92,9 @@
     "walletTransferSwitched"
   ],
   "sources": {
+    "accountCleanupOld": [
+      "spec §25.52AV.2 T1"
+    ],
     "ackInbound": [
       "chatCommands",
       "mapping.bridgeName"

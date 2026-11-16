@@ -86,7 +86,7 @@ object NativeImportHost {
         val payload = JSONObject()
             .put("type", "nativeImportResult")
             .put("reqId", id)
-            .put("code", result.code.wire)
+            .put("code", eventCode(result.code))
         if (result.code == NativeImport.Code.OK || result.code == NativeImport.Code.ALREADY_EXISTS) {
             result.eoa?.let { payload.put("eoa", it) }
         }
@@ -95,6 +95,27 @@ object NativeImportHost {
     }
 
     private val TERMINAL = setOf(NativeImport.Code.OK, NativeImport.Code.ALREADY_EXISTS, NativeImport.Code.CANCELLED)
+
+    /**
+     * The wire `code` of `nativeImportResult`, exactly the five codes of 25.52Y.95 第 2 条 (mapping: 25.52Y.97 第 2 条). The internal codes are
+     * not on the wire. `invalid_format`, `invalid_key` and `invalid_mnemonic` (input not valid, nothing written) are `bad_request`;
+     * `address_mismatch`, `write_failed`, `readback_failed` and `rollback_pending` are `import_failed`. `ok`, `already_exists` and `cancelled`
+     * keep their names. A `rollback_pending` is never `ok` and never `already_exists`.
+     */
+    internal fun eventCode(code: NativeImport.Code): String = when (code) {
+        NativeImport.Code.OK -> "ok"
+        NativeImport.Code.ALREADY_EXISTS -> "already_exists"
+        NativeImport.Code.CANCELLED -> "cancelled"
+        NativeImport.Code.INVALID_FORMAT,
+        NativeImport.Code.INVALID_KEY,
+        NativeImport.Code.INVALID_MNEMONIC,
+        -> "bad_request"
+        NativeImport.Code.ADDRESS_MISMATCH,
+        NativeImport.Code.WRITE_FAILED,
+        NativeImport.Code.READBACK_FAILED,
+        NativeImport.Code.ROLLBACK_PENDING,
+        -> "import_failed"
+    }
 
     /** The `reqId` of the open import page, if any. */
     internal fun currentReqId(): Any? = pageReqId

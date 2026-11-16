@@ -432,7 +432,14 @@ internal class PgpMigrationEngine(
      */
     private fun verifyStaged(armor: String, f0: String, wroteStaged: Boolean, checkpoint: (Stage) -> Unit): MigrationResult {
         fun reject(code: MigrationCode, fp: String? = null): Nothing {
-            if (wroteStaged) runCatching { staged.delete() }
+            // Our own staged write is rolled back. If the removal does not take effect, the write is still there: a write failure, never a silent reject (25.52.6).
+            if (wroteStaged) {
+                try {
+                    staged.delete()
+                } catch (_: IOException) {
+                    throw Stop(MigrationCode.WRITE_FAILED)
+                }
+            }
             throw Stop(code, fp)
         }
 
@@ -486,6 +493,18 @@ internal class PgpMigrationEngine(
         } ?: MigrationResult(MigrationCode.BUSY)
     }
 
+    /**
+     * A removal in the unregister that does not take effect is `clear_incomplete`, never `ok` (25.52Y.84, 25.52Y.91 第 6 项): the item stays,
+     * and a later call resumes the clear.
+     */
+    private fun removeOrIncomplete(remove: () -> Unit) {
+        try {
+            remove()
+        } catch (_: IOException) {
+            throw Stop(MigrationCode.CLEAR_INCOMPLETE)
+        }
+    }
+
     private fun unregisterRun(checkpoint: (Stage) -> Unit): MigrationResult {
         // A present-but-unreadable item is still present: it must be removed too, so it counts as present.
         val markerPresent = try {
@@ -500,17 +519,17 @@ internal class PgpMigrationEngine(
         }
         val walletPresent = wallet.present()
         if (!markerPresent && !stagedPresent && !walletPresent) {
-            lastCode.delete()
+            removeOrIncomplete { lastCode.delete() }
             return MigrationResult(MigrationCode.OK)
         }
         // The recovery check comes before any removal, the W fields included (§25.52C.3, §25.52J.3).
         if (!hasRecoverySource()) return MigrationResult(MigrationCode.UNREGISTER_REFUSED)
         if (markerPresent) {
-            marker.delete()
+            removeOrIncomplete { marker.delete() }
             checkpoint(Stage.AFTER_MARKER_DELETED)
         }
-        if (stagedPresent) staged.delete()
-        lastCode.delete()
+        if (stagedPresent) removeOrIncomplete { staged.delete() }
+        removeOrIncomplete { lastCode.delete() }
         if (walletPresent) {
             try {
                 wallet.remove()
