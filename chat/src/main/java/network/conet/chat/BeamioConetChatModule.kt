@@ -195,7 +195,8 @@ object BeamioConetChatModule {
             // identity commands answer not_ready until a redo succeeds (see dispatch).
             // The marker is read before the redo, which clears it on success. The orphan sweep is for an interrupted clear only.
             val interrupted = orphanSweepMayRun(ClearFlagFiles(pageRecordFiles(ctxIn)))
-            val noAccount = recoveryAccountOf(ctxIn) == null
+            // An unknown snapshot is not "no account": the orphan sweep may not run on an unknown state (fail closed).
+            val noAccount = NativeWallet.vault(ctxIn).snapshotState() != null && recoveryAccountOf(ctxIn) == null
             retryClearRedo(ctxIn)
             // r3rh 第 2 项 (PY.8 第 7 项): with no account and an interrupted clear, the orphan sweep runs in the background. It never blocks
             // start-up or a command; an offline or failed chain check skips the account until the next start-up.
@@ -630,7 +631,13 @@ object BeamioConetChatModule {
     ) {
         NativeWallet.migrateLegacy(ctx)
         val vault = NativeWallet.vault(ctx)
-        when (val st = vault.state()) {
+        // 25.52Y.75: the snapshot. An unknown state is not_ready: nothing is adopted, imported or written (25.52CS.2).
+        val known: NativeWalletVault.State = vault.snapshotState() ?: run {
+            scheduleSnapshotRefresh(ctx)
+            ack(reqId, false, error = NoKeyGate.NOT_READY)
+            return
+        }
+        when (val st = known) {
             is NativeWalletVault.State.Ready -> {
                 if (st.eoa != eoa) {
                     BeamioConetChatSignBroker.clearNativeSigner()
@@ -1116,7 +1123,8 @@ object BeamioConetChatModule {
 
     /** The account whose migration records logout must check: the wallet's, else the legacy copy's. Null when neither. */
     private fun recoveryAccountOf(ctx: Context): String? {
-        (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.let { return it.eoa }
+        // 25.52Y.75: the snapshot. An unknown snapshot is not an account and not "no account" either: the caller must check that it is known.
+        (NativeWallet.vault(ctx).snapshotState() as? NativeWalletVault.State.Ready)?.let { return it.eoa }
         return BeamioChatPgpStore.legacyCopy(ctx)?.eoa?.takeIf { PgpMigrationPolicy.EOA_RE.matches(it) }
     }
 
