@@ -66,7 +66,7 @@ class PgpMigrationVectorsTest {
         assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
         assertEquals(2, doc.getJSONArray("pageRecordDeleteCases").length())
         // r3cf (25.52AH): the self-check has 259 steps (it had 254 before the r3cf vectors).
-        assertEquals(261, doc.getJSONObject("selfCheck").getInt("runs"))
+        assertEquals(438, doc.getJSONObject("selfCheck").getInt("runs"))
     }
 
     @Test
