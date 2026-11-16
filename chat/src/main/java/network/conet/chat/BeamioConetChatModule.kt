@@ -479,7 +479,12 @@ object BeamioConetChatModule {
         }
         // G1 (25.26.4c item 4): a native record exists and this session is not ready. The EOA in the payload must equal
         // the record; a mismatch or a missing EOA changes nothing. A locked record cannot be checked against the EOA.
-        val vaultNow = NativeWallet.vault(ctx).state()
+        // 25.52Y.75: the snapshot, never the keystore on this thread. An unknown snapshot is not_ready once, with nothing changed.
+        val vaultNow = NativeWallet.vault(ctx).snapshotState() ?: run {
+            scheduleSnapshotRefresh(ctx)
+            ack(reqId, false, error = NoKeyGate.NOT_READY)
+            return
+        }
         if (NoKeyGate.gateOf(vaultNow, NativeSessionState.isReady()) == NoKeyGate.Gate.G1) {
             if (vaultNow !is NativeWalletVault.State.Ready) {
                 ack(reqId, false, error = "locked")
