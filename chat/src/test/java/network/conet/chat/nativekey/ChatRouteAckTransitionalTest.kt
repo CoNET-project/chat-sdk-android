@@ -37,4 +37,14 @@ class ChatRouteAckTransitionalTest {
         assertTrue("Y.73-transitional is named at the entry", audit.contains("Y.73-transitional"))
         assertTrue("the expiry condition is written at the entry", audit.contains("expiry:"))
     }
+
+    /**
+     * Y.73 第 3 项 expiry test: when the release record says both shells ship the submitted branch (a flag written by the PWA and shell release
+     * records, never by the SDK), the transitional entry must be gone. The flag's path and format are not yet agreed with the PWA integration seat,
+     * so this test is an explicit pending failure, not a pass. It stays red until the path and format are agreed and the test reads them.
+     */
+    @Test
+    fun expiryFlagPathIsAgreedAndTheEntryExpires() {
+        org.junit.Assert.fail("PENDING: the expiry flag path and format are not agreed with the PWA integration seat (Y.73 第 3 项); the expiry test is not in place")
+    }
 }
