@@ -637,9 +637,15 @@ internal class SealedPageRecordStore(
 
     /** The stored record, or `null` when there is none. Throws [IOException] when present but unreadable. */
     fun read(): JSONObject? {
-        val bytes = files.read(name) ?: return null
+        // diag4 (logging only): the file read and the open (decrypt) as separate segments.
+        val tFile = DiagTiming.now()
+        val bytes = files.read(name)
+        DiagTiming.log("page:fileRead", tFile, if (bytes == null) "absent" else "ok")
+        if (bytes == null) return null
         if (bytes.size < MIN_FILE_BYTES || bytes[0] != FORMAT_VERSION[0]) throw IOException("page record is malformed")
+        val tOpen = DiagTiming.now()
         val plain = wrap.open(aad, bytes.copyOfRange(1, bytes.size)) ?: throw IOException("page record does not open")
+        DiagTiming.log("page:open", tOpen, "ok")
         return try {
             JSONObject(String(plain, Charsets.UTF_8))
         } catch (_: Exception) {
