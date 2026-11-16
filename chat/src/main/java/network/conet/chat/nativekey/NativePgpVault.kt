@@ -61,19 +61,19 @@ internal class NativePgpVault(
     private val rec = recName(account, slot)
     private val mark = markName(account, slot)
 
-    /** Reports the state. Removes a record that never reached its marker. */
+    /**
+     * Reports the state. A read never deletes anything (project ruling 2026-11-16: keep the user's data). A record without its marker is
+     * Locked("marker_missing"), an unknown state that retries; it is not treated as absent, so nothing creates a new key over it. A marker
+     * without a record is Locked("record_missing") for the same reason. Only a write's own rollback removes records (restore).
+     */
     @Synchronized
     fun state(): State {
         val r = files.read(rec)
         val m = files.read(mark)
         if (r == null) {
-            if (m != null) files.delete(mark)
-            return State.NoKey
+            return if (m == null) State.NoKey else State.Locked("record_missing")
         }
-        if (m == null) {
-            files.delete(rec)
-            return State.NoKey
-        }
+        if (m == null) return State.Locked("marker_missing")
         if (!m.contentEquals(digestHex(r).toByteArray(Charsets.US_ASCII))) return State.Locked("marker_mismatch")
         val parsed = parseRecord(r) ?: return State.Locked("unreadable")
         if (parsed.eoa != account) return State.Locked("account_mismatch")

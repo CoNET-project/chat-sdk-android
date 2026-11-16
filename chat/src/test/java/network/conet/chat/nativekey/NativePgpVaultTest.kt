@@ -115,12 +115,17 @@ class NativePgpVaultTest {
     }
 
     @Test
-    fun aRecordWithoutItsMarkerIsRemovedAsIncomplete() {
+    fun aRecordWithoutItsMarkerIsKeptAndReportedLocked() {
+        // Rewritten 2026-11-16 (project ruling: a read never deletes user data). The earlier assertion removed the record on read.
         val (vault, _, files) = fresh()
         assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
         files.delete(NativePgpVault.markName(SYN_EOA))
-        assertTrue(vault.state() is NativePgpVault.State.NoKey)
-        assertFalse(files.map.containsKey(NativePgpVault.recName(SYN_EOA)))
+        val st = vault.state()
+        assertTrue(st is NativePgpVault.State.Locked && (st as NativePgpVault.State.Locked).reason == "marker_missing")
+        assertTrue(files.map.containsKey(NativePgpVault.recName(SYN_EOA)))
+        // A second read changes nothing either.
+        assertTrue(vault.state() is NativePgpVault.State.Locked)
+        assertTrue(files.map.containsKey(NativePgpVault.recName(SYN_EOA)))
     }
 
     @Test

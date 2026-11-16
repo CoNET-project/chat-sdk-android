@@ -148,9 +148,9 @@ class NativeWalletVault(
         val mark = files.read(MARK)
         val mnem = files.read(MNEM)
         if (rec == null) {
-            // A marker or phrase without a key record cannot be used. A bare marker is removed (it is not key material).
-            if (mark != null) runCatching { files.delete(MARK) }
-            return if (mnem != null) State.Locked("record_missing") else State.NoKey
+            // A marker or phrase without a key record cannot be used. A read never removes it (project ruling 2026-11-16): an unknown state.
+            if (mark != null || mnem != null) return State.Locked("record_missing")
+            return State.NoKey
         }
         if (!markerOk(rec, mark, mnem)) return State.Locked(if (mark == null) "marker_missing" else "marker_mismatch")
         val opened = openRecord(rec) ?: return State.Locked("unreadable")
