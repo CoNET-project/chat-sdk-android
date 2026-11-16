@@ -44,6 +44,12 @@ internal object NativeOpenRules {
 
         /** `true` when the page opened. Only called when [registered] is true. */
         fun open(reqId: Any): Boolean
+
+        /** Admission before a binding lookup (the account page only). Other pages always admit a lookup. */
+        fun admit(reqId: Any): NativeAccountCreateHost.Admission = NativeAccountCreateHost.Admission.LOOKUP
+
+        /** The answer of the lookup, or null when it failed. The account page only. */
+        fun settle(reqId: Any, code: String?) {}
     }
 
     /**
@@ -108,16 +114,40 @@ internal object NativeOpenRules {
         if (gate != null && gate != NoKeyGate.Gate.G0) return Reply(NOT_AVAILABLE)
         // The create guard (AccountCreateGuard): a create that is not allowed never opens the page; the diagnostic code stays in the SDK.
         if (guardDenial != null) return Reply(NOT_AVAILABLE)
-        // R1487: the binding lookup answers before the page opens. Already bound and a failed lookup never open the page.
-        when (binding?.invoke()) {
-            BindingCode.ALREADY_BOUND -> return Reply(null, page = PAGE_NONE, result = BindingCode.ALREADY_BOUND.wire)
-            BindingCode.LOOKUP_UNAVAILABLE -> return Reply(null, page = PAGE_NONE, result = BindingCode.LOOKUP_UNAVAILABLE.wire)
-            BindingCode.CREATE, null -> Unit
+        // Admission (N-31, N-32, N-39, N-41): a refused request never runs a lookup; the same page is answered as opened (N-31).
+        when (host.admit(id)) {
+            NativeAccountCreateHost.Admission.REFUSED -> return Reply(NOT_AVAILABLE)
+            NativeAccountCreateHost.Admission.SAME_PAGE -> return Reply(null, page = if (accountRequired) PAGE_OPENED else null)
+            NativeAccountCreateHost.Admission.LOOKUP -> Unit
         }
-        return if (host.open(id)) {
-            Reply(null, page = if (accountRequired) PAGE_OPENED else null)
+        // R1487: the binding lookup answers before the page opens. Already bound and a failed lookup never open the page.
+        val code = if (binding == null) {
+            BindingCode.CREATE
         } else {
-            Reply(NOT_AVAILABLE)
+            try {
+                binding()
+            } catch (e: Exception) {
+                host.settle(id, null)
+                throw e
+            }
+        }
+        return afterBinding(id, host, code, accountRequired)
+    }
+
+    /**
+     * The reply once the binding answer is known (R1487, §25.46.2). The answer releases the lookup slot; `already_bound` and `lookup_unavailable`
+     * are final for the `reqId`, and only a confirmed absence opens the page. Also used by the asynchronous answer of a lookup (N-39, N-40).
+     */
+    fun afterBinding(reqId: Any, host: Host, code: BindingCode, accountRequired: Boolean): Reply {
+        host.settle(reqId, code.wire)
+        return when (code) {
+            BindingCode.ALREADY_BOUND -> Reply(null, page = PAGE_NONE, result = BindingCode.ALREADY_BOUND.wire)
+            BindingCode.LOOKUP_UNAVAILABLE -> Reply(null, page = PAGE_NONE, result = BindingCode.LOOKUP_UNAVAILABLE.wire)
+            BindingCode.CREATE -> if (host.open(reqId)) {
+                Reply(null, page = if (accountRequired) PAGE_OPENED else null)
+            } else {
+                Reply(NOT_AVAILABLE)
+            }
         }
     }
 
@@ -149,5 +179,7 @@ internal object NativeOpenRules {
     val accountHost: Host = object : Host {
         override fun registered(): Boolean = NativeAccountCreateHost.launcher != null
         override fun open(reqId: Any): Boolean = NativeAccountCreateHost.open(reqId)
+        override fun admit(reqId: Any): NativeAccountCreateHost.Admission = NativeAccountCreateHost.admit(reqId)
+        override fun settle(reqId: Any, code: String?) = NativeAccountCreateHost.settle(reqId, code)
     }
 }

@@ -31,6 +31,51 @@ object NativeAccountCreateHost {
     @Volatile
     private var resultSeen = false
 
+    /**
+     * The `reqId`s that have a final answer (r3kn, r3la, §25.46.2): `ok`, `cancelled` (the page closed with no result), `already_bound`, and
+     * `lookup_unavailable`. A later delivery of one of them is `not_available`. The set is not cleared when another page opens (N-42).
+     */
+    private val completed = mutableSetOf<String>()
+
+    /** The `reqId` whose binding lookup is in flight (r3kl, M-1): another `reqId` is refused until it is answered. */
+    private var queryKey: String? = null
+
+    /** The admission of one open request (§25.46.2): a lookup may start, the open page is the same request, or the request is refused. */
+    enum class Admission { LOOKUP, SAME_PAGE, REFUSED }
+
+    /**
+     * Admits one open request before its lookup. A completed `reqId` is refused; while a page is open, the same `reqId` is that page (N-31) and any
+     * other is refused (N-32); while a lookup is in flight, every request is refused (N-39, N-41). Otherwise the lookup may start and holds the slot.
+     */
+    @Synchronized
+    internal fun admit(reqId: Any): Admission {
+        val k = reqId.toString()
+        if (k in completed) return Admission.REFUSED
+        pageReqId?.let { return if (it.toString() == k) Admission.SAME_PAGE else Admission.REFUSED }
+        if (queryKey != null) return Admission.REFUSED
+        queryKey = k
+        return Admission.LOOKUP
+    }
+
+    /**
+     * The answer of a lookup (or its failure, [code] null) releases the slot. An answer that is final completes the `reqId`.
+     */
+    @Synchronized
+    internal fun settle(reqId: Any, code: String?) {
+        val k = reqId.toString()
+        if (queryKey == k) queryKey = null
+        if (code == "already_bound" || code == "lookup_unavailable") completed += k
+    }
+
+    /** Tests only: the state of the host is cleared, so each case starts from a fresh host. */
+    @Synchronized
+    internal fun resetForTests() {
+        pageReqId = null
+        resultSeen = false
+        completed.clear()
+        queryKey = null
+    }
+
     private val ALLOWED_FIELDS = setOf("type", "reqId", "code", "eoa")
     private val RESULT_CODES = setOf("ok", "cancelled", "already_exists", "write_failed", "readback_failed")
     private val CANONICAL_EOA = Regex("^0x[0-9a-f]{40}$")
@@ -80,6 +125,7 @@ object NativeAccountCreateHost {
             val eoa = event.optString("eoa", "")
             if (!CANONICAL_EOA.matches(eoa)) return Drop("eoa_invalid")
             forward(id, code, eoa)
+            completed += id.toString()
             pageReqId = null
             resultSeen = false
             return null
@@ -97,6 +143,7 @@ object NativeAccountCreateHost {
             // A cancelled creation ends its creation transaction (the key is not created, so no copy is written for it).
             ShellRecordState.creationTxn.set(false)
             forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
+            completed += id.toString()
         }
         pageReqId = null
         resultSeen = false

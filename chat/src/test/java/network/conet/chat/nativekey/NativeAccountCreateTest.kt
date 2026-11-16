@@ -36,6 +36,7 @@ class NativeAccountCreateTest {
     @Before
     fun setUp() {
         payloads.clear()
+        NativeAccountCreateHost.resetForTests()
         NativeAccountCreateHost.launcher = null
         NativeAccountCreateHost.events = { payloads.add(it) }
     }

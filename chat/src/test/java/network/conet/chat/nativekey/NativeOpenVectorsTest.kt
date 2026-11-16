@@ -31,6 +31,8 @@ class NativeOpenVectorsTest {
         NativeImportHost.launcher = null
         NativeRecoveryHost.launcher = null
         NativeAccountCreateHost.launcher = null
+        NativeAccountCreateHost.events = null
+        NativeAccountCreateHost.resetForTests()
         opens.clear()
     }
 
@@ -65,12 +67,26 @@ class NativeOpenVectorsTest {
         NativeAccountCreateHost.launcher = hostFor("nativeAccountCreateOpen", env.optString("accountHost", "absent"))
     }
 
-    /** The ack for one `open` step, from the shared decision. */
-    private fun ackFor(req: JSONObject, gate: NoKeyGate.Gate?): JSONObject {
+    /** The binding answer the env gives an account open (R1487), or null when no lookup is run (the page opens on a confirmed absence). */
+    private fun bindingOf(env: JSONObject): (() -> BindingCode)? = when (env.optString("binding", "")) {
+        "already_bound" -> { { BindingCode.ALREADY_BOUND } }
+        "lookup_unavailable" -> { { BindingCode.LOOKUP_UNAVAILABLE } }
+        else -> null
+    }
+
+    private fun bindingCodeOf(name: String): BindingCode = when (name) {
+        "none" -> BindingCode.CREATE
+        "already_bound" -> BindingCode.ALREADY_BOUND
+        "lookup_unavailable" -> BindingCode.LOOKUP_UNAVAILABLE
+        else -> error("unknown binding answer $name")
+    }
+
+    /** The reply for one `open` step, from the shared decision. */
+    private fun replyFor(req: JSONObject, gate: NoKeyGate.Gate?, binding: (() -> BindingCode)?): NativeOpenRules.Reply {
         val type = req.getString("type")
         val fields = req.keys().asSequence().map { it.toString() }.toList()
         val reqId = PgpDecryptInbound.reqIdOf(req)
-        val reply = when (type) {
+        return when (type) {
             "nativeImportOpen" -> NativeOpenRules.importOpen(fields, reqId, NativeOpenRules.importHost)
             "nativeRecoveryOpen" -> NativeOpenRules.recoveryOpen(fields, reqId, NativeOpenRules.recoveryHost)
             "nativeAccountCreateOpen" -> NativeOpenRules.accountCreateOpen(
@@ -79,11 +95,14 @@ class NativeOpenVectorsTest {
                 req.opt("account"),
                 checkNotNull(gate) { "the account create case has no keyState" },
                 NativeOpenRules.accountHost,
+                binding = binding,
             )
             else -> error("not a page-open command: $type")
         }
-        return NativeOpenRules.ackPayload(reqId, reply)
     }
+
+    private fun resultEvent(reqId: Any, code: String): JSONObject =
+        JSONObject().put("type", "nativeAccountCreateResult").put("reqId", reqId).put("code", code)
 
     /** The result of one recovery submission, sent by the recovery host for the open page. */
     private fun finishRecovery(step: JSONObject) {
@@ -103,12 +122,36 @@ class NativeOpenVectorsTest {
         val gate = env.optString("keyState", "").takeIf { it.isNotEmpty() }?.let { NoKeyGate.Gate.valueOf(it) }
         val events = mutableListOf<JSONObject>()
         NativeRecoveryHost.events = { events += it }
+        NativeAccountCreateHost.events = { events += it }
+        val binding = bindingOf(env)
         val steps = c.getJSONArray("steps")
         for (i in 0 until steps.length()) {
             val step = steps.getJSONObject(i)
             when (step.getString("op")) {
-                "open" -> events += ackFor(step.getJSONObject("req"), gate)
+                "open" -> {
+                    val req = step.getJSONObject("req")
+                    val reply = replyFor(req, gate, if (req.getString("type") == "nativeAccountCreateOpen") binding else null)
+                    val reqId = PgpDecryptInbound.reqIdOf(req)
+                    events += NativeOpenRules.ackPayload(reqId, reply)
+                    reply.result?.let { events += resultEvent(reqId!!, it) }
+                }
                 "recoveryResult" -> finishRecovery(step)
+                "pageClose" -> NativeAccountCreateHost.pageClosed()
+                "accountResult" -> {
+                    val ev = JSONObject().put("type", "nativeAccountCreateResult").put("reqId", step.get("reqId")).put("code", step.getString("code"))
+                    if (step.has("eoa")) ev.put("eoa", step.getString("eoa"))
+                    NativeAccountCreateHost.report(ev)
+                }
+                "queryStart" -> {
+                    // A lookup in flight holds the slot (r3kl, M-1): the admission is LOOKUP.
+                    assertEquals(NativeAccountCreateHost.Admission.LOOKUP, NativeAccountCreateHost.admit(step.get("reqId")))
+                }
+                "queryAnswer" -> {
+                    val reqId = step.get("reqId")
+                    val reply = NativeOpenRules.afterBinding(reqId, NativeOpenRules.accountHost, bindingCodeOf(step.getString("binding")), true)
+                    events += NativeOpenRules.ackPayload(reqId, reply)
+                    reply.result?.let { events += resultEvent(reqId, it) }
+                }
                 else -> error("unknown op ${step.getString("op")}")
             }
         }
