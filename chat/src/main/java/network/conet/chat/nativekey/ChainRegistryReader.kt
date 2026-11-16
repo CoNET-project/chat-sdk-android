@@ -25,13 +25,17 @@ internal fun interface EthTransport {
 }
 
 /**
- * The live read of the current registry (§25.52HH.1, HI.2): `getAccount(address)` and `getOwnerByAccountName(string)`, as `eth_call` only, on the
- * one current endpoint (no backup, HH.6). A revert is classified exactly (HH.4); every failure is an invalid result, and no failure is "no record".
+ * The live read of the current registry (§25.52HH.1, HI.2): `getAccount(address)` and `getOwnerByAccountName(string)`, as `eth_call` only. A revert is
+ * classified exactly (HH.4); every failure is an invalid result, and no failure is "no record".
+ *
+ * [endpoints] are tried in order within the one total budget. A valid answer (found, or the exact AccountNotFound) ends the read at once: a valid
+ * "no record" never queries the next endpoint (PM ruling, R2213). Only an invalid result (network, timeout, or node failure) moves to the next one.
+ * The binding path uses the primary endpoint only, so the default is that single endpoint.
  */
 internal class ChainRegistryReader(
     private val transport: EthTransport = HttpEthTransport(),
     private val registry: String = AccountRegistryRead.current.registry,
-    private val url: String = AccountRegistryRead.current.endpoints.first().url,
+    private val endpoints: List<RegistryEndpoint> = listOf(AccountRegistryRead.current.endpoints.first()),
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
 ) : RegistryReader {
 
@@ -49,16 +53,23 @@ internal class ChainRegistryReader(
     }
 
     private fun one(kind: BindingKind, deadlineMs: Long, data: String, decode: (String) -> Decoded): RegistryRead {
-        val timeout = RegistryBudget.perCallTimeout(deadlineMs, nowMs()) ?: return RegistryRead.Invalid("budget_exceeded")
-        val decoded = when (val r = transport.call(url, registry, data, timeout)) {
-            is EthCallResult.Value -> decode(r.hex)
-            is EthCallResult.Reverted -> Decoded(RegistryMapping.classifyRevertData(r.data))
-            is EthCallResult.Failed -> Decoded(r.outcome)
+        var last: RegistryRead = RegistryRead.Invalid("rpc_error")
+        for (ep in endpoints) {
+            val timeout = RegistryBudget.perCallTimeout(deadlineMs, nowMs()) ?: return RegistryRead.Invalid("budget_exceeded")
+            val decoded = when (val r = transport.call(ep.url, registry, data, timeout)) {
+                is EthCallResult.Value -> decode(r.hex)
+                is EthCallResult.Reverted -> Decoded(RegistryMapping.classifyRevertData(r.data))
+                is EthCallResult.Failed -> Decoded(r.outcome)
+            }
+            val out: RegistryRead = when (val reg = RegistryMapping.map(kind, decoded.raw)) {
+                is RegistryRead.Found -> RegistryRead.Found(decoded.eoa)
+                else -> reg
+            }
+            // A valid answer (found, or the exact no-record) ends the read; only an invalid one tries the next endpoint.
+            if (out !is RegistryRead.Invalid) return out
+            last = out
         }
-        return when (val reg = RegistryMapping.map(kind, decoded.raw)) {
-            is RegistryRead.Found -> RegistryRead.Found(decoded.eoa)
-            else -> reg
-        }
+        return last
     }
 
     companion object {

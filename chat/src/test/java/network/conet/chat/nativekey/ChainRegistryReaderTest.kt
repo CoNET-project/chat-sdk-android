@@ -43,7 +43,51 @@ class ChainRegistryReaderTest {
     private val eoa = "0x" + "ab".repeat(20)
     private val url = "https://rpc1.conet.network"
 
-    private fun reader(t: EthTransport, now: Long = 0L) = ChainRegistryReader(transport = t, registry = "0x" + "11".repeat(20), url = url, nowMs = { now })
+    private fun reader(t: EthTransport, now: Long = 0L) =
+        ChainRegistryReader(transport = t, registry = "0x" + "11".repeat(20), endpoints = listOf(RegistryEndpoint(url, 12_000)), nowMs = { now })
+
+    private val backup = "https://publicrpc.conet.network"
+
+    private fun twoEndpoints(t: EthTransport, now: Long = 0L) =
+        ChainRegistryReader(
+            transport = t,
+            registry = "0x" + "11".repeat(20),
+            endpoints = listOf(RegistryEndpoint(url, 12_000), RegistryEndpoint(backup, 12_000)),
+            nowMs = { now },
+        )
+
+    @Test
+    fun aPrimaryNoRecordIsFinalAndTheBackupIsNeverQueried() {
+        val urls = mutableListOf<String>()
+        val t = Fake { u, _, _ -> urls += u; EthCallResult.Reverted("0xfaba8ebe") }
+        assertTrue(twoEndpoints(t).readAccount(eoa, 10_000L) is RegistryRead.Absent)
+        assertEquals(listOf(url), urls)
+    }
+
+    @Test
+    fun aPrimaryTimeoutQueriesTheBackupWithinTheTotal() {
+        val urls = mutableListOf<String>()
+        val t = Fake { u, _, _ -> urls += u; if (u == url) EthCallResult.Failed(RawOutcome.TIMEOUT) else EthCallResult.Value(ownerHex("ab".repeat(20))) }
+        val r = twoEndpoints(t).readOwner("alice", 10_000L) as RegistryRead.Found
+        assertEquals("0x" + "ab".repeat(20), r.eoa)
+        assertEquals(listOf(url, backup), urls)
+    }
+
+    @Test
+    fun whenBothEndpointsFailTheResultIsInvalidNotAbsent() {
+        val t = Fake { _, _, _ -> EthCallResult.Failed(RawOutcome.RPC_ERROR) }
+        val r = twoEndpoints(t).readOwner("alice", 10_000L)
+        assertTrue(r is RegistryRead.Invalid)
+        assertEquals(2, t.calls)
+    }
+
+    @Test
+    fun eachEndpointReadIsCappedAtFourSeconds() {
+        val t = Fake { _, _, _ -> EthCallResult.Failed(RawOutcome.TIMEOUT) }
+        twoEndpoints(t, now = 0L).readAccount(eoa, 10_000L)
+        assertEquals(2, t.calls)
+        assertEquals(4_000L, t.lastTimeout)
+    }
 
     @Test
     fun anExactAccountNotFoundRevertIsAbsent() {

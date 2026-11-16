@@ -72,9 +72,8 @@ internal object NativeOpenRules {
     /**
      * `nativeAccountCreateOpen` (§25.46.10, §25.52Z.2). [account] is the value of the `account` field (`null` when absent).
      * Missing or malformed `account` is `bad_request`, checked with the input, before the host is asked.
-     */
-    /**
-     * `nativeAccountCreateOpen`. [binding] is the binding lookup (§25.52Z.3, R1487), run after the gate and the guard and before the page opens.
+     *
+     * [binding] is the binding lookup (§25.52Z.3, R1487), run after the gate and the guard and before the page opens.
      * Already bound and a failed lookup answer `ok` with `page: "none"` and the result code (no page, no eoa); a confirmed absence opens the page.
      * With no [binding] the lookup is not run (the vectors of the create checks only).
      */
