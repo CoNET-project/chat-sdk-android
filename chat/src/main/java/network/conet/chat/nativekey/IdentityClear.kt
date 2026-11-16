@@ -265,7 +265,8 @@ internal class IdentityClear(
      * already decided before `clear_pending` was set, so they are not repeated. Returns null when nothing was interrupted.
      */
     fun redoIfInterrupted(): String? {
-        if (!flags.clearPending()) return null
+        // Strict read (rc2.2-qa, review 76706f6d): a read that fails is not a pending clear, so no redo runs and nothing is deleted.
+        if (!flags.clearPendingStrict()) return null
         // r3rk: while clear_pending is set and W is held (or unreadable), the redo does not run and the block stays, until clearIdentity
         // completes the clear. A null result is returned only when nothing was interrupted, so it is the only way the block lifts.
         if (holdsWallet() != false) return IdentityClearCode.CLEAR_INCOMPLETE

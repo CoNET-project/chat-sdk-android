@@ -21,9 +21,13 @@ class VaultSnapshotGateTest {
 
     @Test
     fun anUnknownSnapshotAnswersNotReadyOnceWithTheUnreadableReason() {
+        // 25.52Y.88: the unknown answers come from NoKeyGate.storageAnswer; walletStatus carries the unreadable reason from NoKeyGate.
         val m = module()
-        assertTrue("walletStatus carries unreadable", m.contains("put(\"notReadyReason\", \"unreadable\")"))
-        assertFalse("the unknown branch never answers g1_uninitialized", m.contains("g1_uninitialized\")") && m.substringAfter("snap == null").substringBefore("val state = snap").contains("g1_uninitialized"))
+        val gate = File("src/main/java/network/conet/chat/nativekey/NoKeyGate.kt").readText(Charsets.UTF_8)
+        val unreadableLine = gate.lines().first { it.contains("fun walletStatusUnreadable()") }
+        assertTrue("walletStatus carries the unreadable reason", unreadableLine.contains("NOT_READY_UNREADABLE"))
+        assertTrue("the gate answers the unknown snapshot through NoKeyGate.storageAnswer", m.contains("NoKeyGate.storageAnswer(type, snap)"))
+        assertFalse("the unknown branch never answers g1_uninitialized", m.substringAfter("snap == null").substringBefore("val state = snap").contains("g1_uninitialized"))
     }
 
     @Test

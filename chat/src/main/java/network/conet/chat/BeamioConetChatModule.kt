@@ -332,20 +332,16 @@ object BeamioConetChatModule {
                     return
                 }
             }
-            // 25.52Y.70 第 4 项, 25.52Y.75: the gate reads the snapshot, never the keystore on this thread. While it is unknown the command is
-            // answered not_ready once: walletStatus carries status not_ready with notReadyReason unreadable (not g1_uninitialized); any other
-            // command is an ack not_ready. Nothing is read from the payload, nothing is written.
+            // 25.52Y.70 第 4 项, 25.52Y.75, 25.52Y.88: the gate reads the snapshot, never the keystore on this thread. An unknown snapshot, or a
+            // storage-derived lock, is answered by NoKeyGate.storageAnswer: not_ready once for the keystore names, walletStatus with the
+            // unreadable reason, passcodeStatus with its status, and the historical reads with source not_ready. Nothing is read or written.
             val snap = NativeWallet.vault(context).snapshotState()
-            if (snap == null) {
-                scheduleSnapshotRefresh(context)
-                if (type == "walletStatus") {
-                    ack(reqId, true, result = JSONObject().put("status", "not_ready").put("notReadyReason", "unreadable"))
-                } else {
-                    ack(reqId, false, error = NoKeyGate.NOT_READY)
-                }
+            if (snap == null) scheduleSnapshotRefresh(context)
+            NoKeyGate.storageAnswer(type, snap)?.let { answer ->
+                answerStorageUnknown(reqId, answer)
                 return
             }
-            val state = snap
+            val state = snap ?: return
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
             // clear_pending set (strictly read): clearIdentity finishes the interrupted clear in G0 and G1 (25.26.4c 第 3a 項, 25.52Y.21 (a),
             // gate-state G0-CLR-PENDING and G1-CLR-PENDING, no-key NK-CP1). Without the marker, the gate answers as before (G0 no_key, G1 not_ready).
@@ -384,7 +380,26 @@ object BeamioConetChatModule {
                 else -> Unit
             }
         }
+        // 25.52Y.88 B: the page-open names pass the gate by name, so the storage check is made here, before the handler reads the keystore.
+        if (type in NoKeyGate.PAGE_OPEN) {
+            val snapOpen = NativeWallet.vault(context).snapshotState()
+            if (snapOpen == null) scheduleSnapshotRefresh(context)
+            NoKeyGate.storageAnswer(type, snapOpen)?.let { answer ->
+                answerStorageUnknown(echoId(body), answer)
+                return
+            }
+        }
         dispatch(type, body)
+    }
+
+    /** Sends the 25.52Y.88 answer: one ack for the keystore names, or the business result of a walletStatus or historical read. */
+    private fun answerStorageUnknown(reqId: Any, answer: NoKeyGate.StorageAnswer) {
+        when (answer) {
+            NoKeyGate.StorageAnswer.ACK_NOT_READY -> ack(reqId, false, error = NoKeyGate.NOT_READY)
+            NoKeyGate.StorageAnswer.WALLET_STATUS_NOT_READY -> ack(reqId, true, result = NoKeyGate.walletStatusUnreadable())
+            NoKeyGate.StorageAnswer.PASSCODE_UNKNOWN -> ack(reqId, true, result = NoKeyGate.passcodeStatusUnknown())
+            NoKeyGate.StorageAnswer.HISTORY_SOURCE_NOT_READY -> ack(reqId, true, result = NoKeyGate.historySourceNotReady())
+        }
     }
 
     private fun dispatch(type: String, body: JSONObject) {
@@ -1713,7 +1728,7 @@ object BeamioConetChatModule {
                 gate,
                 { body.keys().asSequence().map { it.toString() }.toList() },
                 reqId,
-                identityPublicSource(),
+                identityPublicSource(ctx),
             )
         }
         reply.refused?.let { Log.w(TAG, "identityPublic refused field: $it") }
@@ -1725,9 +1740,16 @@ object BeamioConetChatModule {
      * `NotRead` and `pgpReady` stays false. That is not an error, and it is not "no identity" (§25.48.9, §25.30.3). The session's
      * PGP copies come from the PWA's init, and are not used here.
      */
-    private fun identityPublicSource(): IdentityPublic.Source = object : IdentityPublic.Source {
+    private fun identityPublicSource(app: Context): IdentityPublic.Source = object : IdentityPublic.Source {
         override fun eoa(): String? = currentSession()?.eoa
         override fun pgp(): IdentityPublic.PgpRecord = IdentityPublic.PgpRecord.NotRead
+
+        // 25.48.4, 25.52Y.90: any K_pgp on the device. An unreadable store gives null (unknown), never false.
+        override fun kPresent(): Boolean? = try {
+            network.conet.chat.nativekey.AccountPgpK.forDevice(app).existsAny()
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**

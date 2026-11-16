@@ -53,10 +53,19 @@ internal object IdentityPublic {
 
         /** What the native PGP record gives this read. */
         fun pgp(): PgpRecord
+
+        /**
+         * Whether any K_pgp is on the device (25.48.4, 25.52Y.90). Asked only for the G0 `no_key` answer. Null when it cannot be read: the
+         * field is then left out, and an absent or non-boolean value is unreadable, never false (25.52X.2).
+         */
+        fun kPresent(): Boolean? = null
     }
 
-    /** The decision. [error] is null for ok; [refused] is the first credential field name, for the log only. */
-    class Reply(val error: String?, val result: JSONObject?, val refused: String? = null) {
+    /**
+     * The decision. [error] is null for ok; [refused] is the first credential field name, for the log only. [kPresent] is set only on the
+     * G0 `no_key` answer (25.52Y.90): it is never part of the ready answer.
+     */
+    class Reply(val error: String?, val result: JSONObject?, val refused: String? = null, val kPresent: Boolean? = null) {
         val ok: Boolean get() = error == null
     }
 
@@ -65,7 +74,7 @@ internal object IdentityPublic {
      */
     fun answer(gate: NoKeyGate.Gate, fieldsOf: () -> Collection<String>, reqId: Any?, source: Source): Reply {
         when (gate) {
-            NoKeyGate.Gate.G0 -> return Reply(NO_KEY, null)
+            NoKeyGate.Gate.G0 -> return Reply(NO_KEY, null, kPresent = source.kPresent())
             NoKeyGate.Gate.G1 -> return Reply(NOT_READY, null)
             NoKeyGate.Gate.G2 -> Unit
         }
@@ -102,6 +111,8 @@ internal object IdentityPublic {
             reply.result?.let { payload.put("result", it) }
         } else {
             payload.put("error", reply.error)
+            // kPresent is a boolean on the G0 no_key answer only (25.52Y.90). Unknown is omitted, never sent as false.
+            if (reply.error == NO_KEY) reply.kPresent?.let { payload.put("kPresent", it) }
         }
         return payload
     }

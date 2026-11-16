@@ -138,6 +138,49 @@ object NoKeyGate {
         if (gate == Gate.G0) passcodeStatusNoKey()
         else JSONObject().put("set", false).put("locked", false).put("hasKey", true)
 
+    /** The answers of 25.52Y.88 while the snapshot is unknown or the store is storage-derived Locked. */
+    enum class StorageAnswer { ACK_NOT_READY, WALLET_STATUS_NOT_READY, PASSCODE_UNKNOWN, HISTORY_SOURCE_NOT_READY }
+
+    /** Historical reads (25.52DL.1): `ok:true` with `result.source` `not_ready` and no data, not an error ack. */
+    val HISTORY_READS: Set<String> = setOf("historyRead", "historyLoad", "historyLoadOlder", "historyListConversations", "historyOpenConversation")
+
+    /** The three page-open names (25.52Y.88 B): they pass the name check but still need the keystore before the handler runs. */
+    val PAGE_OPEN: Set<String> = setOf("nativeAccountCreateOpen", "nativeImportOpen", "nativeRecoveryOpen")
+
+    /** Lifecycle names answer before the gate and are never decided here (25.52Y.88 A). */
+    private val LIFECYCLE: Set<String> = setOf("hello", "pause", "resume", "destroy")
+
+    /**
+     * 25.52Y.88: the answer for [command] while the snapshot is unknown ([state] null) or the store is storage-derived Locked. Null means the
+     * gate decides as before (Ready, G0 `no_key`, lifecycle). A null state always has an answer, so an unknown snapshot never reaches the
+     * keystore. Nothing is read from the payload and nothing is written.
+     */
+    fun storageAnswer(command: String, state: NativeWalletVault.State?): StorageAnswer? {
+        if (command in LIFECYCLE) return null
+        if (state != null && state !is NativeWalletVault.State.Locked) return null
+        return when (command) {
+            "walletStatus" -> StorageAnswer.WALLET_STATUS_NOT_READY
+            "passcodeStatus" -> if (state == null) StorageAnswer.PASSCODE_UNKNOWN else null
+            // clearIdentity keeps its own redo path for a storage-derived lock (25.52PY.4); only an unknown snapshot answers here.
+            "clearIdentity" -> if (state == null) StorageAnswer.ACK_NOT_READY else null
+            in HISTORY_READS -> StorageAnswer.HISTORY_SOURCE_NOT_READY
+            else -> StorageAnswer.ACK_NOT_READY
+        }
+    }
+
+    /** `walletStatus` while the state is unknown or unreadable: `status not_ready`, `notReadyReason unreadable` (25.52Y.75 第 1 项). */
+    fun walletStatusUnreadable(): JSONObject = JSONObject().put("status", NOT_READY).put("notReadyReason", NOT_READY_UNREADABLE)
+
+    /**
+     * `passcodeStatus` while the snapshot is unknown (25.52Y.88 A). `hasKey` is true: the unknown state never reads as "no account"
+     * (25.52GX.2, only `absent` may). `walletState` is `not_ready` (undetermined).
+     */
+    fun passcodeStatusUnknown(): JSONObject =
+        JSONObject().put("set", false).put("locked", false).put("hasKey", true).put("walletState", NOT_READY)
+
+    /** A historical read under a storage lock or an unknown snapshot (25.52DL.1): `source` is `not_ready`, no data. */
+    fun historySourceNotReady(): JSONObject = JSONObject().put("source", NOT_READY)
+
     /** `eoa + ":" + workspace`, workspace `default` (D5). The EOA is lower-case. */
     fun accountKeyOf(eoa: String, workspace: String = "default"): String = eoa.lowercase() + ":" + workspace
 }
