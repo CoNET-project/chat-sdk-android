@@ -97,8 +97,10 @@ class NativeOldAccountChainTest {
         }
         files.crashAfterWrite = null
         assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.recName(account)))
-        assertEquals("unconfirmed record is not a key", "no_pgp_key", dev.active.decryptInbound(test.getString("armored")).code)
-        assertFalse("and it is removed", files.map.containsKey(NativePgpVault.recName(account)))
+        // Rewritten 2026-11-16 (project ruling: a read never deletes user data). The unconfirmed record stays and reads as an unknown state
+        // (pgp_locked, retry), not as no key: a read must not remove what a write left. The retry below is the write path that completes it.
+        assertEquals("unconfirmed record is unknown, not a key", "pgp_locked", dev.active.decryptInbound(test.getString("armored")).code)
+        assertTrue("and it is kept", files.map.containsKey(NativePgpVault.recName(account)))
 
         // 8. Retry: the same restore completes, and the key works.
         assertEquals("retry", "ok", m.restore("A").result)
