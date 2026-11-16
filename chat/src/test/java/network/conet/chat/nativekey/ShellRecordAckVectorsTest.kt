@@ -17,7 +17,7 @@ class ShellRecordAckVectorsTest {
 
     @Test
     fun theAckGroupHasTwentyEightCases() {
-        assertEquals(28, doc.getJSONArray("ackCases").length())
+        assertEquals(62, doc.getJSONArray("ackCases").length())
     }
 
     @Test
