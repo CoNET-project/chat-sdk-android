@@ -50,6 +50,22 @@ class CreateAccountKTest {
     }
 
     @Test
+    fun aKResidueIsReportedAsResidueAndTheWalletIsRemoved() {
+        // The K write fails and its removal fails too: the creation is write_failed, W is removed, and the result says a K residue may remain.
+        val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
+        val backend = object : AccountPgpKBackend {
+            override fun get(name: String): String? = null
+            override fun put(name: String, value: String): Boolean = false
+            override fun names(): Set<String> = emptySet()
+            override fun remove(name: String): Boolean = false
+        }
+        val r = NativeAccountCreate.create(vault, AccountPgpK(backend), zero)
+        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
+        assertTrue(r.residue)
+        assertTrue(vault.state() is NativeWalletVault.State.NoKey)
+    }
+
+    @Test
     fun anExistingKIsNeverOverwrittenAndTheNewWalletIsRemoved() {
         val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
         val backend = MemoryAccountPgpKBackend()

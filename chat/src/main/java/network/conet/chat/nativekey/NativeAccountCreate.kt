@@ -189,7 +189,11 @@ object NativeAccountCreate {
         ROLLBACK_PENDING("rollback_pending"),
     }
 
-    class Result(val code: Code, val eoa: String? = null)
+    /**
+     * [residue] is true when the creation failed and the K item that was written could not be removed: a half PGP item may remain on the device for
+     * an account that has no wallet. The code stays write_failed; the caller records the residue (code only, never the key) for a later sweep.
+     */
+    class Result(val code: Code, val eoa: String? = null, val residue: Boolean = false)
 
     private val worker = Executors.newSingleThreadExecutor()
 
@@ -222,13 +226,10 @@ object NativeAccountCreate {
     }
 
     /**
-     * Creates and stores a new account key (§25.46.5 steps 2 to 4). A record that already exists is never overwritten.
-     * The caller's [entropy] is copied and zeroed; so are the derived key and the copy.
-     */
-    /**
-     * The creation transaction (§25.52Y.1 第 6 项, PM ruling): the wallet W and the new account PGP item K are written together. A new PGP key pair
-     * is generated for the account inside this transaction. Any failure after W is written removes W again, so the device holds no key for the
-     * account; an existing K is never overwritten (EXISTS answers already_exists and removes the new W).
+     * Creates and stores a new account (§25.46.5 steps 2 to 4, §25.52Y.1 第 6 项, PM ruling): the wallet W and the new account PGP item K are written
+     * together. A new PGP key pair is generated for the account inside this transaction. Any failure after W is written removes W again, so the device
+     * holds no key for the account; an existing K is never overwritten (EXISTS answers already_exists and removes the new W). A record that already
+     * exists is never overwritten. The caller's [entropy] is copied and zeroed; so are the derived key and the copy.
      */
     internal fun create(vault: NativeWalletVault, pgp: AccountPgpK, entropy: ByteArray = randomEntropy()): Result {
         val e = entropy.copyOf()
@@ -287,7 +288,11 @@ object NativeAccountCreate {
                 rollBackW()
                 Result(Code.ALREADY_EXISTS)
             }
-            AccountPgpKWrite.FAILED, AccountPgpKWrite.FAILED_RESIDUE -> rollBackW()
+            AccountPgpKWrite.FAILED -> rollBackW()
+            AccountPgpKWrite.FAILED_RESIDUE -> {
+                val failed = rollBackW()
+                Result(failed.code, residue = true)
+            }
         }
     }
 
