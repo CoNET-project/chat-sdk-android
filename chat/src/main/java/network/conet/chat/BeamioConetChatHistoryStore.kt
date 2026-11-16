@@ -460,6 +460,8 @@ class BeamioConetChatHistoryStore(
         val ts = if (entry.has("ts")) entry.optLong("ts") else clock.now()
         val key = writerSendKey(entry.optString("sendId", ""), peer, dir, ts, body) ?: return false
         val committed = committedKeys()
+        // Snapshot first: if the queue file cannot be written the enqueue is taken back, so "not queued" (false) is the truth.
+        val before = HistoryBatch.PendingState.fromJson(pending.toJson()) ?: return false
         val added = HistoryBatch.enqueue(
             pending,
             HistoryBatch.PendingEntry(key, peer, dir, ts, body),
@@ -467,7 +469,10 @@ class BeamioConetChatHistoryStore(
             random,
         ) { it in committed }
         if (!added) return true
-        writePendingFile()
+        if (!writePendingFile()) {
+            pending = before
+            return false
+        }
         publishSnapshot()
         armTimer()
         return true
@@ -1013,22 +1018,25 @@ class BeamioConetChatHistoryStore(
      * Atomic replace (temp file + rename). The previous queue file is never deleted
      * first: when the rename fails it is kept, and the next write retries with the
      * whole in-memory queue. Refused while the file on disk has not been read.
+     * Returns false when the queue is not durable. A memory-only store (no storage directory) returns true by design.
      */
-    private fun writePendingFile() {
+    private fun writePendingFile(): Boolean {
         if (pendingUnreadable) {
             log("warn", "[history] pending file not read; not overwriting it")
-            return
+            return false
         }
-        val file = pendingFile() ?: return
-        val key = pendingKey ?: return
-        try {
+        val file = pendingFile() ?: return true
+        val key = pendingKey ?: return false
+        return try {
             file.parentFile?.mkdirs()
             val cipher = ConetChatCryptoUtil.aesGcmEncrypt(key, pending.toJson().toString().toByteArray(Charsets.UTF_8))
             val tmp = File(file.parentFile, file.name + ".tmp")
             tmp.writeText(cipher, Charsets.UTF_8)
             if (!replaceFile(tmp, file)) throw IOException("pending queue replace failed; previous file kept")
+            true
         } catch (e: Exception) {
             log("warn", "[history] pending file write failed: ${e.javaClass.simpleName}")
+            false
         }
     }
 

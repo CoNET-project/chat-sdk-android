@@ -409,19 +409,33 @@ class HistoryLocalIntegrationTest {
         assertEquals(before, f.readText(Charsets.UTF_8))
     }
 
+    private fun appendResult(s: BeamioConetChatHistoryStore, dir: String, ts: Long, body: String, sendId: String): Boolean {
+        val latch = CountDownLatch(1)
+        var queued = false
+        val o = JSONObject().put("peer", peer).put("dir", dir).put("ts", ts).put("body", body).put("sendId", sendId)
+        s.append(o) { queued = it; latch.countDown() }
+        assertTrue(latch.await(30, TimeUnit.SECONDS))
+        return queued
+    }
+
     @Test
-    fun failedReplaceKeepsThePreviousPendingFile() {
+    fun entryIsNotReportedQueuedWhenThePendingFileCannotBeWritten() {
         val dir = tmp.newFolder("pending-replace")
         val chain = Chain()
         val w = store(eoa, dir, FakeNet(chain))
         prepare(w)
-        append(w, "out", 1000L, "FIXTURE-PENDING kept one", "sid-k1")
+        assertTrue(appendResult(w, "out", 1000L, "FIXTURE-PENDING kept one", "sid-k1"))
         val f = pendingFileOf(dir)
         val before = f.readText(Charsets.UTF_8)
         val refusing = storeReplacing(eoa, dir, FakeNet(chain)) { _, _ -> false }
         prepare(refusing)
-        append(refusing, "out", 1001L, "FIXTURE-PENDING not replaced", "sid-k2")
+        assertFalse(
+            "an entry that is not durable must not be reported as queued",
+            appendResult(refusing, "out", 1001L, "FIXTURE-PENDING not durable", "sid-k2"),
+        )
         assertEquals(before, f.readText(Charsets.UTF_8))
+        // The refused entry was taken back from memory: the published queue still holds only the durable one.
+        assertEquals(1, refusing.pendingCount())
         prepare(store(eoa, dir, FakeNet(chain)))
     }
 }
