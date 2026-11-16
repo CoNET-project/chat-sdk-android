@@ -23,6 +23,7 @@ internal object CleanupOwners {
     private val EOA = Regex("^0x[0-9a-f]{40}$")
     private val PGP_NAME = Regex("""^pgp\.v1\.(?:(?:pending|old|done)\.)?([0-9a-f]{40})(?:\.[A-Za-z0-9_-]+)?$""")
     private val PGP_MIGRATION_NAME = Regex("""^pgp\.v1\.mig\.([0-9a-f]{40})\.([A-Za-z0-9_-]+)\.(?:n|m|last)$""")
+    private val PGP_MIGRATION_NO_WORKSPACE = Regex("""^pgp\.v1\.mig\.([0-9a-f]{40})\.(?:n|m|last)$""")
     private val PAGE_NAME = Regex("""^page\.v1\.([0-9a-f]{40})\.([A-Za-z0-9_-]+)\.rec$""")
     /** Every name of the one vault: the marker is part of it, so an unreadable marker makes the owner unknown too (Y.103 blocker). */
     private val WALLET_NAMES = listOf(NativeWalletVault.REC, NativeWalletVault.MARK, NativeWalletVault.INTENT, NativeWalletVault.COMMIT, NativeWalletVault.MNEM)
@@ -37,6 +38,10 @@ internal object CleanupOwners {
     fun pgpOwner(name: String): OwnerRead {
         PGP_MIGRATION_NAME.find(name)?.let { m ->
             return eoaOwner("0x" + m.groupValues[1], m.groupValues[2])
+        }
+        // A migration row of the account without a named workspace is the account's own row (Y.105 第 4 条): its workspace is the default one (D5).
+        PGP_MIGRATION_NO_WORKSPACE.find(name)?.let { m ->
+            return eoaOwner("0x" + m.groupValues[1])
         }
         val m = PGP_NAME.find(name) ?: return OwnerRead.Unowned
         return eoaOwner("0x" + m.groupValues[1])

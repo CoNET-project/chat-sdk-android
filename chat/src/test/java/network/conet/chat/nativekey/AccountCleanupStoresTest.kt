@@ -143,7 +143,7 @@ class AccountCleanupStoresTest {
 
         assertEquals(AccountCleanupOld.OK, run(pgpAdapters(dir)).code)
         assertTrue("no owner: kept", File(dir, "pgp.v1.garbage.rec").exists())
-        assertTrue("a migration file without its workspace has no owner: kept", File(dir, "pgp.v1.mig.$oldHex.n").exists())
+        assertFalse("a migration row of the account without a named workspace is its own row (Y.105): removed", File(dir, "pgp.v1.mig.$oldHex.n").exists())
     }
 
     @Test

@@ -89,9 +89,18 @@ class AndroidVaultFiles(private val dir: File) : VaultFiles {
      */
     override fun read(name: String): ByteArray? {
         val f = File(dir, name)
-        if (f.exists() && !f.isFile) throw IOException("vault entry is not a regular file")
-        if (!f.exists() && dir.exists() && dir.list() == null) throw IOException("vault directory cannot be listed")
-        return if (f.isFile) f.readBytes() else null
+        // Absent is only NoSuchFileException from the stat. Any other failure (permission, I/O, a parent that is not a directory) is a read
+        // failure: unknown, never "no record" (Y.104 第 3 条, Y.105 第 2 条).
+        val attributes = try {
+            java.nio.file.Files.readAttributes(f.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+        } catch (_: java.nio.file.NoSuchFileException) {
+            if (dir.exists() && dir.list() == null) throw IOException("vault directory cannot be listed")
+            return null
+        } catch (e: IOException) {
+            throw IOException("vault entry cannot be read", e)
+        }
+        if (!attributes.isRegularFile) throw IOException("vault entry is not a regular file")
+        return f.readBytes()
     }
 
     override fun write(name: String, bytes: ByteArray) {

@@ -138,4 +138,29 @@ class NativeUnknownStateTest {
         assertEquals(NativeWalletVault.State.Ready::class.java, state.javaClass)
         assertEquals(eoaA, (state as NativeWalletVault.State.Ready).eoa)
     }
+
+    /**
+     * A vault entry that cannot be stat-ed (permission denied) is unknown, not absent: the read throws and the state is not taken (Y.104 第 3 条,
+     * Y.105 第 2 条). Skipped as root, where every permission check passes.
+     */
+    @Test
+    fun aVaultEntryThatCannotBeStatedIsUnknownNotAbsent() {
+        val dir = tmp.root.resolve("native_wallet_v1").apply { mkdirs() }
+        org.junit.Assume.assumeTrue("permission checks need a non-root process", System.getProperty("user.name") != "root")
+        assertTrue(dir.setExecutable(false))
+        try {
+            val files = AndroidVaultFiles(dir)
+            assertThrows(IOException::class.java) { files.read(NativeWalletVault.REC) }
+            assertThrows(IOException::class.java) { NativeWalletVault(NativeTestWrap(), files).state() }
+        } finally {
+            dir.setExecutable(true)
+        }
+    }
+
+    /** A missing entry in a readable directory is absent: the one case that reads as no record. */
+    @Test
+    fun aMissingEntryInAReadableDirectoryIsAbsent() {
+        val dir = tmp.root.resolve("native_wallet_v1").apply { mkdirs() }
+        assertNull(AndroidVaultFiles(dir).read(NativeWalletVault.REC))
+    }
 }
