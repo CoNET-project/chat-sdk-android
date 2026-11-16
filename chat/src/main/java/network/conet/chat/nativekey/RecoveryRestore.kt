@@ -13,6 +13,9 @@ class RecoveryOutcome private constructor(val code: String, val eoa: String?, va
     companion object {
         internal fun ok(eoa: String) = RecoveryOutcome("ok", eoa, null)
         internal fun fail(code: String) = RecoveryOutcome(code, null, null)
+
+        /** `already_exists` with the public EOA of the device's key (25.52X.4). [eoa] is null when it cannot be read: no EOA is carried. */
+        internal fun existing(eoa: String?) = RecoveryOutcome("already_exists", eoa, null)
         internal fun backoff(seconds: Int) = RecoveryOutcome("backoff", null, seconds)
     }
 }
@@ -86,7 +89,7 @@ internal class RecoveryEngine(
     /** Path A (§25.42.5, recovery code). Steps 1 to 12. */
     fun restoreWithCode(rawCode: ByteArray): RecoveryOutcome {
         // Step 1: the gate. A key on the device answers already_exists before anything is read.
-        if (hasKey()) return RecoveryOutcome.fail("already_exists")
+        if (hasKey()) return RecoveryOutcome.existing(vault.publicEoaIfReadable())
         // Step 2: the shape of the code.
         val code = RecoveryCode.normalize(rawCode) ?: return RecoveryOutcome.fail("invalid_format")
         try {
@@ -108,7 +111,7 @@ internal class RecoveryEngine(
     /** Path B (§25.42.5, account name and password). Steps 1 to 12. The password is a char array the caller clears. */
     fun restoreWithAccountPassword(rawName: String, password: CharArray): RecoveryOutcome {
         // Step 1: the gate.
-        if (hasKey()) return RecoveryOutcome.fail("already_exists")
+        if (hasKey()) return RecoveryOutcome.existing(vault.publicEoaIfReadable())
         // Step 2: the name is trimmed; the password must be present.
         val name = rawName.trim { it == ' ' || it in '\t'..'\r' }
         if (name.isEmpty() || password.isEmpty()) return RecoveryOutcome.fail("invalid_format")
@@ -161,7 +164,7 @@ internal class RecoveryEngine(
             try {
                 val eoa = WalletAddress.fromPrivateKey(key) ?: return RecoveryOutcome.fail("record_invalid")
                 // Step 9: check the native record again before the write.
-                if (hasKey()) return RecoveryOutcome.fail("already_exists")
+                if (hasKey()) return RecoveryOutcome.existing(vault.publicEoaIfReadable())
                 // Step 10: write, read back, roll back (importKey, §25.25.3).
                 return when (vault.importKey(eoa, key)) {
                     NativeWalletVault.Import.OK -> {
@@ -169,7 +172,7 @@ internal class RecoveryEngine(
                         RecoveryOutcome.ok(eoa)
                     }
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
-                        RecoveryOutcome.fail("already_exists")
+                        RecoveryOutcome.existing(vault.publicEoaIfReadable())
                     NativeWalletVault.Import.STORE_FAILED -> RecoveryOutcome.fail("write_failed")
                     NativeWalletVault.Import.READBACK_FAILED -> RecoveryOutcome.fail("readback_failed")
                     NativeWalletVault.Import.ROLLBACK_PENDING -> RecoveryOutcome.fail("rollback_pending")

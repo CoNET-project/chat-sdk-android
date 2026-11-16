@@ -234,7 +234,7 @@ object NativeAccountCreate {
     internal fun create(vault: NativeWalletVault, pgp: AccountPgpK, entropy: ByteArray = randomEntropy()): Result {
         val e = entropy.copyOf()
         try {
-            if (vault.state() !is NativeWalletVault.State.NoKey) return Result(Code.ALREADY_EXISTS)
+            if (vault.state() !is NativeWalletVault.State.NoKey) return Result(Code.ALREADY_EXISTS, vault.publicEoaIfReadable())
             val phrase = phraseOf(e)
             val key = MnemonicDerivation.deriveKey(phrase) ?: return Result(Code.WRITE_FAILED)
             try {
@@ -244,7 +244,7 @@ object NativeAccountCreate {
                 return when (vault.importMnemonicKey(eoa, key, phrase, NativeWalletVault.SOURCE_NATIVE_CREATE)) {
                     NativeWalletVault.Import.OK -> writeKOrRollBack(vault, pgp, eoa)
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
-                        Result(Code.ALREADY_EXISTS)
+                        Result(Code.ALREADY_EXISTS, vault.publicEoaIfReadable())
                     NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
                     NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.ROLLBACK_PENDING)
                     // Store failures roll back inside the vault. A derived key that the vault refuses is treated the same:

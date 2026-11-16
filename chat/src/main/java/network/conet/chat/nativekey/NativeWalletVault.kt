@@ -109,12 +109,19 @@ class NativeWalletVault(
     }
 
     /**
-     * The marker rule (spec §25.52Y.42 第 4 项 (g)). With a marker it must equal the digest of the stored records. Without one, a record
-     * that has no phrase record is a key-only record from before the marker rule, and it is accepted as it is: its AEAD tag and address
-     * check still bind it, and nothing is written. A phrase record without a marker is damage.
+     * The marker rule (spec §25.52Y.42 第 4 项 (g), §25.52Y.92). With a marker it must equal the digest of the stored records. Without one, only
+     * the legacy pure-key record is accepted as it is ([legacy], see [legacyPureKey]): its AEAD tag and address check still bind it, and nothing
+     * is written. Any other record without a marker is damage (unreadable, never accepted or repaired here).
      */
-    private fun markerOk(rec: ByteArray, mark: ByteArray?, mnem: ByteArray?): Boolean =
-        if (mark == null) mnem == null else mark.contentEquals(markerOf(rec, mnem))
+    private fun markerOk(rec: ByteArray, mark: ByteArray?, mnem: ByteArray?, legacy: Boolean): Boolean =
+        if (mark == null) legacy && mnem == null else mark.contentEquals(markerOf(rec, mnem))
+
+    /**
+     * The legacy pure-key exception (25.52Y.92 第 2 項): no phrase record, no intent record, no commit marker and no digest. Used by the reads
+     * that run after the reconcile. [computeState] reads the intent before the reconcile, because the reconcile removes it.
+     */
+    private fun legacyPureKey(mark: ByteArray?, mnem: ByteArray?): Boolean =
+        mark == null && mnem == null && files.read(COMMIT) == null && files.read(INTENT) == null
 
     /**
      * The last state computed under the lock, read without it (25.52Y.75, the snapshot of the command gate). `null` until the first computation
@@ -125,6 +132,14 @@ class NativeWalletVault(
 
     /** The snapshot, without the monitor. `null` when it is not known yet. Never blocks. */
     fun snapshotState(): State? = snapshot
+
+    /**
+     * The public, lower-case EOA of the key on this device, when the record reads and its address check passes (25.52X.4). That is the
+     * derivation and the stored record, both successful. Null otherwise: an unreadable key gives no EOA. The key itself is never returned.
+     */
+    fun publicEoaIfReadable(): String? = (state() as? State.Ready)?.eoa?.lowercase()?.takeIf { PUBLIC_EOA.matches(it) }
+
+    private val PUBLIC_EOA = Regex("^0x[0-9a-f]{40}$")
 
     /** Drops the snapshot. Used by the clear path in a finally block, so an interrupted clear never leaves a stale Ready. */
     fun invalidateSnapshot() {
@@ -144,16 +159,25 @@ class NativeWalletVault(
     }
 
     private fun computeState(): State {
+        // 25.52Y.92 第 2 項 (c): an intent present before the reconcile is a write in progress. The reconcile removes it, so it is read first.
+        val intentBefore = files.read(INTENT) != null
         if (!reconcile()) return State.Locked("rollback_pending")
         val rec = files.read(REC)
         val mark = files.read(MARK)
         val mnem = files.read(MNEM)
+        val commit = files.read(COMMIT)
         if (rec == null) {
             // A marker or phrase without a key record cannot be used. A read never removes it (project ruling 2026-11-16): an unknown state.
             if (mark != null || mnem != null) return State.Locked("record_missing")
             return State.NoKey
         }
-        if (!markerOk(rec, mark, mnem)) return State.Locked(if (mark == null) "marker_missing" else "marker_mismatch")
+        // 25.52Y.92 第 2 項: the legacy pure-key record is accepted only with a readable key record and no phrase, intent, commit marker or
+        // digest. An intent or a digest without the commit marker is a write that did not finish: unreadable, never accepted or repaired here.
+        if (commit == null && (intentBefore || mark != null)) {
+            return State.Locked(if (mark == null) "marker_missing" else "marker_mismatch")
+        }
+        val legacy = !intentBefore && commit == null && mark == null && mnem == null
+        if (!markerOk(rec, mark, mnem, legacy)) return State.Locked(if (mark == null) "marker_missing" else "marker_mismatch")
         val opened = openRecord(rec) ?: return State.Locked("unreadable")
         opened.key.fill(0)
         return State.Ready(opened.eoa)
@@ -166,7 +190,7 @@ class NativeWalletVault(
         val rec = files.read(REC) ?: return null
         val mark = files.read(MARK)
         val mnem = files.read(MNEM)
-        if (!markerOk(rec, mark, mnem)) return null
+        if (!markerOk(rec, mark, mnem, legacyPureKey(mark, mnem))) return null
         return openRecord(rec)?.key
     }
 
@@ -235,7 +259,7 @@ class NativeWalletVault(
         val rec = files.read(REC) ?: return MnemonicRead.Unavailable
         val mark = files.read(MARK)
         val mnem = files.read(MNEM)
-        if (!markerOk(rec, mark, mnem)) return MnemonicRead.Unavailable
+        if (!markerOk(rec, mark, mnem, legacyPureKey(mark, mnem))) return MnemonicRead.Unavailable
         val opened = openRecord(rec) ?: return MnemonicRead.Unavailable
         try {
             if (mnem == null) return MnemonicRead.Missing

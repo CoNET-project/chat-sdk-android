@@ -141,7 +141,7 @@ object NativeImport {
         return when (imported) {
             NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
             NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
-                Result(Code.ALREADY_EXISTS)
+                Result(Code.ALREADY_EXISTS, vault.publicEoaIfReadable())
             NativeWalletVault.Import.ADDRESS_MISMATCH -> Result(Code.ADDRESS_MISMATCH)
             NativeWalletVault.Import.STORE_FAILED -> Result(Code.WRITE_FAILED)
             NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)

@@ -82,7 +82,15 @@ class NativeRecoveryVectorsTest {
             assertEquals("$id[$i] type", "nativeRecoveryResult", e.getString("type"))
             assertEquals("$id[$i] reqId", e.getString("reqId"), g.reqId)
             assertEquals("$id[$i] code", e.getString("code"), g.code)
-            if (e.has("eoa")) assertEquals("$id[$i] eoa", e.getString("eoa"), g.eoa) else assertNull("$id[$i] eoa", g.eoa)
+            if (e.has("eoa")) {
+                assertEquals("$id[$i] eoa", e.getString("eoa"), g.eoa)
+            } else if (g.code == "already_exists") {
+                // 25.52X.4 (r3kg, coordinator ruling): already_exists carries the public lower-case eoa when derivation and storage succeed. This
+                // vector predates r3kg and has no eoa field; the vector is re-pinned with the unified re-pin. The eoa is absent or a valid EOA.
+                assertTrue("$id[$i] eoa is absent or the public lower-case EOA", g.eoa == null || Regex("^0x[0-9a-f]{40}$").matches(g.eoa))
+            } else {
+                assertNull("$id[$i] eoa", g.eoa)
+            }
             if (e.has("cooldownSec")) {
                 assertEquals("$id[$i] cooldownSec", e.getInt("cooldownSec"), g.cooldownSec)
             } else {

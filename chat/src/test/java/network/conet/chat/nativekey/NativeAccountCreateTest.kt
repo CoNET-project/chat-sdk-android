@@ -198,7 +198,8 @@ class NativeAccountCreateTest {
         val before = files.map.mapValues { it.value.copyOf() }
         val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, r.code)
-        assertNull(r.eoa)
+        // 25.52X.4 (rc2.2-qa): the readable existing key's public lower-case EOA is carried on already_exists.
+        assertEquals(eoaA, r.eoa)
         assertEquals(eoaA, (vault.state() as NativeWalletVault.State.Ready).eoa)
         assertEquals(before.keys, files.map.keys)
         for ((k, v) in before) assertArrayEquals(v, files.map[k])
