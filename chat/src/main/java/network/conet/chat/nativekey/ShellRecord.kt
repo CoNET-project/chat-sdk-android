@@ -1208,7 +1208,12 @@ internal class ShellRecordBridge(
         }
 
         // §25.52O.5 step 3: W fields need schema 2, and a stored copy with W fields takes only schema 2 writes (§25.52F.5, §25.52L.4).
+        // r3lo, AK-30 (ruling 2026-11-15): the revision check comes before the W-field and schema checks, so a stale rev is conflict (currentRev).
+        // A missing or non-integer schemaVersion stays bad_request below (DL-10a), so the early check applies only to an integer schemaVersion.
         val schema = record.opt("schemaVersion")
+        if (current != null && schema is Int && rev != ((current.opt("rev") as? Int) ?: 0)) {
+            return reply("conflict", listOf("currentRev" to ((current.opt("rev") as? Int) ?: 0)))
+        }
         val storedWallet = current?.let { ShellRecordPolicy.walletIn(it) }.orEmpty()
         if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(storedWallet)))
@@ -1241,7 +1246,8 @@ internal class ShellRecordBridge(
             // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
             if (flags.accountPointer() || flags.legacyUnreadable()) return reply("migrating", emptyList())
             when (outcome()) {
-                ImportOutcome.ABSENT -> if (store == null) return reply("error", listOf("sub" to "no_key"))
+                // AK-10 (ruling 2026-11-15): no account and no record with the legacy store confirmed empty: migrating, not ok or no_key.
+                ImportOutcome.ABSENT -> if (store == null) return reply("migrating", emptyList())
                 null, ImportOutcome.LEGACY_UNREADABLE, ImportOutcome.NOT_DONE, ImportOutcome.DONE, ImportOutcome.ACCOUNT_MISMATCH ->
                     return reply("migrating", emptyList())
             }
