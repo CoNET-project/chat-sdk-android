@@ -698,8 +698,14 @@ object BeamioConetChatModule {
         eoa: String,
         done: () -> Unit,
     ) {
-        NativeWallet.migrateLegacy(ctx)
-        val vault = NativeWallet.vault(ctx)
+        // An unreadable stored wallet is unknown: init answers not_ready and adopts, imports and writes nothing (25.52CS.2).
+        val vault = try {
+            NativeWallet.migrateLegacy(ctx)
+            NativeWallet.vault(ctx)
+        } catch (_: Exception) {
+            ack(reqId, false, error = NoKeyGate.NOT_READY)
+            return
+        }
         // 25.52Y.75: the snapshot. An unknown state is not_ready: nothing is adopted, imported or written (25.52CS.2).
         val known: NativeWalletVault.State = vault.snapshotState() ?: run {
             scheduleSnapshotRefresh(ctx)
@@ -1935,7 +1941,11 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "not_initialised")
             return
         }
-        NativeWallet.migrateLegacy(ctx)
+        // An unreadable stored wallet is unknown: provisionIdentity answers not_ready and writes nothing (25.52CS.2).
+        runCatching { NativeWallet.migrateLegacy(ctx) }.onFailure {
+            ack(reqId, false, error = NoKeyGate.NOT_READY)
+            return
+        }
         // 25.52Y.75: the snapshot. Unknown is not_ready: an absent or unknown vault must never look like "no key" (25.52CS.2).
         val snapState = NativeWallet.vault(ctx).snapshotState()
         if (snapState == null) {
