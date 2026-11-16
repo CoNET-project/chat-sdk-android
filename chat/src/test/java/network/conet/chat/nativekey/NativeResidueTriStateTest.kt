@@ -79,4 +79,25 @@ class NativeResidueTriStateTest {
             assertEquals("$id: as written", c.getString("expect"), result)
         }
     }
+
+    /**
+     * Y.107 第 1 条 through the storage answer: the page's walletStatus for a readable phrase without the key record is not intercepted as a storage
+     * lock; it is the G1 walletStatus that has the shape of has (not_ready, g1_uninitialized), which classifies as has.
+     */
+    @Test
+    fun aReadablePhraseWithoutTheKeyRecordIsNotInterceptedAndWalletStatusIsHas() {
+        val state = NativeWalletVault.State.Locked(NativeWalletVault.PHRASE_ONLY)
+        assertEquals(null, NoKeyGate.storageAnswer("walletStatus", state))
+        val ws = NoKeyGate.walletStatusFor(NoKeyGate.gateOf(state, sessionReady = false), state)
+        assertEquals("not_ready", ws.getString("status"))
+        assertEquals(NoKeyGate.NOT_READY_G1_UNINITIALIZED, ws.getString("notReadyReason"))
+        assertEquals(NativeMnemonicTriState.HAS, NativeMnemonicTriState.classify(false, "not_ready", NoKeyGate.NOT_READY_G1_UNINITIALIZED, false))
+    }
+
+    /** A storage-derived lock (a record that cannot be read) is still intercepted: not_ready and unreadable, never has. */
+    @Test
+    fun aStorageDerivedLockIsStillInterceptedAsUnreadable() {
+        val state = NativeWalletVault.State.Locked("record_missing")
+        assertEquals(NoKeyGate.StorageAnswer.WALLET_STATUS_NOT_READY, NoKeyGate.storageAnswer("walletStatus", state))
+    }
 }

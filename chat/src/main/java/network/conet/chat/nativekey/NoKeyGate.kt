@@ -164,7 +164,12 @@ object NoKeyGate {
         if (command in LIFECYCLE) return null
         if (state != null && state !is NativeWalletVault.State.Locked) return null
         return when (command) {
-            "walletStatus" -> StorageAnswer.WALLET_STATUS_NOT_READY
+            // A readable phrase without the key record is has (Y.107 第 1 条): not a storage lock, so walletStatus is not intercepted here.
+            "walletStatus" -> if (state is NativeWalletVault.State.Locked && state.reason == NativeWalletVault.PHRASE_ONLY) {
+                null
+            } else {
+                StorageAnswer.WALLET_STATUS_NOT_READY
+            }
             "passcodeStatus" -> if (state == null) StorageAnswer.PASSCODE_UNKNOWN else null
             // clearIdentity keeps its own redo path for a storage-derived lock (25.52PY.4); only an unknown snapshot answers here.
             "clearIdentity" -> if (state == null) StorageAnswer.ACK_NOT_READY else null
