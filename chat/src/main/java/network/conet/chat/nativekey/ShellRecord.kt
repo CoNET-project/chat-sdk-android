@@ -1618,12 +1618,13 @@ object BeamioShellRecordImport {
      */
     private fun replicaFromKeystore(context: Context, eoa: String) {
         val app = context.applicationContext
-        val key = NativeWallet.vault(app).unlock() ?: return
-        try {
-            ShellReplica.answer(key, eoa, ImportOutcome.ABSENT, flagsOf(app).accountPointer(), storeFor(app, eoa))
-        } finally {
-            key.fill(0)
-        }
+        ShellReplica.fromUnlock(
+            unlock = { NativeWallet.vault(app).unlock() },
+            expectedEoa = eoa,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = flagsOf(app).accountPointer(),
+            store = storeFor(app, eoa),
+        )
     }
 
     /** The vault and the gate of the account on this device (shared by walletEoaAddress and walletCredential). */

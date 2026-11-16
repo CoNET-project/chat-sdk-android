@@ -31,6 +31,40 @@ class KeystoreReplicaVectorsTest {
         assertEquals(emptyList<String>(), failures)
     }
 
+    /** The production glue: the key bytes are zeroed after the answer, in every case, and the copy is built only when the rules hold. */
+    @Test
+    fun theProductionGlueZeroesTheKeyAndBuildsTheCopyOnlyWhenRulesHold() {
+        val armorBytes = hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT)
+        val files = NativeTestFiles()
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "${VectorSidecar.ACCOUNT}:default")
+        var captured: ByteArray? = null
+        val ok = ShellReplica.fromUnlock(
+            unlock = { armorBytes.copyOf().also { captured = it } },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = false,
+            store = store,
+        )
+        assertEquals(true, ok is ShellReplica.Answer.Ok)
+        assertEquals(true, captured!!.all { it == 0.toByte() })
+        assertEquals(VectorSidecar.ACCOUNT, store.read()!!.getJSONArray("profiles").getJSONObject(0).getString("keyID"))
+
+        // A pointer that is set is not replicated, and the key is still zeroed.
+        val files2 = NativeTestFiles()
+        val store2 = SealedPageRecordStore(NativeTestWrap(), files2, "${VectorSidecar.ACCOUNT}:default")
+        var captured2: ByteArray? = null
+        val refused = ShellReplica.fromUnlock(
+            unlock = { armorBytes.copyOf().also { captured2 = it } },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = true,
+            store = store2,
+        )
+        assertEquals(true, refused is ShellReplica.Answer.NotApplied)
+        assertEquals(true, captured2!!.all { it == 0.toByte() })
+        assertEquals(null, store2.read())
+    }
+
     private fun runCase(c: JSONObject): List<String> {
         val st = c.getJSONObject("state")
         val expect = c.getJSONObject("expect")

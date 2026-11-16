@@ -19,6 +19,24 @@ internal object ShellReplica {
      * Builds the copy from [key] when every condition holds: the legacy store is confirmed empty ([outcome] ABSENT), no pointer is set, no copy
      * exists, and the key derives [expectedEoa]. [key] is only read; the caller zeroes it. A missing key (unreadable or none) is not applied.
      */
+    /**
+     * The production glue (KR-01): unlocks the readable keystore key through [unlock], answers, and zeroes the key bytes in every case.
+     */
+    fun fromUnlock(
+        unlock: () -> ByteArray?,
+        expectedEoa: String,
+        outcome: ImportOutcome?,
+        pointerSet: Boolean,
+        store: SealedPageRecordStore,
+    ): Answer {
+        val key = unlock() ?: return Answer.NotApplied
+        return try {
+            answer(key, expectedEoa, outcome, pointerSet, store)
+        } finally {
+            key.fill(0)
+        }
+    }
+
     fun answer(key: ByteArray?, expectedEoa: String, outcome: ImportOutcome?, pointerSet: Boolean, store: SealedPageRecordStore): Answer {
         if (key == null) return Answer.NotApplied
         if (pointerSet || outcome != ImportOutcome.ABSENT) return Answer.NotApplied
