@@ -144,6 +144,7 @@ class BridgeKeyAuditTest {
             // POST /api/regiestChatRoute. Not in any bridge payload, ack, event or result (ChatRouteSubmit.kt, commit 1579c15).
             "ChatRouteSubmit.kt" to listOf(
                 "private val FIELDS = listOf(\"wallet\", \"keyID\", \"publicKeyArmored\", \"encrypKeyArmored\", \"routeKeyID\", \"timestamp\", \"nonce\", \"signature\")",
+                "\"encrypKeyArmored\" to b.encrypKeyArmored,",
             ),
             "WalletCredential.kt" to listOf(
                 "const val KIND_MNEMONIC = \"mnemonic\"",
@@ -152,11 +153,6 @@ class BridgeKeyAuditTest {
                 "return ok(echo, JSONObject().put(\"eoa\", eoa).put(\"credentialKind\", WalletCredential.KIND_MNEMONIC).put(\"mnemonic\", phrase))",
             ),
             "BeamioConetChatModule.kt" to listOf(
-                // Y.73-transitional (25.52Y.73 第 2、3 项; expiry: the earlier of both shells shipping the submitted branch, or the first formal
-                // package with it). chatRouteRegister's four-field ack (spec 25.28.3): the encrypted backup (encrypKeyArmored is the ciphertext of the
-                // PGP private key, not the key) and the public material. Removed in the same release as the ack change; see ChatRouteAckTransitionalTest.
-                // The eight-key set is asserted exactly there.
-                ".put(\"publicKeyArmored\", built.publicKeyArmored).put(\"encrypKeyArmored\", built.encrypKeyArmored)",
                 // Read, but unreachable: validate(INIT) refuses these names first (A4 finding F1). Removal belongs to P-IMP-PGP.
                 "pgpArmorInInit = id.optString(\"pgpPrivateKeyArmored\", \"\")",
                 "pgpPassphraseInInit = id.optString(\"pgpPassphrase\", \"\")",
