@@ -189,6 +189,16 @@ object BeamioConetChatModule {
      * (the shell dispatches them as a `cashtreesandroid` `CustomEvent`).
      */
     fun handleCommand(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {
+        val t0 = network.conet.chat.nativekey.DiagTiming.now()
+        val type = body.optString("type", "")
+        try {
+            handleCommandInner(context, body, emit)
+        } finally {
+            network.conet.chat.nativekey.DiagTiming.log("handleCommand:$type", t0)
+        }
+    }
+
+    private fun handleCommandInner(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {
         val ctxIn = context.applicationContext
         if (appContext == null) {
             // r3rh 第 1 项 (PY.8 第 5 项): the redo is local-only and runs synchronously before the first command. If it fails, the wallet and
@@ -724,6 +734,15 @@ object BeamioConetChatModule {
      * identity can listen (no wallet key, PGP key, route key or roster).
      */
     fun startFromStore(context: Context, reason: String): Boolean {
+        val t0 = network.conet.chat.nativekey.DiagTiming.now()
+        try {
+            return startFromStoreInner(context, reason)
+        } finally {
+            network.conet.chat.nativekey.DiagTiming.log("startFromStore:$reason", t0)
+        }
+    }
+
+    private fun startFromStoreInner(context: Context, reason: String): Boolean {
         val ctx = context.applicationContext
         appContext = ctx
         currentSession()?.let { existing ->
@@ -1743,7 +1762,14 @@ object BeamioConetChatModule {
      * came to the foreground. Opens / resumes the mailbox listen from the stored
      * identity. Same as [startFromStore].
      */
-    fun wake(context: Context, reason: String): Boolean = startFromStore(context, reason)
+    fun wake(context: Context, reason: String): Boolean {
+        val t0 = network.conet.chat.nativekey.DiagTiming.now()
+        try {
+            return startFromStore(context, reason)
+        } finally {
+            network.conet.chat.nativekey.DiagTiming.log("wake:$reason", t0)
+        }
+    }
 
     /** Native call layer: the call is over. Applies an owed background pause now. */
     fun release(reason: String) {
