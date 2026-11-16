@@ -62,7 +62,7 @@ class ShellRecordAckVectorsTest {
         }
         val size = if (ctx.has("sizeBytes")) ctx.getInt("sizeBytes") else body.toString().toByteArray(Charsets.UTF_8).size
         val bridge = ShellRecordBridge(
-            // §25.52Y.52: the account is modelled from the case ctx, and resolved by the production rule (ShellRecordAccounts.heldCopy).
+            // §25.52Y.52: the account is modelled from the case ctx and resolved by the production rule.
             account = { accountFor(ctx, c, store) },
             migrating = { false },
             outcome = { outcome },
@@ -93,18 +93,31 @@ class ShellRecordAckVectorsTest {
     }
 
     /** The vectors' label `a1` for the account's EOA (keyID values and the record's keys). */
-    /** The account for a case (§25.52Y.52): unknown with acctUnknown unless a copy holds the EOA key; a named eoa or pointerAcct; else the copy's account. */
+    /**
+     * The account of a case (§25.52Y.52), resolved by the production rule [ShellRecordAccounts.resolve]. The vault state comes from the ctx
+     * (`locked`, `nativeKey`, otherwise no key); a named account (`eoa`, `pointerAcct`) is the bound account; the page copy is named for the
+     * account that holds the EOA key, so [ShellRecordAccounts.heldCopy] resolves an unknown account from the copy.
+     */
     private fun accountFor(ctx: JSONObject, c: JSONObject, store: SealedPageRecordStore): ShellRecordAccount {
-        // The vault is locked and no account is bound (ShellRecordAccounts.resolve: Locked).
-        if (ctx.optBoolean("locked")) return ShellRecordAccount.Locked
-        val named = ctx.optString("eoa", ctx.optString("pointerAcct", ""))
-        if (named.isNotEmpty()) return ShellRecordAccount.Ready(store, if (named == "a2") VectorSidecar.OTHER else ACCOUNT)
-        if (ctx.optBoolean("acctUnknown")) {
-            val held = c.optJSONObject("store")?.let { a1(it.getJSONObject("record")) as? JSONObject } ?: return ShellRecordAccount.Unknown
-            val holder = listOf(ACCOUNT, VectorSidecar.OTHER).firstOrNull { ShellRecordPolicy.accountHoldsEoaKey(held, it) }
-            return if (holder != null) ShellRecordAccount.Ready(store, holder) else ShellRecordAccount.Unknown
+        val vault: NativeWalletVault.State = when {
+            ctx.optBoolean("locked") -> NativeWalletVault.State.Locked("test")
+            ctx.optBoolean("nativeKey") -> NativeWalletVault.State.Ready(ACCOUNT)
+            else -> NativeWalletVault.State.NoKey
         }
-        return if (c.has("store")) ShellRecordAccount.Ready(store, ACCOUNT) else ShellRecordAccount.Unknown
+        val named = ctx.optString("eoa", ctx.optString("pointerAcct", ""))
+        val bound = if (named.isEmpty()) null else if (named == "a2") VectorSidecar.OTHER else ACCOUNT
+        val copy = c.optJSONObject("store")?.let { a1(it.getJSONObject("record")) as? JSONObject }
+        val holder = copy?.let { r -> listOf(ACCOUNT, VectorSidecar.OTHER).firstOrNull { ShellRecordPolicy.accountHoldsEoaKey(r, it) } }
+        val copyAccount = holder ?: ACCOUNT
+        val copyNames = if (copy == null) emptyList() else listOf("page.v1." + copyAccount.removePrefix("0x") + ".default.rec")
+        return ShellRecordAccounts.resolve(
+            vault = vault,
+            sessionReady = true,
+            sessionGate = false,
+            bound = bound,
+            copyNames = { copyNames },
+            storeOf = { store },
+        )
     }
 
     private fun a1(v: Any?): Any? = when (v) {
