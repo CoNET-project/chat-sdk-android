@@ -378,12 +378,13 @@ class NativeWalletVault(
      * The intent (r3ny, spec §25.52Y.42 第 4 项 (g)): UTF-8 JSON `{"v":1,"kind":"intent","eoa","sealed"}`. The sealed payload is
      * `{"v":1,"eoa","mnemonicPlanned","startedAt","phase":"begun"}` (startedAt is UTC to the second) under the intent AAD.
      */
-    private fun encodeIntent(eoa: String, mnemonicPlanned: Boolean, created: List<String>): ByteArray {
+    internal fun encodeIntent(eoa: String, mnemonicPlanned: Boolean, created: List<String>?): ByteArray {
         val body = JSONObject()
             .put("v", RECORD_VERSION)
             .put("eoa", eoa)
             .put("mnemonicPlanned", mnemonicPlanned)
-            .put("created", org.json.JSONArray(created))
+            // A null manifest is the old format (no `created`): reconcile deletes nothing for it (plan 1).
+            .apply { if (created != null) put("created", org.json.JSONArray(created)) }
             .put("startedAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
             .put("phase", "begun")
             .toString()

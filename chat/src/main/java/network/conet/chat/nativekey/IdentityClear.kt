@@ -177,6 +177,22 @@ internal fun reportLegacyValue(flags: ClearFlagFiles, value: String): String {
 internal fun orphanSweepMayRun(flags: ClearFlagFiles): Boolean = flags.clearPendingStrict()
 
 /**
+ * The accounts the start-up orphan sweep may remove (25.52Y.85 第 6 条, Y.80 第 3 項; project ruling 2026-11-16). Only the continuation of a
+ * user-initiated clear counts: [clearPending] is the strict read taken before the redo. The clear involves [involved], the account of the
+ * active pointer read before the redo, and only that account is a candidate. [live] is the account of a live record (a new account): it is
+ * never a candidate, and when it is the involved account nothing is removed. No clear, or no involved account, removes nothing.
+ * No-account alone is never a reason (the removal reading "no W" is not an allowed deletion).
+ */
+internal object OrphanSweepRule {
+    fun accountsToRemove(clearPending: Boolean, involved: String?, live: String?, accounts: Collection<String>): List<String> {
+        if (!clearPending) return emptyList()
+        val target = involved?.lowercase()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+        if (live != null && live.lowercase() == target) return emptyList()
+        return accounts.map { it.lowercase() }.distinct().filter { it == target }
+    }
+}
+
+/**
  * The account of a migration record file (`pgp.v1.mig.<40 hex>.<workspace>.{n,m,last}`), as a lower-case `0x` address, or null for any other
  * name. Used by the start-up redo when no account is known (PY.8 第 7 项).
  */

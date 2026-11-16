@@ -36,6 +36,7 @@ import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
 import network.conet.chat.nativekey.MigrationResult
 import network.conet.chat.nativekey.migrationAccountOfName
+import network.conet.chat.nativekey.OrphanSweepRule
 import network.conet.chat.nativekey.SignRequestRule
 import network.conet.chat.nativekey.orphanSweepMayRun
 import network.conet.chat.nativekey.eraseBackupFlagsOfUnknownAccount
@@ -205,15 +206,16 @@ object BeamioConetChatModule {
             // identity commands answer not_ready until a redo succeeds (see dispatch).
             // The marker is read before the redo, which clears it on success. The orphan sweep is for an interrupted clear only.
             val interrupted = orphanSweepMayRun(ClearFlagFiles(pageRecordFiles(ctxIn)))
-            // An unknown snapshot is not "no account": the orphan sweep may not run on an unknown state (fail closed).
-            val noAccount = NativeWallet.vault(ctxIn).snapshotState() != null && recoveryAccountOf(ctxIn) == null
+            // The cleared account is the active pointer, read before the redo removes it (25.52Y.85 第 6 条, rc2.2-qa item 2).
+            val involvedAccount = if (interrupted) activePointerAccount(ctxIn) else null
             retryClearRedo(ctxIn)
-            // r3rh 第 2 项 (PY.8 第 7 项): with no account and an interrupted clear, the orphan sweep runs in the background. It never blocks
-            // start-up or a command; an offline or failed chain check skips the account until the next start-up.
-            if (interrupted && noAccount) {
-                // 2026-11-16 (Y.85 第 6 条, reviewer 76706f6d): the start-up orphan sweep deletes migration residue on a "no W" reading, which is not one of the
-                // allowed deletions (write rollback, confirmed cleanup_old, user's clear or unregister). Disabled until cleanup_old is implemented.
-                if (ORPHAN_SWEEP_ENABLED) pgpMigrateWorker.execute { runCatching { sweepOrphanMigrations(ctxIn) }.onFailure { Log.w(TAG, "orphan sweep skipped") } }
+            // Background only; it never blocks start-up or a command. It runs only as the continuation of an interrupted clear (clear_pending
+            // set, strictly read) and removes only the account that clear involves (OrphanSweepRule). No-account alone is not a reason.
+            if (interrupted) {
+                pgpMigrateWorker.execute {
+                    runCatching { sweepOrphanMigrations(ctxIn, interrupted, involvedAccount) }
+                        .onFailure { Log.w(TAG, "orphan sweep skipped") }
+                }
             }
         }
         appContext = ctxIn
@@ -1089,31 +1091,27 @@ object BeamioConetChatModule {
             }
     }
 
+    /** The account of the active pointer, lower-case, or null when it is not set or not readable. Read before the redo removes it. */
+    private fun activePointerAccount(ctx: Context): String? = try {
+        pageRecordFiles(ctx).read(DeviceFlagFiles.ADDRESS)?.toString(Charsets.UTF_8)?.lowercase()?.takeIf { it.isNotEmpty() }
+    } catch (_: Exception) {
+        null
+    }
+
     /**
-     * PY.8 第 7 项 (r3rd, R2169 (i); r3rf, R2170 (a)): with no account, sweep the migration records of accounts that hold no active pointer and
-     * no W. Each account gets the C.3 check (any one of L, P readable natively, or a chain backup). A passing account is removed in
-     * M → N → lastCode order; a refused one is kept.
+     * PY.8 第 7 项 (r3rd, R2169 (i); r3rf, R2170 (a)), narrowed by 25.52Y.85 第 6 条 (rc2.2-qa item 2): the orphan sweep removes migration
+     * records only as the continuation of an interrupted clear ([clearPending], read strictly at start-up), and only of the account that clear
+     * involves ([involved], the pointer read before the redo). [OrphanSweepRule] decides the candidates. A live account (the new account) is
+     * never removed. Each candidate gets the C.3 check (any one of L, P readable natively, or a chain backup); a passing one is removed in
+     * M → N → lastCode order, a refused one is kept. An unknown snapshot, a wallet or an unreadable store keeps everything.
      * Only codes and counts are logged, never an account value. Returns false when a removal failed (clear_incomplete; the redo continues).
      */
-    /** Off: the start-up sweep is not an allowed deletion until the confirmed cleanup_old exists (25.52Y.85). */
-    internal val ORPHAN_SWEEP_ENABLED = false
-
-    private fun sweepOrphanMigrations(ctx: Context): Boolean {
-        val pointerSet = try {
-            pageRecordFiles(ctx).read(DeviceFlagFiles.POINTER) != null
-        } catch (_: Exception) {
-            return false
-        }
-        val activeAddress = try {
-            pageRecordFiles(ctx).read(DeviceFlagFiles.ADDRESS)?.toString(Charsets.UTF_8)?.lowercase()
-        } catch (_: Exception) {
-            return false
-        }
-        // A pointer with no readable address cannot tell which account is active, so nothing is swept.
-        if (pointerSet && activeAddress == null) return true
+    private fun sweepOrphanMigrations(ctx: Context, clearPending: Boolean, involved: String?): Boolean {
+        // The live account is needed to exclude it: an unknown snapshot is not "no live account" (fail closed).
+        val snap = NativeWallet.vault(ctx).snapshotState() ?: return false
+        val live = (snap as? NativeWalletVault.State.Ready)?.eoa
         val accounts = NativeWallet.migrationNames(ctx).mapNotNull { migrationAccountOfName(it) }.distinct()
-        // PY.8 第 7 项: only accounts with no W are swept. With no account, W cannot be attributed to one, so the sweep runs only when no W
-        // material is present at all. W present, or unreadable (the answer unknown), keeps every account (fail closed; nothing is removed).
+        // PY.8 第 7 项: W present, or unreadable (the answer unknown), keeps every account (fail closed; nothing is removed).
         val wallet = holdsWallet(ctx, NativeWallet.migrationFiles(ctx), pageRecordFiles(ctx))
         if (wallet != false) {
             // R2172: a diagnostic code and the kept count only, never an account value.
@@ -1121,14 +1119,11 @@ object BeamioConetChatModule {
             Log.i(TAG, "$code kept=${accounts.size}")
             return true
         }
+        val candidates = OrphanSweepRule.accountsToRemove(clearPending, involved, live, accounts)
         var removed = 0
-        var kept = 0
+        var kept = accounts.size - candidates.size
         var failed = false
-        for (account in accounts) {
-            if (account == activeAddress) {
-                kept++
-                continue
-            }
+        for (account in candidates) {
             if (!BeamioPgpMigrationImport.orphanSourceOk(ctx, account)) {
                 kept++
                 continue

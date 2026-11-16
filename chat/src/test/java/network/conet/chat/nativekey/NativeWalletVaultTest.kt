@@ -266,4 +266,28 @@ class NativeWalletVaultTest {
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
         assertNotNull(files.map[NativeWalletVault.MARK])
     }
+
+    // ---- R. reconcile (rc2.2-qa item 1, plan 1) ---------------------------------------------
+
+    /** An interrupted import with an old-format intent (no `created` manifest) deletes nothing and reports rollback_pending. */
+    @Test
+    fun oldFormatIntentDeletesNothingAndReportsRollbackPending() {
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        val v = vault(wrap, files)
+        assertEquals(Import.OK, v.importKey(eoaA, keyA))
+        // The import did not commit: no commit record, and the intent is in the old format.
+        files.map.remove(NativeWalletVault.COMMIT)
+        files.map[NativeWalletVault.INTENT] = v.encodeIntent(eoaA, mnemonicPlanned = false, created = null)
+        val before = files.map.mapValues { it.value.copyOf() }
+
+        val restarted = vault(wrap, files)
+        val s = restarted.state()
+
+        assertTrue("old-format intent is rollback_pending", s is State.Locked && s.reason == "rollback_pending")
+        assertEquals("no name is removed or added", before.keys, files.map.keys)
+        for ((name, bytes) in before) assertArrayEquals("$name is unchanged", bytes, files.map[name])
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
+        assertTrue(files.map.containsKey(NativeWalletVault.MARK))
+    }
 }
