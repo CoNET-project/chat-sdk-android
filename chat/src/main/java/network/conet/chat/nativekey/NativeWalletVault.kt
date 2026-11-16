@@ -125,6 +125,11 @@ class NativeWalletVault(
     /** The snapshot, without the monitor. `null` when it is not known yet. Never blocks. */
     fun snapshotState(): State? = snapshot
 
+    /** Drops the snapshot. Used by the clear path in a finally block, so an interrupted clear never leaves a stale Ready. */
+    fun invalidateSnapshot() {
+        snapshot = null
+    }
+
     /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). Updates the snapshot. */
     @Synchronized
     fun state(): State {

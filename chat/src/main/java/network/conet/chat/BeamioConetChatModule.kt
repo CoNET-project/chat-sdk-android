@@ -997,7 +997,12 @@ object BeamioConetChatModule {
                 if (!migrationRecordsOk) {
                     false
                 } else {
-                    val vaultOk = vault.forget()
+                    // The snapshot is dropped in a finally block: an exception in forget() must not leave a stale Ready (25.52Y.75 review).
+                    val vaultOk = try {
+                        vault.forget()
+                    } finally {
+                        vault.invalidateSnapshot()
+                    }
                     val pagesOk = page.names().filter { !isFlagFile(it) }.map { eraseChecked(page, it) }.all { it }
                     val keystoreOk = BeamioChatWalletKeyStore.clear(ctx)
                     val pgpOk = BeamioChatPgpStore.clearKeepingLegacy(ctx)
@@ -1495,9 +1500,7 @@ object BeamioConetChatModule {
      */
     /** Computes the vault snapshot on the io executor (25.52Y.75): the keystore is never opened on the caller's thread for the gate. */
     private fun scheduleSnapshotRefresh(ctx: Context) {
-        io.execute {
-            runCatching { NativeWallet.vault(ctx).state() }
-        }
+        network.conet.chat.nativekey.VaultSnapshotRefresh.schedule(ctx)
     }
 
     private fun pgpUpgradeRetryCommand(body: JSONObject) {
