@@ -86,4 +86,21 @@ class UnknownAnswerTest {
         assertNotNull("an unreadable report never allows a create", refusal)
         assertEquals(AccountCreateGuard.denial(unreadable.copy(migrating = true)), refusal)
     }
+
+    /**
+     * The window-channel walletEoaAddress answer (25.52Y.42 第 5 项 (c)): an unreadable vault is one ack with error not_ready, never an exception out of
+     * the bridge (25.52Y.84). The vault is a real vault whose record read throws.
+     */
+    @Test
+    fun walletEoaAddressIsNotReadyOnAnUnreadableVaultWithOneAck() {
+        val files = FailingReads(NativeTestFiles()) { it == NativeWalletVault.REC }
+        val vault = NativeWalletVault(NativeTestWrap(), files)
+        val body = org.json.JSONObject().put("type", WalletEoaAddressBridge.NAME).put("reqId", "w1")
+
+        val ack = WalletEoaAddressBridge.answer(originAllowed = true, body = body) { vault to NoKeyGate.Gate.G2 }
+
+        assertEquals("w1", ack.getString("reqId"))
+        assertFalse(ack.getBoolean("ok"))
+        assertEquals("not_ready", ack.getString("error"))
+    }
 }

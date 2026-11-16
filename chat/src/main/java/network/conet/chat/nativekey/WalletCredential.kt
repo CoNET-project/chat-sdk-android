@@ -87,8 +87,18 @@ internal object WalletEoaAddressBridge {
         if (!ShellRecordPolicy.reqIdValid(rawId)) return fail(echo, "bad_request")
         if (body.optString("type", "") != NAME) return fail(echo, "unknown_command")
         if (ShellRecordPolicy.keysOf(body).any { it != "type" && it != "reqId" }) return fail(echo, "bad_request")
-        val (vault, gate) = current()
-        return when (val a = WalletCredential.eoaAddress(vault, gate)) {
+        // An unreadable vault is unknown: not_ready, one ack for this reqId (25.52Y.84, Y.104 第 3 条), never an exception out of the bridge.
+        val (vault, gate) = try {
+            current()
+        } catch (_: Exception) {
+            return fail(echo, "not_ready")
+        }
+        val a = try {
+            WalletCredential.eoaAddress(vault, gate)
+        } catch (_: Exception) {
+            return fail(echo, "not_ready")
+        }
+        return when (a) {
             is WalletCredential.Answer.Ok ->
                 org.json.JSONObject().put("type", "ack").put("reqId", echo).put("ok", true).put("result", a.result)
             is WalletCredential.Answer.Refused -> fail(echo, a.code)
@@ -132,11 +142,16 @@ internal object WalletCredentialBridge {
         if (mode != null && mode != "unseal") return fail(echo, "bad_request")
         if ((mode == "unseal") != (blob != null)) return fail(echo, "bad_request")
         if (blob != null && blob !is String) return fail(echo, "bad_request")
-        val (vault, gate) = current()
-        if (gate == NoKeyGate.Gate.G0) return fail(echo, WalletCredential.NO_KEY)
-        val state = vault.state()
-        if (state !is NativeWalletVault.State.Ready) return fail(echo, WalletCredential.UNAVAILABLE)
-        return if (mode == "unseal") unseal(echo, vault, state.eoa, blob as String) else obtain(echo, vault, state.eoa)
+        // An unreadable vault or store is unknown: not_ready, one answer for this reqId (25.52Y.84), never an exception out of the bridge.
+        return try {
+            val (vault, gate) = current()
+            if (gate == NoKeyGate.Gate.G0) return fail(echo, WalletCredential.NO_KEY)
+            val state = vault.state()
+            if (state !is NativeWalletVault.State.Ready) return fail(echo, WalletCredential.UNAVAILABLE)
+            if (mode == "unseal") unseal(echo, vault, state.eoa, blob as String) else obtain(echo, vault, state.eoa)
+        } catch (_: Exception) {
+            fail(echo, "not_ready")
+        }
     }
 
     private fun obtain(echo: Any, vault: NativeWalletVault, eoa: String): JSONObject {
