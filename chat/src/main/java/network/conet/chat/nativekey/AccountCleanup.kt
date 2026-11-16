@@ -223,7 +223,13 @@ internal class AccountCleanupRun(
         )
         if (outcome.code != AccountCleanupOld.OK) return outcome
         if (!journal.clear() || !confirmation.consume()) {
-            return AccountCleanupOld.Outcome(AccountCleanupOld.CLEAR_INCOMPLETE, outcome.deleted, outcome.kept, cleanupPending = true)
+            return AccountCleanupOld.Outcome(
+                AccountCleanupOld.CLEAR_INCOMPLETE,
+                outcome.deleted,
+                outcome.kept,
+                cleanupPending = true,
+                retainedUnattributed = outcome.retainedUnattributed,
+            )
         }
         return outcome
     }

@@ -26,6 +26,8 @@ import network.conet.chat.nativekey.AccountPgpK
 import network.conet.chat.nativekey.CleanupConfirmation
 import network.conet.chat.nativekey.CleanupJournal
 import network.conet.chat.nativekey.accountCleanupAck
+import network.conet.chat.nativekey.AccountCleanupDispatch
+import network.conet.chat.nativekey.CleanupRun
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
 import network.conet.chat.nativekey.BeamioPgpMigrationImport
@@ -1578,27 +1580,31 @@ object BeamioConetChatModule {
     private fun accountCleanupOldCommand(body: JSONObject) {
         val ctx = appContext
         io.execute {
-            val reqId = body.opt("reqId")
-            val fields = body.keys().asSequence().map { it.toString() }.filter { it != "type" && it != "reqId" }.toList()
-            val outcome = if (ctx == null) {
-                AccountCleanupOld.Outcome(AccountCleanupOld.NOT_READY, emptyList(), emptyList(), false)
-            } else {
-                try {
-                    val newKey = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.let { it.eoa.lowercase() + ":default" }
-                    accountCleanupRun(ctx).run(
-                        payloadFields = fields,
-                        accountKey = body.optString("accountKey", "").ifEmpty { null },
-                        idempotencyKey = body.optString("idempotencyKey", "").ifEmpty { null },
-                        gateNotReady = false,
-                        newAccountKey = newKey,
-                        newAccountReadable = newKey != null,
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "accountCleanupOld failed: ${e.javaClass.simpleName}")
-                    AccountCleanupOld.Outcome(AccountCleanupOld.CLEAR_INCOMPLETE, emptyList(), emptyList(), cleanupPending = true)
-                }
-            }
-            emitEvent(accountCleanupAck(reqId, outcome))
+            // The dispatch (AccountCleanupDispatch) runs the same AccountCleanupRun the bridge builds; the module only supplies the context.
+            val ack = AccountCleanupDispatch.handle(
+                reqId = body.opt("reqId"),
+                body = body,
+                nativeNewAccount = {
+                    ctx?.let { (NativeWallet.vault(it).state() as? NativeWalletVault.State.Ready)?.let { ready -> ready.eoa.lowercase() + ":default" } }
+                },
+                runFor = { ctx?.let { accountCleanupRunFor(it) } },
+            )
+            emitEvent(ack)
+        }
+    }
+
+    /** The run of one accountCleanupOld: the production adapters over this app's stores (Y.100, Y.103). */
+    private fun accountCleanupRunFor(ctx: Context): CleanupRun {
+        val run = accountCleanupRun(ctx)
+        return { fields, accountKey, idempotencyKey, newAccountKey, readable ->
+            run.run(
+                payloadFields = fields,
+                accountKey = accountKey,
+                idempotencyKey = idempotencyKey,
+                gateNotReady = false,
+                newAccountKey = newAccountKey,
+                newAccountReadable = readable,
+            )
         }
     }
 
@@ -1615,6 +1621,7 @@ object BeamioConetChatModule {
                 clearLegacyPgp = { BeamioChatPgpStore.clearLegacyRecord(ctx) },
                 walletCopyOwner = { BeamioChatWalletKeyStore.ownerEoa(ctx) },
                 clearWalletCopy = { BeamioChatWalletKeyStore.clearRecord(ctx) },
+                inboxCount = { BeamioConetChatInboxStore.list(ctx).size },
             ),
         )
     }

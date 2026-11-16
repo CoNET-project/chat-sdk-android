@@ -39,8 +39,17 @@ internal object AccountCleanupOld {
     /** One store's scan: its items, and whether the scan saw every item (an incomplete scan cannot finish the cleanup). */
     class Scan(val items: List<Item>, val complete: Boolean)
 
-    /** The result: [code], the names deleted by this call, the names of the new account kept, and whether a resume is pending. */
-    class Outcome(val code: String, val deleted: List<String>, val kept: List<String>, val cleanupPending: Boolean)
+    /**
+     * The result: [code], the names deleted by this call, the names of the new account kept, whether a resume is pending, and
+     * [retainedUnattributed]: the number of items kept because no owner could be read (Y.100; Y.103 第 1 条 reports the inbox entries among them).
+     */
+    class Outcome(
+        val code: String,
+        val deleted: List<String>,
+        val kept: List<String>,
+        val cleanupPending: Boolean,
+        val retainedUnattributed: Int = 0,
+    )
 
     /**
      * The input check, before any store is read. [payloadFields] are the payload keys other than `type` and `reqId`. Returns the refusal
@@ -93,7 +102,8 @@ internal object AccountCleanupOld {
             }
         }
         val kept = items.filter { it.accountKey == newAccountKey }.map { it.name }
-        return if (failed) Outcome(CLEAR_INCOMPLETE, deleted, kept, cleanupPending = true)
-        else Outcome(OK, deleted, kept, cleanupPending = false)
+        val retained = items.count { it.accountKey == null }
+        return if (failed) Outcome(CLEAR_INCOMPLETE, deleted, kept, cleanupPending = true, retainedUnattributed = retained)
+        else Outcome(OK, deleted, kept, cleanupPending = false, retainedUnattributed = retained)
     }
 }

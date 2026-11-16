@@ -8,6 +8,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 
 /**
  * The production adapters of `accountCleanupOld` (Y.100, 2026-11-16): for each store, the new account's items are kept, an old account's items are
@@ -290,5 +291,128 @@ class AccountCleanupStoresTest {
         val out = run(listOf(SingleRecordCleanup("legacy_pgp", { throw java.io.IOException("unreadable") }, { true })))
 
         assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
+    }
+
+    // ---- Y.103 blocker: a read failure is unknown and retryable (clear_incomplete, nothing removed); a parse failure is unowned (kept, ok) ----
+
+    /** The wallet vault: a readable old envelope next to a vault name that cannot be read: the owner is unknown, nothing is removed. */
+    @Test
+    fun aWalletVaultFileThatCannotBeReadIsClearIncompleteAndNothingOfTheVaultIsRemoved() {
+        val dir = nativeDir()
+        File(dir, "wallet.v1.rec").writeText(envelope(oldEoa))
+        File(dir, "wallet.v1.ok").mkdirs()
+
+        val out = run(walletAdapters(dir))
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
+        assertTrue(out.cleanupPending)
+        assertTrue("the readable old record is kept, not decided from a partial read", File(dir, "wallet.v1.rec").exists())
+    }
+
+    /** A wallet vault name that is present but is not a regular file is a read failure too. */
+    @Test
+    fun aWalletVaultNameThatIsNotAFileIsUnreadable() {
+        val dir = nativeDir()
+        File(dir, "wallet.v1.rec").mkdirs()
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(walletAdapters(dir)).code)
+    }
+
+    /** A wallet vault file that reads but is not a JSON envelope is a parse failure: unowned, kept, and ok. */
+    @Test
+    fun aWalletVaultFileThatDoesNotParseIsUnownedKeptAndOk() {
+        val dir = nativeDir()
+        File(dir, "wallet.v1.rec").writeText("not json")
+
+        val out = run(walletAdapters(dir))
+
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertTrue(File(dir, "wallet.v1.rec").exists())
+        assertEquals(1, out.retainedUnattributed)
+    }
+
+    /** The native vault directory that cannot be listed is an incomplete scan. */
+    @Test
+    fun aNativeDirectoryThatCannotBeListedIsClearIncomplete() {
+        val dir = tmp.root.resolve("native_wallet_v1")
+        dir.writeText("not a directory")
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(walletAdapters(dir)).code)
+    }
+
+    /** The page directory that cannot be listed is an incomplete scan. */
+    @Test
+    fun aPageDirectoryThatCannotBeListedIsClearIncomplete() {
+        val dir = tmp.root.resolve("page_record_v1")
+        dir.writeText("not a directory")
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(pageAdapters(dir)).code)
+    }
+
+    /** The K items whose names cannot be read are an incomplete scan; nothing is removed. */
+    @Test
+    fun aKStoreThatCannotBeReadIsClearIncomplete() {
+        val unreadable = object : AccountPgpKBackend {
+            override fun get(name: String): String? = null
+
+            override fun put(name: String, value: String): Boolean = false
+
+            override fun names(): Set<String> = throw IOException("unreadable")
+
+            override fun remove(name: String): Boolean = false
+        }
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(KPgpCleanup(unreadable))).code)
+    }
+
+    /** A K name whose EOA does not parse is unowned: kept, and ok. */
+    @Test
+    fun aKNameThatDoesNotParseIsUnownedKeptAndOk() {
+        val backend = MemoryAccountPgpKBackend()
+        backend.put("K.v1|not-an-address|default", "x")
+
+        assertEquals(AccountCleanupOld.OK, run(listOf(KPgpCleanup(backend))).code)
+        assertTrue(backend.names().contains("K.v1|not-an-address|default"))
+    }
+
+    /** A legacy wallet copy that cannot be read is an incomplete scan (the copy's EOA read throws). */
+    @Test
+    fun aLegacyWalletCopyThatCannotBeReadIsClearIncomplete() {
+        val out = run(listOf(SingleRecordCleanup("wallet_copy", { throw IOException("prefs unreadable") }, { error("must not run") })))
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
+    }
+
+    /** A legacy record whose EOA does not parse is unowned: kept, and ok. */
+    @Test
+    fun aLegacyRecordWhoseEoaDoesNotParseIsUnownedKeptAndOk() {
+        val out = run(listOf(SingleRecordCleanup("legacy_pgp", { "garbage" }, { error("must not run") })))
+
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertEquals(1, out.retainedUnattributed)
+    }
+
+    /** The history directory that cannot be listed is an incomplete scan. */
+    @Test
+    fun aHistoryDirectoryThatCannotBeListedIsClearIncomplete() {
+        val file = tmp.root.resolve("conet-chat")
+        file.writeText("not a directory")
+
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(HistoryDirCleanup(file))).code)
+    }
+
+    // ---- Y.103: the inbox entries are retained and counted; an unreadable inbox is incomplete ----
+
+    @Test
+    fun theInboxEntriesAreRetainedAndCountedInTheOutcome() {
+        val out = run(listOf(UnattributedInboxCleanup { 3 }))
+
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertEquals(3, out.retainedUnattributed)
+    }
+
+    @Test
+    fun anUnreadableInboxIsClearIncomplete() {
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(UnattributedInboxCleanup { throw IOException("inbox unreadable") })).code)
     }
 }
