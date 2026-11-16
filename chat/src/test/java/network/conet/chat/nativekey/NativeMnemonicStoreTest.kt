@@ -334,7 +334,7 @@ class NativeMnemonicStoreTest {
             val entropy = ByteArray(16) { (it * 7 + seed * 31 + 3).toByte() }
             val files = NativeTestFiles()
             val v = vault(NativeTestWrap(), files)
-            val r = NativeAccountCreate.create(v, entropy.copyOf())
+            val r = NativeAccountCreate.create(v, memoryAccountPgpK(), entropy.copyOf())
             assertEquals("seed $seed", NativeAccountCreate.Code.OK, r.code)
             val eoaOut = r.eoa!!
             val phrase = NativeAccountCreate.phraseOf(entropy)

@@ -210,7 +210,7 @@ object NativeAccountCreate {
                 } else {
                     // The explicit creation transaction starts here (25.52Y.54 PY.18(b)): the first page copy write is the creation write.
                     ShellRecordState.creationTxn.set(true)
-                    create(NativeWallet.vault(app))
+                    create(NativeWallet.vault(app), AccountPgpK.forDevice(app))
                 }
             } catch (_: Exception) {
                 Result(Code.WRITE_FAILED)
@@ -225,7 +225,12 @@ object NativeAccountCreate {
      * Creates and stores a new account key (§25.46.5 steps 2 to 4). A record that already exists is never overwritten.
      * The caller's [entropy] is copied and zeroed; so are the derived key and the copy.
      */
-    fun create(vault: NativeWalletVault, entropy: ByteArray = randomEntropy()): Result {
+    /**
+     * The creation transaction (§25.52Y.1 第 6 项, PM ruling): the wallet W and the new account PGP item K are written together. A new PGP key pair
+     * is generated for the account inside this transaction. Any failure after W is written removes W again, so the device holds no key for the
+     * account; an existing K is never overwritten (EXISTS answers already_exists and removes the new W).
+     */
+    internal fun create(vault: NativeWalletVault, pgp: AccountPgpK, entropy: ByteArray = randomEntropy()): Result {
         val e = entropy.copyOf()
         try {
             if (vault.state() !is NativeWalletVault.State.NoKey) return Result(Code.ALREADY_EXISTS)
@@ -236,7 +241,7 @@ object NativeAccountCreate {
                 // r3nw 第 1 项 (PM R1872): the account keeps the phrase its entropy spells (12 words, m/44'/60'/0'/0/0); the phrase is sealed
                 // beside the key and is never returned from here.
                 return when (vault.importMnemonicKey(eoa, key, phrase, NativeWalletVault.SOURCE_NATIVE_CREATE)) {
-                    NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
+                    NativeWalletVault.Import.OK -> writeKOrRollBack(vault, pgp, eoa)
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                         Result(Code.ALREADY_EXISTS)
                     NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
@@ -252,6 +257,37 @@ object NativeAccountCreate {
             }
         } finally {
             e.fill(0)
+        }
+    }
+
+    /**
+     * K of the new account (after W is written): a new PGP key pair, its keyId (the subkey key ID, as the identity of the native PGP record),
+     * written only when no K exists, and read back. On any failure W is removed again.
+     */
+    private fun writeKOrRollBack(vault: NativeWalletVault, pgp: AccountPgpK, eoa: String): Result {
+        fun rollBackW(): Result {
+            // A forget that fails leaves W behind: the device is not clean, which the caller reports as write_failed.
+            vault.forget()
+            return Result(Code.WRITE_FAILED)
+        }
+        val gen = try {
+            NativePgpKeyGen.generate(eoa, SecureRandom())
+        } catch (_: Exception) {
+            return rollBackW()
+        }
+        val keyId = try {
+            NativePgp.parseSecret(gen.privateArmor)?.let { NativePgpBackup.subkeyKeyId(it) }
+        } catch (_: Exception) {
+            null
+        } ?: return rollBackW()
+        return when (pgp.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, keyId, gen.publicArmor, gen.privateArmor, System.currentTimeMillis() / 1000L)) {
+            AccountPgpKWrite.WRITTEN -> Result(Code.OK, eoa)
+            AccountPgpKWrite.EXISTS -> {
+                // K is there already for this account: the new W is removed, and the existing item stays (never overwritten).
+                rollBackW()
+                Result(Code.ALREADY_EXISTS)
+            }
+            AccountPgpKWrite.FAILED, AccountPgpKWrite.FAILED_RESIDUE -> rollBackW()
         }
     }
 

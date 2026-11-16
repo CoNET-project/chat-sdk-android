@@ -174,7 +174,7 @@ class NativeAccountCreateTest {
     fun aNewVaultGetsAKeyAndTheLowercaseAddressOfTheDerivedAccount() {
         val files = NativeTestFiles()
         val vault = NativeWalletVault(NativeTestWrap(), files)
-        val r = NativeAccountCreate.create(vault, zeroEntropy)
+        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.OK, r.code)
         assertEquals(eoaOfAbandon, r.eoa)
         assertEquals(eoaOfAbandon, (vault.state() as NativeWalletVault.State.Ready).eoa)
@@ -186,7 +186,7 @@ class NativeAccountCreateTest {
     @Test
     fun aCallerEntropyArrayIsNotModified() {
         val entropy = ByteArray(16) { 3 }
-        NativeAccountCreate.create(NativeWalletVault(NativeTestWrap(), NativeTestFiles()), entropy)
+        NativeAccountCreate.create(NativeWalletVault(NativeTestWrap(), NativeTestFiles()), memoryAccountPgpK(), entropy)
         assertArrayEquals(ByteArray(16) { 3 }, entropy)
     }
 
@@ -196,7 +196,7 @@ class NativeAccountCreateTest {
         val vault = NativeWalletVault(NativeTestWrap(), files)
         assertEquals(NativeWalletVault.Import.OK, vault.importKey(eoaA, keyA))
         val before = files.map.mapValues { it.value.copyOf() }
-        val r = NativeAccountCreate.create(vault, zeroEntropy)
+        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, r.code)
         assertNull(r.eoa)
         assertEquals(eoaA, (vault.state() as NativeWalletVault.State.Ready).eoa)
@@ -211,7 +211,7 @@ class NativeAccountCreateTest {
         assertEquals(NativeWalletVault.Import.OK, vault.importKey(eoaA, keyA))
         files.map[NativeWalletVault.MARK] = byteArrayOf(1, 2, 3)
         assertTrue(vault.state() is NativeWalletVault.State.Locked)
-        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, NativeAccountCreate.create(vault, zeroEntropy).code)
+        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
     }
 
@@ -220,7 +220,7 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         files.failWrite = NativeWalletVault.REC
         val vault = NativeWalletVault(NativeTestWrap(), files)
-        val r = NativeAccountCreate.create(vault, zeroEntropy)
+        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
         assertNull(r.eoa)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
@@ -232,7 +232,7 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap().apply { failSeal = true }
         val vault = NativeWalletVault(wrap, files)
-        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, NativeAccountCreate.create(vault, zeroEntropy).code)
+        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
         assertTrue(files.map.isEmpty())
     }
@@ -242,7 +242,7 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap().apply { openOverride = { ByteArray(32) { 7 } } }
         val vault = NativeWalletVault(wrap, files)
-        val r = NativeAccountCreate.create(vault, zeroEntropy)
+        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.READBACK_FAILED, r.code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
         assertTrue(files.map.isEmpty())
