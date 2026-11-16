@@ -28,6 +28,10 @@ class ModuleStateReadGuardTest {
         assertTrue(module.contains("answer(false, \"not_ready\")"))
         assertTrue(module.contains("pgpRestore restore failed"))
         assertTrue(module.contains("JSONObject().put(\"code\", \"not_ready\")"))
+        // Each reply goes through a single-reply guard, so a failing emit is never followed by a second reply (25.52Y.84).
+        assertTrue(module.contains("once.once { if (reply != null)"))
+        assertTrue(module.contains("resultOnce.once { emitEvent("))
+        assertTrue(module.contains("SingleReply().once { emitEvent(payload) }"))
     }
 
     /** The migration worker sends one result on any unreadable store: the reread code, never a success or a confirmed none. */

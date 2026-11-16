@@ -45,6 +45,7 @@ import network.conet.chat.nativekey.VaultFiles
 import network.conet.chat.nativekey.eraseChecked
 import network.conet.chat.nativekey.pageRecordFiles
 import network.conet.chat.nativekey.MigrationResult
+import network.conet.chat.nativekey.SingleReply
 import network.conet.chat.nativekey.migrationAccountOfName
 import network.conet.chat.nativekey.OrphanSweepRule
 import network.conet.chat.nativekey.SignRequestRule
@@ -1513,18 +1514,22 @@ object BeamioConetChatModule {
             return answer(false, "account_mismatch")
         }
         if (evaluateOnly) {
+            val once = SingleReply()
             pgpRestoreWorker.execute {
                 // An unreadable store during the evaluation is not_ready: one answer for this reqId, never a silent drop (25.52Y.84).
-                try {
-                    answer(true, result = PgpRestoreBridge.evaluate(PgpRestoreBridge.productionMachine(ctx, eoa)))
+                // The evaluation and the answer are separate, so a failing emit cannot become a second answer (SingleReply).
+                val reply = try {
+                    PgpRestoreBridge.evaluate(PgpRestoreBridge.productionMachine(ctx, eoa))
                 } catch (e: Exception) {
                     Log.w(TAG, "pgpRestore evaluate failed: ${e.javaClass.simpleName}")
-                    answer(false, "not_ready")
+                    null
                 }
+                once.once { if (reply != null) answer(true, result = reply) else answer(false, "not_ready") }
             }
             return
         }
         answer(true, result = JSONObject().put("accepted", true))
+        val resultOnce = SingleReply()
         pgpRestoreWorker.execute {
             // The ack was sent; the result follows once. An unreadable store is not_ready, never a silent drop (25.52Y.84).
             val event = try {
@@ -1533,7 +1538,7 @@ object BeamioConetChatModule {
                 Log.w(TAG, "pgpRestore restore failed: ${e.javaClass.simpleName}")
                 JSONObject().put("code", "not_ready")
             }
-            emitEvent(event.put("type", "pgpRestoreResult").put("reqId", reqId))
+            resultOnce.once { emitEvent(event.put("type", "pgpRestoreResult").put("reqId", reqId)) }
             Log.i(TAG, "pgpRestore result=${event.optString("code")}")
         }
     }
@@ -1575,20 +1580,24 @@ object BeamioConetChatModule {
         if (!pgpMigrateRunning.compareAndSet(false, true)) return answer(false, "busy")
         answer(true)
         pgpMigrateWorker.execute {
+            // The run is computed first, the one result is emitted once (SingleReply): a failing emit is never followed by a second result.
+            var event: JSONObject? = null
             try {
                 val result = BeamioPgpMigrationImport.run(c, eoa)
-                emitEvent(PgpMigrationBridge.eventFor(id, result))
+                event = PgpMigrationBridge.eventFor(id, result)
                 Log.i(TAG, "pgpMigrate result=${result.code.wire}")
             } catch (_: PgpMigrationInterrupted) {
                 // Interrupted: no event (§25.52.12). The stored state is resumed by the next request.
                 Log.i(TAG, "pgpMigrate interrupted")
             } catch (e: Exception) {
                 // A store that cannot be read during the run is unknown: the reread code, never a success or a confirmed none (25.52Y.84).
-                emitEvent(PgpMigrationBridge.eventFor(id, MigrationResult(MigrationCode.REREAD_FAILED)))
+                event = PgpMigrationBridge.eventFor(id, MigrationResult(MigrationCode.REREAD_FAILED))
                 Log.w(TAG, "pgpMigrate failed: ${e.javaClass.simpleName}")
             } finally {
                 pgpMigrateRunning.set(false)
             }
+            val payload = event ?: return@execute
+            SingleReply().once { emitEvent(payload) }
         }
     }
 
