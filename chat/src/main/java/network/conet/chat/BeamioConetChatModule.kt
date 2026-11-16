@@ -199,6 +199,26 @@ object BeamioConetChatModule {
         }
         appContext = ctxIn
         emitFn = emit
+        // The K_pgp upgrade (PM ruling): once per process, after the keychain is readable; asynchronous, never blocks a command.
+        val vaultState = try {
+            network.conet.chat.nativekey.NativeWallet.vault(ctxIn).state()
+        } catch (_: Exception) {
+            null
+        }
+        if (network.conet.chat.nativekey.KpgpUpgradeTrigger.claim(vaultState)) {
+            val eoa = (vaultState as network.conet.chat.nativekey.NativeWalletVault.State.Ready).eoa
+            io.execute {
+                val result = try {
+                    network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L)
+                } catch (_: Exception) {
+                    null
+                }
+                // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
+                if (result != null && result.action != "keep_existing" && result.action != "upgraded_from_L") {
+                    emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", result.action))
+                }
+            }
+        }
         BeamioConetChatSignBroker.setEmit(emit)
         // 25.52AW.1, 25.52AU.1, 25.52AX.1: the envelope comes first, for every entry. A reqId that is missing or not valid is `bad_request` with a
         // null reqId, answered once, before any gate or state change. Integer 0 is valid and is echoed (T-179).
