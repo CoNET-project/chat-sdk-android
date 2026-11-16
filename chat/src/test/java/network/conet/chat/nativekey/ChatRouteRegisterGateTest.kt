@@ -57,8 +57,8 @@ class ChatRouteRegisterGateTest {
         val end = source.indexOf("private fun pgpIdentityCreateWaiting(")
         val body = source.substring(start, end)
         assertTrue("finally block", body.contains("} finally {"))
-        assertTrue("zeroes the EOA key", body.contains("key?.fill(0)"))
-        assertTrue("zeroes the armor", body.contains("armor?.fill(0)"))
+        assertTrue("zeroes the EOA key", body.contains("key.fill(0)"))
+        assertTrue("zeroes the armor", body.contains("armorBytes?.fill(0)"))
         assertEquals("the gate is not in the handler: the module's gate answers first", true, body.contains("ChatRouteRegister.parse(body)"))
     }
 }

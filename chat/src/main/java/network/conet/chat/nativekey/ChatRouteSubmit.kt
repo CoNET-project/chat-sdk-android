@@ -53,20 +53,6 @@ internal object ChatRouteSubmit {
         return "{" + parts.joinToString(",") + "}"
     }
 
-    /** The request body of a built registration, in the fixed key order. The only place the eight registration keys are written out. */
-    fun bodyOf(b: ChatRouteRegister.Built.Ok): String = bodyJson(
-        mapOf(
-            "wallet" to b.wallet,
-            "keyID" to b.keyID,
-            "publicKeyArmored" to b.publicKeyArmored,
-            "encrypKeyArmored" to b.encrypKeyArmored,
-            "routeKeyID" to b.routeKeyID,
-            "timestamp" to b.timestamp.toString(),
-            "nonce" to b.nonce,
-            "signature" to b.signature,
-        ),
-    )
-
     /**
      * The on-chain check of the registration (read only): `true` when the PGP directory holds the expected keyId, `false` when it does not,
      * `null` when the read failed (that is not "not registered").
