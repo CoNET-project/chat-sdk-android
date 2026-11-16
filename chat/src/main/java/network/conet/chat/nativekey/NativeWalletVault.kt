@@ -249,13 +249,9 @@ class NativeWalletVault(
      * call registered; a failed removal keeps the intent, so the next start reports rollback_pending.
      */
     private fun store(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
-        // A write invalidates the snapshot and recomputes it under the same lock, so the gate never reads a state from before the write.
+        // The snapshot is invalidated and recomputed on the next gate read (io). No reconcile runs here: a crash-recovery path must stay as it was.
         snapshot = null
-        try {
-            return storeWrite(eoa, key, source, phrase)
-        } finally {
-            snapshot = runCatching { computeState() }.getOrNull()
-        }
+        return storeWrite(eoa, key, source, phrase)
     }
 
     private fun storeWrite(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
@@ -345,11 +341,7 @@ class NativeWalletVault(
     @Synchronized
     fun forget(): Boolean {
         snapshot = null
-        try {
-            return forgetWrite()
-        } finally {
-            snapshot = runCatching { computeState() }.getOrNull()
-        }
+        return forgetWrite()
     }
 
     private fun forgetWrite(): Boolean {

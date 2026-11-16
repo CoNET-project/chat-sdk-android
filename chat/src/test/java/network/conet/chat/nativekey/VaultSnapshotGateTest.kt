@@ -27,10 +27,11 @@ class VaultSnapshotGateTest {
     }
 
     @Test
-    fun everyWriteRecomputesTheSnapshotUnderTheLock() {
+    fun everyWriteInvalidatesTheSnapshotAndNoWriteRunsReconcile() {
         val v = vault()
-        assertTrue("store recomputes the snapshot", v.contains("snapshot = runCatching { computeState() }.getOrNull()"))
-        assertTrue("forget recomputes the snapshot", v.contains("private fun forgetWrite()"))
+        assertTrue("store invalidates the snapshot", v.contains("snapshot = null\n        return storeWrite("))
+        assertTrue("forget invalidates the snapshot", v.contains("snapshot = null\n        return forgetWrite()"))
         assertTrue("state() sets the snapshot", v.contains("snapshot = s"))
+        assertFalse("a write does not recompute (no reconcile on the write path)", v.contains("snapshot = runCatching { computeState() }"))
     }
 }
