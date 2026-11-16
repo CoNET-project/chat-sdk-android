@@ -1536,6 +1536,15 @@ object BeamioShellRecordImport {
 
     /** Answers one page request. [requestBytes] is the size of the message as received, in UTF-8 bytes. */
     fun handle(context: Context, origin: ShellOrigin, body: JSONObject, requestBytes: Int): JSONObject {
+        // diag2 (logging only): the window.BeamioShellRecord entry, thread, milliseconds and the reply code. Not through handleCommand.
+        val t0 = DiagTiming.now()
+        val out = handleInner(context, origin, body, requestBytes)
+        val code = out.optJSONObject("result")?.optString("code")?.takeIf { it.isNotEmpty() } ?: out.optString("error", "")
+        DiagTiming.log("shellRecord:" + body.optString("type", ""), t0, code)
+        return out
+    }
+
+    private fun handleInner(context: Context, origin: ShellOrigin, body: JSONObject, requestBytes: Int): JSONObject {
         val out = bridge(context).handle(origin, body, requestBytes)
         // The creation transaction ends with its first write (rev 0) that is ok: the page copy of the key the user just created.
         val firstWrite = body.optJSONObject("record")?.opt("rev") == 0
