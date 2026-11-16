@@ -32,7 +32,8 @@ class NativePgpInteropTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("d385b33f68767b98afdb4e061fbb1cf31ecf2d394345a1182f70ab064c181439", sha256Hex(bytes))
+        // Output of scripts/gen-pgp-native-vectors.mjs (seeded): regenerate by the command in the script header.
+        assertEquals("7fd1d237facb54090db90cc01dd3967cfbd4853ab6528fb4bca43cfdb2f5a411", sha256Hex(bytes))
     }
 
     @Test
