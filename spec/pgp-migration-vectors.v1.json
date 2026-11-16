@@ -10695,6 +10695,1132 @@
       }
     }
   ],
+  "pgpUpgradeRetryCases": [
+    {
+      "id": "PR-01",
+      "title": "用户点击重试：L 有效，写入成功：ack accepted，事件 upgraded_from_L",
+      "input": {
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": true,
+        "writeOk": true,
+        "readbackOk": true
+      },
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "upgraded_from_L"
+        }
+      }
+    },
+    {
+      "id": "PR-02",
+      "title": "用户点击重试：K_pgp 已存在：ack accepted，事件 keep_existing，不覆盖",
+      "input": {
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true
+      },
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "keep_existing"
+        }
+      }
+    },
+    {
+      "id": "PR-03",
+      "title": "用户点击重试：L 无效，无链上备份，经原生确认：ack accepted，事件 generated_on_user_click",
+      "input": {
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": false,
+        "chainBackupPresent": false,
+        "nativeConfirm": true
+      },
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "generated_on_user_click"
+        }
+      }
+    },
+    {
+      "id": "PR-04",
+      "title": "用户点击重试：L 无效，无链上备份，未经原生确认：ack accepted，事件 pgp_migration_retry，不生成",
+      "input": {
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": false,
+        "chainBackupPresent": false,
+        "nativeConfirm": false
+      },
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "pgp_migration_retry"
+        }
+      }
+    },
+    {
+      "id": "PR-05",
+      "title": "用户点击重试：账户不符：ack account_mismatch，无事件",
+      "input": {
+        "accountMatch": false,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false
+      },
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "PR-06",
+      "title": "用户点击重试：存储派生 Locked：ack not_ready，无事件",
+      "input": {
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": true,
+        "kPgpExists": false
+      },
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "not_ready"
+        }
+      }
+    },
+    {
+      "id": "PR-07",
+      "title": "用户点击重试：口令锁定（iOS）：ack locked，无事件",
+      "input": {
+        "accountMatch": true,
+        "unlocked": false,
+        "storageLocked": false,
+        "kPgpExists": false
+      },
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "locked"
+        }
+      }
+    },
+    {
+      "id": "PR-08",
+      "title": "用户点击重试：载荷含私钥或 armor 字段：ack key_over_bridge_refused，不处理",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "privateKeyArmor"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false
+      },
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "key_over_bridge_refused"
+        }
+      }
+    }
+  ],
+  "ipSubmitVerificationCases": [
+    {
+      "id": "IP-01",
+      "title": "IP 成功应答，链上只读核对已登记：submitted",
+      "input": {
+        "ipResponse": "ok",
+        "chainReadable": true,
+        "chainRegistered": true
+      },
+      "expect": {
+        "code": "submitted",
+        "retried": false
+      }
+    },
+    {
+      "id": "IP-02",
+      "title": "IP 成功应答，链上未登记：unverified_submit，不报 submitted",
+      "input": {
+        "ipResponse": "ok",
+        "chainReadable": true,
+        "chainRegistered": false
+      },
+      "expect": {
+        "code": "unverified_submit",
+        "retried": false
+      }
+    },
+    {
+      "id": "IP-03",
+      "title": "IP 成功应答，读链不可达：network_unavailable，不报 submitted",
+      "input": {
+        "ipResponse": "ok",
+        "chainReadable": false
+      },
+      "expect": {
+        "code": "network_unavailable",
+        "retried": false
+      }
+    },
+    {
+      "id": "IP-04",
+      "title": "IP 返回 5xx，重试前核对链上已登记：submitted，不重复提交",
+      "input": {
+        "ipResponse": "5xx",
+        "chainReadable": true,
+        "chainRegistered": true
+      },
+      "expect": {
+        "code": "submitted",
+        "retried": false
+      }
+    },
+    {
+      "id": "IP-05",
+      "title": "IP 超时，重试前核对链上未登记，重试成功且之后链上登记：submitted（重试一次）",
+      "input": {
+        "ipResponse": "timeout",
+        "chainReadable": true,
+        "chainRegistered": false,
+        "retryOk": true,
+        "chainRegisteredAfterRetry": true
+      },
+      "expect": {
+        "code": "submitted",
+        "retried": true
+      }
+    },
+    {
+      "id": "IP-06",
+      "title": "IP 5xx，重试后链上仍未登记：network_unavailable，不报 submitted",
+      "input": {
+        "ipResponse": "5xx",
+        "chainReadable": true,
+        "chainRegistered": false,
+        "retryOk": true,
+        "chainRegisteredAfterRetry": false
+      },
+      "expect": {
+        "code": "network_unavailable",
+        "retried": true
+      }
+    },
+    {
+      "id": "IP-07",
+      "title": "IP 5xx，读链不可达：network_unavailable，不盲目重试",
+      "input": {
+        "ipResponse": "5xx",
+        "chainReadable": false
+      },
+      "expect": {
+        "code": "network_unavailable",
+        "retried": false
+      }
+    }
+  ],
+  "chatAvailabilityCases": [
+    {
+      "id": "CA-01",
+      "title": "K_pgp 已核验可用：读写均开，无提示",
+      "input": {
+        "kPgpVerified": true,
+        "kPgpUpgraded": true,
+        "pgpSource": "ok",
+        "offline": false,
+        "localHistoryAvailable": true
+      },
+      "expect": {
+        "history": "readwrite",
+        "encryptActions": "enabled",
+        "hint": null,
+        "retry": null,
+        "useL": false
+      }
+    },
+    {
+      "id": "CA-02",
+      "title": "pgp_source_unavailable，本地历史可用：只读显示历史，发送与解密禁用，提示“聊天加密暂不可用，正在重试”，按退避重试",
+      "input": {
+        "kPgpVerified": false,
+        "kPgpUpgraded": false,
+        "pgpSource": "pgp_source_unavailable",
+        "offline": false,
+        "localHistoryAvailable": true
+      },
+      "expect": {
+        "history": "readonly",
+        "encryptActions": "disabled",
+        "hint": "chat_crypto_retrying",
+        "retry": "schedule",
+        "useL": false
+      }
+    },
+    {
+      "id": "CA-03",
+      "title": "离线冷启动，K_pgp 未完成升级，本地有旧 L：不用 L 签名或解密，只读历史",
+      "input": {
+        "kPgpVerified": false,
+        "kPgpUpgraded": false,
+        "pgpSource": "none",
+        "offline": true,
+        "localHistoryAvailable": true,
+        "legacyLPresent": true
+      },
+      "expect": {
+        "history": "readonly",
+        "encryptActions": "disabled",
+        "hint": "chat_crypto_retrying",
+        "retry": "schedule",
+        "useL": false
+      }
+    },
+    {
+      "id": "CA-04",
+      "title": "本地历史不可用：不显示为无会话，提示重试，发送禁用（不得显示“无会话”）",
+      "input": {
+        "kPgpVerified": false,
+        "kPgpUpgraded": false,
+        "pgpSource": "pgp_source_unavailable",
+        "offline": true,
+        "localHistoryAvailable": false
+      },
+      "expect": {
+        "history": "hidden_with_retry",
+        "encryptActions": "disabled",
+        "hint": "chat_crypto_retrying",
+        "retry": "schedule",
+        "useL": false
+      }
+    },
+    {
+      "id": "CA-05",
+      "title": "重试退避序列为 30 秒、2 分钟、10 分钟，之后由用户手动重试",
+      "input": {
+        "retryAttempt": 3
+      },
+      "expect": {
+        "delaysMs": [
+          30000,
+          120000,
+          600000
+        ],
+        "afterSchedule": "manual"
+      }
+    },
+    {
+      "id": "CA-06",
+      "title": "网络由离线恢复为在线：立即重试一次（由 PWA 发起）",
+      "input": {
+        "networkTransition": "offline_to_online"
+      },
+      "expect": {
+        "immediateRetry": 1
+      }
+    }
+  ],
+  "accountResetCases": [
+    {
+      "id": "ST-01",
+      "title": "双边确认无助记词（IDB absent，原生 absent）：进入 onboarding，不删除，不清理",
+      "input": {
+        "idb": "absent",
+        "native": "absent",
+        "pgpPresent": false,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "onboarding",
+        "deleteOld": false,
+        "enterOnboarding": true,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-02",
+      "title": "单边可恢复（IDB 有，原生无）：沿原账户，不误判无账号，不删除",
+      "input": {
+        "idb": "present",
+        "native": "absent",
+        "pgpPresent": true,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "continue_account",
+        "deleteOld": false,
+        "enterOnboarding": false,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-03",
+      "title": "单边可恢复（IDB 无，原生有）：沿原账户，不误判无账号，不删除",
+      "input": {
+        "idb": "absent",
+        "native": "present",
+        "pgpPresent": true,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "continue_account",
+        "deleteOld": false,
+        "enterOnboarding": false,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-04",
+      "title": "读取未知后重试（IDB 暂不可读）：不进入 onboarding，不删除，重试",
+      "input": {
+        "idb": "unknown",
+        "native": "absent",
+        "pgpPresent": true,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "retry_unknown",
+        "deleteOld": false,
+        "enterOnboarding": false,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-05",
+      "title": "仅 PGP 缺失（助记词在，PGP 缺）：沿原账户，修复 PGP，不判助记词丢失，不删除",
+      "input": {
+        "idb": "present",
+        "native": "present",
+        "pgpPresent": false,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "continue_account",
+        "deleteOld": false,
+        "enterOnboarding": false,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-06",
+      "title": "未确认不清理：进入 onboarding 后用户未完成恢复确认，不删除旧存储",
+      "input": {
+        "idb": "absent",
+        "native": "absent",
+        "pgpPresent": false,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": true
+      },
+      "expect": {
+        "action": "onboarding",
+        "deleteOld": false,
+        "enterOnboarding": true,
+        "keepNewAccount": false
+      }
+    },
+    {
+      "id": "ST-07",
+      "title": "恢复确认后清旧保新：确认并已建立新账户，删除旧存储，保留新账户与新数据",
+      "input": {
+        "idb": "absent",
+        "native": "absent",
+        "pgpPresent": false,
+        "userConfirmedRecovery": true,
+        "newAccountEstablished": true
+      },
+      "expect": {
+        "action": "cleanup_old",
+        "deleteOld": true,
+        "enterOnboarding": false,
+        "keepNewAccount": true
+      }
+    },
+    {
+      "id": "ST-08",
+      "title": "锁定或超时不当作确认无助记词：retry_unknown，不删除，不进入 onboarding",
+      "input": {
+        "idb": "absent",
+        "native": "unknown",
+        "locked": true,
+        "pgpPresent": false,
+        "userConfirmedRecovery": false,
+        "newAccountEstablished": false
+      },
+      "expect": {
+        "action": "retry_unknown",
+        "deleteOld": false,
+        "enterOnboarding": false,
+        "keepNewAccount": false
+      }
+    }
+  ],
+  "nativeMnemonicTriStateCases": [
+    {
+      "id": "TS-01",
+      "title": "双边确认无：walletStatus no_key 且 kPresent 假，快照已知：confirmed_none",
+      "input": {
+        "ws": "no_key",
+        "kPresent": false,
+        "snapshotUnknown": false
+      },
+      "expect": "confirmed_none"
+    },
+    {
+      "id": "TS-02",
+      "title": "G1（not_ready + g1_uninitialized）：has",
+      "input": {
+        "ws": "not_ready",
+        "reason": "g1_uninitialized",
+        "snapshotUnknown": false
+      },
+      "expect": "has"
+    },
+    {
+      "id": "TS-03",
+      "title": "G2 解锁或口令锁定（unlocked 或 locked，附 accountKey）：has",
+      "input": {
+        "ws": "unlocked",
+        "snapshotUnknown": false
+      },
+      "expect": "has"
+    },
+    {
+      "id": "TS-04",
+      "title": "读取未知：not_ready + unreadable：unknown，不得判无助记词",
+      "input": {
+        "ws": "not_ready",
+        "reason": "unreadable",
+        "snapshotUnknown": false
+      },
+      "expect": "unknown"
+    },
+    {
+      "id": "TS-05",
+      "title": "快照未知（not_ready，unreadable）：unknown，重试，不进入 onboarding",
+      "input": {
+        "ws": "not_ready",
+        "reason": "unreadable",
+        "snapshotUnknown": true
+      },
+      "expect": "unknown"
+    },
+    {
+      "id": "TS-06",
+      "title": "no_key 但 kPresent 为真（有 K 而无钥）：unknown，不判确认无",
+      "input": {
+        "ws": "no_key",
+        "kPresent": true,
+        "snapshotUnknown": false
+      },
+      "expect": "unknown"
+    }
+  ],
+  "onboardingCompatCases": [
+    {
+      "id": "CP-01",
+      "title": "口令锁定（walletStatus locked，G2）：原生有助记词，continue_account，不进入 onboarding",
+      "input": {
+        "shell": "native",
+        "nativeKeys": true,
+        "kpresentCap": true,
+        "ws": "locked",
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "continue_account",
+        "enterOnboarding": false,
+        "newAccountEntry": false
+      }
+    },
+    {
+      "id": "CP-02",
+      "title": "存储派生锁（not_ready + unreadable）：未知，retry_unknown，不进入 onboarding，不提供新建账号入口",
+      "input": {
+        "shell": "native",
+        "nativeKeys": true,
+        "kpresentCap": true,
+        "ws": "not_ready",
+        "reason": "unreadable",
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "retry_unknown",
+        "enterOnboarding": false,
+        "newAccountEntry": false
+      }
+    },
+    {
+      "id": "CP-03",
+      "title": "浏览器（无原生侧）全新安装：IDB 空，onboarding，允许新建账号",
+      "input": {
+        "shell": "browser",
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "onboarding",
+        "enterOnboarding": true,
+        "newAccountEntry": true
+      }
+    },
+    {
+      "id": "CP-04",
+      "title": "原生壳未声明 native-keys（§25.29.5、选项 A）：不进入 onboarding，不新建账号，首页可进，聊天禁用（能力缺失）",
+      "input": {
+        "shell": "native",
+        "nativeKeys": false,
+        "kpresentCap": false,
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "chat_unavailable_capability_missing",
+        "enterOnboarding": false,
+        "newAccountEntry": false
+      }
+    },
+    {
+      "id": "CP-05",
+      "title": "声明 native-keys 而未声明 kpresent（不应出现）：原生未知，retry_unknown，不得进入 onboarding，不提供新建账号入口",
+      "input": {
+        "shell": "native",
+        "nativeKeys": true,
+        "kpresentCap": false,
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "retry_unknown",
+        "enterOnboarding": false,
+        "newAccountEntry": false
+      }
+    },
+    {
+      "id": "CP-06",
+      "title": "双边确认无（新 SDK，walletStatus no_key 且 kPresent 假，IDB 空）：onboarding，允许新建账号",
+      "input": {
+        "shell": "native",
+        "nativeKeys": true,
+        "kpresentCap": true,
+        "ws": "no_key",
+        "kPresent": false,
+        "idb": "absent"
+      },
+      "expect": {
+        "action": "onboarding",
+        "enterOnboarding": true,
+        "newAccountEntry": true
+      }
+    }
+  ],
+  "pgpMissingBoundaryCases": [
+    {
+      "id": "PG-01",
+      "title": "PGP 缺失（pgpReady 假），助记词有：账户沿原账户，聊天禁用，不判账户丢失",
+      "input": {
+        "pgpReady": false,
+        "nativeMnemonic": "has",
+        "idb": "present"
+      },
+      "expect": {
+        "account": "continue_account",
+        "chatEnabled": false
+      }
+    },
+    {
+      "id": "PG-02",
+      "title": "PGP 缺失，IDB 与原生均确认无助记词：账户判定只看助记词，onboarding；聊天不可用",
+      "input": {
+        "pgpReady": false,
+        "nativeMnemonic": "confirmed_none",
+        "idb": "absent"
+      },
+      "expect": {
+        "account": "onboarding",
+        "chatEnabled": false
+      }
+    },
+    {
+      "id": "PG-03",
+      "title": "pgpUpgradeState 为 pgp_migration_retry，助记词有：沿原账户，聊天禁用",
+      "input": {
+        "pgpReady": true,
+        "pgpUpgradeState": "pgp_migration_retry",
+        "nativeMnemonic": "has",
+        "idb": "absent"
+      },
+      "expect": {
+        "account": "continue_account",
+        "chatEnabled": false
+      }
+    },
+    {
+      "id": "PG-04",
+      "title": "PGP 齐备，助记词有：沿原账户，聊天开启",
+      "input": {
+        "pgpReady": true,
+        "pgpUpgradeState": "upgraded_from_L",
+        "nativeMnemonic": "has",
+        "idb": "present"
+      },
+      "expect": {
+        "account": "continue_account",
+        "chatEnabled": true
+      }
+    },
+    {
+      "id": "PG-05",
+      "title": "walletStatus locked 且 status 键缺失：unknown，不判 has，不进入 onboarding",
+      "input": {
+        "ws": "locked",
+        "statusKeyPresent": false
+      },
+      "expect": "unknown"
+    },
+    {
+      "id": "PG-06",
+      "title": "walletStatus locked 且 status 键存在（口令锁定）：has",
+      "input": {
+        "ws": "locked",
+        "statusKeyPresent": true
+      },
+      "expect": "has"
+    }
+  ],
+  "accountCleanupOldCases": [
+    {
+      "id": "CU-01",
+      "title": "成功：新账户已建立可读，原生确认，删除全部旧存储，保留新账户与新数据",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "ok",
+        "deleted": [
+          "oldWallet",
+          "oldPgp",
+          "oldCopy",
+          "oldChat",
+          "oldMigrationResidue"
+        ],
+        "kept": [
+          "newWallet",
+          "newChat"
+        ],
+        "resumable": false,
+        "cleanupPending": false
+      }
+    },
+    {
+      "id": "CU-02",
+      "title": "载荷携带确认标记（confirm/userConfirmed）：confirmation_not_native，不删除",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey",
+          "userConfirmed"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "confirmation_not_native",
+        "deleted": []
+      }
+    },
+    {
+      "id": "CU-03",
+      "title": "原生未确认（确认界面未完成）：not_confirmed，不删除",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": false,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "not_confirmed",
+        "deleted": []
+      }
+    },
+    {
+      "id": "CU-04",
+      "title": "新账户未建立或不可读：not_available，不删除",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": false,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "not_available",
+        "deleted": []
+      }
+    },
+    {
+      "id": "CU-05",
+      "title": "载荷 accountKey 与原生新账户不符：account_mismatch，不删除",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": false,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "account_mismatch",
+        "deleted": []
+      }
+    },
+    {
+      "id": "CU-06",
+      "title": "存储派生锁或锁定：not_ready，不删除",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ],
+        "storeLocked": true
+      },
+      "expect": {
+        "code": "not_ready",
+        "deleted": []
+      }
+    },
+    {
+      "id": "CU-07",
+      "title": "部分清理失败：clear_incomplete，已删项不回滚，未完成项保留，可续作（cleanupPending）",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldWallet",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldPgp",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default",
+            "deleteFails": true
+          },
+          {
+            "name": "oldChat",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "oldMigrationResidue",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "clear_incomplete",
+        "deleted": [
+          "oldWallet",
+          "oldPgp",
+          "oldChat",
+          "oldMigrationResidue"
+        ],
+        "kept": [
+          "newWallet",
+          "newChat"
+        ],
+        "resumable": true,
+        "cleanupPending": true
+      }
+    },
+    {
+      "id": "CU-08",
+      "title": "幂等续作：再次调用（同 idempotencyKey）完成剩余旧项，应答 ok；已删项不重复",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "idempotencyKey"
+        ],
+        "accountKey": "eoa-new:default",
+        "newAccountReadable": true,
+        "nativeConfirmed": true,
+        "accountKeyMatch": true,
+        "storeItems": [
+          {
+            "name": "oldCopy",
+            "accountKey": "eoa-old:default"
+          },
+          {
+            "name": "newWallet",
+            "accountKey": "eoa-new:default"
+          },
+          {
+            "name": "newChat",
+            "accountKey": "eoa-new:default"
+          }
+        ]
+      },
+      "expect": {
+        "code": "ok",
+        "deleted": [
+          "oldCopy"
+        ],
+        "kept": [
+          "newWallet",
+          "newChat"
+        ],
+        "resumable": false,
+        "cleanupPending": false
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",
@@ -13435,70 +14561,94 @@
   ],
   "pageRecordDeleteCases": [
     {
-      "id": "DL-10a",
-      "title": "页面记录会话条目删除：写入 rev 与当前不符（陈旧副本）：conflict，不覆盖（r3by，§25.52AC.4）",
-      "rec": {
-        "rev": 3,
-        "chats": [
-          {
-            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "emailAddr": "a"
-          },
-          {
-            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "emailAddr": "b"
-          }
-        ]
-      },
-      "writeRev": 2,
-      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "id": "PR-01",
+      "title": "用户点击重试：L 有效，写入成功：ack accepted，事件 upgraded_from_L",
       "expect": {
-        "code": "conflict",
-        "currentRev": 3,
-        "rec": {
-          "rev": 3,
-          "chats": [
-            {
-              "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "emailAddr": "a"
-            },
-            {
-              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "emailAddr": "b"
-            }
-          ]
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "upgraded_from_L"
         }
       }
     },
     {
-      "id": "DL-10b",
-      "title": "页面记录会话条目删除：从新鲜读回（rev 相符）构造：ok，rev 加一，仅删该会话条目（r3by）",
-      "rec": {
-        "rev": 3,
-        "chats": [
-          {
-            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "emailAddr": "a"
-          },
-          {
-            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "emailAddr": "b"
-          }
-        ]
-      },
-      "writeRev": 3,
-      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "id": "PR-02",
+      "title": "用户点击重试：K_pgp 已存在：ack accepted，事件 keep_existing，不覆盖",
       "expect": {
-        "code": "ok",
-        "rev": 4,
-        "rec": {
-          "rev": 4,
-          "chats": [
-            {
-              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "emailAddr": "b"
-            }
-          ]
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "keep_existing"
+        }
+      }
+    },
+    {
+      "id": "PR-03",
+      "title": "用户点击重试：L 无效，无链上备份，经原生确认：ack accepted，事件 generated_on_user_click",
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "generated_on_user_click"
+        }
+      }
+    },
+    {
+      "id": "PR-04",
+      "title": "用户点击重试：L 无效，无链上备份，未经原生确认：ack accepted，事件 pgp_migration_retry，不生成",
+      "expect": {
+        "ack": {
+          "ok": true,
+          "accepted": true
+        },
+        "event": {
+          "code": "pgp_migration_retry"
+        }
+      }
+    },
+    {
+      "id": "PR-05",
+      "title": "用户点击重试：账户不符：ack account_mismatch，无事件",
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "PR-06",
+      "title": "用户点击重试：存储派生 Locked：ack not_ready，无事件",
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "not_ready"
+        }
+      }
+    },
+    {
+      "id": "PR-07",
+      "title": "用户点击重试：口令锁定（iOS）：ack locked，无事件",
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "locked"
+        }
+      }
+    },
+    {
+      "id": "PR-08",
+      "title": "用户点击重试：载荷含私钥或 armor 字段：ack key_over_bridge_refused，不处理",
+      "expect": {
+        "ack": {
+          "ok": false,
+          "error": "key_over_bridge_refused"
         }
       }
     }
