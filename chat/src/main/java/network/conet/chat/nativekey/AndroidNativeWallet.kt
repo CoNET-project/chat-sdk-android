@@ -102,9 +102,16 @@ class AndroidVaultFiles(private val dir: File) : VaultFiles {
         }
     }
 
+    override fun exists(name: String): Boolean = File(dir, name).exists()
+
+    /**
+     * Removes the file and its temp leftover. A removal that does not take effect throws (the file is still there), so no caller can take a
+     * failed removal for a done one (spec 25.25.5, 25.52Y.42 第 4 项 (e)).
+     */
     override fun delete(name: String) {
-        File(dir, name).delete()
-        File(dir, "$name.tmp").delete()
+        for (f in listOf(File(dir, name), File(dir, "$name.tmp"))) {
+            if (f.exists() && !f.delete() && f.exists()) throw IOException("vault delete failed")
+        }
     }
 
     /** The file names in the directory, for the page-copy discovery (§25.52AD.2). Empty when the directory does not exist. */

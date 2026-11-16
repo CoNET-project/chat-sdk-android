@@ -19,11 +19,17 @@ interface KeyWrap {
     fun deleteKey(): Boolean
 }
 
-/** Record and marker storage. [write] must be all-or-nothing (temp file and rename on the device). */
+/**
+ * Record and marker storage. [write] must be all-or-nothing (temp file and rename on the device). [delete] throws when the removal does not
+ * take effect; a caller that must know the file is gone checks [exists] (see [eraseChecked]), it never trusts a silent return.
+ */
 interface VaultFiles {
     fun read(name: String): ByteArray?
     fun write(name: String, bytes: ByteArray)
     fun delete(name: String)
+
+    /** True when anything is present under [name], a file or not. The default reads the file back. */
+    fun exists(name: String): Boolean = read(name) != null
 }
 
 /**
@@ -99,13 +105,11 @@ class NativeWalletVault(
         // Plan 1: only the names the manifest lists, and never a name that predates the import. An old-format intent (no manifest) deletes nothing.
         val manifest = intent.created ?: return false
         val allowed = setOf(MARK, REC, MNEM, COMMIT)
-        return try {
-            for (name in manifest) if (name in allowed && name != COMMIT) files.delete(name)
-            files.delete(INTENT)
-            true
-        } catch (e: Exception) {
-            false
+        // Each removal is confirmed (eraseChecked): a manifest file still present keeps the intent, so the state stays Locked and the next start retries.
+        for (name in manifest) if (name in allowed && name != COMMIT) {
+            if (!eraseChecked(files, name)) return false
         }
+        return eraseChecked(files, INTENT)
     }
 
     /**
@@ -360,17 +364,11 @@ class NativeWalletVault(
 
     /** Removes what this import registered, then the intent. Any removal that fails keeps the intent: the next start retries and reports rollback_pending. */
     private fun rollbackAndReport(code: Import, mnemonicPlanned: Boolean): Import {
-        try {
-            files.delete(COMMIT)
-            files.delete(MARK)
-            files.delete(REC)
-            if (mnemonicPlanned) files.delete(MNEM)
-            files.delete(INTENT)
-        } catch (e: Exception) {
-            // The intent stays; the next start retries and the account is rollback_pending (spec 25.52Y.42 第 4 项 (e)).
-            return Import.ROLLBACK_PENDING
-        }
-        return code
+        val names = listOfNotNull(COMMIT, MARK, REC, if (mnemonicPlanned) MNEM else null, INTENT)
+        // Every removal is confirmed. The intent is removed last and only after the others are gone; a failure keeps it, so the next start
+        // retries and the account is rollback_pending (spec 25.52Y.42 第 4 项 (e)).
+        val gone = names.all { eraseChecked(files, it) }
+        return if (gone) code else Import.ROLLBACK_PENDING
     }
 
     /**

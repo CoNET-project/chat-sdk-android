@@ -212,13 +212,13 @@ internal fun migrationAccountOfName(name: String): String? {
 }
 
 /**
- * Deletes one file and checks that it is gone. A delete that reports nothing is confirmed by reading the file back. Any exception
- * or a file still present is a failure.
+ * Deletes one file and checks that it is gone. The check is [VaultFiles.exists], not a read: a name that holds something a read does not
+ * return (a directory) is still present. Any exception or a name still present is a failure.
  */
 internal fun eraseChecked(files: VaultFiles, name: String): Boolean {
     runCatching { files.delete(name) }
     return try {
-        files.read(name) == null
+        !files.exists(name)
     } catch (_: Exception) {
         false
     }

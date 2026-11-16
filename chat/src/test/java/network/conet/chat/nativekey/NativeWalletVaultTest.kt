@@ -290,4 +290,51 @@ class NativeWalletVaultTest {
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
         assertTrue(files.map.containsKey(NativeWalletVault.MARK))
     }
+
+    /** An interrupted import: the intent, the record and the marker are on disk, the commit is not. */
+    private fun interruptedImportAfterMarker(files: NativeTestFiles, wrap: NativeTestWrap) {
+        files.crashAfterWrite = NativeWalletVault.MARK
+        assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
+        files.crashAfterWrite = null
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+    }
+
+    /**
+     * A manifest file whose removal returns without removing it keeps the intent and the state is Locked (rollback_pending), never Ready or
+     * NoKey. The next start, once the removal takes effect, finishes the rollback.
+     */
+    @Test
+    fun aManifestFileThatCannotBeRemovedKeepsTheIntentAndLocks() {
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        interruptedImportAfterMarker(files, wrap)
+        files.silentDeleteFailure = NativeWalletVault.REC
+
+        val v = vault(wrap, files)
+        val s = v.state()
+        assertTrue("reported rollback_pending", s is State.Locked && s.reason == "rollback_pending")
+        assertTrue("the intent is kept", files.map.containsKey(NativeWalletVault.INTENT))
+        assertTrue("the record that could not be removed is still there", files.map.containsKey(NativeWalletVault.REC))
+        assertNull("no key is released while locked", v.unlock())
+
+        files.silentDeleteFailure = null
+        val restarted = vault(wrap, files)
+        assertTrue("the next start finishes the rollback", restarted.state() is State.NoKey)
+        assertFalse(files.map.containsKey(NativeWalletVault.REC))
+        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+    }
+
+    /** A manifest removal that throws keeps the intent the same way: Locked, and nothing is confirmed as removed. */
+    @Test
+    fun aManifestRemovalThatThrowsKeepsTheIntentAndLocks() {
+        val files = NativeTestFiles()
+        val wrap = NativeTestWrap()
+        interruptedImportAfterMarker(files, wrap)
+        files.failDelete = NativeWalletVault.REC
+
+        val s = vault(wrap, files).state()
+        assertTrue("reported rollback_pending", s is State.Locked && s.reason == "rollback_pending")
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
+    }
 }

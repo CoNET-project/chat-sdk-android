@@ -54,6 +54,8 @@ internal class NativeTestFiles : VaultFiles {
     val map = HashMap<String, ByteArray>()
     var failWrite: String? = null
     var failDelete: String? = null
+    /** A removal that returns without removing, as the old AndroidVaultFiles did (the file stays, nothing is thrown). */
+    var silentDeleteFailure: String? = null
     var crashAfterWrite: String? = null
 
     override fun read(name: String): ByteArray? = map[name]?.copyOf()
@@ -66,6 +68,7 @@ internal class NativeTestFiles : VaultFiles {
 
     override fun delete(name: String) {
         if (failDelete == name) throw IOException("cannot remove")
+        if (silentDeleteFailure == name) return
         map.remove(name)
     }
 }
