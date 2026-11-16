@@ -1403,16 +1403,16 @@ internal object ShellRecordState {
 }
 
 /** The creation transaction as a time window: it is on for [WINDOW_MS] after it is set, so an abandoned creation cannot stay on for the process. */
-internal class CreationTxnWindow {
+internal class CreationTxnWindow(private val nowMs: () -> Long = { System.currentTimeMillis() }) {
     private val until = AtomicLong(0L)
 
     fun set(on: Boolean) {
-        until.set(if (on) System.currentTimeMillis() + WINDOW_MS else 0L)
+        until.set(if (on) nowMs() + WINDOW_MS else 0L)
     }
 
-    fun get(): Boolean = System.currentTimeMillis() < until.get()
+    fun get(): Boolean = nowMs() < until.get()
 
-    private companion object {
+    companion object {
         const val WINDOW_MS = 10L * 60L * 1000L
     }
 }

@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.21-r1841qa"
+version = "0.2.22-rc1"
 
 android {
     namespace = "network.conet.chat"
@@ -33,6 +33,13 @@ android {
             "boolean",
             "WALLET_CREDENTIAL_QA",
             (project.findProperty("chatWalletCredentialQa")?.toString() == "true").toString(),
+        )
+        // QA-only capability (identity.native-keys.v1, PM ruling for the 0.2.22-rc1 device candidate): declared only in a QA candidate built
+        // with -PchatNativeKeysQa=true. Without the property the bit is not declared; the formal build is not declared until the gate passes.
+        buildConfigField(
+            "boolean",
+            "NATIVE_KEYS_QA",
+            (project.findProperty("chatNativeKeysQa")?.toString() == "true").toString(),
         )
         // The artifact version as a build constant (spec 25.52Y.45, PM R2054): the SDK reports it as hello.sdkVersion; a test compares them.
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")

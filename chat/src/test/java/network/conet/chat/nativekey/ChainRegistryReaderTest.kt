@@ -89,6 +89,15 @@ class ChainRegistryReaderTest {
         assertEquals(4_000L, t.lastTimeout)
     }
 
+    /** The real answer of the current registry for a registered account (RealRegistryFixture, read-only from rpc1): the record decodes as bound. */
+    @Test
+    fun aRealRegisteredAccountDecodesAsFoundOnTheCurrentRegistry() {
+        val t = Fake { _, _, _ -> EthCallResult.Value(RealRegistryFixture.GET_ACCOUNT_RESULT) }
+        val r = reader(t).readAccount(RealRegistryFixture.REGISTERED_ACCOUNT, 10_000L)
+        assertTrue(r is RegistryRead.Found)
+        assertEquals(RegistryMapping.map(BindingKind.EOA, RawOutcome.BOUND).javaClass, r.javaClass)
+    }
+
     @Test
     fun anExactAccountNotFoundRevertIsAbsent() {
         val t = Fake { _, _, _ -> EthCallResult.Reverted("0xfaba8ebe") }

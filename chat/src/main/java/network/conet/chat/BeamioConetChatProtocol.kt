@@ -18,7 +18,7 @@ object BeamioConetChatProtocol {
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
     /** The artifact version (spec 25.52Y.45, PM R2054); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
-    const val SDK_VERSION = "0.2.21-r1841qa"
+    const val SDK_VERSION = "0.2.22-rc1"
 
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
@@ -35,7 +35,11 @@ object BeamioConetChatProtocol {
         "history.local.v1",
         "history.page.v1",
         "layout.cache.v1",
-    ) + listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA })
+    ) + listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA }) +
+        listOfNotNull(NATIVE_KEYS_CAPABILITY.takeIf { BuildConfig.NATIVE_KEYS_QA })
+
+    /** The native-keys capability, declared only in a QA candidate (-PchatNativeKeysQa=true). Not in the shared hello vector. */
+    const val NATIVE_KEYS_CAPABILITY = "identity.native-keys.v1"
 
     /**
      * The window-channel capability for walletCredential (spec 25.52Y.38 第 2 项 (e), 25.52Y.44; PM R2042). Declared only in a QA build
