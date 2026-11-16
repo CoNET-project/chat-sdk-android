@@ -1651,7 +1651,13 @@ object BeamioConetChatModule {
         val reply = if (ctx == null) {
             IdentityPublic.Reply(IdentityPublic.NOT_READY, null)
         } else {
-            val gate = NoKeyGate.gateOf(NativeWallet.vault(ctx).state(), NativeSessionState.isReady())
+            val snap = NativeWallet.vault(ctx).snapshotState()
+            if (snap == null) {
+                scheduleSnapshotRefresh(ctx)
+                ack(reqId, false, error = NoKeyGate.NOT_READY)
+                return
+            }
+            val gate = NoKeyGate.gateOf(snap, NativeSessionState.isReady())
             IdentityPublic.answer(
                 gate,
                 { body.keys().asSequence().map { it.toString() }.toList() },
@@ -1694,7 +1700,14 @@ object BeamioConetChatModule {
             return
         }
         NativeWallet.migrateLegacy(ctx)
-        val vaultEoa = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.eoa
+        // 25.52Y.75: the snapshot. Unknown is not_ready: an absent or unknown vault must never look like "no key" (25.52CS.2).
+        val snapState = NativeWallet.vault(ctx).snapshotState()
+        if (snapState == null) {
+            scheduleSnapshotRefresh(ctx)
+            ack(reqId, false, error = NoKeyGate.NOT_READY)
+            return
+        }
+        val vaultEoa = (snapState as? NativeWalletVault.State.Ready)?.eoa
         val state = IdentityProvisionContract.nativeKeyState(vaultEoa, eoa)
         val result = IdentityProvisionContract.readyResponse(eoa, state)
         Log.i(TAG, "identity provisioned ready=${result.optBoolean("ready")}")
@@ -2082,7 +2095,10 @@ object BeamioConetChatModule {
 
     /** The gate (G0 `no_key`, G1 `not_ready`) and then the answer of [NativeHistoryDelete]: one ack per request, sent through the event channel. */
     private fun historyDeleteCommand(context: Context, type: String, body: JSONObject) {
-        val gate = NoKeyGate.gateOf(NativeWallet.vault(context).state(), NativeSessionState.isReady())
+        // 25.52Y.75: the snapshot. An unknown state is not_ready, and nothing is deleted or read from the payload.
+        val snap = NativeWallet.vault(context).snapshotState()
+        if (snap == null) scheduleSnapshotRefresh(context)
+        val gate = NoKeyGate.gateOf(snap ?: return emitEvent(NativeHistoryDelete.ack(type, body, NoKeyGate.NOT_READY, currentSession()?.history?.localStore())), NativeSessionState.isReady())
         val answer = NoKeyGate.answerFor(type, gate)
         val refusal = if (answer == NoKeyGate.NO_KEY || answer == NoKeyGate.NOT_READY) answer else null
         emitEvent(NativeHistoryDelete.ack(type, body, refusal, currentSession()?.history?.localStore()))
