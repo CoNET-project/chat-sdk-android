@@ -311,7 +311,20 @@ object BeamioConetChatModule {
                     return
                 }
             }
-            val state = NativeWallet.vault(context).state()
+            // 25.52Y.70 第 4 项, 25.52Y.75: the gate reads the snapshot, never the keystore on this thread. While it is unknown the command is
+            // answered not_ready once: walletStatus carries status not_ready with notReadyReason unreadable (not g1_uninitialized); any other
+            // command is an ack not_ready. Nothing is read from the payload, nothing is written.
+            val snap = NativeWallet.vault(context).snapshotState()
+            if (snap == null) {
+                scheduleSnapshotRefresh(context)
+                if (type == "walletStatus") {
+                    ack(reqId, true, result = JSONObject().put("status", "not_ready").put("notReadyReason", "unreadable"))
+                } else {
+                    ack(reqId, false, error = NoKeyGate.NOT_READY)
+                }
+                return
+            }
+            val state = snap
             val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
             // clear_pending set (strictly read): clearIdentity finishes the interrupted clear in G0 and G1 (25.26.4c 第 3a 項, 25.52Y.21 (a),
             // gate-state G0-CLR-PENDING and G1-CLR-PENDING, no-key NK-CP1). Without the marker, the gate answers as before (G0 no_key, G1 not_ready).
@@ -1461,6 +1474,13 @@ object BeamioConetChatModule {
      * caller's thread. A new key is generated only with the native confirmation, which this build does not have: the click alone never generates
      * (the result is pgp_migration_retry). Every result reaches the page as a pgpUpgradeState event, keep_existing included.
      */
+    /** Computes the vault snapshot on the io executor (25.52Y.75): the keystore is never opened on the caller's thread for the gate. */
+    private fun scheduleSnapshotRefresh(ctx: Context) {
+        io.execute {
+            runCatching { NativeWallet.vault(ctx).state() }
+        }
+    }
+
     private fun pgpUpgradeRetryCommand(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         val keys = body.keys().asSequence().map { it.toString() }.toSet()

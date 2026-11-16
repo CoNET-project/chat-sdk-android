@@ -115,9 +115,25 @@ class NativeWalletVault(
     private fun markerOk(rec: ByteArray, mark: ByteArray?, mnem: ByteArray?): Boolean =
         if (mark == null) mnem == null else mark.contentEquals(markerOf(rec, mnem))
 
-    /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). */
+    /**
+     * The last state computed under the lock, read without it (25.52Y.75, the snapshot of the command gate). `null` until the first computation
+     * and while a write is in progress: the gate then answers not_ready once and does not touch the keystore on the caller's thread.
+     */
+    @Volatile
+    private var snapshot: State? = null
+
+    /** The snapshot, without the monitor. `null` when it is not known yet. Never blocks. */
+    fun snapshotState(): State? = snapshot
+
+    /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). Updates the snapshot. */
     @Synchronized
     fun state(): State {
+        val s = computeState()
+        snapshot = s
+        return s
+    }
+
+    private fun computeState(): State {
         if (!reconcile()) return State.Locked("rollback_pending")
         val rec = files.read(REC)
         val mark = files.read(MARK)
@@ -233,6 +249,16 @@ class NativeWalletVault(
      * call registered; a failed removal keeps the intent, so the next start reports rollback_pending.
      */
     private fun store(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
+        // A write invalidates the snapshot and recomputes it under the same lock, so the gate never reads a state from before the write.
+        snapshot = null
+        try {
+            return storeWrite(eoa, key, source, phrase)
+        } finally {
+            snapshot = runCatching { computeState() }.getOrNull()
+        }
+    }
+
+    private fun storeWrite(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
         if (!isCanonicalEoa(eoa)) return Import.BAD_EOA
         if (source != SOURCE_NATIVE_IMPORT && source != SOURCE_NATIVE_CREATE && source != SOURCE_LEGACY) return Import.BAD_KEY
         if (key.size != 32) return Import.BAD_KEY
@@ -318,6 +344,15 @@ class NativeWalletVault(
      */
     @Synchronized
     fun forget(): Boolean {
+        snapshot = null
+        try {
+            return forgetWrite()
+        } finally {
+            snapshot = runCatching { computeState() }.getOrNull()
+        }
+    }
+
+    private fun forgetWrite(): Boolean {
         val filesGone = listOf(COMMIT, MARK, REC, MNEM, INTENT).map { eraseChecked(files, it) }.all { it }
         return filesGone && wrap.deleteKey()
     }
