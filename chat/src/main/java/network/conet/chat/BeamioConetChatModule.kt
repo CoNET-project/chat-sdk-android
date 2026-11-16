@@ -138,6 +138,12 @@ object BeamioConetChatModule {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean = size > 512
     }
     private val main = Handler(Looper.getMainLooper())
+    /**
+     * The route submission bases, IP first when the roster is wired (25.52Y.61 第 4 项). Until then the domain only. The IP addresses are not
+     * in source: they come from the global native network roster, which is not wired yet.
+     */
+    private val ROUTE_BASES: List<String> = listOf("https://beamio.ca")
+
     private val io = Executors.newCachedThreadPool { r ->
         Thread(r, "conet-chat-module").apply { isDaemon = true }
     }
@@ -1513,9 +1519,10 @@ object BeamioConetChatModule {
     }
 
     /**
-     * W5 `chatRouteRegister` (spec 25.28.3 to 25.28.5; PM R2085). Reached only in G2 (the gate answers no_key, not_ready and locked before this):
-     * the request is checked first, then the EOA key and the PGP armor are read from the vault, the registration is built in [ChatRouteRegister],
-     * and both byte arrays are zeroed after use. The String copies of the password and the armor cannot be zeroed on the JVM (a stated limit).
+     * `chatRouteRegister` (25.52Y.61 第 2 至 4 项, 25.52Y.66): the native layer builds the registration, submits it itself, and confirms it on chain.
+     * The page posts nothing. The answer is {code: "submitted"} on success and only a code on failure; no backup, signature or key field is returned.
+     * The vault is read on the io executor only (never on the caller's thread). Route bases: the domain only until the IP roster is wired (see
+     * [ROUTE_BASES]); the IP path is not yet live in this build.
      */
     private fun chatRouteRegisterCommand(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
@@ -1526,41 +1533,65 @@ object BeamioConetChatModule {
             return
         }
         if (ctx == null) { ack(reqId, false, error = "not_ready"); return }
+        val request = parsed.request
+        io.execute { registerRouteNative(ctx, reqId, request) }
+    }
+
+    private fun registerRouteNative(ctx: Context, reqId: Any?, request: ChatRouteRegister.Request) {
         val vault = NativeWallet.vault(ctx)
-        val eoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
+        val eoa = (try { vault.state() } catch (_: Exception) { null } as? NativeWalletVault.State.Ready)?.eoa
         if (eoa == null) { ack(reqId, false, error = "not_ready"); return }
-        // A vault that cannot be unlocked is a storage-derived failure: not_ready (spec 25.52CS.2, T-133-05). `locked` is the passcode lock only,
-        // which Android does not have (25.52GQ.3a), so it is not answered here.
-        val key = vault.unlock()
-        if (key == null) { ack(reqId, false, error = "not_ready"); return }
-        var armorBytes: ByteArray? = null
-        try {
-            val armor = NativeWallet.pgpFor(ctx, eoa).armorForMove()
-            armorBytes = armor?.toByteArray(Charsets.UTF_8)
-            val nonceBytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
-            val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
-            val nonce = "0x" + nonceBytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-            val built = ChatRouteRegister.build(
-                request = parsed.request,
-                wallet = eoa,
-                eoaPrivateKey = key,
-                pgpPrivateArmor = armorBytes,
-                timestampMs = System.currentTimeMillis(),
-                nonce = nonce,
-                iv = iv,
-            )
-            when (built) {
-                is ChatRouteRegister.Built.Refused -> ack(reqId, false, error = built.code)
-                is ChatRouteRegister.Built.Ok -> ack(reqId, true, result = JSONObject()
-                    .put("wallet", built.wallet).put("keyID", built.keyID)
-                    .put("publicKeyArmored", built.publicKeyArmored).put("encrypKeyArmored", built.encrypKeyArmored)
-                    .put("routeKeyID", built.routeKeyID).put("timestamp", built.timestamp)
-                    .put("nonce", built.nonce).put("signature", built.signature))
-            }
-        } finally {
-            key.fill(0)
-            armorBytes?.fill(0)
+        // A vault that cannot be unlocked is a storage-derived failure: not_ready (25.52CS.2). Android has no passcode lock (25.52GQ.3a).
+        if (vault.unlock().also { it?.fill(0) } == null) { ack(reqId, false, error = "not_ready"); return }
+        var refusal: String? = null
+        val outcome = network.conet.chat.nativekey.ChatRouteSubmit.submit(
+            bases = ROUTE_BASES,
+            bodyFor = { _ ->
+                val key = vault.unlock()
+                val armor = try { NativeWallet.pgpFor(ctx, eoa).armorForMove()?.toByteArray(Charsets.UTF_8) } catch (_: Exception) { null }
+                try {
+                    if (key == null) { refusal = "not_ready"; null } else {
+                        val nonce = "0x" + ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+                        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+                        when (val built = network.conet.chat.nativekey.ChatRouteRegister.build(
+                            request = request,
+                            wallet = eoa,
+                            eoaPrivateKey = key,
+                            pgpPrivateArmor = armor,
+                            timestampMs = System.currentTimeMillis(),
+                            nonce = nonce,
+                            iv = iv,
+                        )) {
+                            is network.conet.chat.nativekey.ChatRouteRegister.Built.Refused -> { refusal = built.code; null }
+                            is network.conet.chat.nativekey.ChatRouteRegister.Built.Ok -> network.conet.chat.nativekey.ChatRouteSubmit.bodyOf(built)
+                        }
+                    }
+                } finally {
+                    key?.fill(0)
+                    armor?.fill(0)
+                }
+            },
+            poster = network.conet.chat.nativekey.ChatRouteSubmit.HttpPoster,
+            chain = network.conet.chat.nativekey.ChatRouteSubmit.ChainCheck { chainRegisteredFor(eoa, request.keyID) },
+        )
+        when (outcome) {
+            is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.Submitted ->
+                ack(reqId, true, result = JSONObject().put("code", "submitted"))
+            is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.UnverifiedSubmit -> ack(reqId, false, error = "unverified_submit")
+            is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.NetworkUnavailable -> ack(reqId, false, error = "network_unavailable")
+            is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.Refused ->
+                ack(reqId, false, error = refusal ?: outcome.code)
         }
+    }
+
+    /** The read-only chain check of a registration (25.52Y.63 第 3 项): true when the directory holds [keyId], false when not, null when unreadable. */
+    private fun chainRegisteredFor(eoa: String, keyId: String): Boolean? {
+        val chain = network.conet.chat.nativekey.AddressPgpChain.read(eoa) { ep ->
+            network.conet.chat.nativekey.AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs)
+        }
+        if (!chain.chainReadable()) return null
+        val id = chain.identity() ?: return false
+        return id.subkeyKeyId.equals(keyId, ignoreCase = true)
     }
 
     private fun pgpIdentityCreateWaiting(body: JSONObject) {
