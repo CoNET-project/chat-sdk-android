@@ -1490,7 +1490,12 @@ object BeamioConetChatModule {
         if (keys.any { it !in PGP_RESTORE_FIELDS }) return answer(false, "bad_request")
         if (reqId == null) return answer(false, "bad_request")
         val ctx = appContext ?: return answer(false, "not_ready")
-        val state = NativeWallet.vault(ctx).state()
+        // A vault that cannot be read is unknown: not_ready, one answer for this reqId (Y.104 第 3 条), never no_key.
+        val state = try {
+            NativeWallet.vault(ctx).state()
+        } catch (_: Exception) {
+            return answer(false, "not_ready")
+        }
         if (state is NativeWalletVault.State.Locked) return answer(false, "locked")
         val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return answer(false, "no_key")
         val accountKey = body.optString("accountKey", "")
@@ -1531,7 +1536,12 @@ object BeamioConetChatModule {
             emitEvent(payload)
         }
         val ctx = appContext
-        val state = ctx?.let { NativeWallet.vault(it).state() }
+        // A vault that cannot be read is unknown: not_ready, one answer for this reqId (Y.104 第 3 条), never a gate that allows a migration.
+        val state = try {
+            ctx?.let { NativeWallet.vault(it).state() }
+        } catch (_: Exception) {
+            return answer(false, "not_ready")
+        }
         val gate = if (state == null) NoKeyGate.Gate.G1 else NoKeyGate.gateOf(state, NativeSessionState.isReady())
         when (val ack = PgpMigrationBridge.ackFor(body, gate, state is NativeWalletVault.State.Locked, pgpMigrateRunning.get())) {
             is PgpMigrationBridge.Ack.Refused -> return answer(false, ack.code, ack.fields)
