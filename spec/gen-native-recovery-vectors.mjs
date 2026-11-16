@@ -20,7 +20,10 @@ const args = process.argv.slice(2)
 const outIdx = args.indexOf('--out')
 const OUT = outIdx >= 0 ? path.resolve(args[outIdx + 1]) : path.join(here, 'native-recovery-vectors.v1.json')
 
-const requirePwa = createRequire('/Users/peter/Downloads/BeamioContract/src/SilentPassUI/package.json')
+// The PWA package that provides @noble/hashes is named by an environment variable (no home-directory path in the repository).
+const pwaPackageJson = process.env.SILENTPASS_UI_PACKAGE_JSON
+if (!pwaPackageJson) throw new Error('set SILENTPASS_UI_PACKAGE_JSON to the SilentPassUI package.json')
+const requirePwa = createRequire(path.resolve(pwaPackageJson))
 const { argon2id } = requirePwa('@noble/hashes/argon2.js')
 const ethers = requirePwa('ethers')
 const subtle = globalThis.crypto.subtle
