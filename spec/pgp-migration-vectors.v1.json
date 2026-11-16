@@ -9962,6 +9962,132 @@
       }
     }
   ],
+  "pgpIdCases": [
+    {
+      "id": "PI-01",
+      "title": "新生成密钥：用户 ID name 写小写 EOA（输入为混合大小写）",
+      "input": {
+        "isNewKey": true,
+        "eoa": "0xAbC0000000000000000000000000000000000DeF",
+        "profileAccount": "0xabc0000000000000000000000000000000000def",
+        "keyIdLocal": "ab12cd34ef567890",
+        "keyIdRemote": "AB12CD34EF567890"
+      },
+      "expect": {
+        "userIdName": "0xabc0000000000000000000000000000000000def",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12CD34EF567890"
+      }
+    },
+    {
+      "id": "PI-02",
+      "title": "已有密钥：不重写用户 ID，name 保持原值（混合大小写）",
+      "input": {
+        "isNewKey": false,
+        "existingUserIdName": "0xAbC0000000000000000000000000000000000DeF",
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xabc0000000000000000000000000000000000def",
+        "keyIdLocal": "AB12",
+        "keyIdRemote": "ab12"
+      },
+      "expect": {
+        "userIdName": "0xAbC0000000000000000000000000000000000DeF",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12"
+      }
+    },
+    {
+      "id": "PI-03",
+      "title": "账户比较：profile 的混合大小写 EOA 与小写 EOA 规范化后相等",
+      "input": {
+        "isNewKey": false,
+        "existingUserIdName": "x",
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xABC0000000000000000000000000000000000DEF",
+        "keyIdLocal": "AB12",
+        "keyIdRemote": "AB12"
+      },
+      "expect": {
+        "userIdName": "x",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12"
+      }
+    },
+    {
+      "id": "PI-04",
+      "title": "keyID 比较：去空白并转大写后相等（输入含空白与小写）",
+      "input": {
+        "isNewKey": false,
+        "existingUserIdName": "x",
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xabc0000000000000000000000000000000000def",
+        "keyIdLocal": " ab12 cd34 ",
+        "keyIdRemote": "AB12CD34"
+      },
+      "expect": {
+        "userIdName": "x",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12CD34"
+      }
+    },
+    {
+      "id": "PI-05",
+      "title": "用户 ID 混合大小写不影响匹配：name 与 EOA 原文不同，匹配仍只看规范化后的账户",
+      "input": {
+        "isNewKey": false,
+        "existingUserIdName": "0XABC0000000000000000000000000000000000DEF",
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xabc0000000000000000000000000000000000def",
+        "keyIdLocal": "AB12",
+        "keyIdRemote": "ab12"
+      },
+      "expect": {
+        "userIdName": "0XABC0000000000000000000000000000000000DEF",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12"
+      }
+    },
+    {
+      "id": "PI-06",
+      "title": "不同账户：规范化后不等，不匹配（与大小写无关）",
+      "input": {
+        "isNewKey": false,
+        "existingUserIdName": "x",
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xABC0000000000000000000000000000000000001",
+        "keyIdLocal": "AB12",
+        "keyIdRemote": "AB12"
+      },
+      "expect": {
+        "userIdName": "x",
+        "accountMatch": false,
+        "keyIdMatch": true,
+        "registryKeyId": "AB12"
+      }
+    },
+    {
+      "id": "PI-07",
+      "title": "链上目录 keyID：本地小写 keyId 登记为大写子钥 keyId",
+      "input": {
+        "isNewKey": true,
+        "eoa": "0xabc0000000000000000000000000000000000def",
+        "profileAccount": "0xabc0000000000000000000000000000000000def",
+        "keyIdLocal": "deadbeef00112233",
+        "keyIdRemote": "DEADBEEF00112233"
+      },
+      "expect": {
+        "userIdName": "0xabc0000000000000000000000000000000000def",
+        "accountMatch": true,
+        "keyIdMatch": true,
+        "registryKeyId": "DEADBEEF00112233"
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",
