@@ -1456,11 +1456,6 @@ object BeamioConetChatModule {
      * `reqId` gets the event with a null reqId, as the other results do.
      */
     /**
-     * W5 `chatRouteRegister` (spec 25.28.3 to 25.28.5; PM R2085). Reached only in G2 (the gate answers no_key, not_ready and locked before this):
-     * the request is checked first, then the EOA key and the PGP armor are read from the vault, the registration is built in [ChatRouteRegister],
-     * and both byte arrays are zeroed after use. The String copies of the password and the armor cannot be zeroed on the JVM (a stated limit).
-     */
-    /**
      * `pgpUpgradeRetry` (25.52Y.63 第 2 项, 25.52Y.64 PR-01..08): the user's click on the upgrade retry. Fields are `type`, `reqId`, `accountKey`;
      * a key, passphrase or armor field is `key_over_bridge_refused` before anything is read. The vault is read on the io executor only, never on the
      * caller's thread. A new key is generated only with the native confirmation, which this build does not have: the click alone never generates
@@ -1497,6 +1492,11 @@ object BeamioConetChatModule {
         }
     }
 
+    /**
+     * W5 `chatRouteRegister` (spec 25.28.3 to 25.28.5; PM R2085). Reached only in G2 (the gate answers no_key, not_ready and locked before this):
+     * the request is checked first, then the EOA key and the PGP armor are read from the vault, the registration is built in [ChatRouteRegister],
+     * and both byte arrays are zeroed after use. The String copies of the password and the armor cannot be zeroed on the JVM (a stated limit).
+     */
     private fun chatRouteRegisterCommand(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         val ctx = appContext
