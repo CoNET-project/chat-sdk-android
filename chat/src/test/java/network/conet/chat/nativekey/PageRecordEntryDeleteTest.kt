@@ -4,7 +4,6 @@ import network.conet.chat.nativekey.PgpMigrationKeys.ACCOUNT
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Ignore
 import org.junit.Test
 import java.io.File
 
@@ -19,9 +18,6 @@ import java.io.File
  *  - Mapped. `chats` is moved under `profiles[0]` and `schemaVersion` 1 is added, the position the whitelist accepts. Under this run the case
  *    must give the vector's own result: `conflict` with the current `currentRev` for a stale copy, `ok` with the next `rev` for a fresh one.
  */
-// BLOCKER (2026-11-16, pinned vectors 06199263…f696): `pageRecordDeleteCases` now holds PR-01..PR-08 (pgpUpgradeRetry cases, no `rec`); the
-// DL-10a and DL-10b cases this class runs are absent. Ignored until the interface seat rules; nothing else in the class is changed.
-@Ignore("blocked: pinned pageRecordDeleteCases holds PR-01..08, DL-10a/10b absent (interface ruling pending)")
 class PageRecordEntryDeleteTest {
     private val doc = JSONObject(
         String(

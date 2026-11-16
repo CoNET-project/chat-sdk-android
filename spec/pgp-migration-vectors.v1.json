@@ -14561,94 +14561,70 @@
   ],
   "pageRecordDeleteCases": [
     {
-      "id": "PR-01",
-      "title": "用户点击重试：L 有效，写入成功：ack accepted，事件 upgraded_from_L",
+      "id": "DL-10a",
+      "title": "页面记录会话条目删除：写入 rev 与当前不符（陈旧副本）：conflict，不覆盖（r3by，§25.52AC.4）",
+      "rec": {
+        "rev": 3,
+        "chats": [
+          {
+            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "emailAddr": "a"
+          },
+          {
+            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "emailAddr": "b"
+          }
+        ]
+      },
+      "writeRev": 2,
+      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "expect": {
-        "ack": {
-          "ok": true,
-          "accepted": true
-        },
-        "event": {
-          "code": "upgraded_from_L"
+        "code": "conflict",
+        "currentRev": 3,
+        "rec": {
+          "rev": 3,
+          "chats": [
+            {
+              "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "emailAddr": "a"
+            },
+            {
+              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "emailAddr": "b"
+            }
+          ]
         }
       }
     },
     {
-      "id": "PR-02",
-      "title": "用户点击重试：K_pgp 已存在：ack accepted，事件 keep_existing，不覆盖",
+      "id": "DL-10b",
+      "title": "页面记录会话条目删除：从新鲜读回（rev 相符）构造：ok，rev 加一，仅删该会话条目（r3by）",
+      "rec": {
+        "rev": 3,
+        "chats": [
+          {
+            "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "emailAddr": "a"
+          },
+          {
+            "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "emailAddr": "b"
+          }
+        ]
+      },
+      "writeRev": 3,
+      "convKey": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "expect": {
-        "ack": {
-          "ok": true,
-          "accepted": true
-        },
-        "event": {
-          "code": "keep_existing"
-        }
-      }
-    },
-    {
-      "id": "PR-03",
-      "title": "用户点击重试：L 无效，无链上备份，经原生确认：ack accepted，事件 generated_on_user_click",
-      "expect": {
-        "ack": {
-          "ok": true,
-          "accepted": true
-        },
-        "event": {
-          "code": "generated_on_user_click"
-        }
-      }
-    },
-    {
-      "id": "PR-04",
-      "title": "用户点击重试：L 无效，无链上备份，未经原生确认：ack accepted，事件 pgp_migration_retry，不生成",
-      "expect": {
-        "ack": {
-          "ok": true,
-          "accepted": true
-        },
-        "event": {
-          "code": "pgp_migration_retry"
-        }
-      }
-    },
-    {
-      "id": "PR-05",
-      "title": "用户点击重试：账户不符：ack account_mismatch，无事件",
-      "expect": {
-        "ack": {
-          "ok": false,
-          "error": "account_mismatch"
-        }
-      }
-    },
-    {
-      "id": "PR-06",
-      "title": "用户点击重试：存储派生 Locked：ack not_ready，无事件",
-      "expect": {
-        "ack": {
-          "ok": false,
-          "error": "not_ready"
-        }
-      }
-    },
-    {
-      "id": "PR-07",
-      "title": "用户点击重试：口令锁定（iOS）：ack locked，无事件",
-      "expect": {
-        "ack": {
-          "ok": false,
-          "error": "locked"
-        }
-      }
-    },
-    {
-      "id": "PR-08",
-      "title": "用户点击重试：载荷含私钥或 armor 字段：ack key_over_bridge_refused，不处理",
-      "expect": {
-        "ack": {
-          "ok": false,
-          "error": "key_over_bridge_refused"
+        "code": "ok",
+        "rev": 4,
+        "rec": {
+          "rev": 4,
+          "chats": [
+            {
+              "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "emailAddr": "b"
+            }
+          ]
         }
       }
     }

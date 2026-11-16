@@ -64,9 +64,8 @@ class PgpMigrationVectorsTest {
         // r3bz (§25.52AD.7): GX-01 to GX-10b (11 cases). r3by (§25.52AC.8): DL-01 to DL-09 (9 cases) and DL-10a, DL-10b (2 cases).
         assertEquals(11, doc.getJSONArray("gateExceptionCases").length())
         assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
-        // BLOCKER (2026-11-16): the pinned file's `pageRecordDeleteCases` holds PR-01..PR-08 (pgpUpgradeRetry cases); DL-10a and DL-10b are absent.
-        // The interface seat must rule. Until then this count follows the pinned file, and PageRecordEntryDeleteTest is ignored.
-        assertEquals(8, doc.getJSONArray("pageRecordDeleteCases").length())
+        // Y.100: DL-10a and DL-10b are back in pageRecordDeleteCases; the upgrade-retry cases PR-01..08 are in pgpUpgradeRetryCases.
+        assertEquals(2, doc.getJSONArray("pageRecordDeleteCases").length())
         // r3cf (25.52AH): the self-check has 259 steps (it had 254 before the r3cf vectors).
         assertEquals(440, doc.getJSONObject("selfCheck").getInt("runs"))
     }
@@ -393,7 +392,7 @@ class PgpMigrationVectorsTest {
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
 
     companion object {
-        /** sha256 of `spec/pgp-migration-vectors.v1.json`: the version pinned by the coordinator on 2026-11-16 (v1 06199263…f696). */
-        const val PINNED_SHA256 = "061992635dbb29b5726f825a4af37cf735c91eef4a9f4f2806de6875e910f696"
+        /** sha256 of `spec/pgp-migration-vectors.v1.json`: the version pinned by the coordinator on 2026-11-16, Y.100 ruling (v1 abf914cf…6b36b; v2 cce7b834…55b7). */
+        const val PINNED_SHA256 = "abf914cf524fa9ea9c6af7262376269713964b93a9e654a0fe9368de8be6b36b"
     }
 }
