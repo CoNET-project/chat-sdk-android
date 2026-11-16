@@ -122,9 +122,13 @@ internal enum class BindingCode(val wire: String, val page: String, val creation
  *    as a positive source (BL-32, BL-34).
  */
 internal object BindingDecision {
-    fun decide(kind: BindingKind, raw: RawOutcome, totalMs: Long, local: LocalSource, device: BindingDevice): BindingCode {
+    fun decide(kind: BindingKind, raw: RawOutcome, totalMs: Long, local: LocalSource, device: BindingDevice): BindingCode =
+        decideFromRead(kind, RegistryMapping.map(kind, raw), totalMs, local, device)
+
+    /** The same decision from a registry result (the live reader gives this form). */
+    fun decideFromRead(kind: BindingKind, reg: RegistryRead, totalMs: Long, local: LocalSource, device: BindingDevice): BindingCode {
         if (totalMs > RegistryBudget.TOTAL_MS) return BindingCode.LOOKUP_UNAVAILABLE
-        return when (val reg = RegistryMapping.map(kind, raw)) {
+        return when (reg) {
             is RegistryRead.Found -> BindingCode.ALREADY_BOUND
             is RegistryRead.Absent -> when (kind) {
                 BindingKind.TAG -> when {
