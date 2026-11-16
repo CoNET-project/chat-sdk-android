@@ -78,18 +78,33 @@ internal object AddressPgpRead {
      * Reads the record and the backup for [eoa] at one block. Any failure, including a malformed answer, is
      * `Result.failure` with [SOURCE_UNAVAILABLE].
      */
+    private inline fun <T> step(name: String, block: () -> T): T {
+        val t0 = DiagTiming.now()
+        try {
+            return block()
+        } catch (e: Exception) {
+            DiagTiming.log("chain.step:$name", t0, "fail:" + e.javaClass.simpleName)
+            throw e
+        }
+    }
+
     fun snapshot(rpc: Rpc, contract: String, eoa: String): Result<Snapshot> = runCatching {
-        val tag = rpc.call("eth_blockNumber", JSONArray()) as? String ?: error(SOURCE_UNAVAILABLE)
-        val recordHex = rpc.call(
-            "eth_call",
-            JSONArray().put(JSONObject().put("to", contract).put("data", encodeCall(SIG_PGP_KEYS, eoa))).put(tag),
-        ) as? String ?: error(SOURCE_UNAVAILABLE)
-        val backupHex = rpc.call(
-            "eth_call",
-            JSONArray()
-                .put(JSONObject().put("from", eoa).put("to", contract).put("data", encodeCall(SIG_ENCRYPTED_BACKUP, null)))
-                .put(tag),
-        ) as? String ?: error(SOURCE_UNAVAILABLE)
+        // diag5 (logging only): each step logs its label, milliseconds and the exception class on failure. No message, no content.
+        val tag = step("blockNumber") { rpc.call("eth_blockNumber", JSONArray()) as? String ?: error(SOURCE_UNAVAILABLE) }
+        val recordHex = step("record") {
+            rpc.call(
+                "eth_call",
+                JSONArray().put(JSONObject().put("to", contract).put("data", encodeCall(SIG_PGP_KEYS, eoa))).put(tag),
+            ) as? String ?: error(SOURCE_UNAVAILABLE)
+        }
+        val backupHex = step("backup") {
+            rpc.call(
+                "eth_call",
+                JSONArray()
+                    .put(JSONObject().put("from", eoa).put("to", contract).put("data", encodeCall(SIG_ENCRYPTED_BACKUP, null)))
+                    .put(tag),
+            ) as? String ?: error(SOURCE_UNAVAILABLE)
+        }
         val record = decodeRecord(recordHex) ?: error(SOURCE_UNAVAILABLE)
         val backup = decodeString(backupHex) ?: error(SOURCE_UNAVAILABLE)
         Snapshot(tag.removePrefix("0x").toLong(16), record, backup)
