@@ -201,6 +201,11 @@ class BridgeKeyAuditTest {
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"privateKeyHex\", \"privateKeyArmored\", \"privateKeyArmor\", \"pgpPrivateKeyArmored\",",
             ),
+            "PageCopyState.kt" to listOf(
+                // pageCopyState (25.52PY.15 第 15 项, PY.17): a stored-record read of the page copy's key, to decide the state only. The result is
+                // absent, unreadable, or readable with a boolean; no key value reaches any reply.
+                "val armor = p.optString(\"privateKeyArmor\", \"\")",
+            ),
             "ShellReplica.kt" to listOf(
                 // replicaAnswer (r3rv, KR-01, 25.52W.4): the copy built from the native key's own EOA; the armor is the keystore key, not a payload.
                 "JSONArray().put(JSONObject().put(\"keyID\", eoa).put(\"privateKeyArmor\", armor)),",
