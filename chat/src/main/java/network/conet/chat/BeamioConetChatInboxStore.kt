@@ -5,6 +5,7 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 
 /**
  * Inbound messages the app has not confirmed yet (no `ackInbound`), kept on
@@ -16,6 +17,10 @@ import java.io.File
  * `noBackupFilesDir` (never in backups). Entries leave on ACK, after [TTL_MS],
  * or past [MAX_ENTRIES] (oldest first); the mailbox keeps its own copy until the
  * ACK either way.
+ *
+ * An inbox file that exists but cannot be read or parsed is unknown, not empty:
+ * reads throw [IOException], and no caller writes the file back in that state.
+ * The write never deletes the previous file before replacing it.
  */
 internal object BeamioConetChatInboxStore {
     private const val TAG = "BeamioConetChat"
@@ -27,62 +32,78 @@ internal object BeamioConetChatInboxStore {
 
     private val lock = Any()
 
+    private val renameFile: (File, File) -> Boolean = { from, to -> from.renameTo(to) }
+
     private fun file(context: Context) = File(context.applicationContext.noBackupFilesDir, FILE)
 
-    private fun readAll(context: Context): MutableList<Entry> {
-        val f = file(context)
+    /**
+     * A missing file is an empty inbox. A file that exists but cannot be read or
+     * parsed throws [IOException]: the inbox is unknown, so the caller must not
+     * treat it as empty and must not write it back.
+     */
+    internal fun readEntries(f: File): MutableList<Entry> {
         if (!f.exists()) return mutableListOf()
-        return try {
-            val arr = JSONArray(f.readText())
-            val now = System.currentTimeMillis()
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                val e = Entry(o.optString("h"), o.optString("a"), o.optString("v"), o.optLong("t"))
-                e.takeIf { it.armorHash.isNotEmpty() && it.armor.contains("BEGIN PGP MESSAGE") && now - it.at < TTL_MS }
-            }.toMutableList()
+        val arr = try {
+            JSONArray(f.readText())
         } catch (e: Exception) {
-            Log.w(TAG, "inbox store unreadable; starting empty")
-            mutableListOf()
+            throw IOException("inbox store unreadable", e)
         }
+        val now = System.currentTimeMillis()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val e = Entry(o.optString("h"), o.optString("a"), o.optString("v"), o.optLong("t"))
+            e.takeIf { it.armorHash.isNotEmpty() && it.armor.contains("BEGIN PGP MESSAGE") && now - it.at < TTL_MS }
+        }.toMutableList()
     }
 
-    private fun writeAll(context: Context, entries: List<Entry>) {
+    /**
+     * Replaces [f] with [entries] through a temporary file. The previous file is
+     * never deleted first: when the replace fails the previous file and the
+     * temporary file are kept and the failure is thrown.
+     */
+    internal fun writeEntries(f: File, entries: List<Entry>, replace: (File, File) -> Boolean = renameFile) {
         val arr = JSONArray()
         for (e in entries.takeLast(MAX_ENTRIES)) {
             arr.put(JSONObject().put("h", e.armorHash).put("a", e.armor).put("v", e.viaDomain).put("t", e.at))
         }
-        val f = file(context)
-        val tmp = File(f.parentFile, "$FILE.tmp")
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.writeText(arr.toString())
+        if (!replace(tmp, f)) throw IOException("inbox store replace failed; previous file kept")
+    }
+
+    internal fun putAt(f: File, armorHash: String, armor: String, viaDomain: String, replace: (File, File) -> Boolean = renameFile) {
         try {
-            tmp.writeText(arr.toString())
-            if (!tmp.renameTo(f)) {
-                f.delete()
-                tmp.renameTo(f)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "inbox store write failed")
+            val all = readEntries(f)
+            if (all.any { it.armorHash == armorHash }) return
+            all.add(Entry(armorHash, armor, viaDomain, System.currentTimeMillis()))
+            writeEntries(f, all, replace)
+        } catch (e: IOException) {
+            // Unknown or unwritable: the file is left as it is; the mailbox still holds the message until ACK.
+            Log.e(TAG, "inbox store not updated; file kept")
+        }
+    }
+
+    internal fun removeAt(f: File, armorHashes: Collection<String>, replace: (File, File) -> Boolean = renameFile) {
+        try {
+            val all = readEntries(f)
+            if (all.removeAll { it.armorHash in armorHashes }) writeEntries(f, all, replace)
+        } catch (e: IOException) {
+            Log.e(TAG, "inbox store not updated; file kept")
         }
     }
 
     fun put(context: Context, armorHash: String, armor: String, viaDomain: String) {
         if (armorHash.isEmpty() || !armor.contains("BEGIN PGP MESSAGE")) return
-        synchronized(lock) {
-            val all = readAll(context)
-            if (all.any { it.armorHash == armorHash }) return
-            all.add(Entry(armorHash, armor, viaDomain, System.currentTimeMillis()))
-            writeAll(context, all)
-        }
+        synchronized(lock) { putAt(file(context), armorHash, armor, viaDomain) }
     }
 
     fun remove(context: Context, armorHashes: Collection<String>) {
         if (armorHashes.isEmpty()) return
-        synchronized(lock) {
-            val all = readAll(context)
-            if (all.removeAll { it.armorHash in armorHashes }) writeAll(context, all)
-        }
+        synchronized(lock) { removeAt(file(context), armorHashes) }
     }
 
-    fun list(context: Context): List<Entry> = synchronized(lock) { readAll(context) }
+    /** Throws [IOException] when the inbox is unknown; callers must not read that as empty. */
+    fun list(context: Context): List<Entry> = synchronized(lock) { readEntries(file(context)) }
 
     /** True only when the inbox file is gone (spec 25.52PY.8 (4)). */
     fun clear(context: Context): Boolean = synchronized(lock) {

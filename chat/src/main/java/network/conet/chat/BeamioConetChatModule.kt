@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONArray
+import java.io.IOException
 import network.conet.chat.identity.CredFields
 import network.conet.chat.identity.IdentityProvisionContract
 import network.conet.chat.nativekey.NativeMessageSigner
@@ -1214,7 +1215,14 @@ object BeamioConetChatModule {
      * in this session (received while it was not running, or never confirmed).
      */
     private fun replayInbox(ctx: Context, s: Session) {
-        val stored = BeamioConetChatInboxStore.list(ctx).filter { !s.pendingAcks.containsKey(it.armorHash) }
+        val all = try {
+            BeamioConetChatInboxStore.list(ctx)
+        } catch (e: IOException) {
+            // Unknown, not empty: nothing is replayed and nothing is written; the mailbox still holds the copies. Retried next session.
+            Log.w(TAG, "inbox unreadable; not replayed")
+            return
+        }
+        val stored = all.filter { !s.pendingAcks.containsKey(it.armorHash) }
         if (stored.isEmpty()) return
         Log.i(TAG, "inbox replay count=${stored.size}")
         for (e in stored) {

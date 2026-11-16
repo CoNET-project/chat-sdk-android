@@ -3,6 +3,7 @@ package network.conet.chat
 import network.conet.chat.localread.LocalChatIds
 import network.conet.chat.localread.LocalSource
 import network.conet.chat.localread.LocalViewport
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -349,4 +350,78 @@ class HistoryLocalIntegrationTest {
         assertEquals("one database file per account", 2, dir.listFiles()!!.count { it.name.endsWith(".sqlite") })
     }
 
+    // ---- pending queue file: an unreadable file is kept and never written over -------------
+
+    private fun pendingFileOf(dir: File): File = File(dir, ChatHistoryFileNames.pendingName(eoa))
+
+    private fun prepareRefused(s: BeamioConetChatHistoryStore) {
+        val latch = CountDownLatch(1)
+        var ok = true
+        s.prepare { ok = it; latch.countDown() }
+        assertTrue(latch.await(30, TimeUnit.SECONDS))
+        assertFalse("an unreadable pending queue must refuse prepare", ok)
+    }
+
+    private fun storeReplacing(eoaAddr: String, dir: File?, net: HistoryNet, replace: (File, File) -> Boolean): BeamioConetChatHistoryStore =
+        BeamioConetChatHistoryStore(
+            eoa = eoaAddr,
+            chainId = 224422,
+            conetRpcUrl = "",
+            ipfsBaseUrl = "",
+            ipfsWriteBaseUrl = null,
+            apiBaseUrl = "",
+            registryAddress = "0x1511Caa71081C84d8a591490D1b83879088EED72",
+            log = { _, _ -> },
+            storageDir = dir,
+            sqlDbFactory = { network.conet.chat.localread.JdbcSqlDb.open(it) },
+            net = net,
+            clock = FixedClock,
+            signer = FakeSigner,
+            autoFlush = false,
+            dbRootProvider = { LocalChatIds.rootDbFromPrivateKey(testPrivateKey, eoaAddr, "default") },
+            replaceFile = replace,
+        )
+
+    @Test
+    fun undecryptablePendingFileIsKeptAndPrepareRefuses() {
+        val dir = tmp.newFolder("pending-garbage")
+        val chain = Chain()
+        val w = store(eoa, dir, FakeNet(chain))
+        prepare(w)
+        append(w, "out", 1000L, "FIXTURE-PENDING queued one", "sid-p1")
+        val f = pendingFileOf(dir)
+        f.writeText("not-an-encrypted-queue", Charsets.UTF_8)
+        prepareRefused(store(eoa, dir, FakeNet(chain)))
+        assertEquals("not-an-encrypted-queue", f.readText(Charsets.UTF_8))
+    }
+
+    @Test
+    fun pendingFileOfAnUnknownFormatIsKeptAndPrepareRefuses() {
+        val dir = tmp.newFolder("pending-format")
+        val chain = Chain()
+        prepare(store(eoa, dir, FakeNet(chain)))
+        val key = ConetChatCryptoUtil.hkdf(masterOf(eoa), "pending-enc", 32)
+        val future = JSONObject().put("v", 2).put("entries", JSONArray()).toString()
+        val f = pendingFileOf(dir)
+        f.writeText(ConetChatCryptoUtil.aesGcmEncrypt(key, future.toByteArray(Charsets.UTF_8)), Charsets.UTF_8)
+        val before = f.readText(Charsets.UTF_8)
+        prepareRefused(store(eoa, dir, FakeNet(chain)))
+        assertEquals(before, f.readText(Charsets.UTF_8))
+    }
+
+    @Test
+    fun failedReplaceKeepsThePreviousPendingFile() {
+        val dir = tmp.newFolder("pending-replace")
+        val chain = Chain()
+        val w = store(eoa, dir, FakeNet(chain))
+        prepare(w)
+        append(w, "out", 1000L, "FIXTURE-PENDING kept one", "sid-k1")
+        val f = pendingFileOf(dir)
+        val before = f.readText(Charsets.UTF_8)
+        val refusing = storeReplacing(eoa, dir, FakeNet(chain)) { _, _ -> false }
+        prepare(refusing)
+        append(refusing, "out", 1001L, "FIXTURE-PENDING not replaced", "sid-k2")
+        assertEquals(before, f.readText(Charsets.UTF_8))
+        prepare(store(eoa, dir, FakeNet(chain)))
+    }
 }

@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -103,6 +104,8 @@ class BeamioConetChatHistoryStore(
      * submitted. Production builds take the build value (true), so their behaviour is unchanged.
      */
     private val writesEnabled: Boolean = BuildConfig.HISTORY_WRITES,
+    /** Replaces the queue file with its temporary copy. Tests inject a failing replace; production keeps rename. */
+    private val replaceFile: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
 ) {
     data class IndexRecord(
         val seq: Int,
@@ -174,6 +177,8 @@ class BeamioConetChatHistoryStore(
     private var records: MutableList<IndexRecord> = ArrayList()
     private var syncedIndexHash = ""
     private var pending = HistoryBatch.PendingState()
+    /** True while the queue file on disk has not been read: nothing is written over it (queue thread only). */
+    private var pendingUnreadable = false
 
     /** Immutable copies for the read lane, republished after every mutation on [queue]. */
     @Volatile
@@ -290,7 +295,14 @@ class BeamioConetChatHistoryStore(
                 val genesis = ConetChatCryptoUtil.hkdf(masterBytes, FRAGMENT_GENESIS_INFO, 32)
                 genesisCid = "0x" + ConetChatCryptoUtil.toHex(genesis)
                 // Restore the queue left by the last run; a write that fell due while closed runs 10–60 s from now.
-                pending = readPendingFile() ?: HistoryBatch.PendingState()
+                // An unreadable queue file fails prepare: the file is kept untouched and nothing is written over it until a later prepare reads it.
+                pending = try {
+                    readPendingFile() ?: HistoryBatch.PendingState()
+                } catch (e: IOException) {
+                    pendingUnreadable = true
+                    throw e
+                }
+                pendingUnreadable = false
                 HistoryBatch.resume(pending, clock.now(), random)
                 writePendingFile()
                 publishSnapshot()
@@ -979,21 +991,34 @@ class BeamioConetChatHistoryStore(
         return File(dir, ChatHistoryFileNames.pendingName(eoa))
     }
 
+    /**
+     * Null only when there is no pending file. A file that exists but cannot be
+     * decrypted, parsed or recognised throws [IOException]: the queue is unknown,
+     * not empty, and the caller must not write over it.
+     */
     private fun readPendingFile(): HistoryBatch.PendingState? {
         val file = pendingFile() ?: return null
         val key = pendingKey ?: return null
         if (!file.exists()) return null
-        return try {
+        val state = try {
             val json = String(ConetChatCryptoUtil.aesGcmDecrypt(key, file.readText(Charsets.UTF_8)), Charsets.UTF_8)
             HistoryBatch.PendingState.fromJson(JSONObject(json))
         } catch (e: Exception) {
-            log("warn", "[history] pending file unreadable; starting empty")
-            null
+            throw IOException("pending queue unreadable", e)
         }
+        return state ?: throw IOException("pending queue has an unknown format")
     }
 
-    /** Atomic replace (temp file + rename) so a kill mid-write keeps the previous queue. */
+    /**
+     * Atomic replace (temp file + rename). The previous queue file is never deleted
+     * first: when the rename fails it is kept, and the next write retries with the
+     * whole in-memory queue. Refused while the file on disk has not been read.
+     */
     private fun writePendingFile() {
+        if (pendingUnreadable) {
+            log("warn", "[history] pending file not read; not overwriting it")
+            return
+        }
         val file = pendingFile() ?: return
         val key = pendingKey ?: return
         try {
@@ -1001,10 +1026,7 @@ class BeamioConetChatHistoryStore(
             val cipher = ConetChatCryptoUtil.aesGcmEncrypt(key, pending.toJson().toString().toByteArray(Charsets.UTF_8))
             val tmp = File(file.parentFile, file.name + ".tmp")
             tmp.writeText(cipher, Charsets.UTF_8)
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
+            if (!replaceFile(tmp, file)) throw IOException("pending queue replace failed; previous file kept")
         } catch (e: Exception) {
             log("warn", "[history] pending file write failed: ${e.javaClass.simpleName}")
         }
