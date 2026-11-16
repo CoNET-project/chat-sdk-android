@@ -683,7 +683,8 @@ internal class SealedPageRecordStore(
 /**
  * The page copy's W fields as the unregister removes them (§25.52H.2 rule 5, §25.52J.3). Only the W fields go: the rest of the copy stays,
  * and the revision moves on, so a page that still holds an older copy gets `conflict` on its next write. A copy that cannot be read is
- * erased whole, since its W fields cannot be told apart from the rest.
+ * kept (project ruling 2026-11-16): it may be recoverable later, so the removal throws IOException and the unregister answers write_failed
+ * (not cleared), never ok. Only a readable copy has its W fields removed.
  */
 internal class PageWalletRemoval(private val store: SealedPageRecordStore) : MigrationWallet {
     override fun present(): Boolean = try {
@@ -693,12 +694,8 @@ internal class PageWalletRemoval(private val store: SealedPageRecordStore) : Mig
     }
 
     override fun remove() {
-        val record: JSONObject = try {
-            store.read() ?: return
-        } catch (_: IOException) {
-            store.erase()
-            return
-        }
+        // An unreadable copy is kept and the removal fails (project ruling 2026-11-16); the caller reports write_failed, never ok.
+        val record: JSONObject = store.read() ?: return
         if (ShellRecordPolicy.walletIn(record).isEmpty()) return
         ShellRecordPolicy.removeWallet(record)
         record.put("rev", record.optInt("rev", 0) + 1)

@@ -131,8 +131,9 @@ class ShellRecordR424Test {
         files.write(name, ByteArray(40) { 7 })
         val removal = PageWalletRemoval(SealedPageRecordStore(wrap, files, "$ACCOUNT:default"))
         assertTrue("an unreadable copy counts as present", removal.present())
-        removal.remove()
-        assertNull(files.read(name))
+        // Rewritten 2026-11-16 (project ruling): an unreadable copy is kept, and the removal fails instead of erasing it.
+        assertTrue(runCatching { removal.remove() }.isFailure)
+        assertNotNull(files.read(name))
     }
 
     @Test
