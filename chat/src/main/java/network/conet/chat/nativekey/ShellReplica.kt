@@ -17,12 +17,14 @@ internal object ShellReplica {
 
     /**
      * Builds the copy from [key] when every condition holds: the legacy store is confirmed empty ([outcome] ABSENT), no pointer is set, no copy
-     * exists, and the key derives an address. [key] is only read; the caller zeroes it. A missing key (unreadable or none) is not applied.
+     * exists, and the key derives [expectedEoa]. [key] is only read; the caller zeroes it. A missing key (unreadable or none) is not applied.
      */
-    fun answer(key: ByteArray?, outcome: ImportOutcome?, pointerSet: Boolean, store: SealedPageRecordStore): Answer {
+    fun answer(key: ByteArray?, expectedEoa: String, outcome: ImportOutcome?, pointerSet: Boolean, store: SealedPageRecordStore): Answer {
         if (key == null) return Answer.NotApplied
         if (pointerSet || outcome != ImportOutcome.ABSENT) return Answer.NotApplied
+        // The key must be the account's own key: a key that derives another address is not replicated (fail closed).
         val eoa = WalletAddress.fromPrivateKey(key)?.lowercase() ?: return Answer.NotApplied
+        if (!eoa.equals(expectedEoa, ignoreCase = true)) return Answer.NotApplied
         return try {
             if (store.read() != null) return Answer.NotApplied
             val armor = "0x" + key.joinToString("") { "%02x".format(it) }

@@ -11,6 +11,7 @@ import java.io.File
 import java.io.IOException
 import java.security.KeyStore
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -1080,6 +1081,8 @@ internal class ShellRecordBridge(
     private val walletCredential: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
     /** The SDK's own declaration of wallet.credential.v1 (spec 25.52Y.38 第 2 项 (e)): true only in a QA build. */
     private val walletCredentialDeclared: Boolean = WalletCredentialBridge.sdkDeclares(),
+    /** The replica from the readable keystore key (r3rv, KR-01), given the account. Null in tests that do not model the keystore. */
+    private val replica: ((String) -> Unit)? = null,
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -1217,6 +1220,8 @@ internal class ShellRecordBridge(
             null -> reply("migrating", emptyList())
             ImportOutcome.ABSENT -> {
                 flags.clearLegacyUnreadable()
+                // r3rv (KR-01): a readable keystore key with no copy is replicated from that key; the read still answers absent.
+                if (acc is ShellRecordAccount.Ready && acc.nativeKeyPresent) replica?.invoke(acc.eoa)
                 reply("absent", emptyList())
             }
             ImportOutcome.LEGACY_UNREADABLE -> {
@@ -1392,9 +1397,24 @@ internal object ShellRecordState {
 
     /**
      * The explicit creation transaction (25.52Y.54 PY.18(b), AK-42): set when the user confirms the native account creation, and ended by the first
-     * ok write (the copy of the new key), or by a cancelled or failed creation. While it is set, the creation mode is on with the explicit choice.
+     * ok write (the copy of the new key), or by a cancelled or failed creation, or when its window runs out.
      */
-    val creationTxn: AtomicBoolean = AtomicBoolean(false)
+    val creationTxn: CreationTxnWindow = CreationTxnWindow()
+}
+
+/** The creation transaction as a time window: it is on for [WINDOW_MS] after it is set, so an abandoned creation cannot stay on for the process. */
+internal class CreationTxnWindow {
+    private val until = AtomicLong(0L)
+
+    fun set(on: Boolean) {
+        until.set(if (on) System.currentTimeMillis() + WINDOW_MS else 0L)
+    }
+
+    fun get(): Boolean = System.currentTimeMillis() < until.get()
+
+    private companion object {
+        const val WINDOW_MS = 10L * 60L * 1000L
+    }
 }
 
 /**
@@ -1517,8 +1537,9 @@ object BeamioShellRecordImport {
     /** Answers one page request. [requestBytes] is the size of the message as received, in UTF-8 bytes. */
     fun handle(context: Context, origin: ShellOrigin, body: JSONObject, requestBytes: Int): JSONObject {
         val out = bridge(context).handle(origin, body, requestBytes)
-        // The creation transaction ends with its first ok write: the page copy of the key the user just created.
-        if (body.optString("type") == "shellRecordWrite" && out.optJSONObject("result")?.optString("code") == "ok") {
+        // The creation transaction ends with its first write (rev 0) that is ok: the page copy of the key the user just created.
+        val firstWrite = body.optJSONObject("record")?.opt("rev") == 0
+        if (body.optString("type") == "shellRecordWrite" && firstWrite && out.optJSONObject("result")?.optString("code") == "ok") {
             ShellRecordState.creationTxn.set(false)
         }
         return out
@@ -1586,9 +1607,24 @@ object BeamioShellRecordImport {
         flags = flagsOf(context.applicationContext),
         creationMode = { creationTxn || ShellRecordState.creationTxn.get() },
         explicitChoice = { creationTxn || ShellRecordState.creationTxn.get() },
+        replica = { eoa -> runCatching { replicaFromKeystore(context, eoa) } },
         walletEoaAddress = walletCurrent(context),
         walletCredential = walletCurrent(context),
     )
+
+    /**
+     * Builds the page copy from the readable keystore key (r3rv, KR-01). The key bytes are zeroed after use; the copy's armor is a JSON string, so
+     * the armor itself is not zeroable (recorded as a risk, the same as the legacy import).
+     */
+    private fun replicaFromKeystore(context: Context, eoa: String) {
+        val app = context.applicationContext
+        val key = NativeWallet.vault(app).unlock() ?: return
+        try {
+            ShellReplica.answer(key, eoa, ImportOutcome.ABSENT, flagsOf(app).accountPointer(), storeFor(app, eoa))
+        } finally {
+            key.fill(0)
+        }
+    }
 
     /** The vault and the gate of the account on this device (shared by walletEoaAddress and walletCredential). */
     private fun walletCurrent(context: Context): () -> Pair<NativeWalletVault, NoKeyGate.Gate> = {

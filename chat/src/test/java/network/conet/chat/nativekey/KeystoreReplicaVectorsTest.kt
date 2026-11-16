@@ -94,7 +94,7 @@ class KeystoreReplicaVectorsTest {
 
         // The replica answer: `ok_same_eoa` (from the readable key, the EOA of the key) or `not_applied`.
         val key = if (vaultReadable(st)) hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT) else null
-        val replica = ShellReplica.answer(key, outcome, st.getBoolean("pointer"), store)
+        val replica = ShellReplica.answer(key, VectorSidecar.ACCOUNT, outcome, st.getBoolean("pointer"), store)
         val replicaWant = expect.getString("replica")
         val replicaGot = when (replica) {
             is ShellReplica.Answer.Ok -> if (replica.eoa == VectorSidecar.ACCOUNT) "ok_same_eoa" else "ok_other_eoa"
