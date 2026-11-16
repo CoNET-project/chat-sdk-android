@@ -7526,6 +7526,29 @@
     {
       "id": "BL-01",
       "title": "BeamioTag：getOwnerByAccountName 成功、解码通过、零地址（明确无记录），无 SDK 记录：create，进入第一屏",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "empty",
@@ -7549,6 +7572,29 @@
     {
       "id": "BL-02",
       "title": "EOA：getAccount 明确 revert 且完整错误数据恰为 0xfaba8ebe（无参 AccountNotFound），无 SDK 记录：明确无记录，create（R1455 选项 B）",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_not_found",
@@ -7572,6 +7618,29 @@
     {
       "id": "BL-03",
       "title": "BeamioTag：getOwnerByAccountName 返回有效非零地址：already_bound，打开 nativeRecoveryOpen，不生成 EOA",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "bound",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "bound"
@@ -7588,6 +7657,29 @@
     {
       "id": "BL-04",
       "title": "EOA：getAccount 成功返回 exists 为真且账户名非空：already_bound（有效非空记录）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "bound",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "bound"
@@ -7604,6 +7696,29 @@
     {
       "id": "BL-05",
       "title": "EOA：精确 AccountNotFound，但钱包私钥记录存在（R1199）：already_bound（正向来源优先）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": true,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_not_found",
@@ -7621,6 +7736,29 @@
     {
       "id": "BL-06",
       "title": "EOA：精确 AccountNotFound，但 SDK 账户记录 K 存在（§25.52Y.1）：already_bound",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": true,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_not_found",
@@ -7638,6 +7776,29 @@
     {
       "id": "BL-07",
       "title": "EOA：精确 AccountNotFound，SDK 来源不可读：lookup_unavailable，不判无绑定（§25.52HH.2 失败关闭）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": true
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_not_found",
@@ -7655,6 +7816,29 @@
     {
       "id": "BL-08",
       "title": "BeamioTag：RPC 错误：lookup_unavailable，不判无绑定",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "rpc_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "rpc_error"
@@ -7671,6 +7855,29 @@
     {
       "id": "BL-09",
       "title": "EOA：HTTP 错误：lookup_unavailable，不判无绑定",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "http_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "http_error"
@@ -7687,6 +7894,29 @@
     {
       "id": "BL-10",
       "title": "BeamioTag：单次读取超时（合计未超上限）：lookup_unavailable，不判无绑定",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "timeout",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "timeout"
@@ -7703,6 +7933,29 @@
     {
       "id": "BL-11",
       "title": "EOA：其它选择器的 revert（Error(string)，0x08c379a0）：lookup_unavailable，不判无绑定",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert"
@@ -7719,6 +7972,29 @@
     {
       "id": "BL-12",
       "title": "BeamioTag：响应解码失败：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "invalid_response",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "invalid_response",
@@ -7736,6 +8012,29 @@
     {
       "id": "BL-13",
       "title": "EOA：成功返回，exists 为真而账户名为空（语义不一致）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "invalid_response",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "invalid_response",
@@ -7753,6 +8052,29 @@
     {
       "id": "BL-14",
       "title": "BeamioTag：返回值不是 20 字节地址（语义校验失败）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "invalid_response",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "invalid_response",
@@ -7770,6 +8092,29 @@
     {
       "id": "BL-15",
       "title": "EOA：精确 AccountNotFound，合计超过 10 秒：lookup_unavailable（超上限优先于明确无记录）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 10001,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_not_found",
@@ -7787,6 +8132,29 @@
     {
       "id": "BL-16",
       "title": "BeamioTag：有效非零地址，但合计超过 10 秒：lookup_unavailable（总上限同样适用于正向结果）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "bound",
+        "totalMs": 10001,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "bound",
@@ -7804,6 +8172,29 @@
     {
       "id": "BL-17",
       "title": "BeamioTag：有效非零地址，同时 SDK 来源不可读：already_bound（正向结果优先，合计未超时）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "bound",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": true
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "bound",
@@ -7821,6 +8212,29 @@
     {
       "id": "BL-18",
       "title": "BeamioTag：零地址（明确无记录），但 SDK 来源不可读：lookup_unavailable（失败关闭）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": true
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "empty",
@@ -7838,6 +8252,29 @@
     {
       "id": "BL-19",
       "title": "BeamioTag：零地址，合计恰为 10 秒（不超过上限）：create（上限边界）",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 10000,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "empty",
@@ -7862,6 +8299,29 @@
     {
       "id": "BL-20",
       "title": "BeamioTag：连接被拒（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "connection_refused",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "connection_refused"
@@ -7878,6 +8338,29 @@
     {
       "id": "BL-21",
       "title": "EOA：HTTP 5xx（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "http_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "http_error"
@@ -7894,6 +8377,29 @@
     {
       "id": "BL-22",
       "title": "BeamioTag：JSON-RPC error（code -32000，本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "rpc_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "rpc_error"
@@ -7910,6 +8416,29 @@
     {
       "id": "BL-23",
       "title": "EOA：revert 其它选择器（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert"
@@ -7926,6 +8455,29 @@
     {
       "id": "BL-24",
       "title": "EOA：eth_call 原始错误数据恰为 0xfaba8ebe（本地夹具 F-06 同源，按原始数据判定，r3kc）：明确无记录，create",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8ebe",
@@ -7949,6 +8501,29 @@
     {
       "id": "BL-25",
       "title": "BeamioTag：返回截断为 31 字节（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "truncated",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "truncated"
@@ -7965,6 +8540,29 @@
     {
       "id": "BL-26",
       "title": "BeamioTag：返回不可解码（非十六进制，本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "undecodable",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "undecodable"
@@ -7981,6 +8579,29 @@
     {
       "id": "BL-27",
       "title": "BeamioTag：结构正确但语义失败（地址字段高位非零，本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "semantic_invalid",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "semantic_invalid",
@@ -7998,6 +8619,29 @@
     {
       "id": "BL-28",
       "title": "EOA：成功返回但 exists 为假而账户名非空（语义失败，本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "semantic_invalid",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "semantic_invalid",
@@ -8015,6 +8659,29 @@
     {
       "id": "BL-29",
       "title": "BeamioTag：非 JSON 响应（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "non_json",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "non_json"
@@ -8031,6 +8698,29 @@
     {
       "id": "BL-30",
       "title": "BeamioTag：无 result 也无 error（本地夹具）：lookup_unavailable",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "no_result",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "no_result"
@@ -8047,6 +8737,29 @@
     {
       "id": "BL-31",
       "title": "BeamioTag：零地址，响应慢于 3 秒但未超上限（本地夹具）：create",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 3000,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "empty",
@@ -8071,6 +8784,29 @@
     {
       "id": "BL-32",
       "title": "BeamioTag：RPC 错误，设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（G1、G2 已在查询前被门控，本输入在创建路径不可达）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "rpc_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": true,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "rpc_error",
@@ -8088,6 +8824,29 @@
     {
       "id": "BL-33",
       "title": "EOA：revert 其它选择器，但 SDK 有账户记录 K（正向来源）：already_bound（G2）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": true,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert",
@@ -8105,6 +8864,29 @@
     {
       "id": "BL-34",
       "title": "BeamioTag：单次读取超时（合计 9 秒，未超上限），设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（本输入在创建路径不可达）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "timeout",
+        "totalMs": 9000,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": true,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "timeout",
@@ -8123,6 +8905,29 @@
     {
       "id": "BL-35",
       "title": "BeamioTag：有效非零地址，SDK 有 K，但合计超过 10 秒：lookup_unavailable（G1）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "bound",
+        "totalMs": 10001,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": true,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "bound",
@@ -8141,6 +8946,29 @@
     {
       "id": "BL-36",
       "title": "EOA：revert 选择器相同但带参数（0xfaba8ebe 加 32 字节零字）：不是明确无记录，lookup_unavailable（R1455）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_args",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_args"
@@ -8157,6 +8985,29 @@
     {
       "id": "BL-37",
       "title": "EOA：revert 错误数据为空：不是明确无记录，lookup_unavailable（R1455）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "revert_empty"
@@ -8173,6 +9024,29 @@
     {
       "id": "BL-38",
       "title": "EOA：成功返回但 exists 为假、账户名为空（不可验证，非 AccountNotFound revert）：lookup_unavailable，不判无绑定（R1455）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "success_exists_false",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "outcome": "success_exists_false"
@@ -8189,6 +9063,29 @@
     {
       "id": "BL-39",
       "title": "BeamioTag：revert 错误数据恰为 0xfaba8ebe：tag 路径不适用 getAccount 的无记录规则，lookup_unavailable（R1455）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "revert_not_found"
@@ -8205,6 +9102,29 @@
     {
       "id": "BL-40",
       "title": "EOA：原始错误数据 0xfaba8ebe（小写，无参）：明确无记录，create（r3kc）",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8ebe",
@@ -8228,6 +9148,29 @@
     {
       "id": "BL-41",
       "title": "EOA：原始错误数据 0xFABA8EBE（大写，无参）：小写化后精确匹配，明确无记录，create（r3kc，F2）",
+      "ctx": {
+        "path": "creation",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xFABA8EBE",
@@ -8251,6 +9194,29 @@
     {
       "id": "BL-42",
       "title": "EOA：原始错误数据为 0xfaba8ebe 加 32 字节零字（选择器相同但带参数）：lookup_unavailable，不进入创建（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_args",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8ebe0000000000000000000000000000000000000000000000000000000000000000"
@@ -8267,6 +9233,29 @@
     {
       "id": "BL-43",
       "title": "EOA：原始错误数据为 0x（空字节）：lookup_unavailable，不进入创建（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0x"
@@ -8283,6 +9272,29 @@
     {
       "id": "BL-44",
       "title": "EOA：原始错误数据缺失（空字符串）：lookup_unavailable，不进入创建（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": ""
@@ -8299,6 +9311,29 @@
     {
       "id": "BL-45",
       "title": "EOA：原始错误数据为 Error(string) 0x08c379a0 加字符串编码：其它选择器，lookup_unavailable（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0x08c379a0000000000000000000000000000000000000000000000000000000000000000000000000"
@@ -8315,6 +9350,29 @@
     {
       "id": "BL-46",
       "title": "EOA：原始错误数据为 0xfaba8eb（7 位十六进制，截断选择器）：lookup_unavailable（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8eb"
@@ -8331,6 +9389,29 @@
     {
       "id": "BL-47",
       "title": "EOA：原始错误数据为 0xfaba8ebf（末位不同）：其它选择器，lookup_unavailable（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8ebf"
@@ -8347,6 +9428,29 @@
     {
       "id": "BL-48",
       "title": "EOA：原始错误数据为 0xfaba8ebe00（选择器加一个字节）：带参数，lookup_unavailable（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "revert_args",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "eoa",
         "revertData": "0xfaba8ebe00"
@@ -8363,6 +9467,29 @@
     {
       "id": "BL-49",
       "title": "BeamioTag：原始错误数据恰为 0xfaba8ebe：tag 路径不适用，lookup_unavailable（r3kc）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "revert",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": false,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "revertData": "0xfaba8ebe"
@@ -8379,6 +9506,29 @@
     {
       "id": "BL-50",
       "title": "r3kj（F-3）：创建路径 G0，设备存在 K 而无钱包私钥，tag 路径零地址：lookup_unavailable（fail-closed，待 PM 裁定）",
+      "ctx": {
+        "path": "creation_G0",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "empty",
@@ -8396,6 +9546,29 @@
     {
       "id": "BL-51",
       "title": "r3kj（F-3）：创建路径 G0，设备存在 K，tag 路径有效非零地址：already_bound（注册表正向优先）",
+      "ctx": {
+        "path": "creation_G0",
+        "queryKind": "tag",
+        "lookupResult": "bound",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "bound",
@@ -8413,6 +9586,29 @@
     {
       "id": "BL-52",
       "title": "r3kk（审阅席 c71ae9b F-3）：tag 路径注册表 RPC 失败，设备可读（K 与钱包私钥记录存在）：lookup_unavailable，设备状态不改变结果（HH.2 固定读法）",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "tag",
+        "lookupResult": "rpc_error",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": true,
+        "kActive": true,
+        "kNonActive": false,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
       "input": {
         "kind": "tag",
         "outcome": "rpc_error",
@@ -8422,6 +9618,87 @@
       "expect": {
         "code": "lookup_unavailable",
         "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-53",
+      "title": "r3rz（§25.52Z.3 第 7 项）：tag 路径，注册表零地址，仅非 ACTIVE 槽位有 K，创建路径 G0：kPresent 计入，lookup_unavailable（失败关闭），不进入创建，不作正向来源",
+      "ctx": {
+        "path": "creation_G0",
+        "queryKind": "tag",
+        "lookupResult": "empty",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": true,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
+      "input": {
+        "kind": "tag",
+        "outcome": "empty",
+        "sdkKNonActive": true,
+        "createG0KPresent": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-54",
+      "title": "r3rz（§25.52Z.3 第 7 项）：EOA 路径，精确无记录，仅非 ACTIVE 槽位有该账户的 K：已绑定（同一账户记录），打开 nativeRecoveryOpen",
+      "ctx": {
+        "path": "lookup",
+        "queryKind": "eoa",
+        "lookupResult": "absent_exact",
+        "totalMs": 0,
+        "endpointCount": 1,
+        "endpoint": "current"
+      },
+      "local": {
+        "walletKey": false,
+        "kActive": false,
+        "kNonActive": true,
+        "kPresent": true,
+        "readFailed": false
+      },
+      "expected": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      },
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found",
+        "sdkKNonActive": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
         "creationEntered": false,
         "queried": [
           "current"
@@ -12442,7 +13719,7 @@
     }
   ],
   "selfCheck": {
-    "runs": 438,
+    "runs": 440,
     "result": "pass"
   },
   "psCases": [

@@ -17,6 +17,21 @@ internal interface AccountPgpKBackend {
 
     /** The names in the store. Throws when the store cannot be read. */
     fun names(): Set<String>
+
+    /** Removes [name]. False when the removal did not complete; the caller reports it, it is never silent. */
+    fun remove(name: String): Boolean
+}
+
+/** The outcome of a write that must not overwrite (§25.52Y.1 第 6 项): written, an item already there (not overwritten), or failed (rolled back). */
+internal enum class AccountPgpKWrite {
+    WRITTEN,
+    EXISTS,
+
+    /** The write failed and what was written was removed: the device holds no K for it. */
+    FAILED,
+
+    /** The write failed and its removal failed too: a half item may remain. The caller must not treat the account as created, and must report it. */
+    FAILED_RESIDUE,
 }
 
 /**
@@ -60,6 +75,18 @@ internal class AccountPgpK(private val backend: AccountPgpKBackend) {
         return json
     }
 
+    /**
+     * Writes the item only when none exists (§25.52Y.1 第 6 项: an existing item is never overwritten). A write that does not read back is removed
+     * again, so no half item is left; a failed removal is reported as FAILED too, and the caller must not treat the account as created.
+     */
+    fun writeIfAbsent(eoa: String, workspace: String, keyId: String, publicArmor: String, privateArmor: String, createdAt: Long): AccountPgpKWrite {
+        if (existsFor(eoa, workspace)) return AccountPgpKWrite.EXISTS
+        val name = itemName(eoa, workspace)
+        if (write(eoa, workspace, keyId, publicArmor, privateArmor, createdAt)) return AccountPgpKWrite.WRITTEN
+        // The write or its read-back failed: remove what was written. A removal that also fails leaves the residue visible to the caller.
+        return if (backend.remove(name)) AccountPgpKWrite.FAILED else AccountPgpKWrite.FAILED_RESIDUE
+    }
+
     /** True when the item of [eoa] in [workspace] exists. Throws when the store cannot be read. */
     fun existsFor(eoa: String, workspace: String): Boolean = backend.names().contains(itemName(eoa, workspace))
 
@@ -94,27 +121,34 @@ internal class AccountPgpK(private val backend: AccountPgpKBackend) {
         override fun put(name: String, value: String): Boolean = prefs().edit().putString(name, value).commit()
 
         override fun names(): Set<String> = prefs().all.keys.toSet()
+
+        override fun remove(name: String): Boolean = prefs().edit().remove(name).commit()
     }
 }
 
 /**
- * The local sources of the binding lookup from the device (HH.2, §25.52Y.1, §25.48.4), as a pure function so the decision can be tested. [kState]
- * is the result of reading K for the EOA (or for any account, on the tag path): present, absent, or unreadable.
+ * The local sources of the binding lookup from the device (HH.2, §25.52Y.1, §25.48.4, §25.52Z.3 第 7 项), as a pure function so the decision can be
+ * tested. [kActive] and [kNonActive] say whether the account's K is in the ACTIVE slot or another slot. [kUnreadable] is a K that cannot be read.
+ *  - EOA path: the wallet key, an ACTIVE K or a non-ACTIVE K is a positive source (BL-54).
+ *  - Tag path: a non-ACTIVE K counts in kPresent (BL-53), so with a zero registry answer it is lookup_unavailable, never a create.
+ *  - An unreadable keychain or K is an unreadable source (fail closed).
  */
 internal object BindingLocalSources {
-    enum class KState { PRESENT, ABSENT, UNREADABLE }
-
-    /**
-     * EOA path: a positive source is the wallet key of the account or its K; an unreadable keychain or K is an unreadable source (fail closed).
-     * Tag path: kPresent is "any K exists" (§25.48.4) and the wallet key is the wallet record; an unreadable K makes the device state unknown.
-     */
-    fun of(keyReady: Boolean, vaultUnreadable: Boolean, kState: KState): Pair<LocalSource, BindingDevice> {
-        val kPresent = kState == KState.PRESENT
+    fun of(
+        keyReady: Boolean,
+        vaultUnreadable: Boolean,
+        kActive: Boolean,
+        kNonActive: Boolean,
+        kUnreadable: Boolean,
+        kPresent: Boolean = false,
+    ): Pair<LocalSource, BindingDevice> {
+        // [kPresent] is "any K exists on the device" (§25.48.4); it can hold a K whose slot is not classified (BL-50, BL-51).
+        val anyK = kActive || kNonActive || kPresent
         val local = when {
-            keyReady || kPresent -> LocalSource.POSITIVE
-            vaultUnreadable || kState == KState.UNREADABLE -> LocalSource.UNREADABLE
+            keyReady || anyK -> LocalSource.POSITIVE
+            vaultUnreadable || kUnreadable -> LocalSource.UNREADABLE
             else -> LocalSource.NONE
         }
-        return local to BindingDevice(kPresent = keyReady || kPresent, walletRecord = keyReady)
+        return local to BindingDevice(kPresent = keyReady || anyK, walletRecord = keyReady)
     }
 }

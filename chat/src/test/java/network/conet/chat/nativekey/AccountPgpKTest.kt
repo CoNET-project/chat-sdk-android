@@ -24,6 +24,12 @@ class AccountPgpKTest {
             return true
         }
         override fun names(): Set<String> = items.keys.toSet()
+        var removeOk = true
+        override fun remove(name: String): Boolean {
+            if (!removeOk) return false
+            items.remove(name)
+            return true
+        }
     }
 
     /** A store that cannot be read: every call throws, as an unopenable encrypted store does. */
@@ -31,6 +37,7 @@ class AccountPgpKTest {
         override fun get(name: String): String? = throw IllegalStateException("store unavailable")
         override fun put(name: String, value: String): Boolean = false
         override fun names(): Set<String> = throw IllegalStateException("store unavailable")
+        override fun remove(name: String): Boolean = false
     }
 
     @Test
@@ -61,6 +68,31 @@ class AccountPgpKTest {
     fun aWriteThatDoesNotReadBackIsFalse() {
         val backend = MemBackend().apply { writeOk = false }
         assertFalse(AccountPgpK(backend).write(eoa, ws, "KID1", "PUB", "PRIV", 1L))
+    }
+
+    @Test
+    fun writeIfAbsentWritesOnceAndNeverOverwrites() {
+        val backend = MemBackend()
+        val k = AccountPgpK(backend)
+        assertEquals(AccountPgpKWrite.WRITTEN, k.writeIfAbsent(eoa, ws, "KID1", "PUB", "PRIV", 1L))
+        assertEquals(AccountPgpKWrite.EXISTS, k.writeIfAbsent(eoa, ws, "KID2", "PUB2", "PRIV2", 2L))
+        // The first item stands unchanged.
+        assertEquals("KID1", k.read(eoa, ws)!!.getString("keyId"))
+    }
+
+    @Test
+    fun aFailedWriteIsRemovedAndReportedFailed() {
+        val backend = MemBackend().apply { writeOk = false }
+        val k = AccountPgpK(backend)
+        assertEquals(AccountPgpKWrite.FAILED, k.writeIfAbsent(eoa, ws, "KID1", "PUB", "PRIV", 1L))
+        assertFalse(k.existsFor(eoa, ws))
+    }
+
+    @Test
+    fun aFailedWriteWhoseRemovalAlsoFailsReportsResidue() {
+        val backend = MemBackend().apply { writeOk = false; removeOk = false }
+        val k = AccountPgpK(backend)
+        assertEquals(AccountPgpKWrite.FAILED_RESIDUE, k.writeIfAbsent(eoa, ws, "KID1", "PUB", "PRIV", 1L))
     }
 
     @Test
@@ -112,23 +144,30 @@ class AccountPgpKTest {
 
     @Test
     fun theBindingLocalSourcesTable() {
-        // EOA path: a wallet key is positive; K present is positive; an unreadable K or keychain is unreadable; neither is none.
-        val (a, ad) = BindingLocalSources.of(keyReady = true, vaultUnreadable = false, kState = BindingLocalSources.KState.ABSENT)
+        fun of(key: Boolean, vault: Boolean, active: Boolean, nonActive: Boolean, unreadable: Boolean) =
+            BindingLocalSources.of(key, vault, active, nonActive, unreadable)
+        // The wallet key is positive; an ACTIVE K is positive; an unreadable K or keychain is unreadable; nothing is none.
+        val (a, ad) = of(key = true, vault = false, active = false, nonActive = false, unreadable = false)
         assertEquals(LocalSource.POSITIVE, a)
         assertEquals(BindingDevice(kPresent = true, walletRecord = true), ad)
 
-        val (b, bd) = BindingLocalSources.of(keyReady = false, vaultUnreadable = false, kState = BindingLocalSources.KState.PRESENT)
+        val (b, bd) = of(key = false, vault = false, active = true, nonActive = false, unreadable = false)
         assertEquals(LocalSource.POSITIVE, b)
         assertEquals(BindingDevice(kPresent = true, walletRecord = false), bd)
 
-        val (c, _) = BindingLocalSources.of(keyReady = false, vaultUnreadable = false, kState = BindingLocalSources.KState.UNREADABLE)
-        assertEquals(LocalSource.UNREADABLE, c)
+        // §25.52Z.3 第 7 项: a non-ACTIVE K is positive on the EOA path (BL-54), and counts in kPresent on the tag path (BL-53).
+        val (c, cd) = of(key = false, vault = false, active = false, nonActive = true, unreadable = false)
+        assertEquals(LocalSource.POSITIVE, c)
+        assertEquals(BindingDevice(kPresent = true, walletRecord = false), cd)
 
-        val (d, _) = BindingLocalSources.of(keyReady = false, vaultUnreadable = true, kState = BindingLocalSources.KState.ABSENT)
+        val (d, _) = of(key = false, vault = false, active = false, nonActive = false, unreadable = true)
         assertEquals(LocalSource.UNREADABLE, d)
 
-        val (e, ed) = BindingLocalSources.of(keyReady = false, vaultUnreadable = false, kState = BindingLocalSources.KState.ABSENT)
-        assertEquals(LocalSource.NONE, e)
-        assertEquals(BindingDevice(kPresent = false, walletRecord = false), ed)
+        val (e, _) = of(key = false, vault = true, active = false, nonActive = false, unreadable = false)
+        assertEquals(LocalSource.UNREADABLE, e)
+
+        val (f, fd) = of(key = false, vault = false, active = false, nonActive = false, unreadable = false)
+        assertEquals(LocalSource.NONE, f)
+        assertEquals(BindingDevice(kPresent = false, walletRecord = false), fd)
     }
 }

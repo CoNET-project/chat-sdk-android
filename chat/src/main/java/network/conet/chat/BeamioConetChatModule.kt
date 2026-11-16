@@ -1303,17 +1303,20 @@ object BeamioConetChatModule {
             (eoa == null || vault.eoa.equals(eoa, ignoreCase = true))
         val vaultUnreadable = vault == null || vault is network.conet.chat.nativekey.NativeWalletVault.State.Locked
         val kStore = network.conet.chat.nativekey.AccountPgpK.forDevice(app)
-        val kState = try {
-            val present = if (eoa != null) {
-                kStore.existsFor(eoa, network.conet.chat.nativekey.PgpMigrationPolicy.WORKSPACE)
+        // The ACTIVE slot: the account's K (EOA path) or any K (tag path). A non-ACTIVE slot has no store in this build, so it is absent here.
+        var kActive = false
+        var kUnreadable = false
+        try {
+            kActive = if (eoa != null) {
+                // A read validates the item: an item that names another account is an exception, so it counts as unreadable (fail closed).
+                kStore.read(eoa, network.conet.chat.nativekey.PgpMigrationPolicy.WORKSPACE) != null
             } else {
                 kStore.existsAny()
             }
-            if (present) network.conet.chat.nativekey.BindingLocalSources.KState.PRESENT else network.conet.chat.nativekey.BindingLocalSources.KState.ABSENT
         } catch (_: Exception) {
-            network.conet.chat.nativekey.BindingLocalSources.KState.UNREADABLE
+            kUnreadable = true
         }
-        return network.conet.chat.nativekey.BindingLocalSources.of(keyReady, vaultUnreadable, kState)
+        return network.conet.chat.nativekey.BindingLocalSources.of(keyReady, vaultUnreadable, kActive, kNonActive = false, kUnreadable = kUnreadable)
     }
 
     private val pgpRestoreWorker = Executors.newSingleThreadExecutor()

@@ -66,7 +66,7 @@ class PgpMigrationVectorsTest {
         assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
         assertEquals(2, doc.getJSONArray("pageRecordDeleteCases").length())
         // r3cf (25.52AH): the self-check has 259 steps (it had 254 before the r3cf vectors).
-        assertEquals(438, doc.getJSONObject("selfCheck").getInt("runs"))
+        assertEquals(440, doc.getJSONObject("selfCheck").getInt("runs"))
     }
 
     @Test
@@ -392,6 +392,6 @@ class PgpMigrationVectorsTest {
 
     companion object {
         /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3cf (§25.52AH, `0ab9f2ab…10fb`; r3bz was `0769d01a…667e`). */
-        const val PINNED_SHA256 = "a8693aa9ba45182e1df993ec1195fde93bbb4b899f042c7a1f63adfa301f4758"
+        const val PINNED_SHA256 = "7d24893c680c5be1b6d09a7273146c0c0665f28c495763070f6e42caf354bc06"
     }
 }
