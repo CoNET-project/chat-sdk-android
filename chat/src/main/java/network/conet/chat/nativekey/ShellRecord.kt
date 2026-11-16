@@ -1610,7 +1610,7 @@ object BeamioShellRecordImport {
     }
 
     private fun bridge(context: Context, sessionGate: Boolean = true, creationTxn: Boolean = false): ShellRecordBridge = ShellRecordBridge(
-        account = { accountOf(context, sessionGate) },
+        account = { val tAcc = DiagTiming.now(); accountOf(context, sessionGate).also { DiagTiming.log("accountOf", tAcc) } },
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),

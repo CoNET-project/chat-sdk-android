@@ -604,9 +604,19 @@ object BeamioConetChatModule {
                 ack(reqId, false, error = "openpgp_not_ready")
                 return@ensureReady
             }
+            // diag4 (logging only): the init segments, with thread, milliseconds and the result.
+            val tAdopt = network.conet.chat.nativekey.DiagTiming.now()
             adoptNativeWallet(ctx, host, reqId, s.eoa) {
-                if (storeInitPgp(ctx, reqId, s.eoa, pgpArmorInInit, pgpPassphraseInInit)) finishInit(ctx, reqId, s, attach)
+                val tPgp = network.conet.chat.nativekey.DiagTiming.now()
+                val pgpOk = storeInitPgp(ctx, reqId, s.eoa, pgpArmorInInit, pgpPassphraseInInit)
+                network.conet.chat.nativekey.DiagTiming.log("init:storeInitPgp", tPgp, if (pgpOk) "ok" else "no")
+                if (pgpOk) {
+                    val tFin = network.conet.chat.nativekey.DiagTiming.now()
+                    finishInit(ctx, reqId, s, attach)
+                    network.conet.chat.nativekey.DiagTiming.log("init:finishInit", tFin)
+                }
             }
+            network.conet.chat.nativekey.DiagTiming.log("init:adoptNativeWallet+done", tAdopt)
         }
     }
 
