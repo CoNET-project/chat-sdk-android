@@ -211,11 +211,13 @@ object BeamioConetChatModule {
                 val result = try {
                     network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L)
                 } catch (_: Exception) {
+                    // 25.52Y.62 第 3 项: any internal exception is pgp_migration_retry, with no cause code.
                     null
                 }
+                val code = result?.action ?: "pgp_migration_retry"
                 // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
-                if (result != null && result.action != "keep_existing" && result.action != "upgraded_from_L") {
-                    emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", result.action))
+                if (code != "keep_existing" && code != "upgraded_from_L") {
+                    emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
                 }
             }
         }
