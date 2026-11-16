@@ -1,7 +1,7 @@
 {
   "meta": {
     "file": "pgp-migration-vectors.v1.json",
-    "spec": "interface/spec.md §25.52H（r3bb；§25.52F、§25.52E、§25.52D 中有差异处以 §25.52H 为准）",
+    "spec": "interface/spec.md §25.52X.2（r3kf；本文件的 newUser、本地三态与 init 向量以 §25.52X.2 为准）。其余批次的 spec 注见各组向量的 meta；§25.52H 为旧注（r3bb），不再作为本文件的依据。",
     "status": "final-pending-PM-gates",
     "generator": "gen-pgp-migration-vectors.mjs（r3bz）",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
@@ -3666,10 +3666,9 @@
     },
     {
       "id": "RD-10",
-      "title": "读回 error（legacy_store_unreadable）：失败关闭，不进引导，稍后重试（r3bq）",
+      "title": "读回 migrating（r3rz 前为 legacy_store_unreadable 读取码）：失败关闭，不进引导，稍后重试（r3bq，U.6）",
       "resp": {
-        "code": "error",
-        "sub": "legacy_store_unreadable"
+        "code": "migrating"
       },
       "expect": {
         "action": "fail_closed"
@@ -4768,8 +4767,7 @@
             "importCode": "legacy_unreadable",
             "store": null,
             "read": {
-              "code": "error",
-              "sub": "legacy_store_unreadable"
+              "code": "migrating"
             }
           }
         }
@@ -5046,8 +5044,7 @@
             "importCode": "legacy_unreadable",
             "store": null,
             "read": {
-              "code": "error",
-              "sub": "legacy_store_unreadable"
+              "code": "migrating"
             }
           }
         },
@@ -5229,6 +5226,79 @@
           }
         }
       ]
+    },
+    {
+      "id": "IM-11",
+      "title": "r3lh（iOS 用例 6）：原生记录已存在，旧存储确认为空：importCode exists（不是 absent），原生记录不变，读回 ok",
+      "init": {
+        "store": {
+          "rev": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "A1",
+                "emailAddr": "x",
+                "privateKeyArmor": "EOA",
+                "chatManager": {
+                  "router": "r"
+                }
+              }
+            ],
+            "mnemonicPhrase": "M"
+          }
+        },
+        "legacy": {
+          "state": "absent"
+        },
+        "derivedAddr": null
+      },
+      "steps": [
+        {
+          "faults": {},
+          "expect": {
+            "importCode": "exists",
+            "store": {
+              "rev": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonicPhrase": "M"
+              }
+            },
+            "read": {
+              "code": "ok",
+              "schemaVersion": 1,
+              "record": {
+                "rev": 1,
+                "schemaVersion": 2,
+                "profiles": [
+                  {
+                    "keyID": "A1",
+                    "emailAddr": "x",
+                    "privateKeyArmor": "EOA",
+                    "chatManager": {
+                      "router": "r"
+                    }
+                  }
+                ],
+                "mnemonicPhrase": "M"
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "ackCases": [
@@ -5316,7 +5386,7 @@
     },
     {
       "id": "AK-04",
-      "title": "旧存储读不到，指针为空：error（legacy_store_unreadable），不得 absent，设备标记置位（r3bp，R431 第 3 条）",
+      "title": "旧存储读不到，指针为空：migrating（r3rz，U.6），不得 absent，设备标记置位（r3bp，R431 第 3 条）",
       "kind": "read",
       "reqId": "r4",
       "ctx": {
@@ -5330,8 +5400,7 @@
         "reqId": "r4",
         "ok": true,
         "result": {
-          "code": "error",
-          "sub": "legacy_store_unreadable"
+          "code": "migrating"
         }
       }
     },
@@ -5373,8 +5442,7 @@
         "reqId": "r6",
         "ok": true,
         "result": {
-          "code": "error",
-          "sub": "legacy_store_unreadable"
+          "code": "migrating"
         }
       }
     },
@@ -5394,8 +5462,7 @@
         "reqId": "r7",
         "ok": true,
         "result": {
-          "code": "error",
-          "sub": "legacy_store_unreadable"
+          "code": "migrating"
         }
       }
     },
@@ -5443,12 +5510,13 @@
     },
     {
       "id": "AK-10",
-      "title": "写入 ok：ack，结果含 rev（r3bp）",
+      "title": "无钥（N）且无记录，旧存储确认为空，指针为空：写入 migrating（R1520b 第 9 项统一；R1532 第 2 项；r3mg；原 ok 作废）",
       "kind": "write",
       "reqId": "w1",
       "ctx": {
         "origin": "allowed",
-        "legacy": "absent"
+        "legacy": "absent",
+        "acctUnknown": true
       },
       "store": null,
       "req": {
@@ -5463,8 +5531,7 @@
         "reqId": "w1",
         "ok": true,
         "result": {
-          "code": "ok",
-          "rev": 1
+          "code": "migrating"
         }
       }
     },
@@ -5474,7 +5541,9 @@
       "kind": "write",
       "reqId": "w2",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true
       },
       "store": {
         "rev": 3,
@@ -5944,7 +6013,9 @@
       "kind": "write",
       "reqId": "w26",
       "ctx": {
-        "origin": "allowed"
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true
       },
       "store": {
         "rev": 1,
@@ -6040,12 +6111,1266 @@
           "code": "migrating"
         }
       }
+    },
+    {
+      "id": "AK-29",
+      "title": "账户 a1（有钥匙）的页面副本不含 a1 档案（A：他账户记录不可见，§25.52U.4）；旧存储确认为空：error（account_mismatch），不答 absent（iOS 用例 1；规格 §25.52U.4）。iOS 原期望 account_record_missing，与规格不符，待 PM 裁定",
+      "kind": "read",
+      "reqId": "r29",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "empty",
+        "pointer": false
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r29",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "AK-30",
+      "title": "同 AK-29 的记录（无匹配档案）；指针为空；旧存储确认为空：写入按 rev 处理，返回 conflict（currentRev 1），不返回 migrating（iOS 用例 2 的写入部分；规格 §25.52W 表“原生记录存在，无匹配档案：按 rev 处理”）。iOS 原期望写入门闸关闭，与规格不符；PM 已裁定（总PM：conflict，currentRev 1，依据 r3lo：rev 校验先于 W 字段与 schema 校验）",
+      "kind": "write",
+      "reqId": "w30",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "empty",
+        "pointer": false
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "w30",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w30",
+        "ok": true,
+        "result": {
+          "code": "conflict",
+          "currentRev": 1
+        }
+      }
+    },
+    {
+      "id": "AK-31",
+      "title": "指针为空；原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储确认为空：ok（记录优先，§25.52U.5；读到记录时指针修复置位）。iOS 原期望 account_record_missing，与规格不符，待 PM 裁定（iOS 用例 2 的读取部分，若记录为匹配账户）",
+      "kind": "read",
+      "reqId": "r31",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "empty",
+        "pointer": false
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r31",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-33",
+      "title": "原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储未读取（legacy 未读）：ok，不答 migrating（记录优先；§25.52U.3 的 migrating 只用于无记录）。iOS 原期望 migrating，与规格不符，待 PM 裁定（iOS 用例 4）",
+      "kind": "read",
+      "reqId": "r33",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "pointer": false
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r33",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-34",
+      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（r3mh，R1539 第 (a) 项；原 account_mismatch 作废）",
+      "kind": "read",
+      "reqId": "r34",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "empty",
+        "pointer": false,
+        "acctUnknown": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r34",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "b2",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-35",
+      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（r3mh，R1539 第 (a) 项；原 account_mismatch 作废）",
+      "kind": "read",
+      "reqId": "r35",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "acctUnknown": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r35",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "b2",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-36",
+      "title": "设备标记存在、页面副本缺失、旧存储尚未读取（未确认）：写入一律 migrating（Y.2；与钥是否存在无关；钥存在的变体同样 migrating，按 B；对照 AK-10；r3me）",
+      "kind": "write",
+      "reqId": "w36",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "marker": true,
+        "pointer": false
+      },
+      "store": null,
+      "req": {
+        "reqId": "w36",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w36",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-37",
+      "title": "残留钥匙：页面副本缺失、原生钥匙存在、旧存储确认为空、指针为空，且不属于建号事务：写入 migrating（B；R1519 2；建号事务见 AK-42；r3md）",
+      "kind": "write",
+      "reqId": "w37",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "legacy": "absent",
+        "pointer": false,
+        "nativeKey": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w37",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w37",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-38",
+      "title": "存储被锁、设备标记不存在、rev 相符、页面副本存在：write_failed，恰好一次（CH.1；W.3 次序：守卫、rev 之后；r3ls）",
+      "kind": "write",
+      "reqId": "w38",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "locked": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w38",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w38",
+        "ok": true,
+        "result": {
+          "code": "write_failed"
+        }
+      }
+    },
+    {
+      "id": "AK-39",
+      "title": "设备标记存在且存储被锁、页面副本存在、rev 相符：migrating（守卫先于存储锁定，r3lm；r3ls）",
+      "kind": "write",
+      "reqId": "w39",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "marker": true,
+        "locked": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w39",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w39",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-40",
+      "title": "账户未知，页面副本枚举失败（不完整或失败），旧存储确认为空，指针为空：读取答 error/record_unreadable，不答 absent，不答 account_mismatch（r3lz；CH.1）",
+      "kind": "read",
+      "reqId": "r40",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "enumFailed": true
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r40",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "record_unreadable"
+        }
+      }
+    },
+    {
+      "id": "AK-41",
+      "title": "账户未知，页面副本枚举失败，旧存储确认为空，指针为空：写入拒绝，返回 migrating（未完成读取；r3lz；与 r3lw 第 4 条同一读法）",
+      "kind": "write",
+      "reqId": "w41",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "enumFailed": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w41",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w41",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-42",
+      "title": "建号事务：钥匙由本事务生成（账户 a1），钥匙生成前已取得 absent，旧存储确认为空，指针为空，页面副本缺失：首次页面副本写入放行，按 rev 落盘（r3md，R1519 3）",
+      "kind": "write",
+      "reqId": "w42",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": false,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w42",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w42",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 1
+        }
+      }
+    },
+    {
+      "id": "AK-43",
+      "title": "第二个账户：指针已置位，建号事务内钥生成，旧存储已确认为空，页面副本缺失：首次写入放行，按 rev 落盘（r3me，R1520b 5）",
+      "kind": "write",
+      "reqId": "w43",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a2",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": true,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w43",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w43",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 1
+        }
+      }
+    },
+    {
+      "id": "AK-44",
+      "title": "第二个账户：指针已置位，事务外（无建号事务），钥存在而页面副本缺失：migrating（W.3 第 3 条与 B；r3me）",
+      "kind": "write",
+      "reqId": "w44",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a2",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w44",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w44",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-46",
+      "title": "存储被锁、页面副本存在、rev 不符：write_failed（锁定先于 rev 判定，R1520b 6；r3me）",
+      "kind": "write",
+      "reqId": "w46",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "locked": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 1
+        }
+      },
+      "req": {
+        "reqId": "w46",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w46",
+        "ok": true,
+        "result": {
+          "code": "write_failed"
+        }
+      }
+    },
+    {
+      "id": "AK-47",
+      "title": "建号事务无明确用户选择（creationTxn 为真，explicitChoice 为假）：写入 migrating；不进入建号模式（R1525 第 1 项）",
+      "kind": "write",
+      "reqId": "w47",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a2",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": true,
+        "creationTxn": true,
+        "explicitChoice": false
+      },
+      "store": null,
+      "req": {
+        "reqId": "w47",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w47",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-48",
+      "title": "建号模式（用户明确选择）：读取待建账户答 absent；指针指向他账户且其记录存在，记录不可见，不答 account_mismatch（R1525 第 3 项，A）",
+      "kind": "read",
+      "reqId": "r48",
+      "ctx": {
+        "origin": "allowed",
+        "creationMode": true,
+        "explicitChoice": true,
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r48",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    },
+    {
+      "id": "AK-49",
+      "title": "建号模式：旧存储读不到：migrating（r3rz，U.6），不答 absent（未确定即不建号，R1520b 第 4 项）",
+      "kind": "read",
+      "reqId": "r49",
+      "ctx": {
+        "origin": "allowed",
+        "creationMode": true,
+        "explicitChoice": true,
+        "legacy": "unreadable",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r49",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-50",
+      "title": "建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）",
+      "kind": "read",
+      "reqId": "r50",
+      "ctx": {
+        "origin": "allowed",
+        "creationMode": true,
+        "explicitChoice": true,
+        "legacy": "found",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r50",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "import_not_done"
+        }
+      }
+    },
+    {
+      "id": "AK-51",
+      "title": "无明确用户选择：creationMode 不生效，按既有规则读取指针账户 a1 的记录，答 ok（R1525 第 1 项）",
+      "kind": "read",
+      "reqId": "r51",
+      "ctx": {
+        "origin": "allowed",
+        "creationMode": true,
+        "explicitChoice": false,
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r51",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-52",
+      "title": "建号完成（指针已切换到 a2，a2 记录存在；a1 的记录不在本存储视图中）：读取 a2 答 ok（R1525 第 2 项、第 3 项后段）",
+      "kind": "read",
+      "reqId": "r52",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a2",
+        "keys": [
+          "a1",
+          "a2"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a2",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r52",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a2",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-53",
+      "title": "建号中断（指针保持旧值 a1，残留 a2 钥，a2 页面副本缺失）：读取答 a1 的记录 ok；残留钥不改变账户（R1525 第 2 项；R1533 两钥加指针）",
+      "kind": "read",
+      "reqId": "r53",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1",
+          "a2"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r53",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "schemaVersion": 1,
+          "record": {
+            "rev": 1,
+            "schemaVersion": 2,
+            "profiles": [
+              {
+                "keyID": "a1",
+                "privateKeyArmor": "EOA"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "AK-54",
+      "title": "指针指向 a2 而 a2 的钥缺失（指针不得指向无页面副本的账户之外的情形，失败关闭）：error account_record_missing（R1533 第 2 条；T.6）",
+      "kind": "read",
+      "reqId": "r54",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a2",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r54",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_record_missing"
+        }
+      }
+    },
+    {
+      "id": "AK-55",
+      "title": "指针为空、两把钥：读取 not_ready，不自动选择（R1533 第 3 条；N 第 2 项）",
+      "kind": "read",
+      "reqId": "r55",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "keys": [
+          "a1",
+          "a2"
+        ]
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r55",
+        "ok": true,
+        "result": {
+          "code": "not_ready"
+        }
+      }
+    },
+    {
+      "id": "AK-56",
+      "title": "指针已指向 a1、两把钥、a1 记录存在：写入按 rev 落盘，答 ok（R1533 第 1 条）",
+      "kind": "write",
+      "reqId": "w56",
+      "ctx": {
+        "origin": "allowed",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1",
+          "a2"
+        ]
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "req": {
+        "reqId": "w56",
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "a1",
+              "privateKeyArmor": "EOA"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w56",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 2
+        }
+      }
+    },
+    {
+      "id": "AK-57",
+      "title": "指针指向 a2 而 a2 的钥缺失：写入 migrating（失败关闭；R1533 第 2 条）",
+      "kind": "write",
+      "reqId": "w57",
+      "ctx": {
+        "origin": "allowed",
+        "pointer": true,
+        "pointerAcct": "a2",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": null,
+      "req": {
+        "reqId": "w57",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w57",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-58",
+      "title": "指针为空、两把钥：写入 migrating（不自动选择；R1533 第 3 条）",
+      "kind": "write",
+      "reqId": "w58",
+      "ctx": {
+        "origin": "allowed",
+        "pointer": false,
+        "keys": [
+          "a1",
+          "a2"
+        ]
+      },
+      "store": null,
+      "req": {
+        "reqId": "w58",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w58",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-59",
+      "title": "建号模式、钥生成之前（待建账户，尚无钥）：写入 migrating；写入须在钥生成之后（R1520b 第 4 项）",
+      "kind": "write",
+      "reqId": "w59",
+      "ctx": {
+        "origin": "allowed",
+        "creationMode": true,
+        "explicitChoice": true,
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a1",
+        "keys": [
+          "a1"
+        ]
+      },
+      "store": null,
+      "req": {
+        "reqId": "w59",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w59",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-60",
+      "title": "指针指向 a2，a2 钥存在而页面副本缺失：读取 migrating，不答 absent（B；R1520b 第 2 项）",
+      "kind": "read",
+      "reqId": "r60",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "pointerAcct": "a2",
+        "keys": [
+          "a1",
+          "a2"
+        ],
+        "nativeKey": true
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r60",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "AK-61",
+      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内无 EOA 私钥：无账户，error account_mismatch，不答 absent（原 AK-34 的意义，r3mh）",
+      "kind": "read",
+      "reqId": "r61",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "empty",
+        "pointer": false,
+        "acctUnknown": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r61",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "AK-62",
+      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内无 EOA 私钥：error account_mismatch，不答 account_record_missing（原 AK-35 的意义，r3mh）",
+      "kind": "read",
+      "reqId": "r62",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": true,
+        "acctUnknown": true
+      },
+      "store": {
+        "rev": 1,
+        "record": {
+          "rev": 1,
+          "schemaVersion": 2,
+          "profiles": [
+            {
+              "keyID": "b2",
+              "emailAddr": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "r62",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "account_mismatch"
+        }
+      }
+    },
+    {
+      "id": "AK-63",
+      "title": "建号事务（有明确选择、钥生成前已取得 absent）但设备标记存在：写入 migrating；同会话建号被拒绝，直到下次启动或读取器重读（R1520b 第 4 项；Y.13 第 6 项；r3mh）",
+      "kind": "write",
+      "reqId": "w63",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a2",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": false,
+        "marker": true,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "store": null,
+      "req": {
+        "reqId": "w63",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "w63",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "CL-01",
+      "title": "清除身份完成后（钥与页面副本已清除，指针已清除）：读取为 absent（clean 状态；R1545 第 (a) 项）",
+      "kind": "read",
+      "reqId": "r_cl1",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "acctUnknown": true
+      },
+      "store": null,
+      "expect": {
+        "type": "ack",
+        "reqId": "r_cl1",
+        "ok": true,
+        "result": {
+          "code": "absent"
+        }
+      }
+    }
+  ],
+  "ackStepCases": [
+    {
+      "id": "AK-32",
+      "title": "iOS 用例 3：旧存储确认为空、无记录：absent；随后出现他账户记录：error（account_mismatch），不答 absent；记录移除且本步未读取旧存储：migrating，不答 absent（§25.52U.6）",
+      "steps": [
+        {
+          "ctx": {
+            "origin": "allowed",
+            "legacy": "empty",
+            "pointer": false
+          },
+          "store": null,
+          "expect": {
+            "code": "absent"
+          }
+        },
+        {
+          "ctx": {
+            "origin": "allowed",
+            "legacy": "empty",
+            "pointer": false,
+            "acctUnknown": true
+          },
+          "store": {
+            "rev": 1,
+            "record": {
+              "rev": 1,
+              "schemaVersion": 2,
+              "profiles": [
+                {
+                  "keyID": "b2",
+                  "emailAddr": "x"
+                }
+              ]
+            }
+          },
+          "expect": {
+            "code": "error",
+            "sub": "account_mismatch"
+          }
+        },
+        {
+          "ctx": {
+            "origin": "allowed",
+            "pointer": false
+          },
+          "store": null,
+          "expect": {
+            "code": "migrating"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CL-02",
+      "title": "清除身份中断（钥与页面副本已清除，指针仍置位，清除阻塞仍在）：读取为 account_record_missing（失败关闭）；重做完成后指针已清除，读取为 absent（R1545 第 (a) 项，第 (b) 项的重做）",
+      "steps": [
+        {
+          "ctx": {
+            "origin": "allowed",
+            "legacy": "absent",
+            "pointer": true,
+            "pointerAcct": "a1",
+            "keys": []
+          },
+          "store": null,
+          "expect": {
+            "code": "error",
+            "sub": "account_record_missing"
+          }
+        },
+        {
+          "ctx": {
+            "origin": "allowed",
+            "legacy": "absent",
+            "pointer": false,
+            "acctUnknown": true
+          },
+          "store": null,
+          "expect": {
+            "code": "absent"
+          }
+        }
+      ]
     }
   ],
   "nativeCreateCases": [
     {
       "id": "NC-01",
-      "title": "G0，account 为 BeamioTag，旧注册表确认无绑定，无 SDK 记录：create，进入第一屏（r3bv，R454）",
+      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，无 SDK 记录：create，进入第一屏（r3bv，R454；r3jw 改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -6055,12 +7380,15 @@
       },
       "expect": {
         "code": "create",
-        "page": "first_screen"
+        "page": "first_screen",
+        "queried": [
+          "current"
+        ]
       }
     },
     {
       "id": "NC-02",
-      "title": "G0，account 为 BeamioTag，旧注册表已绑定：already_bound，打开 nativeRecoveryOpen，不生成 EOA（r3bv）",
+      "title": "G0，account 为 BeamioTag，现行注册表返回有效非零地址：already_bound，打开 nativeRecoveryOpen，不生成 EOA（r3bv；r3jw 改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -6070,7 +7398,10 @@
       },
       "expect": {
         "code": "already_bound",
-        "page": "nativeRecoveryOpen"
+        "page": "nativeRecoveryOpen",
+        "queried": [
+          "current"
+        ]
       }
     },
     {
@@ -6085,7 +7416,10 @@
       },
       "expect": {
         "code": "already_bound",
-        "page": "nativeRecoveryOpen"
+        "page": "nativeRecoveryOpen",
+        "queried": [
+          "current"
+        ]
       }
     },
     {
@@ -6100,7 +7434,10 @@
       },
       "expect": {
         "code": "lookup_unavailable",
-        "page": "retry"
+        "page": "retry",
+        "queried": [
+          "current"
+        ]
       }
     },
     {
@@ -6115,7 +7452,8 @@
       },
       "expect": {
         "code": "not_available",
-        "page": "none"
+        "page": "none",
+        "queried": []
       }
     },
     {
@@ -6130,7 +7468,8 @@
       },
       "expect": {
         "code": "not_available",
-        "page": "none"
+        "page": "none",
+        "queried": []
       }
     },
     {
@@ -6144,7 +7483,8 @@
       },
       "expect": {
         "code": "bad_request",
-        "page": "none"
+        "page": "none",
+        "queried": []
       }
     },
     {
@@ -6159,12 +7499,13 @@
       },
       "expect": {
         "code": "bad_request",
-        "page": "none"
+        "page": "none",
+        "queried": []
       }
     },
     {
       "id": "NC-09",
-      "title": "G0，account 为 BeamioTag，旧注册表确认无绑定，但 SDK 既有记录存在（防御性）：already_bound（r3bv）",
+      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，但 SDK 既有记录存在（防御性）：already_bound（r3bv；r3jw 改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -6174,8 +7515,2522 @@
       },
       "expect": {
         "code": "already_bound",
-        "page": "nativeRecoveryOpen"
+        "page": "nativeRecoveryOpen",
+        "queried": [
+          "current"
+        ]
       }
+    }
+  ],
+  "bindingLookupCases": [
+    {
+      "id": "BL-01",
+      "title": "BeamioTag：getOwnerByAccountName 成功、解码通过、零地址（明确无记录），无 SDK 记录：create，进入第一屏",
+      "input": {
+        "kind": "tag",
+        "outcome": "empty"
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-02",
+      "title": "EOA：getAccount 明确 revert 且完整错误数据恰为 0xfaba8ebe（无参 AccountNotFound），无 SDK 记录：明确无记录，create（R1455 选项 B）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found"
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-03",
+      "title": "BeamioTag：getOwnerByAccountName 返回有效非零地址：already_bound，打开 nativeRecoveryOpen，不生成 EOA",
+      "input": {
+        "kind": "tag",
+        "outcome": "bound"
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-04",
+      "title": "EOA：getAccount 成功返回 exists 为真且账户名非空：already_bound（有效非空记录）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "bound"
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-05",
+      "title": "EOA：精确 AccountNotFound，但钱包私钥记录存在（R1199）：already_bound（正向来源优先）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found",
+        "sdkWalletKey": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-06",
+      "title": "EOA：精确 AccountNotFound，但 SDK 账户记录 K 存在（§25.52Y.1）：already_bound",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found",
+        "sdkK": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-07",
+      "title": "EOA：精确 AccountNotFound，SDK 来源不可读：lookup_unavailable，不判无绑定（§25.52HH.2 失败关闭）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found",
+        "sdkReadFailed": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-08",
+      "title": "BeamioTag：RPC 错误：lookup_unavailable，不判无绑定",
+      "input": {
+        "kind": "tag",
+        "outcome": "rpc_error"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-09",
+      "title": "EOA：HTTP 错误：lookup_unavailable，不判无绑定",
+      "input": {
+        "kind": "eoa",
+        "outcome": "http_error"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-10",
+      "title": "BeamioTag：单次读取超时（合计未超上限）：lookup_unavailable，不判无绑定",
+      "input": {
+        "kind": "tag",
+        "outcome": "timeout"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-11",
+      "title": "EOA：其它选择器的 revert（Error(string)，0x08c379a0）：lookup_unavailable，不判无绑定",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-12",
+      "title": "BeamioTag：响应解码失败：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "invalid_response",
+        "detail": "decode_failed"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-13",
+      "title": "EOA：成功返回，exists 为真而账户名为空（语义不一致）：lookup_unavailable",
+      "input": {
+        "kind": "eoa",
+        "outcome": "invalid_response",
+        "detail": "exists_true_name_empty"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-14",
+      "title": "BeamioTag：返回值不是 20 字节地址（语义校验失败）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "invalid_response",
+        "detail": "owner_not_20_bytes"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-15",
+      "title": "EOA：精确 AccountNotFound，合计超过 10 秒：lookup_unavailable（超上限优先于明确无记录）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_not_found",
+        "totalMs": 10001
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-16",
+      "title": "BeamioTag：有效非零地址，但合计超过 10 秒：lookup_unavailable（总上限同样适用于正向结果）",
+      "input": {
+        "kind": "tag",
+        "outcome": "bound",
+        "totalMs": 10001
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-17",
+      "title": "BeamioTag：有效非零地址，同时 SDK 来源不可读：already_bound（正向结果优先，合计未超时）",
+      "input": {
+        "kind": "tag",
+        "outcome": "bound",
+        "sdkReadFailed": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-18",
+      "title": "BeamioTag：零地址（明确无记录），但 SDK 来源不可读：lookup_unavailable（失败关闭）",
+      "input": {
+        "kind": "tag",
+        "outcome": "empty",
+        "sdkReadFailed": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-19",
+      "title": "BeamioTag：零地址，合计恰为 10 秒（不超过上限）：create（上限边界）",
+      "input": {
+        "kind": "tag",
+        "outcome": "empty",
+        "totalMs": 10000
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-20",
+      "title": "BeamioTag：连接被拒（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "connection_refused"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-21",
+      "title": "EOA：HTTP 5xx（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "eoa",
+        "outcome": "http_error"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-22",
+      "title": "BeamioTag：JSON-RPC error（code -32000，本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "rpc_error"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-23",
+      "title": "EOA：revert 其它选择器（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-24",
+      "title": "EOA：eth_call 原始错误数据恰为 0xfaba8ebe（本地夹具 F-06 同源，按原始数据判定，r3kc）：明确无记录，create",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8ebe"
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-25",
+      "title": "BeamioTag：返回截断为 31 字节（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "truncated"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-26",
+      "title": "BeamioTag：返回不可解码（非十六进制，本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "undecodable"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-27",
+      "title": "BeamioTag：结构正确但语义失败（地址字段高位非零，本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "semantic_invalid",
+        "detail": "owner_high_bits"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-28",
+      "title": "EOA：成功返回但 exists 为假而账户名非空（语义失败，本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "eoa",
+        "outcome": "semantic_invalid",
+        "detail": "exists_false_name_nonempty"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-29",
+      "title": "BeamioTag：非 JSON 响应（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "non_json"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-30",
+      "title": "BeamioTag：无 result 也无 error（本地夹具）：lookup_unavailable",
+      "input": {
+        "kind": "tag",
+        "outcome": "no_result"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-31",
+      "title": "BeamioTag：零地址，响应慢于 3 秒但未超上限（本地夹具）：create",
+      "input": {
+        "kind": "tag",
+        "outcome": "empty",
+        "totalMs": 3000
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-32",
+      "title": "BeamioTag：RPC 错误，设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（G1、G2 已在查询前被门控，本输入在创建路径不可达）",
+      "input": {
+        "kind": "tag",
+        "outcome": "rpc_error",
+        "sdkWalletKey": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-33",
+      "title": "EOA：revert 其它选择器，但 SDK 有账户记录 K（正向来源）：already_bound（G2）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert",
+        "sdkK": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-34",
+      "title": "BeamioTag：单次读取超时（合计 9 秒，未超上限），设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（本输入在创建路径不可达）",
+      "input": {
+        "kind": "tag",
+        "outcome": "timeout",
+        "sdkWalletKey": true,
+        "totalMs": 9000
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-35",
+      "title": "BeamioTag：有效非零地址，SDK 有 K，但合计超过 10 秒：lookup_unavailable（G1）",
+      "input": {
+        "kind": "tag",
+        "outcome": "bound",
+        "sdkK": true,
+        "totalMs": 10001
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-36",
+      "title": "EOA：revert 选择器相同但带参数（0xfaba8ebe 加 32 字节零字）：不是明确无记录，lookup_unavailable（R1455）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_args"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-37",
+      "title": "EOA：revert 错误数据为空：不是明确无记录，lookup_unavailable（R1455）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "revert_empty"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-38",
+      "title": "EOA：成功返回但 exists 为假、账户名为空（不可验证，非 AccountNotFound revert）：lookup_unavailable，不判无绑定（R1455）",
+      "input": {
+        "kind": "eoa",
+        "outcome": "success_exists_false"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-39",
+      "title": "BeamioTag：revert 错误数据恰为 0xfaba8ebe：tag 路径不适用 getAccount 的无记录规则，lookup_unavailable（R1455）",
+      "input": {
+        "kind": "tag",
+        "outcome": "revert_not_found"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-40",
+      "title": "EOA：原始错误数据 0xfaba8ebe（小写，无参）：明确无记录，create（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8ebe"
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-41",
+      "title": "EOA：原始错误数据 0xFABA8EBE（大写，无参）：小写化后精确匹配，明确无记录，create（r3kc，F2）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xFABA8EBE"
+      },
+      "expect": {
+        "code": "create",
+        "page": "first_screen",
+        "creationEntered": true,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-42",
+      "title": "EOA：原始错误数据为 0xfaba8ebe 加 32 字节零字（选择器相同但带参数）：lookup_unavailable，不进入创建（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8ebe0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-43",
+      "title": "EOA：原始错误数据为 0x（空字节）：lookup_unavailable，不进入创建（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0x"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-44",
+      "title": "EOA：原始错误数据缺失（空字符串）：lookup_unavailable，不进入创建（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": ""
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-45",
+      "title": "EOA：原始错误数据为 Error(string) 0x08c379a0 加字符串编码：其它选择器，lookup_unavailable（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0x08c379a0000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-46",
+      "title": "EOA：原始错误数据为 0xfaba8eb（7 位十六进制，截断选择器）：lookup_unavailable（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8eb"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-47",
+      "title": "EOA：原始错误数据为 0xfaba8ebf（末位不同）：其它选择器，lookup_unavailable（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8ebf"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-48",
+      "title": "EOA：原始错误数据为 0xfaba8ebe00（选择器加一个字节）：带参数，lookup_unavailable（r3kc）",
+      "input": {
+        "kind": "eoa",
+        "revertData": "0xfaba8ebe00"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-49",
+      "title": "BeamioTag：原始错误数据恰为 0xfaba8ebe：tag 路径不适用，lookup_unavailable（r3kc）",
+      "input": {
+        "kind": "tag",
+        "revertData": "0xfaba8ebe"
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-50",
+      "title": "r3kj（F-3）：创建路径 G0，设备存在 K 而无钱包私钥，tag 路径零地址：lookup_unavailable（fail-closed，待 PM 裁定）",
+      "input": {
+        "kind": "tag",
+        "outcome": "empty",
+        "createG0KPresent": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-51",
+      "title": "r3kj（F-3）：创建路径 G0，设备存在 K，tag 路径有效非零地址：already_bound（注册表正向优先）",
+      "input": {
+        "kind": "tag",
+        "outcome": "bound",
+        "createG0KPresent": true
+      },
+      "expect": {
+        "code": "already_bound",
+        "page": "nativeRecoveryOpen",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    },
+    {
+      "id": "BL-52",
+      "title": "r3kk（审阅席 c71ae9b F-3）：tag 路径注册表 RPC 失败，设备可读（K 与钱包私钥记录存在）：lookup_unavailable，设备状态不改变结果（HH.2 固定读法）",
+      "input": {
+        "kind": "tag",
+        "outcome": "rpc_error",
+        "sdkK": true,
+        "sdkWalletKey": true
+      },
+      "expect": {
+        "code": "lookup_unavailable",
+        "page": "retry",
+        "creationEntered": false,
+        "queried": [
+          "current"
+        ]
+      }
+    }
+  ],
+  "newUserCases": [
+    {
+      "id": "NU-01",
+      "title": "G1（not_ready）且持久化 eoa 存在：existing_local（不 regenerate，R1484；EOA 路径不参与）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "bound"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-02",
+      "title": "确认无本地身份（no_key、kPresent 假、无持久化 eoa），tag 路径零地址：newUser",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "empty"
+      },
+      "expect": {
+        "branch": "newUser",
+        "enteredNewUser": true,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "first_screen",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-03",
+      "title": "确认无本地身份，tag 路径有效非零地址：already_bound（nativeRecoveryOpen，既有账户路径，不生成 EOA）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "bound"
+      },
+      "expect": {
+        "branch": "already_bound",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "nativeRecoveryOpen",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-04",
+      "title": "确认无本地身份，tag 路径 RPC 错误：unavailable，不走 newUser",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "rpc_error"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-05",
+      "title": "确认无本地身份，tag 路径 revert 恰为 0xfaba8ebe：tag 路径不适用无记录规则，unavailable（R1455）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-06",
+      "title": "确认无本地身份，tag 路径超时：unavailable，不走 newUser",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "timeout"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-07",
+      "title": "确认无本地身份，tag 路径响应无效：unavailable，不走 newUser",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": false,
+        "tagOutcome": "invalid_response"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [
+          "current"
+        ],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-08",
+      "title": "R1472 第 1 项：no_key 且 kPresent 为真，tag 路径零地址：unavailable，不查注册表",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": true
+        },
+        "persistedEoa": false,
+        "tagOutcome": "empty"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-09",
+      "title": "R1472 第 1 项：no_key 且 kPresent 为真，tag 路径非零地址：unavailable（不得判为既有账户）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": true
+        },
+        "persistedEoa": false,
+        "tagOutcome": "bound"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-10",
+      "title": "R1475 (a)：no_key 且 kPresent 假，持久化 eoa 存在：unavailable，不查注册表",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-11",
+      "title": "R1475 (b)：G1 且持久化 eoa 存在，EOA 路径精确无记录：existing_local（登记结果不改变分支）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-12",
+      "title": "R1475 (b)：G1 且持久化 eoa 存在，EOA 路径 RPC 错误：existing_local",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "rpc_error"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-13",
+      "title": "G1 且持久化 eoa 存在，EOA 路径成功返回 exists 为假：existing_local",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "success_exists_false"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-14",
+      "title": "R1473：G1 且无持久化 eoa（残留）：guide_recovery，不 newUser，不 RegenerateUser，不覆盖",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": false,
+        "eoaOutcome": "bound"
+      },
+      "expect": {
+        "branch": "guide_recovery",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "nativeRecoveryOpen",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-15",
+      "title": "R1484：本地不可读（bad_request），持久化 eoa 存在，EOA 路径有效非空：unavailable（不可判定，不 regenerate，不写入）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "bad_request"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "bound"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-16",
+      "title": "本地不可读，无持久化 eoa：unavailable，不查 tag 路径",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "bad_request"
+        },
+        "persistedEoa": false,
+        "tagOutcome": "empty"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-17",
+      "title": "G2 结果 ok 且持久化 eoa 存在：existing_local（锁定与否不影响）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": true,
+          "result": {
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+            "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+            "pgpReady": false
+          }
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-18",
+      "title": "R1473：G1 且无持久化 eoa，注册表精确无记录：guide_recovery（不走 newUser）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": false,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "guide_recovery",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "nativeRecoveryOpen",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-19",
+      "title": "no_key 且 kPresent 为真，持久化 eoa 存在：unavailable（不可判定）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": true
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-20",
+      "title": "G1 且持久化 eoa 存在，EOA 路径应答无效：existing_local",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "invalid_response"
+      },
+      "expect": {
+        "branch": "existing_local",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "init",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-21",
+      "title": "本地不可读且持久化 eoa 存在，EOA 路径 RPC 错误：unavailable",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "bad_request"
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "rpc_error"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-22",
+      "title": "R1484：no_key（kPresent 假）且持久化 eoa 存在，EOA 路径有效非空：unavailable（原 regenerate 已撤销；regenerate 仅在确认无本地身份后考虑）",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "bound"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-23",
+      "title": "R1475 (a)：no_key（kPresent 假）且持久化 eoa 存在，EOA 路径精确无记录：unavailable，不走 newUser",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-24",
+      "title": "本地状态超时，无持久化 eoa：unavailable（不可读）",
+      "input": {
+        "identity": "timeout",
+        "persistedEoa": false,
+        "tagOutcome": "empty"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-25",
+      "title": "本地状态未知形状，持久化 eoa 存在：unavailable（不可读）",
+      "input": {
+        "identity": {
+          "foo": 1
+        },
+        "persistedEoa": true,
+        "eoaOutcome": "revert_not_found"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-26",
+      "title": "R1481 O-A：no_key 缺少 kPresent，无持久化 eoa，tag 路径零地址：unavailable，不得落入 tag 路径",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key"
+        },
+        "persistedEoa": false,
+        "tagOutcome": "empty"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "NU-27",
+      "title": "R1481 O-A：no_key 的 kPresent 为字符串，无持久化 eoa，tag 路径非零地址：unavailable",
+      "input": {
+        "identity": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": "false"
+        },
+        "persistedEoa": false,
+        "tagOutcome": "bound"
+      },
+      "expect": {
+        "branch": "unavailable",
+        "enteredNewUser": false,
+        "eoaPathQueried": false,
+        "queried": [],
+        "page": "retry",
+        "recordsWritten": false
+      }
+    }
+  ],
+  "localStateCases": [
+    {
+      "id": "LS-01",
+      "title": "no_key，附加 kPresent 为假：absent，无 K",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": false
+        }
+      },
+      "expect": {
+        "walletKey": "absent",
+        "kPresent": false
+      }
+    },
+    {
+      "id": "LS-02",
+      "title": "no_key，附加 kPresent 为真：absent，有 K（不可判定，NU-08）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": true
+        }
+      },
+      "expect": {
+        "walletKey": "absent",
+        "kPresent": true
+      }
+    },
+    {
+      "id": "LS-03",
+      "title": "no_key 缺少 kPresent：不可读（fail-closed，r3kf）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LS",
+          "ok": false,
+          "error": "no_key"
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-04",
+      "title": "no_key 的 kPresent 为字符串 \"true\"：不可读（非布尔，r3kf）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LS",
+          "ok": false,
+          "error": "no_key",
+          "kPresent": "true"
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-05",
+      "title": "G1 not_ready：有钥（positive）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        }
+      },
+      "expect": {
+        "walletKey": "positive"
+      }
+    },
+    {
+      "id": "LS-06",
+      "title": "G2 结果 ok，未锁定：有钥（positive）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": true,
+          "result": {
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+            "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+            "pgpReady": false
+          }
+        },
+        "passcodeLocked": false
+      },
+      "expect": {
+        "walletKey": "positive"
+      }
+    },
+    {
+      "id": "LS-07",
+      "title": "G2 结果 ok，Passcode 锁定：有钥（positive，锁定不影响，§25.48.2）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": true,
+          "result": {
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+            "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+            "pgpReady": false
+          }
+        },
+        "passcodeLocked": true
+      },
+      "expect": {
+        "walletKey": "positive"
+      }
+    },
+    {
+      "id": "LS-08",
+      "title": "错误 bad_request：不可读",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "bad_request"
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-09",
+      "title": "错误 key_over_bridge_refused：不可读",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LS",
+          "ok": false,
+          "error": "key_over_bridge_refused"
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-10",
+      "title": "超时：不可读",
+      "input": {
+        "resp": "timeout"
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-11",
+      "title": "未知形状（无 type 为 ack）：不可读",
+      "input": {
+        "resp": {
+          "ok": true,
+          "result": {}
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-12",
+      "title": "ok 为真但无 result：不可读（成功应答必须有 result，§25.48.4）",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LS",
+          "ok": true
+        }
+      },
+      "expect": {
+        "walletKey": "unreadable"
+      }
+    },
+    {
+      "id": "LS-13",
+      "title": "r3ki（F-3）：G1 not_ready 附加 kPresent（非必须字段）：仍为有钥（positive），附加字段不改变结果",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LS",
+          "ok": false,
+          "error": "not_ready",
+          "kPresent": true
+        }
+      },
+      "expect": {
+        "walletKey": "positive"
+      }
+    },
+    {
+      "id": "LS-14",
+      "title": "r3ki（F-3）：G2 结果 ok 附加 kPresent：仍为有钥（positive），kPresent 不改变结果",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": true,
+          "result": {
+            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+            "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+            "pgpReady": false
+          },
+          "kPresent": false
+        }
+      },
+      "expect": {
+        "walletKey": "positive"
+      }
+    }
+  ],
+  "localInitCases": [
+    {
+      "id": "LI-01",
+      "title": "init 应答 ok（EOA 与记录一致）：进入 G2，按既有账户进入，不建号",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LI",
+          "ok": true
+        }
+      },
+      "expect": {
+        "outcome": "enter_g2",
+        "page": "session_g2",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "LI-02",
+      "title": "init 应答 address_mismatch：unavailable，不建号",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "LI",
+          "ok": false,
+          "error": "address_mismatch"
+        }
+      },
+      "expect": {
+        "outcome": "unavailable",
+        "page": "retry",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "LI-03",
+      "title": "init 超时或不可读：unavailable，不建号",
+      "input": {
+        "resp": "timeout"
+      },
+      "expect": {
+        "outcome": "unavailable",
+        "page": "retry",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "LI-04",
+      "title": "init 应答 bad_request：unavailable",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "bad_request"
+        }
+      },
+      "expect": {
+        "outcome": "unavailable",
+        "page": "retry",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "LI-05",
+      "title": "init 应答 not_ready（不应出现于有钥路径）：unavailable",
+      "input": {
+        "resp": {
+          "type": "ack",
+          "reqId": "NU",
+          "ok": false,
+          "error": "not_ready"
+        }
+      },
+      "expect": {
+        "outcome": "unavailable",
+        "page": "retry",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    },
+    {
+      "id": "LI-06",
+      "title": "init 应答无 ack 类型：unavailable",
+      "input": {
+        "resp": {
+          "ok": true
+        }
+      },
+      "expect": {
+        "outcome": "unavailable",
+        "page": "retry",
+        "enteredNewUser": false,
+        "recordsWritten": false
+      }
+    }
+  ],
+  "residualExitCases": [
+    {
+      "id": "RR-01",
+      "title": "残留出口：已有钥，原生派生 eoa 并持久化成功，already_exists 携带公开 eoa；PWA 持久化后进入 existing_local，以 init 进入 G2",
+      "input": {
+        "reply": "already_exists",
+        "derive": "ok",
+        "persist": "ok",
+        "eoaValid": true,
+        "pwaPersist": "ok"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "existing_local_init",
+        "uiShowsCreate": false,
+        "eoaReturned": true
+      }
+    },
+    {
+      "id": "RR-02",
+      "title": "残留出口：派生失败，already_exists 不携带 eoa；页面显示\"需要恢复账户\"，不显示建号，不覆盖，不删除",
+      "input": {
+        "reply": "already_exists",
+        "derive": "fail",
+        "persist": "ok",
+        "eoaValid": false,
+        "pwaPersist": "ok"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "needs_recovery_ui",
+        "uiShowsCreate": false,
+        "eoaReturned": false
+      }
+    },
+    {
+      "id": "RR-03",
+      "title": "残留出口：派生成功但原生持久化失败：不携带 eoa，unavailable，不覆盖，不删除",
+      "input": {
+        "reply": "already_exists",
+        "derive": "ok",
+        "persist": "fail",
+        "eoaValid": true,
+        "pwaPersist": "ok"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "needs_recovery_ui",
+        "uiShowsCreate": false,
+        "eoaReturned": false
+      }
+    },
+    {
+      "id": "RR-04",
+      "title": "残留出口：原生返回 eoa，但 PWA 持久化失败：unavailable（需要恢复账户），不进入 init",
+      "input": {
+        "reply": "already_exists",
+        "derive": "ok",
+        "persist": "ok",
+        "eoaValid": true,
+        "pwaPersist": "fail"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "needs_recovery_ui",
+        "uiShowsCreate": false,
+        "eoaReturned": true
+      }
+    },
+    {
+      "id": "RR-05",
+      "title": "残留出口：eoa 不是有效小写地址：视为无效，unavailable",
+      "input": {
+        "reply": "already_exists",
+        "derive": "ok",
+        "persist": "ok",
+        "eoaValid": false,
+        "pwaPersist": "ok"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "needs_recovery_ui",
+        "uiShowsCreate": false,
+        "eoaReturned": false
+      }
+    },
+    {
+      "id": "RR-06",
+      "title": "残留出口：非 already_exists 的应答不改变页面状态，不携带 eoa（只有 already_exists 与 ok 可携带 eoa）",
+      "input": {
+        "reply": "write_failed",
+        "derive": "ok",
+        "persist": "ok",
+        "eoaValid": true,
+        "pwaPersist": "ok"
+      },
+      "expect": {
+        "overwritten": false,
+        "deleted": false,
+        "recordsWritten": false,
+        "pageState": "unchanged",
+        "uiShowsCreate": false,
+        "eoaReturned": false
+      }
+    }
+  ],
+  "restoreAssessCases": [
+    {
+      "id": "RS-01",
+      "title": "PGP 恢复评估：链上读取成功为有效空结果，备份确认缺失：confirmed_missing（可进入重建）",
+      "input": {
+        "chainRead": "ok_empty",
+        "backup": "missing"
+      },
+      "expect": "confirmed_missing"
+    },
+    {
+      "id": "RS-02",
+      "title": "链上读取失败（RPC）：temporarily_unavailable，不得重建（pgp_source_unavailable）",
+      "input": {
+        "chainRead": "failed",
+        "backup": "missing"
+      },
+      "expect": "temporarily_unavailable"
+    },
+    {
+      "id": "RS-03",
+      "title": "链上读取解码失败：temporarily_unavailable，不得重建",
+      "input": {
+        "chainRead": "undecodable",
+        "backup": "missing"
+      },
+      "expect": "temporarily_unavailable"
+    },
+    {
+      "id": "RS-04",
+      "title": "备份读回失败（不可读）：temporarily_unavailable，不得重建",
+      "input": {
+        "chainRead": "ok_empty",
+        "backup": "unreadable"
+      },
+      "expect": "temporarily_unavailable"
+    },
+    {
+      "id": "RS-05",
+      "title": "迁移中（migrating）：temporarily_unavailable，不得重建",
+      "input": {
+        "chainRead": "ok_empty",
+        "backup": "missing",
+        "migrating": true
+      },
+      "expect": "temporarily_unavailable"
+    },
+    {
+      "id": "RS-06",
+      "title": "链上已有登记：present（非确认缺失）",
+      "input": {
+        "chainRead": "ok_registered",
+        "backup": "missing"
+      },
+      "expect": "present"
+    },
+    {
+      "id": "RS-07",
+      "title": "r3kj（F-6）：链上为有效空结果，备份存在且可用：present（已有数据，不重建）",
+      "input": {
+        "chainRead": "ok_empty",
+        "backup": "present"
+      },
+      "expect": "present"
+    },
+    {
+      "id": "RS-08",
+      "title": "r3kj（F-6）：链上为有效空结果，备份存在但不可解码：present（备份已有，不重建，需用户处理）",
+      "input": {
+        "chainRead": "ok_empty",
+        "backup": "undecodable"
+      },
+      "expect": "present"
+    }
+  ],
+  "rebuildCases": [
+    {
+      "id": "RB-01",
+      "title": "确认缺失、助记词归属已验证、用户确认、四步全部成功：rebuild（新 PGP 登记并公布新路由；不覆盖、不删除任何既有记录）",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "rebuild",
+        "rebuilt": true,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-02",
+      "title": "暂时不可用（RPC 失败）：retry，不重建，不回滚既有数据",
+      "input": {
+        "restore": {
+          "chainRead": "failed",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "retry",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-03",
+      "title": "助记词派生 EOA 与当前钱包不一致（归属不符）：no_rebuild",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xbbbb",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "no_rebuild",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-04",
+      "title": "本机没有助记词：no_rebuild（只能走恢复）",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": false,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "no_rebuild",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-05",
+      "title": "确认缺失且归属已验证，用户未确认：await_user_confirmation，不自动重建（P-IMP-PGP 方案 A）",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": false,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "await_user_confirmation",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-06",
+      "title": "r3kk（G-A）：确认缺失，登记确认失败（未提交，或回执与链上读取确认未登记）：unavailable_retry，回滚本次新生成的本地材料（链上无记录），不覆盖、不删除既有记录",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "fail",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "unavailable_retry",
+        "rebuilt": false,
+        "rolledBack": true,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-07",
+      "title": "r3kj（F-1）：登记成功后，公布路由（步骤 4）失败：retry_idempotent，不回滚本地新钥（链上已有该公钥，回滚会留下无私钥登记），幂等重试步骤 3、4",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "fail"
+          }
+        }
+      },
+      "expect": {
+        "action": "retry_idempotent",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-08",
+      "title": "链上已有登记（present）：no_rebuild，不得以任何步骤覆盖",
+      "input": {
+        "restore": {
+          "chainRead": "ok_registered",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "no_rebuild",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": false
+      }
+    },
+    {
+      "id": "RB-09",
+      "title": "r3kj（F-1）：登记成功后 mailbox 步骤（步骤 3）失败：retry_idempotent，保留本地新钥，不回滚",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "mailbox": "fail",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "retry_idempotent",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-10",
+      "title": "r3kk（G-A）：登记结果未知（交易已提交，回执丢失或超时）；重试前读链：链上无该公钥记录：retry_idempotent，不回滚，保留本地新钥，用同一新钥重新提交登记",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "unknown",
+            "chainAfterUnknown": "absent",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "retry_idempotent",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-11",
+      "title": "r3kk（G-A）、r3kl（L-1）：登记结果未知；重试前读链：链上已有本次新公钥：视为登记成功，继续步骤 3、4（动作 resume_steps_3_4，不重新生成，不回滚）",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "unknown",
+            "chainAfterUnknown": "ours",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "resume_steps_3_4",
+        "rebuilt": true,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-12",
+      "title": "r3kk（G-A）：登记结果未知；重试前读链：链上为其它公钥（已有数据）：no_rebuild，不覆盖，本地新钥不使用、不删除，待人工处理",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "unknown",
+            "chainAfterUnknown": "other",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "no_rebuild",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    },
+    {
+      "id": "RB-13",
+      "title": "r3kk（G-A）：登记确认成功后备份写入失败：retry_idempotent，不回滚，保留本地新钥，重试备份写入",
+      "input": {
+        "restore": {
+          "chainRead": "ok_empty",
+          "backup": "missing",
+          "mnemonicPresent": true,
+          "derivedEoa": "0xaaaa",
+          "walletEoa": "0xaaaa",
+          "userConfirmed": true,
+          "steps": {
+            "generate": "ok",
+            "register": "ok",
+            "backup": "fail",
+            "mailbox": "ok",
+            "route": "ok"
+          }
+        }
+      },
+      "expect": {
+        "action": "retry_idempotent",
+        "rebuilt": false,
+        "rolledBack": false,
+        "overwritten": false,
+        "deleted": false,
+        "keptLocalKey": true
+      }
+    }
+  ],
+  "refreshCases": [
+    {
+      "id": "RF-01",
+      "title": "发送前：每次都拉取（r3kj，F-2）；路由未变则用当前路由",
+      "input": {
+        "trigger": "pre_send",
+        "cacheAgeMin": 2,
+        "refetch": "ok",
+        "changed": false
+      },
+      "expect": {
+        "route": "cached",
+        "refetched": true,
+        "state": "sent",
+        "sentViaUnconfirmedRoute": false
+      }
+    },
+    {
+      "id": "RF-02",
+      "title": "发送前：拉取后路由已变（收件人轮换或新 mailbox）：用新路由",
+      "input": {
+        "trigger": "pre_send",
+        "cacheAgeMin": 9,
+        "refetch": "ok",
+        "changed": true
+      },
+      "expect": {
+        "route": "new",
+        "refetched": true,
+        "state": "sent",
+        "sentViaUnconfirmedRoute": false
+      }
+    },
+    {
+      "id": "RF-03",
+      "title": "发送失败：立即重新拉取，路由已变（mailbox 变更）：用新路由，旧缓存不再使用",
+      "input": {
+        "trigger": "send_failure",
+        "cacheAgeMin": 1,
+        "refetch": "ok",
+        "changed": true
+      },
+      "expect": {
+        "route": "new",
+        "refetched": true,
+        "state": "sent",
+        "sentViaUnconfirmedRoute": false
+      }
+    },
+    {
+      "id": "RF-04",
+      "title": "发送前拉取失败：挂起为 route_unconfirmed（退避见 RF-08 至 RF-11（backoffCases）），不用旧路由自动发送",
+      "input": {
+        "trigger": "pre_send",
+        "cacheAgeMin": 9,
+        "refetch": "fail",
+        "changed": false
+      },
+      "expect": {
+        "route": "none",
+        "refetched": true,
+        "state": "route_unconfirmed",
+        "sentViaUnconfirmedRoute": false
+      }
+    },
+    {
+      "id": "RF-05",
+      "title": "拉取失败后用户明确选择\"仍然发送\"：用缓存路由，且消息记录标记 sent_via_unconfirmed_route（显式，不静默）",
+      "input": {
+        "trigger": "pre_send",
+        "cacheAgeMin": 9,
+        "refetch": "fail",
+        "changed": false,
+        "userSendAnyway": true
+      },
+      "expect": {
+        "route": "cached",
+        "refetched": true,
+        "state": "sent_via_unconfirmed_route",
+        "sentViaUnconfirmedRoute": true
+      }
+    },
+    {
+      "id": "RF-06",
+      "title": "定时刷新拉取失败：缓存路由不变，界面显示路由未确认；不自动发送（退避见 RF-08 至 RF-11（backoffCases））",
+      "input": {
+        "trigger": "timer",
+        "cacheAgeMin": 30,
+        "refetch": "fail",
+        "changed": false
+      },
+      "expect": {
+        "route": "none",
+        "refetched": true,
+        "state": "route_unconfirmed",
+        "sentViaUnconfirmedRoute": false
+      }
+    },
+    {
+      "id": "RF-07",
+      "title": "指纹变化（收件人 PGP 轮换）：重新拉取，路由与公钥更新为新值",
+      "input": {
+        "trigger": "fingerprint_change",
+        "cacheAgeMin": 1,
+        "refetch": "ok",
+        "changed": true
+      },
+      "expect": {
+        "route": "new",
+        "refetched": true,
+        "state": "sent",
+        "sentViaUnconfirmedRoute": false
+      }
+    }
+  ],
+  "backoffCases": [
+    {
+      "id": "RF-08",
+      "title": "r3kj（F-7）：拉取失败后第 1 次退避：30 秒",
+      "input": {
+        "attempt": 1
+      },
+      "expect": 30
+    },
+    {
+      "id": "RF-09",
+      "title": "r3kj（F-7）：第 2 次退避：2 分钟（120 秒）",
+      "input": {
+        "attempt": 2
+      },
+      "expect": 120
+    },
+    {
+      "id": "RF-10",
+      "title": "r3kj（F-7）：第 3 次退避：10 分钟（600 秒）",
+      "input": {
+        "attempt": 3
+      },
+      "expect": 600
+    },
+    {
+      "id": "RF-11",
+      "title": "r3kj（F-7）：第 5 次退避保持上限 10 分钟（600 秒）",
+      "input": {
+        "attempt": 5
+      },
+      "expect": 600
     }
   ],
   "transportCases": [
@@ -7458,7 +11313,7 @@
     },
     {
       "id": "GX-04",
-      "title": "G0 无副本，旧存储读不到，指针为空：legacy_store_unreadable，不返回 no_key 或 absent（r3bz，R480 第 3 条）",
+      "title": "G0 无副本，旧存储读不到，指针为空：migrating（r3rz，U.6），不返回 no_key 或 absent（r3bz，R480 第 3 条）",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -7478,8 +11333,7 @@
         "reqId": "g4",
         "ok": true,
         "result": {
-          "code": "error",
-          "sub": "legacy_store_unreadable"
+          "code": "migrating"
         }
       }
     },
@@ -8046,8 +11900,500 @@
     "bad_request",
     "busy"
   ],
+  "entryCases": [
+    {
+      "id": "E-01",
+      "title": "已有账户，无用户选择：恢复为默认主入口；不进入建号",
+      "input": {
+        "state": "account"
+      },
+      "expect": {
+        "entry": "recovery_default",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-02",
+      "title": "残留状态（标记存在，无账户），无用户选择：恢复为默认主入口；不建号",
+      "input": {
+        "state": "residual",
+        "marker": true
+      },
+      "expect": {
+        "entry": "recovery_default",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-03",
+      "title": "全新设备，无用户选择：仅显示入口页，不建号",
+      "input": {
+        "state": "clean"
+      },
+      "expect": {
+        "entry": "onboarding",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-04",
+      "title": "全新设备，用户点“建立新账户”，未确认：只显示确认，不建号",
+      "input": {
+        "state": "clean",
+        "userChoice": "create",
+        "confirmed": false
+      },
+      "expect": {
+        "entry": "create_confirm",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-05",
+      "title": "已有账户，用户点“建立新账户”，未确认：确认页说明后果（另建独立账户），不建号",
+      "input": {
+        "state": "account",
+        "userChoice": "create",
+        "confirmed": false
+      },
+      "expect": {
+        "entry": "create_confirm",
+        "creation": "none",
+        "consequence": "separate_new_account"
+      }
+    },
+    {
+      "id": "E-06",
+      "title": "已有账户，用户点“建立新账户”并确认：进入建号模式（armed），后果为另建独立账户",
+      "input": {
+        "state": "account",
+        "userChoice": "create",
+        "confirmed": true
+      },
+      "expect": {
+        "entry": "create_confirmed",
+        "creation": "armed",
+        "consequence": "separate_new_account"
+      }
+    },
+    {
+      "id": "E-07",
+      "title": "已有账户，用户选择恢复：恢复入口；不进入建号",
+      "input": {
+        "state": "account",
+        "userChoice": "recover"
+      },
+      "expect": {
+        "entry": "recovery",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-08",
+      "title": "残留状态，用户选择恢复：恢复入口；不进入建号",
+      "input": {
+        "state": "residual",
+        "marker": true,
+        "userChoice": "recover"
+      },
+      "expect": {
+        "entry": "recovery",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-09",
+      "title": "标记存在，用户点“建立新账户”并确认：建号被拒绝（create_refused），不进入建号模式（R1520b 第 4 项）",
+      "input": {
+        "state": "residual",
+        "marker": true,
+        "userChoice": "create",
+        "confirmed": true
+      },
+      "expect": {
+        "entry": "create_refused",
+        "creation": "none",
+        "consequence": "separate_new_account"
+      }
+    },
+    {
+      "id": "E-10",
+      "title": "清除身份完成后（clean 状态），无用户选择：仅显示入口页，不建号（R1545；Y.18）",
+      "input": {
+        "state": "clean"
+      },
+      "expect": {
+        "entry": "onboarding",
+        "creation": "none",
+        "consequence": "none"
+      }
+    },
+    {
+      "id": "E-11",
+      "title": "清除身份中断（指针仍置位、无钥）：残留状态，恢复为默认主入口；清除在重做中完成（R1545；Y.18）",
+      "input": {
+        "state": "residual",
+        "pointerSet": true
+      },
+      "expect": {
+        "entry": "recovery_default",
+        "creation": "none",
+        "consequence": "none"
+      }
+    }
+  ],
+  "legacyReaderCases": [
+    {
+      "id": "LR-01",
+      "title": "目录不存在：absent（唯一条件之一，R1554）",
+      "input": {
+        "dirExists": false
+      },
+      "expectState": "absent",
+      "expectRead": {
+        "code": "absent"
+      }
+    },
+    {
+      "id": "LR-02",
+      "title": "目录可读且无任何条目（确认为空）：absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": []
+      },
+      "expectState": "absent",
+      "expectRead": {
+        "code": "absent"
+      }
+    },
+    {
+      "id": "LR-03",
+      "title": "一个可读文件，含钱包记录：found，读取为 import_not_done",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "found",
+      "expectRead": {
+        "code": "error",
+        "sub": "import_not_done"
+      }
+    },
+    {
+      "id": "LR-04",
+      "title": "文件存在但不可读：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": false,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-05",
+      "title": "CRC 校验失败：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": false,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-06",
+      "title": "文件截断：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": true,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-07",
+      "title": "有效记录为 0（文件存在，内容无有效记录）：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 0,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-08",
+      "title": "列目录失败（目录存在但不能列出）：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": false
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-09",
+      "title": "一个有效文件加一个 CRC 失败的文件：unreadable（任一文件不可读即整体不可读，不得 found，不得 absent）（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          },
+          {
+            "readable": true,
+            "crcOk": false,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-10",
+      "title": "零字节文件（无有效记录）：unreadable，不得 absent（R1554）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 0
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-12",
+      "title": "可读、可核验的旧存储，只含其他文档（无钱包记录）：absent（确认为空，即无旧钱包；R1558）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 2,
+            "walletRecords": 0,
+            "walletDistinguishable": true
+          }
+        ]
+      },
+      "expectState": "absent",
+      "expectRead": {
+        "code": "absent"
+      }
+    },
+    {
+      "id": "LR-15",
+      "title": "只含其他文档（生产形态：无法区分钱包记录与其他文档）：found，读取为 import_not_done，不覆盖钱包，不判为无账户（R1733 B8 保守口径）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 2,
+            "walletDistinguishable": false
+          }
+        ]
+      },
+      "expectState": "found",
+      "expectRead": {
+        "code": "error",
+        "sub": "import_not_done"
+      }
+    },
+    {
+      "id": "LR-13",
+      "title": "可读、可核验的旧存储，钱包 init 记录已删除（两个文件，均无钱包记录）：absent（R1558）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 3,
+            "walletRecords": 0,
+            "walletDistinguishable": true
+          },
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 0,
+            "walletDistinguishable": true
+          }
+        ]
+      },
+      "expectState": "absent",
+      "expectRead": {
+        "code": "absent"
+      }
+    },
+    {
+      "id": "LR-16",
+      "title": "钱包 init 记录已删除（生产形态：无法区分）：found，读取为 import_not_done，不覆盖钱包（R1733 B8）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 3,
+            "walletDistinguishable": false
+          },
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 1,
+            "walletDistinguishable": false
+          }
+        ]
+      },
+      "expectState": "found",
+      "expectRead": {
+        "code": "error",
+        "sub": "import_not_done"
+      }
+    },
+    {
+      "id": "LR-14",
+      "title": "只含其他文档的旧存储，但另一文件 CRC 失败：unreadable（损坏优先；R1558）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": true,
+            "truncated": false,
+            "validRecords": 2,
+            "walletRecords": 0
+          },
+          {
+            "readable": true,
+            "crcOk": false,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 0
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    },
+    {
+      "id": "LR-11",
+      "title": "Plan N 导入读取器：CRC 失败时同样为 unreadable，导入不开始，不得按 absent 处理（R1554，同一判定）",
+      "input": {
+        "dirExists": true,
+        "listOk": true,
+        "files": [
+          {
+            "readable": true,
+            "crcOk": false,
+            "truncated": false,
+            "validRecords": 1,
+            "walletRecords": 1
+          }
+        ]
+      },
+      "expectState": "unreadable",
+      "expectRead": {
+        "code": "migrating"
+      }
+    }
+  ],
   "selfCheck": {
-    "runs": 261,
+    "runs": 438,
     "result": "pass"
   }
 }
