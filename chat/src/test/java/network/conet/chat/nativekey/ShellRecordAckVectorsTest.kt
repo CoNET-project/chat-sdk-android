@@ -62,7 +62,8 @@ class ShellRecordAckVectorsTest {
         }
         val size = if (ctx.has("sizeBytes")) ctx.getInt("sizeBytes") else body.toString().toByteArray(Charsets.UTF_8).size
         val bridge = ShellRecordBridge(
-            account = { ShellRecordAccount.Ready(store, ACCOUNT) },
+            // §25.52Y.52: the account is modelled from the case ctx, and resolved by the production rule (ShellRecordAccounts.heldCopy).
+            account = { accountFor(ctx, c, store) },
             migrating = { false },
             outcome = { outcome },
             flags = flags,
@@ -92,6 +93,20 @@ class ShellRecordAckVectorsTest {
     }
 
     /** The vectors' label `a1` for the account's EOA (keyID values and the record's keys). */
+    /** The account for a case (§25.52Y.52): unknown with acctUnknown unless a copy holds the EOA key; a named eoa or pointerAcct; else the copy's account. */
+    private fun accountFor(ctx: JSONObject, c: JSONObject, store: SealedPageRecordStore): ShellRecordAccount {
+        // The vault is locked and no account is bound (ShellRecordAccounts.resolve: Locked).
+        if (ctx.optBoolean("locked")) return ShellRecordAccount.Locked
+        val named = ctx.optString("eoa", ctx.optString("pointerAcct", ""))
+        if (named.isNotEmpty()) return ShellRecordAccount.Ready(store, if (named == "a2") VectorSidecar.OTHER else ACCOUNT)
+        if (ctx.optBoolean("acctUnknown")) {
+            val held = c.optJSONObject("store")?.let { a1(it.getJSONObject("record")) as? JSONObject } ?: return ShellRecordAccount.Unknown
+            val holder = listOf(ACCOUNT, VectorSidecar.OTHER).firstOrNull { ShellRecordPolicy.accountHoldsEoaKey(held, it) }
+            return if (holder != null) ShellRecordAccount.Ready(store, holder) else ShellRecordAccount.Unknown
+        }
+        return if (c.has("store")) ShellRecordAccount.Ready(store, ACCOUNT) else ShellRecordAccount.Unknown
+    }
+
     private fun a1(v: Any?): Any? = when (v) {
         "a1" -> ACCOUNT
         is JSONObject -> JSONObject().also { o -> for (k in v.keys().asSequence().toList()) o.put(k.toString(), a1(v.get(k.toString()))) }
