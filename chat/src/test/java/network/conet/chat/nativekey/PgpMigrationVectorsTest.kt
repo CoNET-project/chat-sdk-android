@@ -60,7 +60,7 @@ class PgpMigrationVectorsTest {
         assertEquals(12, unregisterCases.length())
         assertEquals(13, (0 until unregisterCases.length()).sumOf { unregisterCases.getJSONObject(it).getJSONArray("steps").length() })
         assertEquals(7, migrationStateCases.length())
-        assertEquals(10, doc.getJSONArray("importCases").length())  // r3cj: IM-10 added
+        assertEquals(11, doc.getJSONArray("importCases").length())  // r3cj: IM-10 added
         // r3bz (§25.52AD.7): GX-01 to GX-10b (11 cases). r3by (§25.52AC.8): DL-01 to DL-09 (9 cases) and DL-10a, DL-10b (2 cases).
         assertEquals(11, doc.getJSONArray("gateExceptionCases").length())
         assertEquals(9, doc.getJSONArray("nativeDeleteCases").length())
