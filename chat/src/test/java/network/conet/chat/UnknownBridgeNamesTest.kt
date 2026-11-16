@@ -28,7 +28,7 @@ class UnknownBridgeNamesTest {
 
     @Test
     fun theModuleAnswersUnknownCommandBeforeTheGate() {
-        val body = source.substringAfter("fun handleCommand(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {")
+        val body = source.substringAfter("private fun handleCommandInner(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {")  // diag2: the body moved to handleCommandInner (logging wrapper in handleCommand)
             .substringBefore("\n    }\n")
         val unknown = body.indexOf("if (!BridgeCommandTable.isRegistered(type))")
         val gate = body.indexOf("NoKeyGate.route(type)")
