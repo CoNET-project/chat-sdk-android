@@ -50,6 +50,31 @@ import network.conet.chat.localread.UnlockResult
  *   our entries after theirs and retry. Committed fragments are never re-encrypted.
  * - Head sync never writes the chain; entries a newer head lacks go back to the queue.
  */
+/**
+ * The names of this store's files in its storage directory (25.52Y.85 第 3 项 (c), chat history). They are derived from the EOA alone, so the
+ * owner of a file is decided by the name: the new account's names are kept, and any other name of these families belongs to another account.
+ * Shared by [BeamioConetChatHistoryStore] and the account cleanup, so both use one derivation.
+ */
+internal object ChatHistoryFileNames {
+    const val LOCAL_PREFIX = "chat-local-v1-"
+    const val PENDING_PREFIX = "history-pending-"
+    val LOCAL_SUFFIXES = listOf(".sqlite", ".sqlite-wal", ".sqlite-shm", ".sqlite-journal")
+
+    /** `accountKey` is `eoa:default` with the EOA lower-case (D5). */
+    fun localName(eoa: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest("${eoa.lowercase()}:default".toByteArray(Charsets.UTF_8))
+        return LOCAL_PREFIX + LocalChatIds.base64Url(digest).take(22) + ".sqlite"
+    }
+
+    fun pendingName(eoa: String): String = PENDING_PREFIX + ConetChatCryptoUtil.keccakUtf8Hex(eoa.lowercase()).substring(2, 18) + ".bin"
+
+    /** The digest part of a local file name (base64url has no dot), for an owner that is not the new account. */
+    fun localDigestOf(name: String): String = name.removePrefix(LOCAL_PREFIX).substringBefore('.')
+
+    /** The tag part of a pending file name. */
+    fun pendingTagOf(name: String): String = name.removePrefix(PENDING_PREFIX).removeSuffix(".bin")
+}
+
 class BeamioConetChatHistoryStore(
     eoa: String,
     private val chainId: Int,
@@ -602,8 +627,7 @@ class BeamioConetChatHistoryStore(
     /** SQLite file of this account (spec r3a 7.1). The device-key name (D18) is pending; SHA-256 stands in for now. */
     private fun localFile(): File? {
         val dir = storageDir ?: return null
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(localAccountKey().toByteArray(Charsets.UTF_8))
-        return File(dir, "chat-local-v1-" + LocalChatIds.base64Url(digest).take(22) + ".sqlite")
+        return File(dir, ChatHistoryFileNames.localName(eoa))
     }
 
     /** accountKey = eoa + ":" + workspace; iOS and Android use the workspace `default` (spec D5). */
@@ -952,8 +976,7 @@ class BeamioConetChatHistoryStore(
 
     private fun pendingFile(): File? {
         val dir = storageDir ?: return null
-        val tag = ConetChatCryptoUtil.keccakUtf8Hex(eoa).substring(2, 18)
-        return File(dir, "history-pending-$tag.bin")
+        return File(dir, ChatHistoryFileNames.pendingName(eoa))
     }
 
     private fun readPendingFile(): HistoryBatch.PendingState? {

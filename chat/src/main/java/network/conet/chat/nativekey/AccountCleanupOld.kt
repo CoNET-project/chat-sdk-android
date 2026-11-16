@@ -33,7 +33,11 @@ internal object AccountCleanupOld {
     private val ALLOWED_FIELDS: Set<String> = setOf("accountKey", "idempotencyKey")
 
     /** One stored item and the accountKey it belongs to (`eoa:workspace`, 25.52Y.77). */
-    data class Item(val name: String, val accountKey: String)
+    /** An item whose owner cannot be determined has a null [accountKey]: it is never removed (coordinator, 2026-11-16). */
+    data class Item(val name: String, val accountKey: String?)
+
+    /** One store's scan: its items, and whether the scan saw every item (an incomplete scan cannot finish the cleanup). */
+    class Scan(val items: List<Item>, val complete: Boolean)
 
     /** The result: [code], the names deleted by this call, the names of the new account kept, and whether a resume is pending. */
     class Outcome(val code: String, val deleted: List<String>, val kept: List<String>, val cleanupPending: Boolean)
@@ -68,10 +72,17 @@ internal object AccountCleanupOld {
      * earlier call with the same idempotencyKey already removed, so they are not handled again (第 7 項). The result is `ok`, or
      * `clear_incomplete` with `cleanupPending` true: the removed items stay removed, and a later call finishes the rest.
      */
-    fun execute(newAccountKey: String, items: List<Item>, done: MutableSet<String>, remove: (Item) -> Boolean): Outcome {
-        val old = items.filter { it.accountKey != newAccountKey && it.name !in done }
+    fun execute(
+        newAccountKey: String,
+        items: List<Item>,
+        done: MutableSet<String>,
+        complete: Boolean = true,
+        remove: (Item) -> Boolean,
+    ): Outcome {
+        // An item of unknown owner is not a candidate, and an incomplete scan cannot finish: clear_incomplete, nothing guessed.
+        val old = items.filter { it.accountKey != null && it.accountKey != newAccountKey && it.name !in done }
         val deleted = mutableListOf<String>()
-        var failed = false
+        var failed = !complete || items.any { it.accountKey == null }
         for (item in old) {
             if (remove(item)) {
                 done += item.name
