@@ -1192,10 +1192,10 @@ internal class ShellRecordBridge(
             return if (names.isEmpty()) reply(code, emptyList()) else reply(code, listOf("names" to JSONArray(names)))
         }
 
-        // 25.52CH.1 (r3eg): a locked store on a write is write_failed, once. The write guards (migrating, device marker) come first (§25.52Y.10, r3lm; AK-39).
-        if (acc is ShellRecordAccount.Locked) {
-            return if (migrating() || flags.legacyUnreadable()) reply("migrating", emptyList()) else reply("write_failed", emptyList())
-        }
+        // §25.52Y.10 (r3lm; AK-39): the write guards (migrating, device marker) come before the storage lock, so they are checked before the read.
+        if (migrating() || flags.legacyUnreadable()) return reply("migrating", emptyList())
+        // 25.52CH.1 (r3eg): a locked store on a write is write_failed, once.
+        if (acc is ShellRecordAccount.Locked) return reply("write_failed", emptyList())
         val ready = acc as? ShellRecordAccount.Ready
         val store = ready?.store
         val current: JSONObject? = if (store == null) {
