@@ -213,17 +213,19 @@ class AccountCleanupRunTest {
         for (name in newFiles()) assertTrue(File(history, name).exists())
     }
 
-    /** A name of no known form has no owner: it is never removed; the known old items are removed and the result is clear_incomplete. */
+    /**
+     * Y.100: a name with no owner is kept, is not a failure and does not block ok. The known old items are removed and the result is ok.
+     */
     @Test
-    fun anItemOfUnknownOwnerIsNeverRemovedAndTheResultIsClearIncomplete() {
+    fun anItemOfUnknownOwnerIsKeptAndDoesNotBlockOk() {
         setUp()
         confirmation.record(newKey, 1L)
         File(history, "stray.dat").writeText("unknown")
 
         val out = runWith()
 
-        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
-        assertTrue(out.cleanupPending)
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertFalse(out.cleanupPending)
         assertEquals("unknown", File(history, "stray.dat").readText())
         assertFalse(File(history, ChatHistoryFileNames.localName(oldEoa)).exists())
     }

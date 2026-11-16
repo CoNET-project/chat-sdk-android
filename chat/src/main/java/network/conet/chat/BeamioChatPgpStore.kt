@@ -100,6 +100,19 @@ object BeamioChatPgpStore {
         }
     }
 
+    /**
+     * The EOA named by the legacy record L, for the account cleanup (25.52Y.91, `L` only of an old account). Null when there is no record;
+     * throws when the store cannot be read.
+     */
+    internal fun legacyOwnerEoa(context: Context): String? =
+        prefs(context).getString(KEY_EOA, "").orEmpty().trim().lowercase().ifEmpty { null }
+
+    /** Removes the legacy record L of an old account. True only when no owner remains in the store. */
+    internal fun clearLegacyRecord(context: Context): Boolean {
+        clear(context)
+        return runCatching { legacyOwnerEoa(context) == null }.getOrDefault(false)
+    }
+
     /** Logout / wallet switch: forget the PGP key, route key and wallet binding. */
     fun clear(context: Context) {
         runCatching { prefs(context).edit().clear().commit() }

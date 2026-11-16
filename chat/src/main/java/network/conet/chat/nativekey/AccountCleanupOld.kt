@@ -79,10 +79,11 @@ internal object AccountCleanupOld {
         complete: Boolean = true,
         remove: (Item) -> Boolean,
     ): Outcome {
-        // An item of unknown owner is not a candidate, and an incomplete scan cannot finish: clear_incomplete, nothing guessed.
+        // Y.100 (2026-11-16): an item with no owner is kept and is neither a failure nor a block for ok; only an incomplete scan or a failed
+        // removal of a known old item makes the result clear_incomplete. A new account's item is never a candidate.
         val old = items.filter { it.accountKey != null && it.accountKey != newAccountKey && it.name !in done }
         val deleted = mutableListOf<String>()
-        var failed = !complete || items.any { it.accountKey == null }
+        var failed = !complete
         for (item in old) {
             if (remove(item)) {
                 done += item.name

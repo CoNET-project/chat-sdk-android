@@ -75,6 +75,13 @@ object BeamioChatWalletKeyStore {
         }
     }
 
+    /** The EOA of the legacy wallet copy, for the account cleanup (25.52Y.91). Null when there is none; throws when unreadable. */
+    internal fun ownerEoa(context: Context): String? =
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_EOA, "").orEmpty().trim().lowercase().ifEmpty { null }
+
+    /** Removes the legacy wallet copy of an old account. True only when the copy is gone and the wrapping key is removed. */
+    internal fun clearRecord(context: Context): Boolean = clear(context) && runCatching { ownerEoa(context) == null }.getOrDefault(false)
+
     /** True only when the preferences are committed and the wrapping key is gone (spec 25.52PY.8 (3)). */
     fun clear(context: Context): Boolean {
         val prefsOk = runCatching {

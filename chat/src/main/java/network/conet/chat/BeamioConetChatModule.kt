@@ -19,6 +19,13 @@ import network.conet.chat.nativekey.NativePgpVault
 import network.conet.chat.nativekey.NativeAccountCreateHost
 import network.conet.chat.nativekey.NativeRecoveryHost
 import network.conet.chat.nativekey.NativeImportHost
+import network.conet.chat.nativekey.AccountCleanupOld
+import network.conet.chat.nativekey.AccountCleanupRun
+import network.conet.chat.nativekey.AccountCleanupWiring
+import network.conet.chat.nativekey.AccountPgpK
+import network.conet.chat.nativekey.CleanupConfirmation
+import network.conet.chat.nativekey.CleanupJournal
+import network.conet.chat.nativekey.accountCleanupAck
 import network.conet.chat.nativekey.PgpDecryptInbound
 import network.conet.chat.nativekey.PgpRestoreBridge
 import network.conet.chat.nativekey.BeamioPgpMigrationImport
@@ -466,6 +473,7 @@ object BeamioConetChatModule {
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
             "pgpUpgradeRetry" -> pgpUpgradeRetryCommand(body)
+            "accountCleanupOld" -> accountCleanupOldCommand(body)
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             "chatRouteRegister" -> chatRouteRegisterCommand(body)
             else -> {
@@ -1561,6 +1569,54 @@ object BeamioConetChatModule {
     /** Computes the vault snapshot on the io executor (25.52Y.75): the keystore is never opened on the caller's thread for the gate. */
     private fun scheduleSnapshotRefresh(ctx: Context) {
         network.conet.chat.nativekey.VaultSnapshotRefresh.schedule(ctx)
+    }
+
+    /**
+     * `accountCleanupOld` (25.52Y.91, Y.100): the page's cleanup after the user's native confirmation, run on the io thread. One ack for this reqId.
+     * No key, phrase or confirmation passes through the payload: the confirmation is the native screen's record (CleanupConfirmation).
+     */
+    private fun accountCleanupOldCommand(body: JSONObject) {
+        val ctx = appContext
+        io.execute {
+            val reqId = body.opt("reqId")
+            val fields = body.keys().asSequence().map { it.toString() }.filter { it != "type" && it != "reqId" }.toList()
+            val outcome = if (ctx == null) {
+                AccountCleanupOld.Outcome(AccountCleanupOld.NOT_READY, emptyList(), emptyList(), false)
+            } else {
+                try {
+                    val newKey = (NativeWallet.vault(ctx).state() as? NativeWalletVault.State.Ready)?.let { it.eoa.lowercase() + ":default" }
+                    accountCleanupRun(ctx).run(
+                        payloadFields = fields,
+                        accountKey = body.optString("accountKey", "").ifEmpty { null },
+                        idempotencyKey = body.optString("idempotencyKey", "").ifEmpty { null },
+                        gateNotReady = false,
+                        newAccountKey = newKey,
+                        newAccountReadable = newKey != null,
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "accountCleanupOld failed: ${e.javaClass.simpleName}")
+                    AccountCleanupOld.Outcome(AccountCleanupOld.CLEAR_INCOMPLETE, emptyList(), emptyList(), cleanupPending = true)
+                }
+            }
+            emitEvent(accountCleanupAck(reqId, outcome))
+        }
+    }
+
+    private fun accountCleanupRun(ctx: Context): AccountCleanupRun {
+        val state = AndroidVaultFiles(java.io.File(ctx.filesDir, "account_cleanup_v1"))
+        return AccountCleanupRun(
+            journal = CleanupJournal(state),
+            confirmation = CleanupConfirmation(state),
+            adapters = AccountCleanupWiring.adapters(
+                filesDir = ctx.filesDir,
+                noBackupDir = ctx.noBackupFilesDir,
+                kPgp = AccountPgpK.cleanupBackend(ctx),
+                legacyPgpOwner = { BeamioChatPgpStore.legacyOwnerEoa(ctx) },
+                clearLegacyPgp = { BeamioChatPgpStore.clearLegacyRecord(ctx) },
+                walletCopyOwner = { BeamioChatWalletKeyStore.ownerEoa(ctx) },
+                clearWalletCopy = { BeamioChatWalletKeyStore.clearRecord(ctx) },
+            ),
+        )
     }
 
     private fun pgpUpgradeRetryCommand(body: JSONObject) {

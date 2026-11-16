@@ -135,7 +135,8 @@ class BridgeCommandTableTest {
         // 25.52AW.3, BG.4, BP.1: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); chatRouteRegister (W5, 25.28.3, PM R2085)
         // makes 54; the page-record names are in T too.
         // 25.52Y.65 第 5 项: pgpUpgradeRetry is in table-T (T1 12, total 67); it is the 55th registered name.
-        assertEquals(55, exact.size)
+        // 25.52Y.95 第 1 条: accountCleanupOld (T1 13, total 68) is the 56th registered name (Y.100 第 5 项).
+        assertEquals(56, exact.size)
         val outside = (exact + BridgeCommandTable.CHAT_CHANNEL_SHELL_RECORD).filter { it !in t }
         assertTrue("registered names outside table-T: $outside", outside.isEmpty())
         assertTrue("T1 names are in table-T", t.containsAll(setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")))

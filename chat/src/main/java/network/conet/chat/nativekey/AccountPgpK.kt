@@ -115,6 +115,9 @@ internal class AccountPgpK(private val backend: AccountPgpKBackend) {
          * no plain fallback for a private key.
          */
         fun forDevice(context: Context): AccountPgpK = AccountPgpK(EncryptedBackend(context.applicationContext))
+
+        /** The same production backend, for the account cleanup (25.52Y.91): it lists and removes the K items; it never writes a new one. */
+        fun cleanupBackend(context: Context): AccountPgpKBackend = EncryptedBackend(context.applicationContext)
     }
 
     private class EncryptedBackend(private val app: Context) : AccountPgpKBackend {
