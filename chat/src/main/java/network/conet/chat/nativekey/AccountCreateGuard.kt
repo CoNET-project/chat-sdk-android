@@ -31,7 +31,6 @@ internal data class CreateGuardInputs(
  */
 internal object AccountCreateGuard {
     const val MIGRATING = "migrating"
-    const val NEEDS_NATIVE_RECOVERY = "needs_native_recovery"
     const val POINTER_SET = "pointer_set"
     const val REPLICA_PRESENT = "replica_present"
 
@@ -49,8 +48,9 @@ internal object AccountCreateGuard {
 
     /** Diagnostic code of the refusal, or `null` when a create may proceed. Order: key first, then migration, then the pointer and copies. */
     fun denial(i: CreateGuardInputs): String? = when {
-        i.key == KeyState.UNREADABLE -> NEEDS_NATIVE_RECOVERY
-        i.key == KeyState.READABLE -> REPLICA_PRESENT
+        // PY.19 (1): create mode has no account context, so a key present or unreadable is migrating here. replicaAnswer and
+        // needs_native_recovery are told apart only on the normal read path that has an account.
+        i.key != KeyState.NONE -> MIGRATING
         i.migrating || i.legacyUnreadable || i.legacyReport != "absent" -> MIGRATING
         i.pointer -> POINTER_SET
         i.pageCopy -> REPLICA_PRESENT

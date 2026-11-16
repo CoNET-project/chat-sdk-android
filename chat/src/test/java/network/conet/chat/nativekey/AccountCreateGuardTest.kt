@@ -24,14 +24,14 @@ class AccountCreateGuardTest {
     }
 
     @Test
-    fun aReadableKeyWithAbsentLegacyIsNotAllowedToCreate() {
+    fun aKeyPresentInCreateModeIsMigratingNotAllowedToCreate() {
         // Key held, legacy confirmed absent, create mode: must not create (the replica path only).
-        assertEquals(AccountCreateGuard.REPLICA_PRESENT, AccountCreateGuard.denial(inputs(key = KeyState.READABLE)))
+        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(key = KeyState.READABLE)))
     }
 
     @Test
-    fun anUnreadableKeyNeedsNativeRecovery() {
-        assertEquals(AccountCreateGuard.NEEDS_NATIVE_RECOVERY, AccountCreateGuard.denial(inputs(key = KeyState.UNREADABLE)))
+    fun anUnreadableKeyIsMigratingInCreateMode() {
+        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(key = KeyState.UNREADABLE)))
     }
 
     @Test
