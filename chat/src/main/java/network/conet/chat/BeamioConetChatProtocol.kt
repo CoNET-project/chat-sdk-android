@@ -35,13 +35,14 @@ object BeamioConetChatProtocol {
         "history.local.v1",
         "history.page.v1",
         "layout.cache.v1",
-    ) + listOf(KPRESENT_CAPABILITY) +
+    ) +
         listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA }) +
         listOfNotNull(NATIVE_KEYS_CAPABILITY.takeIf { BuildConfig.NATIVE_KEYS_QA })
 
     /**
-     * The kPresent capability (spec 25.52X.5, 25.52Y.90; ruling of the coordinator): declared in hello because the G0 `no_key` answer carries
-     * kPresent. Not yet in the shared hello vector; the vector follows at the unified re-pin (the conformance test adds it).
+     * The kPresent capability (spec 25.52X.5, 25.52Y.90). Not declared in hello: §25.52X.5 also requires `already_exists` to carry the public
+     * `eoa`, and the import page's answer has no SDK event that could carry it (the import page only opens; see the receipt). Declare it when
+     * that path is complete (coordinator ruling: retract until then).
      */
     const val KPRESENT_CAPABILITY = "identity.kpresent.v1"
 

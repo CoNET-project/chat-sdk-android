@@ -39,9 +39,7 @@ class ChatDaemonConformanceTest {
         // PM R2048); the vector has no QA variant yet, so that one bit is added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
             (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList()) +
-            (if (BuildConfig.NATIVE_KEYS_QA) listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) else emptyList()) +
-            // identity.kpresent.v1 (spec 25.52X.5; coordinator ruling): declared in every build; the shared vector gets it at the unified re-pin.
-            listOf(BeamioConetChatProtocol.KPRESENT_CAPABILITY)
+            (if (BuildConfig.NATIVE_KEYS_QA) listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) else emptyList())
         assertEquals(expected, strings(result.getJSONArray("capabilities")))
         for (cap in BeamioConetChatProtocol.CAPABILITIES) {
             // Names not yet in the shared vector (see above): every other declared name must be a spec capability.
