@@ -1640,8 +1640,11 @@ object BeamioShellRecordImport {
 
     private fun accountOf(context: Context, sessionGate: Boolean): ShellRecordAccount {
         val app = context.applicationContext
+        // 25.52Y.75: the snapshot first, so a read does not wait for a write or a background task holding the keystore monitor (S25, 2026-11-15).
+        // The fallback computes the state under the lock; it runs on the shell-record worker, which is not the caller's thread.
+        val vault = NativeWallet.vault(app)
         return ShellRecordAccounts.resolve(
-            vault = NativeWallet.vault(app).state(),
+            vault = vault.snapshotState() ?: vault.state(),
             sessionReady = NativeSessionState.isReady(),
             sessionGate = sessionGate,
             bound = ShellRecordState.bound.get(),
