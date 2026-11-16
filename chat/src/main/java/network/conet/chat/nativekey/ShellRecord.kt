@@ -1295,6 +1295,9 @@ internal class ShellRecordBridge(
             // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed
             // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
             if (flags.accountPointer() || flags.legacyUnreadable()) return reply("migrating", emptyList())
+            // §25.52Y (R1519 2), AK-37: a native key with no page copy, no pointer and no creation transaction is a residual key: migrating.
+            // The creation transaction (AK-42) is the explicit creation flow, which the caller sets through creationMode and explicitChoice.
+            if (ready?.nativeKeyPresent == true && !(creationMode() && explicitChoice())) return reply("migrating", emptyList())
             when (outcome()) {
                 // AK-10 (ruling 2026-11-15): no account and no record with the legacy store confirmed empty: migrating, not ok or no_key.
                 ImportOutcome.ABSENT -> if (store == null) return reply("migrating", emptyList())
@@ -1518,11 +1521,12 @@ object BeamioShellRecordImport {
      * Writes the whole record from the native account creation or recovery, which may replace the W fields (§25.52H.2, rule 4). The page
      * never calls this. The revision follows the page rule: the record's `rev` must equal the current one.
      */
-    fun writeWalletNative(context: Context, record: JSONObject): JSONObject {
+    fun writeWalletNative(context: Context, record: JSONObject, creationTxn: Boolean = false): JSONObject {
         val body = JSONObject().put("type", "shellRecordWrite").put("reqId", 0).put("record", record)
         val bytes = body.toString().toByteArray(Charsets.UTF_8).size
         // The native creation runs before this session is initialised (G1 is the state it creates from), so the session gate does not apply.
-        return bridge(context, sessionGate = false).handle(ShellOrigin.EMBEDDED_PAGE, body, bytes, nativeWrite = true)
+        // [creationTxn] is the explicit creation transaction (25.52Y.54 PY.18(b)). Off by default: a native key with no copy is then migrating.
+        return bridge(context, sessionGate = false, creationTxn = creationTxn).handle(ShellOrigin.EMBEDDED_PAGE, body, bytes, nativeWrite = true)
     }
 
     /** The first-run import (§25.52K), called by [BeamioPgpMigrationImport.importFirstRun]. */
@@ -1549,11 +1553,13 @@ object BeamioShellRecordImport {
         return code
     }
 
-    private fun bridge(context: Context, sessionGate: Boolean = true): ShellRecordBridge = ShellRecordBridge(
+    private fun bridge(context: Context, sessionGate: Boolean = true, creationTxn: Boolean = false): ShellRecordBridge = ShellRecordBridge(
         account = { accountOf(context, sessionGate) },
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),
+        creationMode = { creationTxn },
+        explicitChoice = { creationTxn },
         walletEoaAddress = walletCurrent(context),
         walletCredential = walletCurrent(context),
     )

@@ -77,7 +77,8 @@ class ShellRecordAckVectorsTest {
             migrating = { false },
             outcome = { outcome },
             flags = flags,
-            creationMode = { ctx.optBoolean("creationMode") },
+            // AK-42: a creation transaction (creationTxn) is the creation mode with the explicit choice.
+            creationMode = { ctx.optBoolean("creationMode") || ctx.optBoolean("creationTxn") },
             explicitChoice = { ctx.optBoolean("explicitChoice") },
         )
         val ack = bridge.handle(origin, body, size)
