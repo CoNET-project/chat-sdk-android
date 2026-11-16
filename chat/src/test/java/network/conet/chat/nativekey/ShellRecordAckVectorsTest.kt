@@ -108,11 +108,8 @@ class ShellRecordAckVectorsTest {
      * account that holds the EOA key, so [ShellRecordAccounts.heldCopy] resolves an unknown account from the copy.
      */
     private fun accountFor(ctx: JSONObject, c: JSONObject, store: SealedPageRecordStore): ShellRecordAccount {
-        val vault: NativeWalletVault.State = when {
-            ctx.optBoolean("locked") -> NativeWalletVault.State.Locked("test")
-            ctx.optBoolean("nativeKey") -> NativeWalletVault.State.Ready(ACCOUNT)
-            else -> NativeWalletVault.State.NoKey
-        }
+        // ctx.locked is the storage lock (§25.52Y.53): it does not change the account, so it is not a vault state here.
+        val vault: NativeWalletVault.State = if (ctx.optBoolean("nativeKey")) NativeWalletVault.State.Ready(ACCOUNT) else NativeWalletVault.State.NoKey
         val named = ctx.optString("eoa", ctx.optString("pointerAcct", ""))
         val bound = if (named.isEmpty()) null else if (named == "a2") VectorSidecar.OTHER else ACCOUNT
         val copy = c.optJSONObject("store")?.let { a1(it.getJSONObject("record")) as? JSONObject }
