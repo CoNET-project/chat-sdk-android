@@ -805,9 +805,18 @@ object BeamioConetChatModule {
         NativeWallet.migrateLegacy(ctx)
         NativeWallet.migrateLegacyPgp(ctx)
         val vault = NativeWallet.vault(ctx)
-        val walletEoa = (vault.state() as? NativeWalletVault.State.Ready)?.eoa
+        // An unreadable store is unknown: the listen does not start (false), never taken for an absent account (25.52Y.84).
+        val walletEoa = try {
+            (vault.state() as? NativeWalletVault.State.Ready)?.eoa
+        } catch (_: Exception) {
+            return false
+        }
         val pgp = BeamioChatPgpStore.load(ctx)
-        val pgpReady = NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
+        val pgpReady = try {
+            NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
+        } catch (_: Exception) {
+            return false
+        }
         if (pgp == null || !pgpReady || !pgp.hasRoutePublic || walletEoa == null) {
             Log.w(TAG, "no stored identity for a no-page listen ($reason)")
             return false
@@ -1505,13 +1514,25 @@ object BeamioConetChatModule {
         }
         if (evaluateOnly) {
             pgpRestoreWorker.execute {
-                answer(true, result = PgpRestoreBridge.evaluate(PgpRestoreBridge.productionMachine(ctx, eoa)))
+                // An unreadable store during the evaluation is not_ready: one answer for this reqId, never a silent drop (25.52Y.84).
+                try {
+                    answer(true, result = PgpRestoreBridge.evaluate(PgpRestoreBridge.productionMachine(ctx, eoa)))
+                } catch (e: Exception) {
+                    Log.w(TAG, "pgpRestore evaluate failed: ${e.javaClass.simpleName}")
+                    answer(false, "not_ready")
+                }
             }
             return
         }
         answer(true, result = JSONObject().put("accepted", true))
         pgpRestoreWorker.execute {
-            val event = PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa))
+            // The ack was sent; the result follows once. An unreadable store is not_ready, never a silent drop (25.52Y.84).
+            val event = try {
+                PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa))
+            } catch (e: Exception) {
+                Log.w(TAG, "pgpRestore restore failed: ${e.javaClass.simpleName}")
+                JSONObject().put("code", "not_ready")
+            }
             emitEvent(event.put("type", "pgpRestoreResult").put("reqId", reqId))
             Log.i(TAG, "pgpRestore result=${event.optString("code")}")
         }
@@ -1561,6 +1582,10 @@ object BeamioConetChatModule {
             } catch (_: PgpMigrationInterrupted) {
                 // Interrupted: no event (§25.52.12). The stored state is resumed by the next request.
                 Log.i(TAG, "pgpMigrate interrupted")
+            } catch (e: Exception) {
+                // A store that cannot be read during the run is unknown: the reread code, never a success or a confirmed none (25.52Y.84).
+                emitEvent(PgpMigrationBridge.eventFor(id, MigrationResult(MigrationCode.REREAD_FAILED)))
+                Log.w(TAG, "pgpMigrate failed: ${e.javaClass.simpleName}")
             } finally {
                 pgpMigrateRunning.set(false)
             }

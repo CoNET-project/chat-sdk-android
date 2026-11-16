@@ -93,8 +93,9 @@ internal class PgpRestoreDevice(val id: String, val account: String, wrap: KeyWr
         return try {
             val o = JSONObject(String(bytes, Charsets.UTF_8))
             PendingMeta(o.getString("idemKey"), o.getLong("observedVersion"), o.getString("kind"))
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            // Present but unreadable is unknown, not "no pending": a new key is never generated on an unknown state (25.52Y.84).
+            throw java.io.IOException("pending metadata unreadable", e)
         }
     }
 
