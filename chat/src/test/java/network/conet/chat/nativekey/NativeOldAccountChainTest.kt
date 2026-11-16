@@ -102,9 +102,12 @@ class NativeOldAccountChainTest {
         assertEquals("unconfirmed record is unknown, not a key", "pgp_locked", dev.active.decryptInbound(test.getString("armored")).code)
         assertTrue("and it is kept", files.map.containsKey(NativePgpVault.recName(account)))
 
-        // 8. Retry: the same restore completes, and the key works.
-        assertEquals("retry", "ok", m.restore("A").result)
-        assertEquals("decrypt after retry", "ok", dev.active.decryptInbound(test.getString("armored")).code)
+        // 8. Retry (rewritten 2026-11-16, project ruling: keep the user's data): the locked record is an unknown state, so the automatic restore does
+        // not overwrite it. The retry answers pgp_locked and leaves the record as it is; a user-initiated recovery is the way out (Y.83).
+        val before = files.map[NativePgpVault.recName(account)]!!.copyOf()
+        assertEquals("retry is refused, not overwritten", "undetermined", m.restore("A").result)
+        assertEquals("the record is unchanged", true, before.contentEquals(files.map[NativePgpVault.recName(account)]!!))
+        assertEquals("decrypt still locked", "pgp_locked", dev.active.decryptInbound(test.getString("armored")).code)
     }
 
     @Test

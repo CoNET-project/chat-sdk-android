@@ -255,6 +255,12 @@ internal class PgpRestoreMachine(
             return "failed:fingerprint_mismatch"
         }
         if (write && !onChain.sameAs(identityOf(dev))) {
+            // 2026-11-16 (project ruling, keep the user's data): the automatic restore writes only into an empty slot. A locked record (marker or
+            // record missing) is an unknown state, not an empty one, and a different readable key needs the user's replacement (P-IMP-REPLACE).
+            if (dev.active.state() !is NativePgpVault.State.NoKey) {
+                dev.ui = PgpRestoreUi("undetermined", code = "pgp_locked")
+                return "undetermined"
+            }
             if (dev.active.put(dev.account, armor, "") != NativePgpVault.Put.OK) {
                 dev.ui = PgpRestoreUi("undetermined", code = "write_failed")
                 return "undetermined"
