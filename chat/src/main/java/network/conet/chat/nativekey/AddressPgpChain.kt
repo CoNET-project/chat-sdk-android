@@ -87,11 +87,18 @@ internal class AddressPgpChain private constructor(
             rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
         ): AddressPgpChain {
             for (ep in config.endpoints) {
-                val snap = try {
-                    AddressPgpRead.snapshot(rpcFor(ep), config.contract, eoa).getOrNull()
-                } catch (_: Exception) {
-                    null
-                } ?: continue
+                // diag5 (logging only): the endpoint, the milliseconds and the exception class of a failed read (no content, no message).
+                val t0 = DiagTiming.now()
+                val res: Result<AddressPgpRead.Snapshot> = try {
+                    AddressPgpRead.snapshot(rpcFor(ep), config.contract, eoa)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+                val snap = res.getOrNull()
+                if (snap == null) {
+                    DiagTiming.log("chain:" + ep.url.substringAfter("//"), t0, "fail:" + (res.exceptionOrNull()?.javaClass?.simpleName ?: "null"))
+                    continue
+                }
                 val parsed = !snap.record.exists || PgpPublicIdentity.parse(snap.record.publicKeyArmored) != null
                 return AddressPgpChain(parsed, backupOk = true, record = snap.record, backup = snap.backupText)
             }
