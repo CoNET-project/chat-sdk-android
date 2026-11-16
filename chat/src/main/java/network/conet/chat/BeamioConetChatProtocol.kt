@@ -18,7 +18,7 @@ object BeamioConetChatProtocol {
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
     /** The artifact version (spec 25.52Y.45, PM R2054); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
-    const val SDK_VERSION = "0.2.22"
+    const val SDK_VERSION = "0.2.23"
 
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
@@ -36,9 +36,9 @@ object BeamioConetChatProtocol {
         "history.page.v1",
         "layout.cache.v1",
         KPRESENT_CAPABILITY,
+        NATIVE_KEYS_CAPABILITY,
     ) +
-        listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA }) +
-        listOfNotNull(NATIVE_KEYS_CAPABILITY.takeIf { BuildConfig.NATIVE_KEYS_QA })
+        listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA })
 
     /**
      * The kPresent capability (spec 25.52X.5, 25.52Y.90, 25.52Y.93). Declared in every build: `identityPublic` answers `kPresent` on G0 `no_key`,
@@ -47,7 +47,11 @@ object BeamioConetChatProtocol {
      */
     const val KPRESENT_CAPABILITY = "identity.kpresent.v1"
 
-    /** The native-keys capability, declared only in a QA candidate (-PchatNativeKeysQa=true). Not in the shared hello vector. */
+    /**
+     * The native-keys capability (identity.native-keys.v1). Declared by every build since 2026-11-16 (project owner decision): the formal
+     * release hello carries it. It is not yet in the shared hello vector; the conformance test appends it until the interface seat
+     * updates the vector.
+     */
     const val NATIVE_KEYS_CAPABILITY = "identity.native-keys.v1"
 
     /**

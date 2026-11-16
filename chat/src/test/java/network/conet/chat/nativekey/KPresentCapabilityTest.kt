@@ -30,9 +30,20 @@ class KPresentCapabilityTest {
         assertEquals(base + "identity.kpresent.v1", BeamioConetChatProtocol.CAPABILITIES.take(base.size + 1))
     }
 
+    /**
+     * Formal hello (project owner decision, 2026-11-16): identity.native-keys.v1 is declared by every build, directly after kPresent. The formal
+     * configuration carries no QA name: wallet.credential.v1 is absent unless the wallet-credential QA switch is set (ruled QA-only).
+     */
     @Test
-    fun theNativeKeysCapabilityIsNotDeclaredByTheKPresentChange() {
-        // identity.native-keys.v1 stays QA-only (BuildConfig); declaring kPresent does not declare it.
-        assertEquals(BuildConfig.NATIVE_KEYS_QA, BeamioConetChatProtocol.CAPABILITIES.contains("identity.native-keys.v1"))
+    fun theFormalHelloDeclaresNativeKeysAndNoQaName() {
+        val names = BeamioConetChatProtocol.CAPABILITIES
+        assertTrue(names.contains("identity.native-keys.v1"))
+        assertEquals("identity.native-keys.v1", names[names.indexOf("identity.kpresent.v1") + 1])
+        assertEquals(BuildConfig.WALLET_CREDENTIAL_QA, names.contains("wallet.credential.v1"))
+        assertTrue("the formal build has no wallet-credential QA switch", !BuildConfig.WALLET_CREDENTIAL_QA)
+        val hello = BeamioConetChatProtocol.helloResult().getJSONArray("capabilities")
+        for (i in 0 until hello.length()) {
+            assertTrue("no QA name in hello: ${hello.getString(i)}", !hello.getString(i).lowercase().contains("qa"))
+        }
     }
 }

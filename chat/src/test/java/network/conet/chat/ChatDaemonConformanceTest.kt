@@ -36,11 +36,12 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
         // The shared vector's Android list is the production declaration (spec 25.52Y.116: identity.kpresent.v1 is in it; inbound.generation.v1
-        // is not an Android capability). A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44; PM R2048); the vector has
-        // no QA variant yet, so that one bit is added here only when this build is a QA build.
+        // is not an Android capability). identity.native-keys.v1 is declared by every build (project owner decision, 2026-11-16) and is not yet in
+        // the vector; it is appended here until the interface seat updates the vector. wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44;
+        // PM R2048) stays QA-only: added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
-            (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList()) +
-            (if (BuildConfig.NATIVE_KEYS_QA) listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) else emptyList())
+            listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) +
+            (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList())
         assertEquals(expected, strings(result.getJSONArray("capabilities")))
         for (cap in BeamioConetChatProtocol.CAPABILITIES) {
             // Names not in the shared vector's top-level union (see above): every other declared name must be a spec capability.
