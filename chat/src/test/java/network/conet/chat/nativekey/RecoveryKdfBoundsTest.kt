@@ -37,7 +37,7 @@ class RecoveryKdfBoundsTest {
 
     /** Runs path B against [rec]; the registry returns the record for any name. Returns the outcome code. */
     private fun run(rec: String, failures: CountingFailures, kdfCalls: IntArray): String {
-        val registry = object : RegistryReader {
+        val registry = object : RecoveryRegistryReader {
             override fun byNameHash(indexHash: ByteArray): String? = rec
             override fun byAccountName(name: String): String? = rec
             override fun legacyByAccountName(name: String): String? = null

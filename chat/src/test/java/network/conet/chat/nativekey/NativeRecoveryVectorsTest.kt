@@ -121,7 +121,7 @@ class NativeRecoveryVectorsTest {
         private val legacy: JSONObject,
         private val fail: Boolean,
         private val legacyFail: Boolean,
-    ) : RegistryReader {
+    ) : RecoveryRegistryReader {
         override fun byNameHash(indexHash: ByteArray): String? {
             if (fail) error("rpc unavailable")
             val k = "nameHash:0x" + indexHash.joinToString("") { "%02x".format(it) }

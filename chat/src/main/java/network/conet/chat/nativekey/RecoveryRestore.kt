@@ -54,7 +54,7 @@ internal object RecoveryBackoff {
 }
 
 /** Reads the record of a registry (§25.42.5 steps 4, 4.1). Returns null when there is no record. Throws when unreachable. */
-internal interface RegistryReader {
+internal interface RecoveryRegistryReader {
     fun byNameHash(indexHash: ByteArray): String?
     fun byAccountName(name: String): String?
     fun legacyByAccountName(name: String): String?
@@ -63,7 +63,7 @@ internal interface RegistryReader {
 /** The production reader: the endpoints of [AccountRegistryRead], over HTTPS JSON-RPC. */
 internal class EndpointRegistryReader(
     private val rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
-) : RegistryReader {
+) : RecoveryRegistryReader {
     override fun byNameHash(indexHash: ByteArray): String? =
         AccountRegistryRead.readFirst(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByNameHash(indexHash))
 
@@ -81,7 +81,7 @@ internal class EndpointRegistryReader(
  */
 internal class RecoveryEngine(
     private val vault: NativeWalletVault,
-    private val registry: RegistryReader,
+    private val registry: RecoveryRegistryReader,
     private val failures: RecoveryFailureStore,
     private val clock: RecoveryClock,
     /** The Argon2id step. Production uses [RecoveryRecord.argon2idKey]; a test replaces it to count the calls (§25.47.9). */
