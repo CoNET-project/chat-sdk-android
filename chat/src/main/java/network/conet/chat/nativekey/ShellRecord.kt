@@ -827,14 +827,14 @@ internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode): Shell
 }
 
 /**
- * Clears the legacy marker. A clear that does not take effect is `clear_incomplete` (25.52Y.84): the marker stays and the next read retries.
- * Null when the clear took effect.
+ * Clears the legacy marker on a read path. A clear that does not take effect is answered `record_unreadable` (the read-path sub code the
+ * spec defines, retryable as unknown: coordinator ruling 2026-11-16); the marker stays and the next read retries. Null when the clear took effect.
  */
 internal fun clearLegacyCode(flags: DeviceFlags): String? = try {
     flags.clearLegacyUnreadable()
     null
 } catch (_: IOException) {
-    "clear_incomplete"
+    "record_unreadable"
 }
 
 /**
@@ -1229,8 +1229,9 @@ internal class ShellRecordBridge(
                 flags.setAccountAddress(eoa)
             }
         } catch (_: IOException) {
-            // A flag write that does not take effect: write_failed (25.52Y.84). The next read repairs it.
-            return "write_failed"
+            // A flag write that does not take effect on a read path: record_unreadable (retryable), not a write code (coordinator ruling 2026-11-16).
+            // The next read repairs it.
+            return "record_unreadable"
         }
         return null
     }
@@ -1250,7 +1251,7 @@ internal class ShellRecordBridge(
         return when (outcome()) {
             null -> reply("migrating", emptyList())
             ImportOutcome.ABSENT -> {
-                // The absence is not confirmed while the marker stays: a clear that does not take effect answers clear_incomplete (25.52Y.84).
+                // The absence is not confirmed while the marker stays: a clear that does not take effect answers record_unreadable (retryable).
                 clearLegacyCode(flags)?.let { return reply("error", listOf("sub" to it)) }
                 // r3rv (KR-01): a readable keystore key with no copy is replicated from that key; the read still answers absent.
                 if (acc is ShellRecordAccount.Ready && acc.nativeKeyPresent) replica?.invoke(acc.eoa)
