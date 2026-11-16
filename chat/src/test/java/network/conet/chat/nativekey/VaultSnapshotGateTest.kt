@@ -35,4 +35,13 @@ class VaultSnapshotGateTest {
         assertTrue("state() sets the snapshot", v.contains("snapshot = s"))
         assertFalse("a write does not recompute (no reconcile on the write path)", v.contains("snapshot = runCatching { computeState() }"))
     }
+
+    /** Review (2026-11-16, ShellRecord): an unknown snapshot answers shellRecordRead not_ready once, never record_unreadable. Source check. */
+    @Test
+    fun anUnknownSnapshotAnswersShellRecordReadNotReady() {
+        val r = File("src/main/java/network/conet/chat/nativekey/ShellRecord.kt").readText(Charsets.UTF_8)
+        assertTrue("the unknown branch returns NotReady", r.substringAfter("val known = vault.snapshotState() ?: run {").substringBefore("}").contains("return ShellRecordAccount.NotReady"))
+        assertFalse("the unknown branch never returns Unreadable", r.substringAfter("val known = vault.snapshotState() ?: run {").substringBefore("}").contains("ShellRecordAccount.Unreadable"))
+        assertTrue("NotReady is answered not_ready in the gate", r.contains("if (acc is ShellRecordAccount.NotReady) return reply(\"not_ready\", emptyList())"))
+    }
 }
