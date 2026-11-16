@@ -111,4 +111,28 @@ class ChatRouteSubmitTest {
         val positions = order.map { json.indexOf("\"$it\":") }
         assertTrue(positions.zipWithNext().all { (a, b) -> a in 0 until b })
     }
+
+    /** Rule-level (25.52Y.63 第 3 项): a timeout after the send that the chain shows as registered is submitted, with no resend. Vectors pending. */
+    @Test
+    fun ambiguousTimeoutRegisteredOnChainIsSubmittedWithoutResend() {
+        val seen = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ChatRouteSubmit.Transport.Ambiguous), chainAnswer = true, bases = listOf(ip), seen = seen))
+        assertEquals(1, seen.size)
+    }
+
+    /** Rule-level (25.52Y.63 第 3 项): a timeout not on chain re-signs and retries, at most 3 times; an unreadable chain never resends. Vectors pending. */
+    @Test
+    fun ambiguousTimeoutNotOnChainRetriesThenStops() {
+        var posts = 0
+        val poster = ChatRouteSubmit.Poster { _, _, _ -> posts++; ChatRouteSubmit.Transport.Ambiguous }
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, ChatRouteSubmit.submit(listOf(domain), ::body, poster, chain(false), backoffMs = { 0L }, pause = noPause))
+        assertEquals(1 + ChatRouteSubmit.MAX_5XX_RETRIES, posts)
+    }
+
+    @Test
+    fun ambiguousTimeoutWithUnreadableChainDoesNotResend() {
+        val seen = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ChatRouteSubmit.Transport.Ambiguous), chainAnswer = null, bases = listOf(domain), seen = seen))
+        assertEquals(1, seen.size)
+    }
 }

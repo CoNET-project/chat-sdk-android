@@ -32,6 +32,9 @@ internal object ChatRouteSubmit {
     sealed class Transport {
         class Answer(val status: Int, val body: String) : Transport()
         object Unreachable : Transport()
+
+        /** The request may have reached the server (sent, then no answer or a read timeout). The chain decides, never a blind resend. */
+        object Ambiguous : Transport()
     }
 
     internal fun interface Poster {
@@ -88,6 +91,18 @@ internal object ChatRouteSubmit {
                 attempt++
                 when (val t = poster.post(base.trimEnd('/') + PATH, body, timeoutMs)) {
                     is Transport.Unreachable -> break
+                    is Transport.Ambiguous -> {
+                        // 25.52Y.63 第 3 项: a timeout after the send is checked on chain before any retry.
+                        when (chain.registered()) {
+                            true -> return Outcome.Submitted
+                            null -> return Outcome.NetworkUnavailable
+                            false -> Unit
+                        }
+                        if (retries >= MAX_5XX_RETRIES) return Outcome.NetworkUnavailable
+                        pause(backoffMs(retries))
+                        retries++
+                        continue
+                    }
                     is Transport.Answer -> {
                         if (t.status in 200..299) {
                             if (!runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)) return Outcome.Refused("chain_refused")
@@ -128,14 +143,17 @@ internal object ChatRouteSubmit {
             } catch (_: Exception) {
                 return Transport.Unreachable
             }
+            var sent = false
             return try {
                 OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(json) }
+                sent = true
                 val status = conn.responseCode
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 Transport.Answer(status, text)
             } catch (_: Exception) {
-                Transport.Unreachable
+                // Before the body is sent the server cannot have the request; after it, the outcome is unknown.
+                if (sent) Transport.Ambiguous else Transport.Unreachable
             } finally {
                 conn.disconnect()
             }
