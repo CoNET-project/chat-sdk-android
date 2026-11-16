@@ -404,7 +404,12 @@ internal class BeamioConetChatListenSession {
         ) {
             // Native decryption inside the wallet boundary (§36-B): the vault holds the PGP key and its passphrase, and
             // only the plaintext comes back. The callback runs on the main thread, as it did from the WebView host.
-            val outcome = NativeWallet.pgp(app).decryptInbound(armored)
+            // An unreadable store is a failed decrypt (unknown, retried by the listen), never an uncaught exception on the listen thread (25.52Y.84).
+            val outcome = try {
+                NativeWallet.pgp(app).decryptInbound(armored)
+            } catch (_: Exception) {
+                network.conet.chat.nativekey.NativePgp.Outcome.fail("store_unreadable")
+            }
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 val text = outcome.value
                 if (outcome.ok && text != null) {

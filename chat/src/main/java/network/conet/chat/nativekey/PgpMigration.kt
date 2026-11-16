@@ -593,11 +593,11 @@ internal class PgpMigrationEngine(
     private fun hasRecoverySource(): Boolean =
         legacy.read() != null || recovery.pReadable() || recovery.chainRegistered()
 
-    private fun readLastCode(): String? = try {
-        lastCode.read()
-    } catch (_: IOException) {
-        null
-    }
+    /**
+     * The last code. An unreadable last code throws: the migration state is unknown, never "none" or "pending" (25.52Y.84). A read that cannot
+     * complete is not taken for an absent code.
+     */
+    private fun readLastCode(): String? = lastCode.read()
 
     private fun readStaged(): StagedItem? = try {
         staged.read()

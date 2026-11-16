@@ -1254,15 +1254,28 @@ object BeamioConetChatModule {
         if (reqId == null) return refuse("bad_request")
         val ctx = appContext ?: return refuse("not_ready")
         val vault = NativeWallet.vault(ctx)
-        val state = vault.state()
+        // An unreadable vault is unknown: not_ready, one answer (25.52Y.84), never a gate that allows a decrypt.
+        val state = try {
+            vault.state()
+        } catch (_: Exception) {
+            return refuse("not_ready")
+        }
         val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady())
         PgpDecryptInbound.gateRefusal(gate, state is NativeWalletVault.State.Locked)?.let { return refuse(it) }
         val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return refuse("locked")
         val pgp = NativeWallet.pgpFor(ctx, eoa)
         val source = object : PgpDecryptInbound.Source {
-            override fun subkeyKeyIdHex(): String? = pgp.identity()?.subkeyKeyId
-            override fun decryptLiteral(armoredMessage: String): NativePgp.LiteralResult =
+            // An unreadable key store is unknown: a null subkey is not_ready in PgpDecryptInbound; a failed decrypt is a failed literal.
+            override fun subkeyKeyIdHex(): String? = try {
+                pgp.identity()?.subkeyKeyId
+            } catch (_: Exception) {
+                null
+            }
+            override fun decryptLiteral(armoredMessage: String): NativePgp.LiteralResult = try {
                 pgp.decryptInboundLiteral(armoredMessage)
+            } catch (_: Exception) {
+                NativePgp.LiteralResult.fail("store_unreadable")
+            }
         }
         val answer = PgpDecryptInbound.answer(body, eoa, source)
         if (!answer.ok) return refuse(answer.error ?: "decrypt_failed")
@@ -1277,7 +1290,13 @@ object BeamioConetChatModule {
             ack(reqId, false, error = "not_initialised")
             return
         }
-        val out = NativeWalletCommands.walletAddress(NativeWallet.vault(ctx))
+        // A vault that cannot be read is unknown: not_ready, one answer for this reqId (25.52Y.84, Y.104 第 3 条), never no_key.
+        val out = try {
+            NativeWalletCommands.walletAddress(NativeWallet.vault(ctx))
+        } catch (_: Exception) {
+            ack(reqId, false, error = "not_ready")
+            return
+        }
         if (out.code == "ok") ack(reqId, true, result = JSONObject().put("address", out.address))
         else ack(reqId, false, error = out.code)
     }

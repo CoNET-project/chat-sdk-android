@@ -52,4 +52,24 @@ class ModuleStateReadGuardTest {
     fun holdsWalletIsUnknownOnAnUnreadableVault() {
         assertTrue(module.contains(".any { vaultFiles.read(it) != null }\n        } catch (_: Exception) {\n            return null"))
     }
+
+    /** The wallet address answer: an unreadable vault is not_ready, one ack, never no_key (25.52Y.84). */
+    @Test
+    fun walletAddressAnswersNotReadyOnAnUnreadableVault() {
+        assertTrue(module.contains("NativeWalletCommands.walletAddress(NativeWallet.vault(ctx))\n        } catch (_: Exception) {"))
+    }
+
+    /** The PGP decrypt: an unreadable vault is not_ready, and an unreadable literal is a failed literal (one refusal, 25.52Y.84). */
+    @Test
+    fun pgpDecryptInboundIsNotReadyOnAnUnreadableVault() {
+        assertTrue(module.contains("return refuse(\"not_ready\")"))
+        assertTrue(module.contains("NativePgp.LiteralResult.fail(\"store_unreadable\")"))
+    }
+
+    /** The listen decrypt: an unreadable store is a failed decrypt, never an exception on the listen thread (25.52Y.84). */
+    @Test
+    fun listenDecryptIsAFailedDecryptOnAnUnreadableStore() {
+        val listen = File("src/main/java/network/conet/chat/BeamioConetChatListenSession.kt").readText(Charsets.UTF_8)
+        assertTrue(listen.contains("NativePgp.Outcome.fail(\"store_unreadable\")"))
+    }
 }

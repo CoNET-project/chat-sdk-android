@@ -1710,8 +1710,12 @@ object BeamioShellRecordImport {
 
     private fun migrationStateOf(context: Context): String {
         val app = context.applicationContext
-        val state = NativeWallet.vault(app).state() as? NativeWalletVault.State.Ready ?: return "none"
-        return BeamioPgpMigrationImport.state(app, state.eoa)
+        // A confirmed absent account has no migration; a locked or unreadable one is unknown, never "none" (25.52Y.84).
+        return when (val state = NativeWallet.vault(app).state()) {
+            is NativeWalletVault.State.Ready -> BeamioPgpMigrationImport.state(app, state.eoa)
+            is NativeWalletVault.State.NoKey -> "none"
+            is NativeWalletVault.State.Locked -> throw IOException("account state unknown")
+        }
     }
 
     /** The EOA address of a private-key string (`0x` plus 64 hex digits), lower case, or `null`. The key bytes are zero-filled after use. */
