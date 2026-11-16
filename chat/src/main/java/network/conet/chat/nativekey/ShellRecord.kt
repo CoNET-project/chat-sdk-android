@@ -1641,7 +1641,7 @@ object BeamioShellRecordImport {
     private fun accountOf(context: Context, sessionGate: Boolean): ShellRecordAccount {
         val app = context.applicationContext
         // 25.52Y.75: the snapshot first, so a read does not wait for a write or a background task holding the keystore monitor (S25, 2026-11-15).
-        // The fallback computes the state under the lock; it runs on the shell-record worker, which is not the caller's thread.
+        // The snapshot is read without the monitor. The thread of shellRecordRead is not confirmed by the shell yet (diag pending).
         val vault = NativeWallet.vault(app)
         // 25.52Y.75: an unknown snapshot is unknown, never a keystore read on this thread. The refresh runs on its own io thread.
         val known = vault.snapshotState() ?: run {
