@@ -1189,6 +1189,7 @@ internal class ShellRecordBridge(
             }
             // §25.52Y.56: NOT_DONE is the only source of import_not_done; DONE (found cleared, no record here) fails closed as migrating.
             ImportOutcome.NOT_DONE -> reply("error", listOf("sub" to "import_not_done"))
+            // PENDING interface ruling (25.52Y.56 follow-up): U.6 has no row for DONE with no pointer and no record. Held as migrating; not a pass basis.
             ImportOutcome.DONE -> reply("migrating", emptyList())
             ImportOutcome.ACCOUNT_MISMATCH -> reply("error", listOf("sub" to "account_mismatch"))
         }
