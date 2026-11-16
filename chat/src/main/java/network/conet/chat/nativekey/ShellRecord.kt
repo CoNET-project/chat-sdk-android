@@ -884,6 +884,9 @@ internal sealed class ShellRecordAccount {
     /** No wallet and no imported account. Nothing can be read or held for it yet. */
     object Unknown : ShellRecordAccount()
 
+    /** A page copy exists but no profile of it holds the EOA private key: the copy is a record of another account (§25.52Y.15 第 2 项, r3mh). Reads answer account_mismatch. */
+    object Mismatch : ShellRecordAccount()
+
     /** The vault is locked and no account is bound. */
     object Locked : ShellRecordAccount()
 
@@ -1106,6 +1109,8 @@ internal class ShellRecordBridge(
         // 25.52CH.1 (r3eg): a locked store is a business result, ok:true, with sub storage_locked.
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "storage_locked"))
         if (migrating()) return reply("migrating", emptyList())
+        // §25.52Y.15 第 2 项 (r3mh, AK-61): a page copy that no profile of which holds the EOA key answers account_mismatch.
+        if (acc is ShellRecordAccount.Mismatch) return reply("error", listOf("sub" to "account_mismatch"))
         if (acc is ShellRecordAccount.Ready) {
             val current: JSONObject? = try {
                 acc.store.read()
@@ -1365,7 +1370,10 @@ internal object ShellRecordAccounts {
             // R488: the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
             val restored = bound ?: persisted()?.takeIf { isAddress(it) }
             if (restored != null) ShellRecordAccount.Ready(storeOf(restored), restored)
-            else heldCopy(copyNames(), storeOf) ?: ShellRecordAccount.Unknown
+            else {
+                val names = copyNames()
+                heldCopy(names, storeOf) ?: if (names.count { COPY_NAME.matchEntire(it) != null } == 1) ShellRecordAccount.Mismatch else ShellRecordAccount.Unknown
+            }
         }
     }
 
