@@ -15,6 +15,7 @@ import network.conet.chat.nativekey.VoiceChannelKeys
 import network.conet.chat.nativekey.NativeOpenRules
 import network.conet.chat.nativekey.NativeWallet
 import network.conet.chat.nativekey.CommandAnswerGuard
+import network.conet.chat.nativekey.InitReadyAnswer
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
@@ -745,6 +746,15 @@ object BeamioConetChatModule {
         }
     }
 
+    /** True when the stored PGP material cannot be read: the init answer then reports PGP as unknown (never absent). Read only. */
+    private fun pgpStoreUnreadable(ctx: Context): Boolean =
+        try {
+            BeamioChatPgpStore.load(ctx)
+            false
+        } catch (_: Exception) {
+            true
+        }
+
     private fun finishInit(ctx: Context, reqId: Any, s: Session, attach: Boolean) {
         run {
             val history = BeamioConetChatHistoryStore(
@@ -773,7 +783,7 @@ object BeamioConetChatModule {
             s.history?.destroy()
             s.history = history
             // Listen first: it must not wait on the (sign-dependent) history key derivation.
-            emitEvent(JSONObject().put("type", "ready").put("reqId", reqId))
+            emitEvent(InitReadyAnswer.payload(reqId, pgpStoreUnreadable(ctx)))
             if (attach) {
                 Log.i(TAG, "page attached to the running listen pending=${s.pendingAcks.size}")
                 if (listen.isRunning()) emitStatus("listening", "attached") else resumeListen()

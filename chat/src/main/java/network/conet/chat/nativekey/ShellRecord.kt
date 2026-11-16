@@ -1558,6 +1558,17 @@ internal object ShellRecordAccounts {
  * (`https://appassets.androidplatform.net`, through `WebViewCompat.addWebMessageListener`) and passes the result as [ShellOrigin]. The
  * returned object is the reply to that message. The calls read and write files: run them off the main thread.
  */
+/**
+ * The migration state of an account from its vault state. `none` only for a confirmed absent account. A locked account is
+ * unknown and throws [IOException]; the PGP migration state is read only for a ready account (25.52Y.84).
+ */
+internal fun migrationStateOfVault(state: NativeWalletVault.State, pgpState: (String) -> String): String =
+    when (state) {
+        is NativeWalletVault.State.Ready -> pgpState(state.eoa)
+        is NativeWalletVault.State.NoKey -> "none"
+        is NativeWalletVault.State.Locked -> throw IOException("account state unknown")
+    }
+
 object BeamioShellRecordImport {
     /** The native read-only migration state (§25.52L.6). The page does not call it: the bridge refuses it as an unknown command. */
     fun migrationState(context: Context): String = migrationStateOf(context)
@@ -1710,12 +1721,7 @@ object BeamioShellRecordImport {
 
     private fun migrationStateOf(context: Context): String {
         val app = context.applicationContext
-        // A confirmed absent account has no migration; a locked or unreadable one is unknown, never "none" (25.52Y.84).
-        return when (val state = NativeWallet.vault(app).state()) {
-            is NativeWalletVault.State.Ready -> BeamioPgpMigrationImport.state(app, state.eoa)
-            is NativeWalletVault.State.NoKey -> "none"
-            is NativeWalletVault.State.Locked -> throw IOException("account state unknown")
-        }
+        return migrationStateOfVault(NativeWallet.vault(app).state()) { eoa -> BeamioPgpMigrationImport.state(app, eoa) }
     }
 
     /** The EOA address of a private-key string (`0x` plus 64 hex digits), lower case, or `null`. The key bytes are zero-filled after use. */
