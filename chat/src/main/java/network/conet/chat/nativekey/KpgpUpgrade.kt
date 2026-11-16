@@ -31,6 +31,20 @@ internal object KpgpUpgrade {
         val publicArmor = record?.let { NativePgpKeyGen.publicArmorOf(it.privateArmor) }
         val keyIdOfRecord = record?.let { r -> NativePgp.parseSecret(r.privateArmor)?.let { NativePgpBackup.subkeyKeyId(it) } }
         val lValid = record != null && publicArmor != null && keyIdOfRecord != null && keyIdOfRecord == record.subkeyKeyId
+        // keyID consistency log (rc2.2-qa item 4): match, mismatch or unknown per check, and the on-chain public keyID. The local key and the
+        // local keyID are never logged.
+        val lCheck = when {
+            record == null || keyIdOfRecord == null -> "unknown"
+            keyIdOfRecord == record.subkeyKeyId -> "match"
+            else -> "mismatch"
+        }
+        val chainKeyId = (chain as? ChainBackupRestore.Result.Verified)?.keyId
+        val chainCheck = when {
+            keyIdOfRecord == null || chainKeyId == null -> "unknown"
+            keyIdOfRecord == chainKeyId -> "match"
+            else -> "mismatch"
+        }
+        DiagTiming.log("kpgp.keyid", DiagTiming.now(), "L=$lCheck chain=$chainCheck chainKeyId=${chainKeyId ?: "none"}")
         var writeOk = false
         if (lValid && record != null && publicArmor != null && keyIdOfRecord != null) {
             val tW = DiagTiming.now()

@@ -43,6 +43,16 @@ internal class ClearFlagFiles(private val files: VaultFiles) {
         false
     }
 
+    /**
+     * Three-state read of clear_pending (coordinator ruling, rc2.2-qa): true when the marker is present, false when it is absent, and null when
+     * the read fails. A failed read is unknown, never "no pending clear": nothing is written or consumed here, and the next read decides.
+     */
+    fun clearPendingState(): Boolean? = try {
+        files.read(CLEAR_PENDING) != null
+    } catch (_: Exception) {
+        null
+    }
+
     fun setClearPending(): Boolean = writeChecked(CLEAR_PENDING)
 
     /** Native-internal only (PY.11, PY.16): set for [eoa] by the save-recovery-phrase confirmation, or after a successful recovery. */
@@ -265,8 +275,12 @@ internal class IdentityClear(
      * already decided before `clear_pending` was set, so they are not repeated. Returns null when nothing was interrupted.
      */
     fun redoIfInterrupted(): String? {
-        // Strict read (rc2.2-qa, review 76706f6d): a read that fails is not a pending clear, so no redo runs and nothing is deleted.
-        if (!flags.clearPendingStrict()) return null
+        // Three states (coordinator ruling): present runs the redo; absent is nothing interrupted (null). An unreadable marker is unknown: no redo,
+        // no deletion, no marker written, and the pending state is not consumed. It answers clear_incomplete, which keeps the block until a
+        // later read decides (the command gate retries the redo).
+        val pending = flags.clearPendingState()
+        if (pending == null) return IdentityClearCode.CLEAR_INCOMPLETE
+        if (!pending) return null
         // r3rk: while clear_pending is set and W is held (or unreadable), the redo does not run and the block stays, until clearIdentity
         // completes the clear. A null result is returned only when nothing was interrupted, so it is the only way the block lifts.
         if (holdsWallet() != false) return IdentityClearCode.CLEAR_INCOMPLETE

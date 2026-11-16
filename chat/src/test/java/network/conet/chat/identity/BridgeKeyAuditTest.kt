@@ -200,6 +200,11 @@ class BridgeKeyAuditTest {
                 "\"privateKeyHex\", \"privateKeyArmored\", \"pgpPrivateKeyArmored\", \"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"recoveryCode\", \"pin\", \"password\", \"accountPassword\",",
             ),
+            "AccountCleanupOld.kt" to listOf(
+                // Refusal list of accountCleanupOld (KEY_FIELDS, 25.52Y.91 第 3 項): a key field in the payload is refused. Membership only.
+                "\"privateKeyHex\", \"privateKeyArmor\", \"privateKeyArmored\", \"pgpPrivateKeyArmored\", \"pgpPassphrase\", \"walletPrivateKey\",",
+                "\"mnemonic\", \"mnemonicPhrase\", \"recoveryCode\", \"pin\", \"password\", \"accountPassword\",",
+            ),
             "PgpDecryptInbound.kt" to listOf(
                 // Refusal list of pgpDecryptInbound (FORBIDDEN, forbiddenKey): a forbidden name is refused. Membership only.
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",

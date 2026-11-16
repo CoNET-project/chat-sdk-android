@@ -281,7 +281,11 @@ object NativeAccountCreate {
         } catch (_: Exception) {
             null
         } ?: return rollBackW()
-        return when (pgp.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, keyId, gen.publicArmor, gen.privateArmor, System.currentTimeMillis() / 1000L)) {
+        val tK = DiagTiming.now()
+        val written = pgp.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, keyId, gen.publicArmor, gen.privateArmor, System.currentTimeMillis() / 1000L)
+        // origin log (25.52Y.84 request, rc2.2-qa item 4): the label, the time and the code only. No key, no keyID.
+        DiagTiming.log("kpgp.write:create", tK, written.name.lowercase())
+        return when (written) {
             AccountPgpKWrite.WRITTEN -> Result(Code.OK, eoa)
             AccountPgpKWrite.EXISTS -> {
                 // K is there already for this account: the new W is removed, and the existing item stays (never overwritten).
