@@ -17,13 +17,20 @@ internal object VaultSnapshotRefresh {
 
     /** Schedules one computation unless one is pending or the backoff has not passed. Never blocks. */
     fun schedule(app: Context) {
-        if (System.currentTimeMillis() < notBefore) return
+        if (System.currentTimeMillis() < notBefore) {
+            DiagTiming.log("snapshotRefresh:backoff", DiagTiming.now(), "skip")
+            return
+        }
         if (!pending.compareAndSet(false, true)) return
         executor.execute {
+            // diag3 (logging only): start, end, result with the thread, milliseconds and a code. No content.
+            val t0 = DiagTiming.now()
             try {
                 NativeWallet.vault(app).state()
-            } catch (_: Exception) {
+                DiagTiming.log("snapshotRefresh", t0, "ok")
+            } catch (e: Exception) {
                 notBefore = System.currentTimeMillis() + BACKOFF_MS
+                DiagTiming.log("snapshotRefresh", t0, "fail:" + e.javaClass.simpleName)
             } finally {
                 pending.set(false)
             }
