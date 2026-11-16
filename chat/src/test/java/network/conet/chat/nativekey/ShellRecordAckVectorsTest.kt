@@ -76,6 +76,8 @@ class ShellRecordAckVectorsTest {
             migrating = { false },
             outcome = { outcome },
             flags = flags,
+            creationMode = { ctx.optBoolean("creationMode") },
+            explicitChoice = { ctx.optBoolean("explicitChoice") },
         )
         val ack = bridge.handle(origin, body, size)
 

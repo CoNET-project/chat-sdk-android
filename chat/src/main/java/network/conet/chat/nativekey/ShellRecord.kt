@@ -1046,6 +1046,9 @@ internal class ShellRecordBridge(
     private val migrating: () -> Boolean,
     private val outcome: () -> ImportOutcome?,
     private val flags: DeviceFlags = NoDeviceFlags,
+    /** The creation mode and the explicit choice of the creation flow (§25.52Y.54 PY.18(b)). Off unless the creation flow sets them. */
+    private val creationMode: () -> Boolean = { false },
+    private val explicitChoice: () -> Boolean = { false },
     /** The vault and the gate for walletEoaAddress (PM R1921). Null means the name is not served by this bridge. */
     private val walletEoaAddress: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
     /** The vault and the gate for walletCredential (PM R2048). Null means the name is not served by this bridge. */
@@ -1109,6 +1112,14 @@ internal class ShellRecordBridge(
         // 25.52CH.1 (r3eg): a locked store is a business result, ok:true, with sub storage_locked.
         if (acc is ShellRecordAccount.Locked) return reply("error", listOf("sub" to "storage_locked"))
         if (migrating()) return reply("migrating", emptyList())
+        // §25.52Y.54 PY.18(b), §25.52Y.55 (a): creation mode with an explicit choice and a pointer set does not enter creation (AK-48, AK-49).
+        // A legacy store found answers import_not_done first (AK-50). Nothing is written, the pointer is not switched, no key is deleted.
+        if (creationMode() && explicitChoice() && flags.accountPointer()) {
+            return when (outcome()) {
+                ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
+                else -> reply("migrating", emptyList())
+            }
+        }
         // §25.52Y.15 第 2 项 (r3mh, AK-61): a page copy that no profile of which holds the EOA key answers account_mismatch.
         if (acc is ShellRecordAccount.Mismatch) return reply("error", listOf("sub" to "account_mismatch"))
         if (acc is ShellRecordAccount.Ready) {
