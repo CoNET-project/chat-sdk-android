@@ -57,7 +57,7 @@ class AndroidVaultFilesDeleteTest {
 
         assertThrows(IOException::class.java) { files.delete("wallet.v1.rec") }
         assertTrue("the name is still present", files.exists("wallet.v1.rec"))
-        assertNull("a read does not return a directory", files.read("wallet.v1.rec"))
+        assertThrows("a read of a name that is not a regular file is a read failure, never absent", IOException::class.java) { files.read("wallet.v1.rec") }
         assertArrayEquals(byteArrayOf(7), File(blocker, "child").readBytes())
     }
 

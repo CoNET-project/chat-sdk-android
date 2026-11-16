@@ -171,8 +171,9 @@ class NativeWalletVault(
         val mnem = files.read(MNEM)
         val commit = files.read(COMMIT)
         if (rec == null) {
-            // A marker or phrase without a key record cannot be used. A read never removes it (project ruling 2026-11-16): an unknown state.
-            if (mark != null || mnem != null) return State.Locked("record_missing")
+            // A marker, a phrase or a commit record without the key record cannot be used, and an account once existed: an unknown state, never
+            // no_key (25.52Y.84). A read never removes it (project ruling 2026-11-16).
+            if (mark != null || mnem != null || commit != null) return State.Locked("record_missing")
             return State.NoKey
         }
         // 25.52Y.92 第 2 項: the legacy pure-key record is accepted only with a readable key record and no phrase, intent, commit marker or

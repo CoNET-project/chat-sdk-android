@@ -83,8 +83,14 @@ class AndroidKeyWrap(private val alias: String = KEY_ALIAS) : KeyWrap {
 
 /** Files under the app's private directory. Writes go to a temp file, are synced, then renamed. */
 class AndroidVaultFiles(private val dir: File) : VaultFiles {
+    /**
+     * The bytes of [name], or null only when the name is absent from a readable directory. A name present but not a regular file, or a directory
+     * that exists but cannot be listed, is a read failure (throws): it is never taken for "no record", which would answer no_key (25.52Y.84).
+     */
     override fun read(name: String): ByteArray? {
         val f = File(dir, name)
+        if (f.exists() && !f.isFile) throw IOException("vault entry is not a regular file")
+        if (!f.exists() && dir.exists() && dir.list() == null) throw IOException("vault directory cannot be listed")
         return if (f.isFile) f.readBytes() else null
     }
 
