@@ -96,10 +96,11 @@ class NativeWalletVault(
             runCatching { files.delete(INTENT) }
             return true
         }
+        // Plan 1: only the names the manifest lists, and never a name that predates the import. An old-format intent (no manifest) deletes nothing.
+        val manifest = intent.created ?: return false
+        val allowed = setOf(MARK, REC, MNEM, COMMIT)
         return try {
-            files.delete(MARK)
-            files.delete(REC)
-            if (intent.mnemonicPlanned) files.delete(MNEM)
+            for (name in manifest) if (name in allowed && name != COMMIT) files.delete(name)
             files.delete(INTENT)
             true
         } catch (e: Exception) {
@@ -289,7 +290,7 @@ class NativeWalletVault(
             if (present) return Import.RECORD_EXISTS
         }
         try {
-            files.write(INTENT, encodeIntent(eoa, mnemonicPlanned = phrase != null))
+            files.write(INTENT, encodeIntent(eoa, mnemonicPlanned = phrase != null, created = listOfNotNull(MARK, REC, if (phrase != null) MNEM else null, COMMIT)))
         } catch (e: Exception) {
             return rollbackAndReport(Import.STORE_FAILED, mnemonicPlanned = phrase != null)
         }
@@ -367,17 +368,22 @@ class NativeWalletVault(
         return filesGone && wrap.deleteKey()
     }
 
-    private class Intent(val eoa: String, val mnemonicPlanned: Boolean)
+    /**
+     * [created] is the manifest (project ruling 2026-11-16, plan 1): the file names this import creates. Every name in it was absent before the
+     * import (the precheck). `null` for an old-format intent (no manifest): such an intent deletes nothing (rollback_pending).
+     */
+    private class Intent(val eoa: String, val mnemonicPlanned: Boolean, val created: List<String>?)
 
     /**
      * The intent (r3ny, spec §25.52Y.42 第 4 项 (g)): UTF-8 JSON `{"v":1,"kind":"intent","eoa","sealed"}`. The sealed payload is
      * `{"v":1,"eoa","mnemonicPlanned","startedAt","phase":"begun"}` (startedAt is UTC to the second) under the intent AAD.
      */
-    private fun encodeIntent(eoa: String, mnemonicPlanned: Boolean): ByteArray {
+    private fun encodeIntent(eoa: String, mnemonicPlanned: Boolean, created: List<String>): ByteArray {
         val body = JSONObject()
             .put("v", RECORD_VERSION)
             .put("eoa", eoa)
             .put("mnemonicPlanned", mnemonicPlanned)
+            .put("created", org.json.JSONArray(created))
             .put("startedAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString())
             .put("phase", "begun")
             .toString()
@@ -392,7 +398,8 @@ class NativeWalletVault(
             val b = JSONObject(String(body, Charsets.UTF_8))
             if (b.optInt("v", 0) != RECORD_VERSION || b.optString("eoa", "") != env.eoa) return null
             if (b.optString("phase", "") != "begun") return null
-            Intent(env.eoa, b.getBoolean("mnemonicPlanned"))
+            val manifest = if (b.has("created")) b.getJSONArray("created").let { a -> (0 until a.length()).map { a.getString(it) } } else null
+            Intent(env.eoa, b.getBoolean("mnemonicPlanned"), manifest)
         } catch (e: Exception) {
             null
         }

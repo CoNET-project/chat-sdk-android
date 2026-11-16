@@ -307,6 +307,9 @@ class NativeMnemonicStoreTest {
         assertEquals(eoa, (v.state() as State.Ready).eoa)
         assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
         assertTrue(v.mnemonicOf() is MnemonicRead.Stored)
+        // 2026-11-16 (plan 1): a committed record and a leftover intent keep the record; only the intent goes (the record is never rolled back).
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
+        assertTrue(files.map.containsKey(NativeWalletVault.MNEM))
     }
 
     /** A crash after the key record leaves an intent and an uncommitted record: the next start rolls it back and the account is free to import again. */
