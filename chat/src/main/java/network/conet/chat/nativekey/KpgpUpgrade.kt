@@ -33,14 +33,19 @@ internal object KpgpUpgrade {
         val lValid = record != null && publicArmor != null && keyIdOfRecord != null && keyIdOfRecord == record.subkeyKeyId
         var writeOk = false
         if (lValid && record != null && publicArmor != null && keyIdOfRecord != null) {
+            val tW = DiagTiming.now()
             writeOk = k.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, keyIdOfRecord, publicArmor, record.privateArmor, nowSec) ==
                 AccountPgpKWrite.WRITTEN
+            // origin log (25.52Y.84 request, project ruling): the label, the time and the code only. No key, no keyID.
+            DiagTiming.log("kpgp.write:upgradeL", tW, if (writeOk) "ok" else "fail")
         }
         // The chain source is used only when L gives no valid key (§25.52Y.59 第 3 项 (b)). A verified backup is written; nothing is deleted.
         val chainVerified = chain as? ChainBackupRestore.Result.Verified
         if (!lValid && chainVerified != null) {
+            val tC = DiagTiming.now()
             writeOk = k.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, chainVerified.keyId, chainVerified.publicArmor, chainVerified.privateArmor, nowSec) ==
                 AccountPgpKWrite.WRITTEN
+            DiagTiming.log("kpgp.write:chainBackup", tC, if (writeOk) "ok" else "fail")
         }
         return KpgpPolicy.decide(
             KpgpPolicy.Input(

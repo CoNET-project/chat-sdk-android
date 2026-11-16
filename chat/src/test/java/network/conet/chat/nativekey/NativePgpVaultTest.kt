@@ -109,7 +109,8 @@ class NativePgpVaultTest {
         // The next readback sees other bytes once, so the new record is rolled back to the previous one.
         var armed = true
         wrap.openOverride = { plain -> if (armed) { armed = false; ByteArray(32) { 1 } } else plain }
-        assertEquals(NativePgpVault.Put.READBACK_FAILED, vault.put(eoa, key("ecc-nopass").getString("privateArmored"), ""))
+        // The overwrite is explicit (the replacement path): put refuses an existing record unless overwrite is set (project ruling 2026-11-16).
+        assertEquals(NativePgpVault.Put.READBACK_FAILED, vault.put(eoa, key("ecc-nopass").getString("privateArmored"), "", overwrite = true))
         assertTrue(vault.state() is NativePgpVault.State.Ready)
         assertTrue(vault.decryptInbound(decryptCase("D-1").getString("armor")).ok)
     }
@@ -206,17 +207,17 @@ class NativePgpVaultTest {
 
     /** Project ruling 2026-11-16 (keep the user's data): an automatic write goes into an empty slot only; an existing record is refused and kept. */
     @Test
-    fun putIfAbsentRefusesAnExistingRecordAndKeepsIt() {
+    fun putRefusesAnExistingRecordAndKeepsIt() {
         val (vault, _, files) = fresh()
         assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
         val before = files.map[NativePgpVault.recName(SYN_EOA)]!!.copyOf()
-        assertEquals(NativePgpVault.Put.EXISTS, vault.putIfAbsent(SYN_EOA, key("ecc-nopass").getString("privateArmored"), ""))
+        assertEquals(NativePgpVault.Put.EXISTS, vault.put(SYN_EOA, key("ecc-nopass").getString("privateArmored"), ""))
         assertTrue(before.contentEquals(files.map[NativePgpVault.recName(SYN_EOA)]!!))
     }
 
     @Test
-    fun putIfAbsentWritesIntoAnEmptySlot() {
+    fun putWritesIntoAnEmptySlot() {
         val (vault, _, _) = fresh()
-        assertEquals(NativePgpVault.Put.OK, vault.putIfAbsent(SYN_EOA, key("ecc-pass").getString("privateArmored"), key("ecc-pass").getString("passphrase")))
+        assertEquals(NativePgpVault.Put.OK, vault.put(SYN_EOA, key("ecc-pass").getString("privateArmored"), key("ecc-pass").getString("passphrase")))
     }
 }
