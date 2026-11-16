@@ -415,6 +415,7 @@ object BeamioConetChatModule {
             )
             "pgpRestoreEvaluate" -> pgpRestoreCommand(body, evaluateOnly = true)
             "pgpRestore" -> pgpRestoreCommand(body, evaluateOnly = false)
+            "pgpUpgradeRetry" -> pgpUpgradeRetryCommand(body)
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             "chatRouteRegister" -> chatRouteRegisterCommand(body)
             else -> {
@@ -1459,6 +1460,43 @@ object BeamioConetChatModule {
      * the request is checked first, then the EOA key and the PGP armor are read from the vault, the registration is built in [ChatRouteRegister],
      * and both byte arrays are zeroed after use. The String copies of the password and the armor cannot be zeroed on the JVM (a stated limit).
      */
+    /**
+     * `pgpUpgradeRetry` (25.52Y.63 第 2 项, 25.52Y.64 PR-01..08): the user's click on the upgrade retry. Fields are `type`, `reqId`, `accountKey`;
+     * a key, passphrase or armor field is `key_over_bridge_refused` before anything is read. The vault is read on the io executor only, never on the
+     * caller's thread. A new key is generated only with the native confirmation, which this build does not have: the click alone never generates
+     * (the result is pgp_migration_retry). Every result reaches the page as a pgpUpgradeState event, keep_existing included.
+     */
+    private fun pgpUpgradeRetryCommand(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        val keys = body.keys().asSequence().map { it.toString() }.toSet()
+        if (keys.any { it in PGP_RESTORE_REFUSED }) { ack(reqId, false, error = "key_over_bridge_refused"); return }
+        if (keys.any { it !in PGP_RESTORE_FIELDS }) { ack(reqId, false, error = "bad_request"); return }
+        val ctx = appContext
+        if (ctx == null) { ack(reqId, false, error = "not_ready"); return }
+        val accountKey = body.optString("accountKey", "")
+        io.execute {
+            val state = try { NativeWallet.vault(ctx).state() } catch (_: Exception) { null }
+            // Android has no passcode lock: a storage-derived Locked or no key is not_ready (25.52CS.2).
+            val eoa = (state as? NativeWalletVault.State.Ready)?.eoa
+            if (eoa == null) { ack(reqId, false, error = "not_ready"); return@execute }
+            val cut = accountKey.lastIndexOf(':')
+            if (cut <= 0 || cut == accountKey.length - 1 || !accountKey.substring(0, cut).equals(eoa, ignoreCase = true)) {
+                ack(reqId, false, error = "account_mismatch")
+                return@execute
+            }
+            // 25.52Y.64 PR-01: the ack is {type, reqId, ok: true, accepted: true} (no result object).
+            emitEvent(JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", true).put("accepted", true))
+            val result = try {
+                network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctx, eoa, userClick = true, nowSec = System.currentTimeMillis() / 1000L, nativeConfirm = false)
+            } catch (_: Exception) {
+                null
+            }
+            val code = result?.action ?: "pgp_migration_retry"
+            emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+            Log.i(TAG, "pgpUpgradeRetry result=$code")
+        }
+    }
+
     private fun chatRouteRegisterCommand(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
         val ctx = appContext
