@@ -583,7 +583,7 @@ object BeamioConetChatModule {
             s.mailboxIp = id.optString("mailboxIp", "")
         }
         if (s.ownRouteArmoredPublicKey.isEmpty() || s.pgpPublicKeyArmored.isEmpty()) {
-            BeamioChatPgpStore.load(ctx)?.let { kc ->
+            (try { BeamioChatPgpStore.load(ctx) } catch (_: IOException) { null })?.let { kc ->
                 if (s.pgpPublicKeyArmored.isEmpty()) s.pgpPublicKeyArmored = kc.publicKeyArmor
                 if (s.ownRouteArmoredPublicKey.isEmpty()) s.ownRouteArmoredPublicKey = kc.routePublicKeyArmor
                 if (s.mailboxIp.isEmpty()) s.mailboxIp = kc.mailboxIp
@@ -813,7 +813,8 @@ object BeamioConetChatModule {
         } catch (_: Exception) {
             return false
         }
-        val pgp = BeamioChatPgpStore.load(ctx)
+        // Unknown (unreadable) stored identity is treated as not there: the listen does not start and nothing is written.
+        val pgp = try { BeamioChatPgpStore.load(ctx) } catch (_: IOException) { null }
         val pgpReady = try {
             NativeWallet.pgp(ctx).state() is NativePgpVault.State.Ready
         } catch (_: Exception) {

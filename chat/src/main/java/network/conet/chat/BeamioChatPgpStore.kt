@@ -1,11 +1,13 @@
 package network.conet.chat
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 
 /**
  * Permanent store for the user **PGP** key, the mailbox route public key and the
@@ -144,31 +146,46 @@ object BeamioChatPgpStore {
         )
     }
 
-    fun load(context: Context): Secrets? {
-        val p = prefs(context)
-        val domainsJson = p.getString(KEY_ENTRIES, "[]").orEmpty()
-        val domains = try {
-            val arr = JSONArray(domainsJson)
-            (0 until arr.length()).mapNotNull { i ->
-                arr.optString(i, "").trim().takeIf { it.isNotEmpty() }
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-        return Secrets(
+    /**
+     * Stored public material. Throws [IOException] when the stored entry domains cannot be read: that state is unknown,
+     * not empty, so no caller may write it back as an empty list.
+     */
+    @Throws(IOException::class)
+    fun load(context: Context): Secrets? = loadFrom(prefs(context))
+
+    @Throws(IOException::class)
+    internal fun loadFrom(p: SharedPreferences): Secrets =
+        Secrets(
             publicKeyArmor = p.getString(KEY_PUBLIC, "").orEmpty(),
             pgpKeyId = p.getString(KEY_KEY_ID, "").orEmpty(),
             routePublicKeyArmor = p.getString(KEY_ROUTE, "").orEmpty(),
-            entryDomains = domains,
+            entryDomains = parseStoredEntryDomains(p.getString(KEY_ENTRIES, null)),
             siNodes = decodeSiNodes(p.getString(KEY_SI_NODES, "[]")),
             mailboxIp = p.getString(KEY_MAILBOX_IP, "").orEmpty(),
             eoa = p.getString(KEY_EOA, "").orEmpty(),
         )
+
+    /**
+     * Entry domains from the stored value. An absent value is an empty list; a value that is not a JSON array throws
+     * [IOException] (unknown). A corrupt value never reads as empty.
+     */
+    @Throws(IOException::class)
+    internal fun parseStoredEntryDomains(raw: String?): List<String> {
+        if (raw == null) return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                arr.optString(i, "").trim().takeIf { it.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            throw IOException("stored entry domains unreadable", e)
+        }
     }
 
-    fun save(context: Context, secrets: Secrets): Boolean {
-        val store = prefs(context)
-        if (!lastPrefsSecure) {
+    fun save(context: Context, secrets: Secrets): Boolean = saveInto(prefs(context), lastPrefsSecure, secrets)
+
+    internal fun saveInto(store: SharedPreferences, secure: Boolean, secrets: Secrets): Boolean {
+        if (!secure) {
             Log.w(TAG, "secure store unavailable; public PGP material not saved")
             return false
         }
@@ -212,7 +229,21 @@ object BeamioChatPgpStore {
     }
 
     fun upsertFromWeb(context: Context, body: JSONObject): Boolean {
-        val prev = load(context)
+        val p = prefs(context)
+        return upsertInto(p, lastPrefsSecure, body)
+    }
+
+    /**
+     * Writes the body's public fields over the stored ones. When the stored entry domains cannot be read the whole upsert is
+     * refused and nothing is written, so an unknown stored list is never replaced by an empty one.
+     */
+    internal fun upsertInto(p: SharedPreferences, secure: Boolean, body: JSONObject): Boolean {
+        val prev = try {
+            loadFrom(p)
+        } catch (_: IOException) {
+            Log.w(TAG, "upsert refused: stored entry domains unreadable")
+            return false
+        }
         val domains = when {
             body.has("entryDomains") -> {
                 val arr = body.optJSONArray("entryDomains")
@@ -221,25 +252,25 @@ object BeamioChatPgpStore {
                         arr.optString(i, "").trim().takeIf { it.isNotEmpty() }
                     }
                 } else {
-                    prev?.entryDomains.orEmpty()
+                    prev.entryDomains
                 }
             }
-            else -> prev?.entryDomains.orEmpty()
+            else -> prev.entryDomains
         }
         val secrets = Secrets(
             publicKeyArmor = body.optString("publicKeyArmor", "").trim()
-                .ifBlank { prev?.publicKeyArmor.orEmpty() },
+                .ifBlank { prev.publicKeyArmor },
             pgpKeyId = body.optString("pgpKeyId", "").trim()
-                .ifBlank { prev?.pgpKeyId.orEmpty() },
+                .ifBlank { prev.pgpKeyId },
             routePublicKeyArmor = body.optString("routePublicKeyArmor", "").trim()
-                .ifBlank { prev?.routePublicKeyArmor.orEmpty() },
+                .ifBlank { prev.routePublicKeyArmor },
             entryDomains = domains,
-            siNodes = prev?.siNodes ?: loadSiNodes(context),
-            mailboxIp = prev?.mailboxIp ?: loadMailboxIp(context),
+            siNodes = prev.siNodes,
+            mailboxIp = prev.mailboxIp,
             eoa = body.optString("eoa", "").trim()
-                .ifBlank { prev?.eoa.orEmpty() },
+                .ifBlank { prev.eoa },
         )
-        return save(context, secrets)
+        return saveInto(p, secure, secrets)
     }
 
     /** PWA roster payloads are ignored. The shell refreshes `getAllNodes` itself. */
