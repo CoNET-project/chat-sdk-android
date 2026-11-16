@@ -392,6 +392,6 @@ class PgpMigrationVectorsTest {
 
     companion object {
         /** sha256 of `spec/pgp-migration-vectors.v1.json` as published with r3cf (§25.52AH, `0ab9f2ab…10fb`; r3bz was `0769d01a…667e`). */
-        const val PINNED_SHA256 = "7d24893c680c5be1b6d09a7273146c0c0665f28c495763070f6e42caf354bc06"
+        const val PINNED_SHA256 = "4f64f629dae500a4597c663a4894429cb6cadc7731ba4003afcfcbc1f84921a4"
     }
 }

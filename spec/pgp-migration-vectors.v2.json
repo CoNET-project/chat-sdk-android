@@ -9706,6 +9706,263 @@
       }
     }
   ],
+  "kpgpCases": [
+    {
+      "id": "KP-01",
+      "title": "新建：生成成功，与 W 同一事务写入，读回一致：created",
+      "input": {
+        "kind": "create",
+        "kPgpExists": false,
+        "generateOk": true,
+        "writeOk": true,
+        "readbackOk": true
+      },
+      "expect": {
+        "action": "created",
+        "writes": [
+          "K_pgp",
+          "W"
+        ],
+        "deletes": [],
+        "page": "first_screen_done",
+        "rollback": false
+      }
+    },
+    {
+      "id": "KP-02",
+      "title": "新建：生成失败：write_failed，不写 K_pgp 与 W",
+      "input": {
+        "kind": "create",
+        "kPgpExists": false,
+        "generateOk": false
+      },
+      "expect": {
+        "action": "write_failed",
+        "writes": [],
+        "deletes": [],
+        "page": "none",
+        "rollback": true
+      }
+    },
+    {
+      "id": "KP-03",
+      "title": "新建：写入失败：整体回滚（删除 K_pgp 与 W），write_failed",
+      "input": {
+        "kind": "create",
+        "kPgpExists": false,
+        "generateOk": true,
+        "writeOk": false,
+        "readbackOk": false
+      },
+      "expect": {
+        "action": "write_failed",
+        "writes": [
+          "K_pgp",
+          "W"
+        ],
+        "deletes": [
+          "K_pgp",
+          "W"
+        ],
+        "page": "none",
+        "rollback": true
+      }
+    },
+    {
+      "id": "KP-04",
+      "title": "新建：读回 keyId 或公钥不一致：整体回滚，write_failed",
+      "input": {
+        "kind": "create",
+        "kPgpExists": false,
+        "generateOk": true,
+        "writeOk": true,
+        "readbackOk": false
+      },
+      "expect": {
+        "action": "write_failed",
+        "writes": [
+          "K_pgp",
+          "W"
+        ],
+        "deletes": [
+          "K_pgp",
+          "W"
+        ],
+        "page": "none",
+        "rollback": true
+      }
+    },
+    {
+      "id": "KP-05",
+      "title": "新建：K_pgp 已存在：不新建，not_available（不覆盖）",
+      "input": {
+        "kind": "create",
+        "kPgpExists": true
+      },
+      "expect": {
+        "action": "not_available",
+        "writes": [],
+        "deletes": [],
+        "page": "none"
+      }
+    },
+    {
+      "id": "KP-06",
+      "title": "升级：K_pgp 已存在：保留，不覆盖",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": true
+      },
+      "expect": {
+        "action": "keep_existing",
+        "writes": [],
+        "deletes": [],
+        "page": "home"
+      }
+    },
+    {
+      "id": "KP-07",
+      "title": "升级：原生 PGP 记录 L 有效：由 L 写入 K_pgp，L 不删除",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": true,
+        "writeOk": true,
+        "readbackOk": true
+      },
+      "expect": {
+        "action": "upgraded_from_L",
+        "writes": [
+          "K_pgp"
+        ],
+        "deletes": [],
+        "page": "home",
+        "rollback": false
+      }
+    },
+    {
+      "id": "KP-08",
+      "title": "升级：L 有效但写入失败：不删除 L，pgp_migration_retry，不自动生成",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": true,
+        "writeOk": false,
+        "readbackOk": false
+      },
+      "expect": {
+        "action": "pgp_migration_retry",
+        "writes": [],
+        "deletes": [],
+        "page": "pgp_migration_retry",
+        "rollback": true
+      }
+    },
+    {
+      "id": "KP-09",
+      "title": "升级：L 不存在，链上备份恢复且指纹、子钥、挑战签验通过：写入 K_pgp",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": false,
+        "chainBackupPresent": true,
+        "chainVerify": true,
+        "writeOk": true,
+        "readbackOk": true
+      },
+      "expect": {
+        "action": "upgraded_from_chain",
+        "writes": [
+          "K_pgp"
+        ],
+        "deletes": [],
+        "page": "home",
+        "rollback": false
+      }
+    },
+    {
+      "id": "KP-10",
+      "title": "升级：链上备份校验失败（指纹或挑战签验不过）：不写入，pgp_migration_retry，不自动生成",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": false,
+        "chainBackupPresent": true,
+        "chainVerify": false
+      },
+      "expect": {
+        "action": "pgp_migration_retry",
+        "writes": [],
+        "deletes": [],
+        "page": "pgp_migration_retry",
+        "rollback": true
+      }
+    },
+    {
+      "id": "KP-11",
+      "title": "升级：L 与链上备份均不存在，用户未点击：pgp_migration_retry，不生成新钥",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": false,
+        "chainBackupPresent": false,
+        "userClick": false
+      },
+      "expect": {
+        "action": "pgp_migration_retry",
+        "writes": [],
+        "deletes": [],
+        "page": "pgp_migration_retry",
+        "rollback": false
+      }
+    },
+    {
+      "id": "KP-12",
+      "title": "升级：L 与链上备份均不存在，用户明确点击：生成新钥，按注册流程替换链上记录",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": false,
+        "chainBackupPresent": false,
+        "userClick": true
+      },
+      "expect": {
+        "action": "generated_on_user_click",
+        "writes": [
+          "K_pgp"
+        ],
+        "deletes": [],
+        "page": "home",
+        "rollback": false,
+        "registryReplace": true
+      }
+    },
+    {
+      "id": "KP-13",
+      "title": "升级：L 无效而链上备份有效：以链上备份恢复，L 不删除",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": false,
+        "chainBackupPresent": true,
+        "chainVerify": true,
+        "writeOk": true,
+        "readbackOk": true
+      },
+      "expect": {
+        "action": "upgraded_from_chain",
+        "writes": [
+          "K_pgp"
+        ],
+        "deletes": [],
+        "page": "home",
+        "rollback": false
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",
