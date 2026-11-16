@@ -201,6 +201,10 @@ class BridgeKeyAuditTest {
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"privateKeyHex\", \"privateKeyArmored\", \"privateKeyArmor\", \"pgpPrivateKeyArmored\",",
             ),
+            "AccountPgpK.kt" to listOf(
+                // K (25.52Y.1): the SDK account PGP item is written to the encrypted SDK store, with its private armor, and never over the bridge.
+                ".put(\"privateKeyArmor\", privateArmor)",
+            ),
             "PageCopyState.kt" to listOf(
                 // pageCopyState (25.52PY.15 第 15 项, PY.17): a stored-record read of the page copy's key, to decide the state only. The result is
                 // absent, unreadable, or readable with a boolean; no key value reaches any reply.

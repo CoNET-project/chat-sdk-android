@@ -1289,10 +1289,8 @@ object BeamioConetChatModule {
     }
 
     /**
-     * The local sources of the binding lookup (HH.2, §25.52Y.1, §25.48.4). A positive EOA source is the account's wallet key or its SDK account record
-     * K (the per-account PGP record `pgp.v1.<account>.rec` or its marker). The page copy is not K and is not a source. K is read by name:
-     * an unreadable directory is fail closed (unreadable), and a locked keychain is unreadable too (interface ruling: storage_locked is never no-record).
-     * For a tag the account is not known: kPresent is "any K exists" (§25.48.4).
+     * The local sources of the binding lookup (HH.2, §25.52Y.1, §25.48.4): the wallet key, and K, the SDK account PGP item in the encrypted store
+     * (AccountPgpK). Decided by [network.conet.chat.nativekey.BindingLocalSources]. An unreadable keychain or store is fail closed.
      */
     private fun bindingLocalSources(ctx: Context, eoa: String?): Pair<network.conet.chat.nativekey.LocalSource, BindingDevice> {
         val app = ctx.applicationContext
@@ -1304,28 +1302,19 @@ object BeamioConetChatModule {
         val keyReady = vault is network.conet.chat.nativekey.NativeWalletVault.State.Ready &&
             (eoa == null || vault.eoa.equals(eoa, ignoreCase = true))
         val vaultUnreadable = vault == null || vault is network.conet.chat.nativekey.NativeWalletVault.State.Locked
-        var kPresent = false
-        var kUnreadable = false
-        try {
-            val names = network.conet.chat.nativekey.NativeWallet.pgpFiles(app).names()
-            kPresent = if (eoa != null) {
-                names.contains(network.conet.chat.nativekey.NativePgpVault.recName(eoa)) ||
-                    names.contains(network.conet.chat.nativekey.NativePgpVault.markName(eoa))
+        val kStore = network.conet.chat.nativekey.AccountPgpK.forDevice(app)
+        val kState = try {
+            val present = if (eoa != null) {
+                kStore.existsFor(eoa, network.conet.chat.nativekey.PgpMigrationPolicy.WORKSPACE)
             } else {
-                names.any { PGP_K_NAME.matches(it) }
+                kStore.existsAny()
             }
+            if (present) network.conet.chat.nativekey.BindingLocalSources.KState.PRESENT else network.conet.chat.nativekey.BindingLocalSources.KState.ABSENT
         } catch (_: Exception) {
-            kUnreadable = true
+            network.conet.chat.nativekey.BindingLocalSources.KState.UNREADABLE
         }
-        val local = when {
-            keyReady || kPresent -> network.conet.chat.nativekey.LocalSource.POSITIVE
-            vaultUnreadable || kUnreadable -> network.conet.chat.nativekey.LocalSource.UNREADABLE
-            else -> network.conet.chat.nativekey.LocalSource.NONE
-        }
-        return local to BindingDevice(kPresent = keyReady || kPresent, walletRecord = keyReady)
+        return network.conet.chat.nativekey.BindingLocalSources.of(keyReady, vaultUnreadable, kState)
     }
-
-    private val PGP_K_NAME = Regex("pgp\\.v1\\.[0-9a-f]{40}\\.(rec|ok)")
 
     private val pgpRestoreWorker = Executors.newSingleThreadExecutor()
     private val PGP_RESTORE_FIELDS = setOf("type", "reqId", "accountKey")
