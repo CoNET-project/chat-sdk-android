@@ -930,6 +930,12 @@ object BeamioConetChatModule {
             // removes nothing.
             // (1a) to (1c) and (2) to (8), PY.8 and PY.12: the refusals come before any write (identityClear). A storage error is a code, never
             // ok (PY.3).
+            // An unknown snapshot is not "no account": the clear must not run on a state it cannot determine (25.52Y.75, 25.52CS.2).
+            if (NativeWallet.vault(ctx).snapshotState() == null) {
+                scheduleSnapshotRefresh(ctx)
+                main.post { finishClearIdentity(reqId, IdentityClearCode.CLEAR_INCOMPLETE) }
+                return@execute
+            }
             val eoa = recoveryAccountOf(ctx)
             val code = runCatching { identityClear(ctx, eoa).clear() }.getOrElse { IdentityClearCode.CLEAR_INCOMPLETE }
             main.post { finishClearIdentity(reqId, code) }
@@ -1036,6 +1042,11 @@ object BeamioConetChatModule {
 
     /** Runs the redo again and sets [clearRedoBlocked] from its result: blocked on clear_incomplete or an exception, free otherwise. */
     private fun retryClearRedo(ctx: Context) {
+        // Unknown snapshot: the redo waits for a known state (never run as "no account").
+        if (NativeWallet.vault(ctx).snapshotState() == null) {
+            scheduleSnapshotRefresh(ctx)
+            return
+        }
         runCatching { identityClear(ctx, recoveryAccountOf(ctx)).redoIfInterrupted() }
             .onSuccess { code ->
                 code?.let { Log.i(TAG, "identity clear redo result=$it") }
