@@ -12,6 +12,13 @@ import java.io.File
 // The test account of the vectors, through the sidecar (25.52AL.3).
 private val ACCOUNT: String = VectorSidecar.ACCOUNT
 
+/** A wrapping key that is gone: nothing opens, so a stored record is unreadable (§25.52CH.1, a locked store). */
+private object LockedKeyWrap : KeyWrap {
+    override fun seal(aad: ByteArray, plain: ByteArray): ByteArray = throw IllegalStateException("locked")
+    override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? = null
+    override fun deleteKey(): Boolean = false
+}
+
 class ShellRecordAckVectorsTest {
     private val doc = VectorSidecar.map(JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8)))
 
@@ -61,9 +68,11 @@ class ShellRecordAckVectorsTest {
             JSONObject().put("type", "shellRecordWrite").also { b -> for (k in req.keys()) b.put(k, req.get(k)) }
         }
         val size = if (ctx.has("sizeBytes")) ctx.getInt("sizeBytes") else body.toString().toByteArray(Charsets.UTF_8).size
+        // 25.52CH.1 (r3eg): a locked store cannot open its record, so a read of it fails (AK-38, AK-46): the page store is re-opened with a key that is gone.
+        val bridgeStore = if (ctx.optBoolean("locked")) SealedPageRecordStore(LockedKeyWrap, files, "$ACCOUNT:default") else store
         val bridge = ShellRecordBridge(
             // §25.52Y.52: the account is modelled from the case ctx and resolved by the production rule.
-            account = { accountFor(ctx, c, store) },
+            account = { accountFor(ctx, c, bridgeStore) },
             migrating = { false },
             outcome = { outcome },
             flags = flags,
