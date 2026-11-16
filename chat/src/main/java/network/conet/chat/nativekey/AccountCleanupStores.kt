@@ -54,8 +54,20 @@ internal object CleanupOwners {
      * envelope's clear `eoa` field (no key is opened); a file that reads but names no EOA gives [OwnerRead.Unowned].
      */
     fun walletVaultOwner(dir: File): OwnerRead {
-        val present = WALLET_NAMES.map { File(dir, it) }.filter { it.exists() }
-        if (present.any { !it.isFile }) return OwnerRead.Unreadable
+        // Absent is only NoSuchFileException from the stat; any other failure to stat (permission, I/O) is unreadable, never absent (Y.104 第 3 条).
+        val present = mutableListOf<File>()
+        for (name in WALLET_NAMES) {
+            val f = File(dir, name)
+            val attributes = try {
+                java.nio.file.Files.readAttributes(f.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+            } catch (_: java.nio.file.NoSuchFileException) {
+                continue
+            } catch (_: Exception) {
+                return OwnerRead.Unreadable
+            }
+            if (!attributes.isRegularFile) return OwnerRead.Unreadable
+            present += f
+        }
         val raws = mutableListOf<ByteArray>()
         for (f in present) {
             try {

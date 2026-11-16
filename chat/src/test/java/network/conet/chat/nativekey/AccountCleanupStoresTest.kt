@@ -415,4 +415,23 @@ class AccountCleanupStoresTest {
     fun anUnreadableInboxIsClearIncomplete() {
         assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(UnattributedInboxCleanup { throw IOException("inbox unreadable") })).code)
     }
+
+    /**
+     * A vault entry that cannot be stat-ed (permission denied) is unreadable, not absent: the owner is unknown, the result is clear_incomplete, and
+     * nothing is removed. Skipped where the process can read everything (root).
+     */
+    @Test
+    fun aVaultEntryThatCannotBeStatedIsUnreadableNotAbsent() {
+        val dir = nativeDir()
+        File(dir, "wallet.v1.rec").writeText(envelope(oldEoa))
+        org.junit.Assume.assumeTrue("permission checks need a non-root process", System.getProperty("user.name") != "root")
+        assertTrue(dir.setExecutable(false))
+        try {
+            val owner = CleanupOwners.walletVaultOwner(dir)
+            assertEquals(OwnerRead.Unreadable, owner)
+        } finally {
+            dir.setExecutable(true)
+        }
+        assertTrue("the entry is still there", File(dir, "wallet.v1.rec").exists())
+    }
 }

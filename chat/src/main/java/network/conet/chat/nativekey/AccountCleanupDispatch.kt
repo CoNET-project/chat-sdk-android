@@ -26,7 +26,12 @@ internal object AccountCleanupDispatch {
         nativeNewAccount: () -> String?,
         runFor: () -> CleanupRun?,
     ): JSONObject {
-        val run = runFor() ?: return accountCleanupAck(reqId, AccountCleanupOld.Outcome(AccountCleanupOld.NOT_READY, emptyList(), emptyList(), false))
+        // Every reqId gets exactly one answer (Y.91 第 6 项): a run that cannot be built is not_ready, and a builder that throws is clear_incomplete.
+        val run = try {
+            runFor() ?: return accountCleanupAck(reqId, AccountCleanupOld.Outcome(AccountCleanupOld.NOT_READY, emptyList(), emptyList(), false))
+        } catch (_: Exception) {
+            return accountCleanupAck(reqId, AccountCleanupOld.Outcome(AccountCleanupOld.CLEAR_INCOMPLETE, emptyList(), emptyList(), cleanupPending = true))
+        }
         val fields = body.keys().asSequence().map { it.toString() }.filter { it != "type" && it != "reqId" }.toList()
         val newKey = try {
             nativeNewAccount()

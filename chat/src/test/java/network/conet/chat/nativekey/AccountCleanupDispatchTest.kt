@@ -161,4 +161,20 @@ class AccountCleanupDispatchTest {
         assertEquals("not_available", ack.getString("error"))
         assertTrue(adapter.removed.isEmpty())
     }
+
+    /** A run that cannot be built and throws is still exactly one answer for the reqId: clear_incomplete with cleanupPending, never ok. */
+    @Test
+    fun aRunBuilderThatThrowsStillAnswersTheReqIdOnce() {
+        val ack = AccountCleanupDispatch.handle(
+            reqId = "r7",
+            body = body(),
+            nativeNewAccount = { newKey },
+            runFor = { throw IOException("store cannot be opened") },
+        )
+
+        assertEquals("r7", ack.getString("reqId"))
+        assertFalse(ack.getBoolean("ok"))
+        assertEquals("clear_incomplete", ack.getString("error"))
+        assertTrue(ack.getJSONObject("result").getBoolean("cleanupPending"))
+    }
 }
