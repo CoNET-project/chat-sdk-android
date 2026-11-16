@@ -478,8 +478,8 @@ class ShellRecordTest {
             migrating = { false },
             outcome = { ImportOutcome.LEGACY_UNREADABLE },
         ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r2"), 40)
-        assertEquals("error", unreadable.v().getString("code"))
-        assertEquals("legacy_store_unreadable", unreadable.v().getString("sub"))
+        // §25.52U.6 (r3rz): an unreadable legacy store answers migrating, not error(legacy_store_unreadable).
+        assertEquals("migrating", unreadable.v().getString("code"))
         val notDone = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },

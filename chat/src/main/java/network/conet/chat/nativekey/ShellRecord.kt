@@ -1159,19 +1159,16 @@ internal class ShellRecordBridge(
      */
     private fun noRecord(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
         if (flags.accountPointer()) return reply("error", listOf("sub" to "account_record_missing"))
+        // §25.52U.6 (r3rz): an unreadable or unread legacy store answers migrating, never error(legacy_store_unreadable).
         return when (outcome()) {
-            null -> if (flags.legacyUnreadable()) {
-                reply("error", listOf("sub" to "legacy_store_unreadable"))
-            } else {
-                reply("migrating", emptyList())
-            }
+            null -> reply("migrating", emptyList())
             ImportOutcome.ABSENT -> {
                 flags.clearLegacyUnreadable()
                 reply("absent", emptyList())
             }
             ImportOutcome.LEGACY_UNREADABLE -> {
                 flags.setLegacyUnreadable()
-                reply("error", listOf("sub" to "legacy_store_unreadable"))
+                reply("migrating", emptyList())
             }
             ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
             ImportOutcome.ACCOUNT_MISMATCH -> reply("error", listOf("sub" to "account_mismatch"))

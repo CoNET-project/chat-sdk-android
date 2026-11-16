@@ -119,12 +119,12 @@ class ShellRecordR431Test {
     }
 
     @Test
-    fun aMarkerWithoutAReReadAnswersErrorNotAbsence() {
-        // §25.52T.6 (AK-07): the marker is set and the legacy store was not read again in this process: error, never absent.
+    fun aMarkerWithoutAReReadAnswersMigratingNotAbsence() {
+        // §25.52T.6 (AK-07), §25.52U.6 (r3rz): the marker is set and the legacy store was not read again in this process: migrating, never absent.
         val files = NativeTestFiles()
         DeviceFlagFiles(files).setLegacyUnreadable()
         val resp = read("mark2", bridge(null, store(files), DeviceFlagFiles(files)))
-        assertEquals("legacy_store_unreadable", resp.v().getString("sub"))
+        assertEquals("migrating", resp.v().getString("code"))
     }
 
     @Test
