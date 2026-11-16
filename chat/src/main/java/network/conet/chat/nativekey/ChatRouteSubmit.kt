@@ -101,7 +101,6 @@ internal object ChatRouteSubmit {
     ): Outcome {
         var attempt = 0
         for (base in bases) {
-            val overIp = base.startsWith("http://")
             var retries = 0
             while (true) {
                 val body = bodyFor(attempt) ?: return Outcome.Refused("sign_failed")
@@ -114,11 +113,11 @@ internal object ChatRouteSubmit {
                     is Transport.Answer -> {
                         if (t.status in 200..299) {
                             if (!runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)) return Outcome.Refused("chain_refused")
-                            if (!overIp) return Outcome.Submitted
+                            // A success is never submitted on the answer alone (25.52Y.67 第 2 项), on either base. IP-01..03 for the IP base.
                             return when (chain.registered()) {
-                                true -> Outcome.Submitted // IP-01
-                                false -> Outcome.UnverifiedSubmit // IP-02
-                                null -> Outcome.NetworkUnavailable // IP-03
+                                true -> Outcome.Submitted
+                                false -> Outcome.UnverifiedSubmit
+                                null -> Outcome.NetworkUnavailable
                             }
                         }
                         if (t.status !in 500..599) return Outcome.Refused("chain_refused")

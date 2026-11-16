@@ -96,14 +96,19 @@ class ChatRouteSubmitTest {
     }
 
     @Test
-    fun domainSuccessIsSubmittedWithoutChainCheck() {
-        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ok), chain(null), listOf(domain)))
+    fun domainSuccessRegisteredOnChainIsSubmitted() {
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ok), chain(true), listOf(domain)))
+    }
+
+    @Test
+    fun domainSuccessNotOnChainIsUnverifiedSubmit() {
+        assertEquals(ChatRouteSubmit.Outcome.UnverifiedSubmit, run(listOf(ok), chain(false), listOf(domain)))
     }
 
     @Test
     fun ipUnreachableFallsThroughToDomain() {
         val posts = mutableListOf<String>()
-        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ChatRouteSubmit.Transport.Unreachable, ok), chain(null), listOf(ip, domain), posts))
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ChatRouteSubmit.Transport.Unreachable, ok), chain(true), listOf(ip, domain), posts))
         assertEquals(2, posts.size)
     }
 
