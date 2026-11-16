@@ -10421,6 +10421,169 @@
       }
     }
   ],
+  "registrationMessageCases": [
+    {
+      "id": "MS-01",
+      "title": "登记签名消息：字段顺序与 PWA 合成示例逐字节一致（哈希为 ethers 复算值）",
+      "input": {
+        "wallet": "0x1234567890abcdef1234567890abcdef12345678",
+        "keyID": "0123456789ABCDEF",
+        "publicKeyArmoredHash": "0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55",
+        "encrypKeyArmoredHash": "0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963",
+        "routeKeyID": "FEDCBA9876543210",
+        "timestamp": 1763251200000,
+        "nonce": "0xabababababababababababababababab"
+      },
+      "expect": {
+        "message": "Beamio regiestChatRoute\nwallet:0x1234567890abcdef1234567890abcdef12345678\nkeyID:0123456789ABCDEF\npublicKeyArmoredHash:0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55\nencrypKeyArmoredHash:0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963\nrouteKeyID:FEDCBA9876543210\ntimestamp:1763251200000\nnonce:0xabababababababababababababababab",
+        "endsWithNewline": false
+      }
+    },
+    {
+      "id": "MS-02",
+      "title": "登记签名消息：wallet 混合大小写输入，消息内转小写（请求体另用校验和大小写）",
+      "input": {
+        "wallet": "0x1234567890ABCDEF1234567890abcdef12345678",
+        "keyID": "0123456789ABCDEF",
+        "publicKeyArmoredHash": "0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55",
+        "encrypKeyArmoredHash": "0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963",
+        "routeKeyID": "FEDCBA9876543210",
+        "timestamp": 1763251200000,
+        "nonce": "0xabababababababababababababababab"
+      },
+      "expect": {
+        "message": "Beamio regiestChatRoute\nwallet:0x1234567890abcdef1234567890abcdef12345678\nkeyID:0123456789ABCDEF\npublicKeyArmoredHash:0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55\nencrypKeyArmoredHash:0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963\nrouteKeyID:FEDCBA9876543210\ntimestamp:1763251200000\nnonce:0xabababababababababababababababab",
+        "endsWithNewline": false
+      }
+    },
+    {
+      "id": "MS-03",
+      "title": "登记签名消息：nonce 大写输入，消息内转小写",
+      "input": {
+        "wallet": "0x1234567890abcdef1234567890abcdef12345678",
+        "keyID": "0123456789ABCDEF",
+        "publicKeyArmoredHash": "0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55",
+        "encrypKeyArmoredHash": "0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963",
+        "routeKeyID": "FEDCBA9876543210",
+        "timestamp": 1763251200000,
+        "nonce": "0xABABABABABABABABABABABABABABABAB"
+      },
+      "expect": {
+        "message": "Beamio regiestChatRoute\nwallet:0x1234567890abcdef1234567890abcdef12345678\nkeyID:0123456789ABCDEF\npublicKeyArmoredHash:0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55\nencrypKeyArmoredHash:0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963\nrouteKeyID:FEDCBA9876543210\ntimestamp:1763251200000\nnonce:0xabababababababababababababababab",
+        "endsWithNewline": false
+      }
+    },
+    {
+      "id": "MS-04",
+      "title": "登记签名消息：keyID 与 routeKeyID 原样，不转换大小写（与 PWA 一致）",
+      "input": {
+        "wallet": "0x1234567890abcdef1234567890abcdef12345678",
+        "keyID": "0123456789abcdef",
+        "publicKeyArmoredHash": "0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55",
+        "encrypKeyArmoredHash": "0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963",
+        "routeKeyID": "FEDCBA9876543210",
+        "timestamp": 1763251200000,
+        "nonce": "0xabababababababababababababababab"
+      },
+      "expect": {
+        "message": "Beamio regiestChatRoute\nwallet:0x1234567890abcdef1234567890abcdef12345678\nkeyID:0123456789abcdef\npublicKeyArmoredHash:0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55\nencrypKeyArmoredHash:0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963\nrouteKeyID:FEDCBA9876543210\ntimestamp:1763251200000\nnonce:0xabababababababababababababababab",
+        "endsWithNewline": false
+      }
+    },
+    {
+      "id": "MS-05",
+      "title": "带首尾空白的 keyID 与 routeKeyID：先 trim，签名消息与请求体中的值逐字节相同",
+      "input": {
+        "wallet": "0x1234567890abcdef1234567890abcdef12345678",
+        "keyID": "  0123456789ABCDEF \n",
+        "publicKeyArmoredHash": "0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55",
+        "encrypKeyArmoredHash": "0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963",
+        "routeKeyID": "\tFEDCBA9876543210 ",
+        "timestamp": 1763251200000,
+        "nonce": "0xabababababababababababababababab"
+      },
+      "expect": {
+        "message": "Beamio regiestChatRoute\nwallet:0x1234567890abcdef1234567890abcdef12345678\nkeyID:0123456789ABCDEF\npublicKeyArmoredHash:0xbfca643b8aa65e70e432fc525ea5088f59d9a0b1fcd511b8b8ef3c7eabf61c55\nencrypKeyArmoredHash:0x1703e2670ef6c50a1d3f28c6b3fad223abacdccdb48ae96dae2f6b8113461963\nrouteKeyID:FEDCBA9876543210\ntimestamp:1763251200000\nnonce:0xabababababababababababababababab",
+        "endsWithNewline": false
+      }
+    }
+  ],
+  "routeRegisterAckCases": [
+    {
+      "id": "RA-01",
+      "title": "复用入口，壳内提交成功：ack ok:true，result 仅 code:submitted，无字段",
+      "input": {
+        "code": "submitted"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "code": "submitted"
+        }
+      }
+    },
+    {
+      "id": "RA-02",
+      "title": "复用入口，服务端拒绝：ack ok:false，error chain_refused，无字段",
+      "input": {
+        "code": "chain_refused"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "chain_refused"
+      }
+    },
+    {
+      "id": "RA-03",
+      "title": "复用入口，两路网络不通：ack ok:false，error network_unavailable",
+      "input": {
+        "code": "network_unavailable"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "network_unavailable"
+      }
+    },
+    {
+      "id": "RA-04",
+      "title": "复用入口，签名失败：ack ok:false，error sign_failed，不提交",
+      "input": {
+        "code": "sign_failed"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "sign_failed"
+      }
+    },
+    {
+      "id": "RA-05",
+      "title": "复用入口，备份回读失败：ack ok:false，error backup_readback_failed，不提交",
+      "input": {
+        "code": "backup_readback_failed"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "backup_readback_failed"
+      }
+    },
+    {
+      "id": "RA-06",
+      "title": "复用入口，无 K_pgp：ack ok:false，error no_pgp_key（沿用现有码）",
+      "input": {
+        "code": "no_pgp_key"
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "no_pgp_key"
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",
