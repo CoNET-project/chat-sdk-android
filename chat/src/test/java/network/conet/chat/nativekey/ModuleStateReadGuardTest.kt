@@ -20,4 +20,32 @@ class ModuleStateReadGuardTest {
     fun pgpMigrateAnswersNotReadyWhenTheVaultCannotBeRead() {
         assertTrue(module.contains("ctx?.let { NativeWallet.vault(it).state() }\n        } catch (_: Exception) {\n            return answer(false, \"not_ready\")"))
     }
+
+    /** The restore workers answer every request once: an unreadable store is not_ready on the evaluate answer and on the restore result (25.52Y.84). */
+    @Test
+    fun pgpRestoreWorkersAnswerOnceWithNotReadyOnAnUnreadableStore() {
+        assertTrue(module.contains("pgpRestore evaluate failed"))
+        assertTrue(module.contains("answer(false, \"not_ready\")"))
+        assertTrue(module.contains("pgpRestore restore failed"))
+        assertTrue(module.contains("JSONObject().put(\"code\", \"not_ready\")"))
+    }
+
+    /** The migration worker sends one result on any unreadable store: the reread code, never a success or a confirmed none. */
+    @Test
+    fun pgpMigrateWorkerSendsTheRereadCodeOnAnUnreadableStore() {
+        assertTrue(module.contains("MigrationResult(MigrationCode.REREAD_FAILED)"))
+    }
+
+    /** The no-page listen does not start on an unreadable vault or PGP store. */
+    @Test
+    fun noPageListenDoesNotStartOnAnUnreadableStore() {
+        assertTrue(module.contains("the listen does not start (false), never taken for an absent account"))
+        assertTrue(module.contains("val pgpReady = try {"))
+    }
+
+    /** The identity-clear holds check is unknown (null) on an unreadable vault, page or keystore, so the accounts are kept. */
+    @Test
+    fun holdsWalletIsUnknownOnAnUnreadableVault() {
+        assertTrue(module.contains(".any { vaultFiles.read(it) != null }\n        } catch (_: Exception) {\n            return null"))
+    }
 }
