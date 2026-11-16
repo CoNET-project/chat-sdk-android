@@ -878,11 +878,23 @@ internal typealias ShellReplyFields = List<Pair<String, Any?>>
 
 /** What the bridge needs about the account before it can answer. */
 internal sealed class ShellRecordAccount {
-    /** The account is known, and its page store is [store]. */
-    class Ready(val store: SealedPageRecordStore, val eoa: String) : ShellRecordAccount()
+    /**
+     * The account is known, and its page store is [store]. [nativeKeyPresent] is true when the native key store holds the account's EOA key
+     * (§25.52Y.52 AK-60): the copy is then missing, not the key.
+     */
+    class Ready(val store: SealedPageRecordStore, val eoa: String, val nativeKeyPresent: Boolean = false) : ShellRecordAccount()
 
     /** No wallet and no imported account. Nothing can be read or held for it yet. */
     object Unknown : ShellRecordAccount()
+
+    /** The page copies cannot be enumerated (§25.52CH.1, AK-40, AK-41): a read answers record_unreadable, a write migrating. */
+    object Unreadable : ShellRecordAccount()
+
+    /**
+     * Two or more native keys and no pointer (R1533 第 3 条, N 第 2 项): the account is not chosen automatically. A read answers not_ready; a
+     * write answers migrating (R1539: a write has no not_ready).
+     */
+    object Ambiguous : ShellRecordAccount()
 
     /** A page copy exists but no profile of it holds the EOA private key: the copy is a record of another account (§25.52Y.15 第 2 项, r3mh). Reads answer account_mismatch. */
     object Mismatch : ShellRecordAccount()
@@ -1027,9 +1039,14 @@ private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready", "
  * `origin_refused`, `too_large`, and a `bad_request` without path names (a bad reqId, a missing record, a non-integer rev). A `bad_request`
  * with path names is a content refusal and goes in `result`. No separate event is sent.
  */
-internal fun shellAck(reqId: Any, code: String, fields: ShellReplyFields): JSONObject {
+internal fun shellAck(
+    reqId: Any,
+    code: String,
+    fields: ShellReplyFields,
+    envelope: Boolean = code in ENVELOPE_CODES || (code == "bad_request" && fields.none { it.first == "names" }),
+): JSONObject {
     val out = JSONObject().put("type", "ack").put("reqId", reqId)
-    val envelopeRefusal = code in ENVELOPE_CODES || (code == "bad_request" && fields.none { it.first == "names" })
+    val envelopeRefusal = envelope
     if (envelopeRefusal) return out.put("ok", false).put("error", code)
     val result = JSONObject().put("code", code)
     for ((k, v) in fields) result.put(k, v ?: JSONObject.NULL)
@@ -1091,6 +1108,8 @@ internal class ShellRecordBridge(
         // §25.52AD.4 step 2: the gate answers before the payload is read. G1 is not_ready (§25.26.4c).
         val acc = account()
         if (acc is ShellRecordAccount.NotReady) return reply("not_ready", emptyList())
+        // R1533 第 3 条 (AK-55): two native keys and no pointer; the account is not chosen, and the read answers not_ready as a result code.
+        if (acc is ShellRecordAccount.Ambiguous && type == "shellRecordRead") return shellAck(echo, "not_ready", emptyList(), envelope = false)
         val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
         // spec 25.52Y.41 第 6 项: a read that names a key-shaped field is refused as key material, with the names only and no value. Other
         // unknown names stay bad_request.
@@ -1123,6 +1142,8 @@ internal class ShellRecordBridge(
         }
         // §25.52Y.15 第 2 项 (r3mh, AK-61): a page copy that no profile of which holds the EOA key answers account_mismatch.
         if (acc is ShellRecordAccount.Mismatch) return reply("error", listOf("sub" to "account_mismatch"))
+        // §25.52CH.1, AK-40: the page copies cannot be enumerated, so the record is unreadable (never absent).
+        if (acc is ShellRecordAccount.Unreadable) return reply("error", listOf("sub" to "record_unreadable"))
         if (acc is ShellRecordAccount.Ready) {
             val current: JSONObject? = try {
                 acc.store.read()
@@ -1153,7 +1174,7 @@ internal class ShellRecordBridge(
                 return out
             }
         }
-        return noRecord(reply)
+        return noRecord(acc, reply)
     }
 
     /** The flags a readable record sets: the marker is cleared, and an empty pointer is repaired when a profile matches (§25.52U.5). */
@@ -1174,8 +1195,13 @@ internal class ShellRecordBridge(
      * No native record (§25.52T.3, §25.52T.6). The pointer comes first: a device that has established an account never answers absent.
      * `absent` needs the legacy store confirmed absent, which also clears the marker. An unreadable legacy store sets the marker.
      */
-    private fun noRecord(reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
-        if (flags.accountPointer()) return reply("error", listOf("sub" to "account_record_missing"))
+    private fun noRecord(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
+        if (flags.accountPointer()) {
+            // R1520b 第 2 项, AK-60: the pointer's account key is present and only its page copy is missing: migrating (the copy is rebuilt).
+            // With no key for the pointer's account the pointer is fail-closed (AK-08, AK-54).
+            val keyPresent = acc is ShellRecordAccount.Ready && acc.nativeKeyPresent
+            return if (keyPresent) reply("migrating", emptyList()) else reply("error", listOf("sub" to "account_record_missing"))
+        }
         // §25.52U.6 (r3rz): an unreadable or unread legacy store answers migrating, never error(legacy_store_unreadable).
         return when (outcome()) {
             null -> reply("migrating", emptyList())
@@ -1263,6 +1289,8 @@ internal class ShellRecordBridge(
         // §25.52AA, AK-28: a device marker holds the write back, with or without a record (the record is not yet read as valid).
         if (flags.legacyUnreadable()) return reply("migrating", emptyList())
         if (current == null) {
+            // AK-41 (enumeration failed) and AK-58 (two native keys, no pointer): a write answers migrating, never not_ready (R1539).
+            if (acc is ShellRecordAccount.Unreadable || acc is ShellRecordAccount.Ambiguous) return reply("migrating", emptyList())
             // §25.52W.3, AK-23 to AK-25, AK-27, R445: with no native record, a write waits for a completed read. A pointer, a marker, or any
             // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed
             // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
@@ -1363,6 +1391,12 @@ internal object ShellRecordAccounts {
     /** A lower-case account address: `0x` and 40 hex digits. */
     fun isAddress(value: String): Boolean = ADDRESS.matches(value)
 
+    /**
+     * [keys] is the native key list (the EOA addresses held by the native key store); null means the vault's own state. The pointer
+     * (`bound`) comes first (R1533 第 1 项): a pointer whose key is held is that account; a pointer whose key is absent is fail-closed.
+     * With no pointer, exactly one held key is the account and two or more are [ShellRecordAccount.Ambiguous] (R1533 第 3 条). With no key
+     * the page copy decides (§25.52AD.2, §25.52Y.56); an enumeration failure is [ShellRecordAccount.Unreadable] (AK-40).
+     */
     fun resolve(
         vault: NativeWalletVault.State,
         sessionReady: Boolean,
@@ -1371,25 +1405,43 @@ internal object ShellRecordAccounts {
         copyNames: () -> List<String>,
         storeOf: (String) -> SealedPageRecordStore,
         persisted: () -> String? = { null },
-    ): ShellRecordAccount = when (vault) {
-        is NativeWalletVault.State.Ready, is NativeWalletVault.State.Locked -> when {
-            sessionGate && !sessionReady -> ShellRecordAccount.NotReady
-            vault is NativeWalletVault.State.Ready -> {
-                val eoa = vault.eoa.lowercase()
-                ShellRecordAccount.Ready(storeOf(eoa), eoa)
+        keys: List<String>? = null,
+    ): ShellRecordAccount {
+        val held = (keys ?: (vault as? NativeWalletVault.State.Ready)?.let { listOf(it.eoa) } ?: emptyList())
+            .map { it.lowercase() }.distinct()
+        return when (vault) {
+            is NativeWalletVault.State.Ready, is NativeWalletVault.State.Locked -> when {
+                sessionGate && !sessionReady -> ShellRecordAccount.NotReady
+                vault is NativeWalletVault.State.Locked && bound == null -> ShellRecordAccount.Locked
+                else -> byKeys(held, bound, storeOf) ?: ShellRecordAccount.Locked
             }
-            bound != null -> ShellRecordAccount.Ready(storeOf(bound), bound)
-            else -> ShellRecordAccount.Locked
+            is NativeWalletVault.State.NoKey -> byKeys(held, bound, storeOf) ?: run {
+                // R488: the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
+                val restored = persisted()?.takeIf { isAddress(it) }
+                if (restored != null) {
+                    ShellRecordAccount.Ready(storeOf(restored), restored)
+                } else {
+                    val names = try {
+                        copyNames()
+                    } catch (_: IOException) {
+                        return ShellRecordAccount.Unreadable
+                    }
+                    // §25.52Y.56: one or more copies and none holding the EOA key of its own account is account_mismatch; otherwise Unknown.
+                    heldCopy(names, storeOf) ?: if (copiesPresentNoneHeld(names, storeOf)) ShellRecordAccount.Mismatch else ShellRecordAccount.Unknown
+                }
+            }
         }
-        is NativeWalletVault.State.NoKey -> {
-            // R488: the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
-            val restored = bound ?: persisted()?.takeIf { isAddress(it) }
-            if (restored != null) ShellRecordAccount.Ready(storeOf(restored), restored)
-            else {
-                val names = copyNames()
-                // §25.52Y.56: one or more copies and none holding the EOA key of its own account is account_mismatch; otherwise Unknown.
-                heldCopy(names, storeOf) ?: if (copiesPresentNoneHeld(names, storeOf)) ShellRecordAccount.Mismatch else ShellRecordAccount.Unknown
-            }
+    }
+
+    /** The account decided by the native keys and the pointer, or null when neither names one. */
+    private fun byKeys(held: List<String>, bound: String?, storeOf: (String) -> SealedPageRecordStore): ShellRecordAccount? {
+        val pointer = bound?.lowercase()
+        return when {
+            pointer != null && pointer in held -> ShellRecordAccount.Ready(storeOf(pointer), pointer, nativeKeyPresent = true)
+            pointer != null -> ShellRecordAccount.Ready(storeOf(pointer), pointer, nativeKeyPresent = false)
+            held.size == 1 -> ShellRecordAccount.Ready(storeOf(held[0]), held[0], nativeKeyPresent = true)
+            held.size >= 2 -> ShellRecordAccount.Ambiguous
+            else -> null
         }
     }
 

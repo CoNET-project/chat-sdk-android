@@ -53,6 +53,7 @@ internal object VectorSidecar {
     private val keyIdMap: Map<String, String> = mapOf(
         "a1" to addressA,
         "A1" to "0x" + addressA.substring(2).uppercase(),
+        "a2" to addressB,
         "b2" to addressB,
         "zz" to addressC,
     )

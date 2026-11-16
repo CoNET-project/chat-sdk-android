@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 
 /**
  * The ack group of the vectors (spec r3bp §25.52T.8: AK-01 to AK-16). Each case sets the legacy reader state (`legacy`), the account pointer
@@ -103,17 +104,21 @@ class ShellRecordAckVectorsTest {
         return out
     }
 
-    /** The vectors' label `a1` for the account's EOA (keyID values and the record's keys). */
     /**
-     * The account of a case (§25.52Y.52), resolved by the production rule [ShellRecordAccounts.resolve]. The vault state comes from the ctx
-     * (`locked`, `nativeKey`, otherwise no key); a named account (`eoa`, `pointerAcct`) is the bound account; the page copy is named for the
-     * account that holds the EOA key, so [ShellRecordAccounts.heldCopy] resolves an unknown account from the copy.
+     * The account of a case (§25.52Y.52), resolved by the production rule [ShellRecordAccounts.resolve]. The native key list comes from the
+     * ctx (`keys`; `nativeKey` alone is the single key `a1`), and a named account (`eoa`, `pointerAcct`) is the pointer. The page copy is named
+     * for the account that holds the EOA key, so [ShellRecordAccounts.heldCopy] resolves an unknown account from the copy. `enumFailed` makes the
+     * copy enumeration fail (AK-40, AK-41). ctx.locked is the storage lock (§25.52Y.53): it is not a vault state here.
      */
     private fun accountFor(ctx: JSONObject, c: JSONObject, store: SealedPageRecordStore): ShellRecordAccount {
-        // ctx.locked is the storage lock (§25.52Y.53): it does not change the account, so it is not a vault state here.
-        val vault: NativeWalletVault.State = if (ctx.optBoolean("nativeKey")) NativeWalletVault.State.Ready(ACCOUNT) else NativeWalletVault.State.NoKey
+        val keys: List<String> = when {
+            ctx.has("keys") -> ctx.getJSONArray("keys").let { arr -> (0 until arr.length()).map { label(arr.getString(it)) } }
+            ctx.optBoolean("nativeKey") -> listOf(ACCOUNT)
+            else -> emptyList()
+        }
+        val vault: NativeWalletVault.State = keys.firstOrNull()?.let { NativeWalletVault.State.Ready(it) } ?: NativeWalletVault.State.NoKey
         val named = ctx.optString("eoa", ctx.optString("pointerAcct", ""))
-        val bound = if (named.isEmpty()) null else if (named == "a2") VectorSidecar.OTHER else ACCOUNT
+        val bound = if (named.isEmpty()) null else label(named)
         val copy = c.optJSONObject("store")?.let { a1(it.getJSONObject("record")) as? JSONObject }
         val holder = copy?.let { r -> listOf(ACCOUNT, VectorSidecar.OTHER).firstOrNull { ShellRecordPolicy.accountHoldsEoaKey(r, it) } }
         val copyAccount = holder ?: ACCOUNT
@@ -123,9 +128,21 @@ class ShellRecordAckVectorsTest {
             sessionReady = true,
             sessionGate = false,
             bound = bound,
-            copyNames = { copyNames },
+            copyNames = {
+                if (ctx.optBoolean("enumFailed")) throw IOException("enumeration failed (modelled)")
+                copyNames
+            },
             storeOf = { store },
+            keys = keys,
         )
+    }
+
+    /** The account a vector label names: `a1` is the test account (key A), `a2` and `b2` are the second account (key B). */
+    private fun label(name: String): String = when (name) {
+        // The sidecar already turns an `eoa` of `a1` into the account's address (VectorSidecar.map), so both forms name the account.
+        "a1", ACCOUNT -> ACCOUNT
+        "a2", "b2", VectorSidecar.OTHER -> VectorSidecar.OTHER
+        else -> throw IllegalArgumentException("unknown account label")
     }
 
     private fun a1(v: Any?): Any? = when (v) {
