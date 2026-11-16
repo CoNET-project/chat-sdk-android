@@ -1854,7 +1854,8 @@ object BeamioConetChatModule {
 
     /**
      * A derivation command (W2 to W4, C5). The account key is unlocked for the call and cleared after it. Only the value the spec
-     * allows across the bridge is sent. A vault that is not ready answers `locked`.
+     * allows across the bridge is sent. A true lock answers `locked`; an unreadable wallet state or unlock answers `not_ready` with a
+     * reason (25.52Y.84), and the key is not read.
      */
     private fun derivationCommand(body: JSONObject, run: (ByteArray, String) -> NativeDerivationCommands.Outcome) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
@@ -1862,18 +1863,14 @@ object BeamioConetChatModule {
         emitEvent(derivationAck(reqId, outcome))
     }
 
-    private fun withUnlockedAccount(run: (ByteArray, String) -> NativeDerivationCommands.Outcome): NativeDerivationCommands.Outcome {
-        val locked = NativeDerivationCommands.Outcome.fail(NativeDerivationCommands.LOCKED)
-        val ctx = appContext ?: return locked
+    private fun withUnlockedAccount(body: (ByteArray, String) -> NativeDerivationCommands.Outcome): NativeDerivationCommands.Outcome {
+        val ctx = appContext ?: return NativeDerivationCommands.Outcome.fail(NativeDerivationCommands.LOCKED)
         val vault = NativeWallet.vault(ctx)
-        // An unreadable vault is unknown: the derivation answers locked and never reads the key (25.52Y.84).
-        val ready = (try { vault.state() } catch (_: Exception) { null }) as? NativeWalletVault.State.Ready ?: return locked
-        val key = (try { vault.unlock() } catch (_: Exception) { null }) ?: return locked
-        try {
-            return run(key, ready.eoa)
-        } finally {
-            key.fill(0)
-        }
+        return NativeDerivationCommands.withKey(
+            state = { try { vault.state() } catch (_: Exception) { null } },
+            unlock = { try { vault.unlock() } catch (_: Exception) { null } },
+            body = body,
+        )
     }
 
     private fun derivationAck(reqId: Any?, outcome: NativeDerivationCommands.Outcome): JSONObject {
@@ -1882,6 +1879,7 @@ object BeamioConetChatModule {
             outcome.result?.let { payload.put("result", it) }
         } else {
             payload.put("error", outcome.error)
+            outcome.reason?.let { payload.put("reason", it) }
         }
         return payload
     }

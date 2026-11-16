@@ -9,14 +9,19 @@ import org.json.JSONObject
  * not kept, logged or returned.
  *
  * Errors: `bad_request` (format), `account_mismatch` (the account is not the vault's), `locked` (the key is not unlocked),
+ * `not_ready` with reason `unreadable` (the wallet state or the unlock cannot be read: unknown, never locked, 25.52Y.84),
  * `unknown_channel` (W7 has no temporary key for the session), `not_supported` (C1 is in-process only, §25.43.3).
  */
 internal object NativeDerivationCommands {
     const val BAD_REQUEST = "bad_request"
     const val ACCOUNT_MISMATCH = "account_mismatch"
     const val LOCKED = "locked"
+    const val NOT_READY = "not_ready"
     const val UNKNOWN_CHANNEL = "unknown_channel"
     const val NOT_SUPPORTED = "not_supported"
+
+    /** The reason of a `not_ready` answer when the wallet state or the unlock cannot be read (25.52Y.84). A code, never key material. */
+    const val UNREADABLE = "unreadable"
 
     /** W4: at most 64 `(seq, prevCid)` pairs per call (§25.3, §25.43.5). */
     const val MAX_BATCH = 64
@@ -30,13 +35,36 @@ internal object NativeDerivationCommands {
     private const val WORKSPACE = "default"
     private val EOA_RE = Regex("^0x[0-9a-f]{40}$")
 
-    /** The decision: [error] is null for ok. */
-    class Outcome(val error: String?, val result: JSONObject?) {
+    /** The decision: [error] is null for ok. [reason] is set only with a `not_ready` error. */
+    class Outcome(val error: String?, val result: JSONObject?, val reason: String? = null) {
         val ok: Boolean get() = error == null
 
         companion object {
             fun ok(result: JSONObject) = Outcome(null, result)
             fun fail(code: String) = Outcome(code, null)
+            fun notReady(reason: String) = Outcome(NOT_READY, null, reason)
+        }
+    }
+
+    /**
+     * The gate before a derivation reads the key (25.52Y.84). [state] returns null when reading the wallet state threw; [unlock]
+     * returns null or throws when the key cannot be read (the caller maps a throw to null). A true lock (no key record, a record
+     * that is not usable, a phrase only) is `locked`. A read that failed is unknown: `not_ready` with reason [UNREADABLE]. The key is
+     * read only when the state is ready; [body] runs with it, and the key is zeroed after the call.
+     */
+    fun withKey(
+        state: () -> NativeWalletVault.State?,
+        unlock: () -> ByteArray?,
+        body: (ByteArray, String) -> Outcome,
+    ): Outcome {
+        val s = state()
+        if (s == null || (s is NativeWalletVault.State.Locked && s.reason == UNREADABLE)) return Outcome.notReady(UNREADABLE)
+        if (s !is NativeWalletVault.State.Ready) return Outcome.fail(LOCKED)
+        val key = unlock() ?: return Outcome.notReady(UNREADABLE)
+        try {
+            return body(key, s.eoa)
+        } finally {
+            key.fill(0)
         }
     }
 

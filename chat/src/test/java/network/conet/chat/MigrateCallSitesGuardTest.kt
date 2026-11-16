@@ -6,8 +6,8 @@ import java.io.File
 
 /**
  * Source guards on the module. Every legacy adoption call (NativeWallet.migrateLegacy and migrateLegacyPgp) must sit inside a
- * try or runCatching, so an unreadable stored state never escapes a command or the start path. The derivation read of the
- * vault is guarded too: an unreadable vault there is locked.
+ * try or runCatching, so an unreadable stored state never escapes a command or the start path. The derivation reads of the
+ * vault are guarded too: an unreadable state or unlock is not_ready (reason unreadable), never locked (25.52Y.84).
  */
 class MigrateCallSitesGuardTest {
 
@@ -29,7 +29,8 @@ class MigrateCallSitesGuardTest {
 
     @Test
     fun theDerivationVaultReadsAreGuarded() {
-        assertTrue(module.contains("(try { vault.state() } catch (_: Exception) { null }) as? NativeWalletVault.State.Ready"))
-        assertTrue(module.contains("(try { vault.unlock() } catch (_: Exception) { null }) ?: return locked"))
+        assertTrue(module.contains("state = { try { vault.state() } catch (_: Exception) { null } }"))
+        assertTrue(module.contains("unlock = { try { vault.unlock() } catch (_: Exception) { null } }"))
+        assertTrue(!module.contains("?: return locked"))
     }
 }
