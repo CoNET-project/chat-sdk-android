@@ -15,6 +15,9 @@ internal object KpgpUpgradeTrigger {
         return ran.compareAndSet(false, true)
     }
 
+    /** True until the upgrade has been claimed in this process. Reads no vault state, so it is safe on any thread. */
+    fun pending(): Boolean = !ran.get()
+
     /** Tests only: forgets the claim. */
     internal fun resetForTests() {
         ran.set(false)

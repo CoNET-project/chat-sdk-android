@@ -200,24 +200,28 @@ object BeamioConetChatModule {
         appContext = ctxIn
         emitFn = emit
         // The K_pgp upgrade (PM ruling): once per process, after the keychain is readable; asynchronous, never blocks a command.
-        val vaultState = try {
-            network.conet.chat.nativekey.NativeWallet.vault(ctxIn).state()
-        } catch (_: Exception) {
-            null
-        }
-        if (network.conet.chat.nativekey.KpgpUpgradeTrigger.claim(vaultState)) {
-            val eoa = (vaultState as network.conet.chat.nativekey.NativeWalletVault.State.Ready).eoa
+        // The vault state is read on the io executor only: NativeWalletVault.state() is synchronized and slow (a keystore open), and
+        // reading it on the caller's (main) thread froze the start-up (S25 contention, 2026-11-15).
+        if (network.conet.chat.nativekey.KpgpUpgradeTrigger.pending()) {
             io.execute {
-                val result = try {
-                    network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L)
+                val vaultState = try {
+                    network.conet.chat.nativekey.NativeWallet.vault(ctxIn).state()
                 } catch (_: Exception) {
-                    // 25.52Y.62 第 3 项: any internal exception is pgp_migration_retry, with no cause code.
                     null
                 }
-                val code = result?.action ?: "pgp_migration_retry"
-                // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
-                if (code != "keep_existing" && code != "upgraded_from_L") {
-                    emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+                if (network.conet.chat.nativekey.KpgpUpgradeTrigger.claim(vaultState)) {
+                    val eoa = (vaultState as network.conet.chat.nativekey.NativeWalletVault.State.Ready).eoa
+                    val result = try {
+                        network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L)
+                    } catch (_: Exception) {
+                        // 25.52Y.62 第 3 项: any internal exception is pgp_migration_retry, with no cause code.
+                        null
+                    }
+                    val code = result?.action ?: "pgp_migration_retry"
+                    // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
+                    if (code != "keep_existing" && code != "upgraded_from_L") {
+                        emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+                    }
                 }
             }
         }
