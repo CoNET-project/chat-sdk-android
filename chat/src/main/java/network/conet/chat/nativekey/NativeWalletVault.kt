@@ -133,6 +133,10 @@ class NativeWalletVault(
     /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). Updates the snapshot. */
     @Synchronized
     fun state(): State {
+        // 25.52Y.75 (project ruling 2026-11-16): between two invalidation events the snapshot is authoritative. Invalidated by store, forget,
+        // lock and the clear path (invalidateSnapshot). External changes (a cleared app, a file changed outside the vault) are a stated risk,
+        // caught at the next start and at the key check before signing.
+        snapshot?.let { return it }
         val s = computeState()
         snapshot = s
         return s
@@ -255,8 +259,13 @@ class NativeWalletVault(
      */
     private fun store(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
         // The snapshot is invalidated and recomputed on the next gate read (io). No reconcile runs here: a crash-recovery path must stay as it was.
+        // Invalidated before and after the write: a read inside the write (readback) must not leave its own state behind.
         snapshot = null
-        return storeWrite(eoa, key, source, phrase)
+        try {
+            return storeWrite(eoa, key, source, phrase)
+        } finally {
+            snapshot = null
+        }
     }
 
     private fun storeWrite(eoa: String, key: ByteArray, source: String, phrase: ByteArray?): Import {
@@ -346,7 +355,11 @@ class NativeWalletVault(
     @Synchronized
     fun forget(): Boolean {
         snapshot = null
-        return forgetWrite()
+        try {
+            return forgetWrite()
+        } finally {
+            snapshot = null
+        }
     }
 
     private fun forgetWrite(): Boolean {

@@ -29,8 +29,9 @@ class VaultSnapshotGateTest {
     @Test
     fun everyWriteInvalidatesTheSnapshotAndNoWriteRunsReconcile() {
         val v = vault()
-        assertTrue("store invalidates the snapshot", v.contains("snapshot = null\n        return storeWrite("))
-        assertTrue("forget invalidates the snapshot", v.contains("snapshot = null\n        return forgetWrite()"))
+        // Shape changed with the 2026-11-16 ruling: invalidated before and after the write (try/finally), never recomputed on the write path.
+        assertTrue("store invalidates the snapshot before and after the write", v.contains("return storeWrite(eoa, key, source, phrase)") && v.contains("return storeWrite(eoa, key, source, phrase)"))
+        assertTrue("forget invalidates the snapshot before and after the write", v.contains("return forgetWrite()"))
         assertTrue("state() sets the snapshot", v.contains("snapshot = s"))
         assertFalse("a write does not recompute (no reconcile on the write path)", v.contains("snapshot = runCatching { computeState() }"))
     }
