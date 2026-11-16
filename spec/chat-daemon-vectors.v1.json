@@ -392,7 +392,8 @@
 			"history.local.v1",
 			"history.page.v1",
 			"layout.cache.v1",
-			"identity.kpresent.v1"
+			"identity.kpresent.v1",
+			"identity.native-keys.v1"
 		],
 		"implementations": {
 			"ts-worker": {
@@ -427,7 +428,9 @@
 					"send.mailboxWrap",
 					"history.local.v1",
 					"history.page.v1",
-					"layout.cache.v1"
+					"layout.cache.v1",
+					"identity.kpresent.v1",
+					"identity.native-keys.v1"
 				]
 			},
 			"android": {
@@ -447,7 +450,8 @@
 					"history.local.v1",
 					"history.page.v1",
 					"layout.cache.v1",
-					"identity.kpresent.v1"
+					"identity.kpresent.v1",
+					"identity.native-keys.v1"
 				]
 			}
 		},

@@ -35,19 +35,15 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("protocolVersion"), result.getInt("protocolVersion"))
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
-        // The shared vector's Android list is the production declaration (spec 25.52Y.116: identity.kpresent.v1 is in it; inbound.generation.v1
-        // is not an Android capability). identity.native-keys.v1 is declared by every build (project owner decision, 2026-11-16) and is not yet in
-        // the vector; it is appended here until the interface seat updates the vector. wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44;
-        // PM R2048) stays QA-only: added here only when this build is a QA build.
+        // The shared vector's Android list is the production declaration (spec 25.52Y.119, 25.52Y.121): 15 names, ending with identity.kpresent.v1
+        // and identity.native-keys.v1. wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44; PM R2048) is not in the vector and stays QA-only:
+        // it is added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
-            listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) +
             (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList())
         assertEquals(expected, strings(result.getJSONArray("capabilities")))
         for (cap in BeamioConetChatProtocol.CAPABILITIES) {
-            // Names not in the shared vector's top-level union (see above): every other declared name must be a spec capability.
+            // The only name outside the shared vector's top-level union is the QA-only wallet.credential.v1.
             if (cap == BeamioConetChatProtocol.WALLET_CREDENTIAL_CAPABILITY) continue
-            if (cap == BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) continue
-            if (cap == BeamioConetChatProtocol.KPRESENT_CAPABILITY) continue
             assertTrue("$cap is not a spec capability", cap in all)
         }
         // spec 25.52Y.45: hello.sdkVersion is this build's artifact version (with its suffix), not a vector literal.
