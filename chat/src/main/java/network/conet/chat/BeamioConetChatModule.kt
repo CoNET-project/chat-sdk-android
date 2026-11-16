@@ -389,7 +389,10 @@ object BeamioConetChatModule {
             }
             when (route) {
                 NoKeyGate.Route.WALLET_STATUS -> {
-                    ack(reqId, true, result = NoKeyGate.walletStatusFor(gate, state))
+                    // The account pointer is read only for the phrase-only G2 answer (25.52Y.117); a failed read is unknown there.
+                    ack(reqId, true, result = NoKeyGate.walletStatusFor(gate, state) {
+                        BeamioShellRecordImport.flagsOf(context.applicationContext).accountAddress()
+                    })
                     return
                 }
                 NoKeyGate.Route.PASSCODE_STATUS -> {

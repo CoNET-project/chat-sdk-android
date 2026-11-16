@@ -111,7 +111,7 @@ object NoKeyGate {
      * `walletStatus` for a gate (table D, r3g): G0 `no_key`; G1 `not_ready`; G2 `unlocked` with `accountKey` when the
      * record opens, or `locked` otherwise. A locked record has no verified account, so it carries no `accountKey`.
      */
-    fun walletStatusFor(gate: Gate, state: NativeWalletVault.State): JSONObject = when (gate) {
+    fun walletStatusFor(gate: Gate, state: NativeWalletVault.State, pointerAccount: () -> String? = { null }): JSONObject = when (gate) {
         Gate.G0 -> walletStatusNoKey()
         // R1841 / spec §25.52Y.39 第 9 项: the G1 answer carries why it is not ready. A readable record that is not initialised is
         // `g1_uninitialized`; a record that cannot be read (a locked or storage-derived state) is `unreadable`. The field is only on
@@ -119,11 +119,26 @@ object NoKeyGate {
         // r3oc (spec §25.52Y.42 第 4 项 (k)): a damaged marker, a pending rollback, and a store that cannot be read all answer not_ready with
         // reason unreadable. `unavailable` is a walletState value (§25.52GX.1), not a walletStatus status; locked and no_key are not used.
         Gate.G1 -> JSONObject().put("status", NOT_READY).put("notReadyReason", notReadyReasonOf(state))
-        Gate.G2 -> when (state) {
-            is NativeWalletVault.State.Ready ->
+        Gate.G2 -> when {
+            state is NativeWalletVault.State.Ready ->
                 JSONObject().put("status", "unlocked").put("accountKey", accountKeyOf(state.eoa))
+            state is NativeWalletVault.State.Locked && state.reason == NativeWalletVault.PHRASE_ONLY -> phraseOnlyWalletStatus(pointerAccount())
             else -> JSONObject().put("status", "locked")
         }
+    }
+
+    /**
+     * The G2 answer of a readable phrase without the key record (spec §25.52Y.117 第 2 项, §25.52Y.118): `locked` with the accountKey of the
+     * account pointer and `reason` `phrase_only`. The page reads it as has. A pointer that cannot be read is unknown: `not_ready` with
+     * reason unreadable, never `no_key` and never a lock without the account.
+     */
+    fun phraseOnlyWalletStatus(pointer: String?): JSONObject {
+        val eoa = pointer?.takeIf { ShellRecordAccounts.isAddress(it) }
+            ?: return JSONObject().put("status", NOT_READY).put("notReadyReason", NOT_READY_UNREADABLE)
+        return JSONObject()
+            .put("status", "locked")
+            .put("accountKey", accountKeyOf(eoa))
+            .put("reason", NativeWalletVault.PHRASE_ONLY)
     }
 
     /** The `notReadyReason` of a G1 answer (spec §25.52Y.39 第 9 项): readable and not initialised, or unreadable. */

@@ -74,7 +74,8 @@ class KeyPathGuardTest {
     @Test
     fun statusQueriesAnswerFromTheVaultStateInBothCases() {
         // AND-N4, AND-N5: walletStatus and passcodeStatus answer from the vault state, with or without a record.
-        assertTrue(module.contains("NoKeyGate.walletStatusFor(gate, state)"))
+        assertTrue(module.contains("NoKeyGate.walletStatusFor(gate, state) {"))
+        assertTrue(module.contains("BeamioShellRecordImport.flagsOf(context.applicationContext).accountAddress()"))
         assertTrue(module.contains("NoKeyGate.passcodeStatusFor(gate)"))
     }
 
