@@ -837,9 +837,15 @@ object BeamioPgpMigrationImport {
         }
     }
 
-    /** `none`, `pending`, `failed` or `verified`. Read only. */
-    fun state(context: Context, eoa: String, workspace: String = PgpMigrationPolicy.WORKSPACE): String =
-        engine(context, eoa, workspace, null)?.state() ?: "none"
+    /**
+     * `none`, `pending`, `failed` or `verified`. Read only. An account or workspace that is not valid throws IllegalArgumentException:
+     * a bad input is not a confirmed absence, so it never answers `none`.
+     */
+    fun state(context: Context, eoa: String, workspace: String = PgpMigrationPolicy.WORKSPACE): String {
+        val engine = engine(context, eoa, workspace, null)
+            ?: throw IllegalArgumentException("invalid account or workspace for the migration state")
+        return engine.state()
+    }
 
     /**
      * Unregister (§25.52C.3, §25.52I.8): removes M, N and the last code after the recovery check. L is never removed. Returns `ok`,

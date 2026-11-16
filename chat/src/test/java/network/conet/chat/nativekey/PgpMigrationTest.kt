@@ -286,6 +286,21 @@ class PgpMigrationTest {
         assertTrue(none.isNull("fp"))
     }
 
+    /**
+     * The read-only state of an invalid account or workspace is refused, never `none` (the engine is null for such input, and a null
+     * engine must not be read as a confirmed absence). The state function needs an Android context, so this checks its source.
+     */
+    @Test
+    fun anInvalidAccountOrWorkspaceIsNeverNone() {
+        val text = File("src/main/java/network/conet/chat/nativekey/PgpMigration.kt").readText()
+        val start = text.indexOf("fun state(context: Context, eoa: String")
+        assertTrue("the state function exists", start >= 0)
+        val body = text.substring(start, text.indexOf("\n    }", start) + 6)
+        assertTrue("an invalid input throws", body.contains("throw IllegalArgumentException"))
+        assertFalse("a null engine is not read as none", body.contains("\"none\""))
+        assertFalse("no elvis fallback to none", text.contains("engine(context, eoa, workspace, null)?.state() ?: \"none\""))
+    }
+
     @Test
     fun theCheckpointIsNotPartOfThePublicEntry() {
         val text = File("src/main/java/network/conet/chat/nativekey/PgpMigration.kt").readText()
