@@ -14,6 +14,7 @@ import network.conet.chat.nativekey.NativeDerivationCommands
 import network.conet.chat.nativekey.VoiceChannelKeys
 import network.conet.chat.nativekey.NativeOpenRules
 import network.conet.chat.nativekey.NativeWallet
+import network.conet.chat.nativekey.CommandAnswerGuard
 import network.conet.chat.nativekey.NativeWalletCommands
 import network.conet.chat.nativekey.NativePgp
 import network.conet.chat.nativekey.NativePgpVault
@@ -191,6 +192,10 @@ object BeamioConetChatModule {
     /** Read-only for the shell's gate: true only after a successful `init` for the native record (25.26.4c, G2). */
     fun isNativeSessionReady(): Boolean = NativeSessionState.isReady()
     private var idleCheckPosted = false
+
+    /** Request ids answered by the command now running (set per [handleCommand]). Null outside a command. */
+    @Volatile
+    private var answeredInCommand: MutableSet<String>? = null
     private const val IDLE_CHECK_MS = 10_000L
 
     fun isAvailable(): Boolean = true
@@ -204,9 +209,21 @@ object BeamioConetChatModule {
     fun handleCommand(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {
         val t0 = network.conet.chat.nativekey.DiagTiming.now()
         val type = body.optString("type", "")
+        val reqId: Any? = body.opt("reqId")
+        val saved = answeredInCommand
+        val answered: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
+        answeredInCommand = answered
         try {
             handleCommandInner(context, body, emit)
+        } catch (e: Exception) {
+            // An exception that escapes a handler is unknown, not absent: the request still gets one answer, not_ready, unless an
+            // answer was already decided for it. Nothing is written by this path.
+            Log.w(TAG, "command $type failed: ${e.javaClass.simpleName}")
+            if (CommandAnswerGuard.firstAnswer(answered, reqId)) {
+                ack(reqId, false, error = NoKeyGate.NOT_READY)
+            }
         } finally {
+            answeredInCommand = saved
             network.conet.chat.nativekey.DiagTiming.log("handleCommand:$type", t0)
         }
     }
@@ -3048,6 +3065,7 @@ object BeamioConetChatModule {
     }
 
     private fun emitEvent(payload: JSONObject) {
+        CommandAnswerGuard.keyOf(payload.opt("reqId"))?.let { answeredInCommand?.add(it) }
         val out = JSONObject().put("action", "chatModuleEvent").put("event", payload)
         main.post {
             try {
