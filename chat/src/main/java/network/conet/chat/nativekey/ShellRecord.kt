@@ -1115,8 +1115,9 @@ internal class ShellRecordBridge(
         // §25.52Y.54 PY.18(b), §25.52Y.55 (a): creation mode with an explicit choice and a pointer set does not enter creation (AK-48, AK-49).
         // A legacy store found answers import_not_done first (AK-50). Nothing is written, the pointer is not switched, no key is deleted.
         if (creationMode() && explicitChoice() && flags.accountPointer()) {
+            // §25.52Y.56 (r3lt 第 (1) 项): DONE is found already cleared, so it is not import_not_done; NOT_DONE is the only source of it here.
             return when (outcome()) {
-                ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
+                ImportOutcome.NOT_DONE -> reply("error", listOf("sub" to "import_not_done"))
                 else -> reply("migrating", emptyList())
             }
         }
@@ -1186,7 +1187,9 @@ internal class ShellRecordBridge(
                 flags.setLegacyUnreadable()
                 reply("migrating", emptyList())
             }
-            ImportOutcome.NOT_DONE, ImportOutcome.DONE -> reply("error", listOf("sub" to "import_not_done"))
+            // §25.52Y.56: NOT_DONE is the only source of import_not_done; DONE (found cleared, no record here) fails closed as migrating.
+            ImportOutcome.NOT_DONE -> reply("error", listOf("sub" to "import_not_done"))
+            ImportOutcome.DONE -> reply("migrating", emptyList())
             ImportOutcome.ACCOUNT_MISMATCH -> reply("error", listOf("sub" to "account_mismatch"))
         }
     }
@@ -1383,7 +1386,21 @@ internal object ShellRecordAccounts {
             if (restored != null) ShellRecordAccount.Ready(storeOf(restored), restored)
             else {
                 val names = copyNames()
-                heldCopy(names, storeOf) ?: if (names.count { COPY_NAME.matchEntire(it) != null } == 1) ShellRecordAccount.Mismatch else ShellRecordAccount.Unknown
+                // §25.52Y.56: one or more copies and none holding the EOA key of its own account is account_mismatch; otherwise Unknown.
+                heldCopy(names, storeOf) ?: if (copiesPresentNoneHeld(names, storeOf)) ShellRecordAccount.Mismatch else ShellRecordAccount.Unknown
+            }
+        }
+    }
+
+    /** True when at least one page copy is named and no copy holds the EOA key of its own account. An unreadable copy counts as not held (fail closed). */
+    private fun copiesPresentNoneHeld(names: List<String>, storeOf: (String) -> SealedPageRecordStore): Boolean {
+        val eoas = names.mapNotNull { COPY_NAME.matchEntire(it)?.groupValues?.get(1)?.let { hex -> "0x$hex" } }
+        if (eoas.isEmpty()) return false
+        return eoas.none { eoa ->
+            try {
+                storeOf(eoa).read()?.let { ShellRecordPolicy.accountHoldsEoaKey(it, eoa) } ?: false
+            } catch (_: IOException) {
+                false
             }
         }
     }
