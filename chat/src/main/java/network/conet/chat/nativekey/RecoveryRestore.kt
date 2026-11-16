@@ -57,7 +57,6 @@ internal object RecoveryBackoff {
 internal interface RecoveryRegistryReader {
     fun byNameHash(indexHash: ByteArray): String?
     fun byAccountName(name: String): String?
-    fun legacyByAccountName(name: String): String?
 }
 
 /** The production reader: the endpoints of [AccountRegistryRead], over HTTPS JSON-RPC. */
@@ -69,9 +68,6 @@ internal class EndpointRegistryReader(
 
     override fun byAccountName(name: String): String? =
         AccountRegistryRead.readFirst(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByAccountName(name))
-
-    override fun legacyByAccountName(name: String): String? =
-        AccountRegistryRead.readFirst(AccountRegistryRead.legacy, rpcFor, AccountRegistryRead.callDataByAccountName(name))
 }
 
 /**

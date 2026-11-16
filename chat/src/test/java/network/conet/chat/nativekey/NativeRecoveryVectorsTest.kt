@@ -42,7 +42,6 @@ class NativeRecoveryVectorsTest {
         val env = c.getJSONObject("env")
         val device = env.optJSONObject("device") ?: JSONObject()
         val rpcFails = env.optString("rpc") == "fail"
-        val legacyFails = rpcFails || env.optString("legacyRpc") == "fail"
 
         val inner = NativeTestFiles()
         val files = FaultyFiles(inner, writeFail = device.optBoolean("writeFail"), readbackFail = device.optBoolean("readbackFail"))
@@ -59,9 +58,7 @@ class NativeRecoveryVectorsTest {
         if (device.has("failures")) failures.save(device.getInt("failures"), clock.now)
         val registry = FixtureRegistry(
             current = doc.getJSONObject("fixtures").getJSONObject("registry"),
-            legacy = doc.getJSONObject("fixtures").getJSONObject("legacyRegistry"),
             fail = rpcFails,
-            legacyFail = legacyFails,
         )
         val engine = RecoveryEngine(vault, registry, failures, RecoveryClock { clock.now })
 
@@ -118,9 +115,7 @@ class NativeRecoveryVectorsTest {
     /** The vector's registry: `nameHash:0x…` keys by the keccak of the code, `name:…` keys by account name. */
     private class FixtureRegistry(
         private val current: JSONObject,
-        private val legacy: JSONObject,
         private val fail: Boolean,
-        private val legacyFail: Boolean,
     ) : RecoveryRegistryReader {
         override fun byNameHash(indexHash: ByteArray): String? {
             if (fail) error("rpc unavailable")
@@ -132,12 +127,6 @@ class NativeRecoveryVectorsTest {
             if (fail) error("rpc unavailable")
             val k = "name:$name"
             return if (current.has(k)) current.getString(k) else null
-        }
-
-        override fun legacyByAccountName(name: String): String? {
-            if (legacyFail) error("rpc unavailable")
-            val k = "name:$name"
-            return if (legacy.has(k)) legacy.getString(k) else null
         }
     }
 

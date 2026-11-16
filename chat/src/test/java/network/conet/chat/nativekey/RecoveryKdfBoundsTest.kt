@@ -40,7 +40,6 @@ class RecoveryKdfBoundsTest {
         val registry = object : RecoveryRegistryReader {
             override fun byNameHash(indexHash: ByteArray): String? = rec
             override fun byAccountName(name: String): String? = rec
-            override fun legacyByAccountName(name: String): String? = null
         }
         val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
         val kdf: (ByteArray, RecoveryRecord.Stored) -> ByteArray = { _, _ ->

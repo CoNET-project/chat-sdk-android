@@ -28,13 +28,6 @@ internal object AccountRegistryRead {
         ),
     )
 
-    /** The pre-migration registry, read-only archive endpoint, 8 seconds. Used only to report `legacy_record`. */
-    @Volatile
-    var legacy: RegistryConfig = RegistryConfig(
-        registry = "0x4afaca09cf8307070a83836223Ae129073eC92e5",
-        endpoints = listOf(RegistryEndpoint("https://rpc-old.conet.network", 8_000)),
-    )
-
     /** Call data for `getBase64ByNameHash(bytes32)`: the selector and the 32-byte key. */
     fun callDataByNameHash(indexHash: ByteArray): String {
         require(indexHash.size == 32)
