@@ -5,7 +5,6 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import network.conet.chat.BeamioChatPgpStore
-import java.io.IOException
 import network.conet.chat.BeamioChatWalletKeyStore
 import network.conet.chat.ConetChatCryptoUtil
 import java.io.File
