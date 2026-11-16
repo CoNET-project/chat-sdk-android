@@ -140,6 +140,11 @@ class BridgeKeyAuditTest {
             // walletCredential (spec 25.52Y.38 第 1 项 (a), 第 3 项 (e); r3nv 第 5 项): the single exception for the native-to-page output of the
             // recovery phrase, which is the phrase's output field and its kind name. It is not a read from a bridge payload. The bridge
             // does not register the name until the shell trust gate and capability bit are in place.
+            // T-50 d class (25.52Y.70 第 1 项, granted for the registration request body only): the eight-key list of the native HTTP body
+            // POST /api/regiestChatRoute. Not in any bridge payload, ack, event or result (ChatRouteSubmit.kt, commit 1579c15).
+            "ChatRouteSubmit.kt" to listOf(
+                "private val FIELDS = listOf(\"wallet\", \"keyID\", \"publicKeyArmored\", \"encrypKeyArmored\", \"routeKeyID\", \"timestamp\", \"nonce\", \"signature\")",
+            ),
             "WalletCredential.kt" to listOf(
                 "const val KIND_MNEMONIC = \"mnemonic\"",
                 ".put(\"mnemonic\", read.phrase),",
