@@ -6696,7 +6696,7 @@
     },
     {
       "id": "AK-48",
-      "title": "建号模式（用户明确选择）：读取待建账户答 absent；指针指向他账户且其记录存在，记录不可见，不答 account_mismatch（R1525 第 3 项，A）",
+      "title": "PY.18(b)，第二账户建号本版不支持：建号模式（用户明确选择）但指针指向 a1（非空）：读取答 migrating，不进入建号，不删钥，不改现有副本（r3rz 总PM 裁定；原“absent”期望作废；R1525 第 3 项 A 的 absent 仅适用于指针为空）",
       "kind": "read",
       "reqId": "r48",
       "ctx": {
@@ -6728,7 +6728,7 @@
         "reqId": "r48",
         "ok": true,
         "result": {
-          "code": "absent"
+          "code": "migrating"
         }
       }
     },
@@ -6772,7 +6772,7 @@
     },
     {
       "id": "AK-50",
-      "title": "建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）",
+      "title": "PY.18(b) 同规则（r3rz，待总PM 确认）：指针非空的建号模式读取答 migrating（原 import_not_done 期望作废）；建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）",
       "kind": "read",
       "reqId": "r50",
       "ctx": {
@@ -6792,8 +6792,7 @@
         "reqId": "r50",
         "ok": true,
         "result": {
-          "code": "error",
-          "sub": "import_not_done"
+          "code": "migrating"
         }
       }
     },
@@ -7529,7 +7528,14 @@
       "title": "BeamioTag：getOwnerByAccountName 成功、解码通过、零地址（明确无记录），无 SDK 记录：create，进入第一屏",
       "input": {
         "kind": "tag",
-        "outcome": "empty"
+        "outcome": "empty",
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -7545,7 +7551,14 @@
       "title": "EOA：getAccount 明确 revert 且完整错误数据恰为 0xfaba8ebe（无参 AccountNotFound），无 SDK 记录：明确无记录，create（R1455 选项 B）",
       "input": {
         "kind": "eoa",
-        "outcome": "revert_not_found"
+        "outcome": "revert_not_found",
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -7828,7 +7841,14 @@
       "input": {
         "kind": "tag",
         "outcome": "empty",
-        "totalMs": 10000
+        "totalMs": 10000,
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -7908,7 +7928,14 @@
       "title": "EOA：eth_call 原始错误数据恰为 0xfaba8ebe（本地夹具 F-06 同源，按原始数据判定，r3kc）：明确无记录，create",
       "input": {
         "kind": "eoa",
-        "revertData": "0xfaba8ebe"
+        "revertData": "0xfaba8ebe",
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -8023,7 +8050,14 @@
       "input": {
         "kind": "tag",
         "outcome": "empty",
-        "totalMs": 3000
+        "totalMs": 3000,
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -8173,7 +8207,14 @@
       "title": "EOA：原始错误数据 0xfaba8ebe（小写，无参）：明确无记录，create（r3kc）",
       "input": {
         "kind": "eoa",
-        "revertData": "0xfaba8ebe"
+        "revertData": "0xfaba8ebe",
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
@@ -8189,7 +8230,14 @@
       "title": "EOA：原始错误数据 0xFABA8EBE（大写，无参）：小写化后精确匹配，明确无记录，create（r3kc，F2）",
       "input": {
         "kind": "eoa",
-        "revertData": "0xFABA8EBE"
+        "revertData": "0xFABA8EBE",
+        "preconditions": {
+          "legacyConfirmedAbsent": true,
+          "pointerEmpty": true,
+          "nativeKey": false,
+          "pageCopy": false,
+          "writeFailure": false
+        }
       },
       "expect": {
         "code": "create",
