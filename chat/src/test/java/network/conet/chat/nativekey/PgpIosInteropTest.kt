@@ -99,7 +99,7 @@ class PgpIosInteropTest {
 
     @Test
     fun theVectorFileIsTheHashedCopy() {
-        assertEquals("edf7f7f8aa137f5813b160018b6ff09affd228e877ee080fe8d8ad97e04366fb", sha256Hex(raw))
+        assertEquals("55d19a4c0ce739b38a2273c6e168811b7d82eb57bbefd01c30404748136ee529", sha256Hex(raw))
         assertEquals("v3.5.2", vectors.getJSONObject("versions").getString("gopenpgp").substringBefore(" ("))
         assertEquals("6.3.0", vectors.getJSONObject("versions").getString("openpgpjs"))
     }
@@ -108,11 +108,11 @@ class PgpIosInteropTest {
     fun theSyntheticKeysAreWhatTheVectorsSay() {
         val r = NativePgp.parseSecret(recipientPrivate())
         assertNotNull("recipient private", r)
-        assertEquals("1d6aa46a179b2780721b1c40f5b097ce4f164fe1", r!!.fingerprint)
-        assertEquals("1d6aa46a179b2780721b1c40f5b097ce4f164fe1", publicRing(recipientPublic()).publicKey.fingerprint.joinToString("") { "%02x".format(it) })
+        assertEquals("583302fbe093f68061269d08785fba87c0d97008", r!!.fingerprint)
+        assertEquals("583302fbe093f68061269d08785fba87c0d97008", publicRing(recipientPublic()).publicKey.fingerprint.joinToString("") { "%02x".format(it) })
         val s = NativePgp.parseSecret(signerPrivate())
         assertNotNull("signer private", s)
-        assertEquals("71e2ed32a9f2b430de95ff7c9ebf9b32fb261078", s!!.fingerprint)
+        assertEquals("3fd3b98618d8c0328f5944489b9dc74df18542c5", s!!.fingerprint)
     }
 
     /** Direction 1: iOS (gopenpgp) ciphertexts decrypt with bcpg through the production path. */

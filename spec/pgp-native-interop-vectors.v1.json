@@ -1,28 +1,29 @@
 {
  "file": "pgp-native-interop-vectors.v1.json",
  "purpose": "X-19 interop export for the Android SDK (bcpg 1.87). Bidirectional: iOS (gopenpgp v3.5.2) <-> Android (bcpg) <-> PWA (openpgp.js 6.3.0).",
- "generator": "iOS X-19 wrapper (gopenpgp v3.5.2) and openpgp.js 6.3.0, 2026-11-13. Keys and plaintexts are generated for this vector set only.",
+ "generator": "gen-native-pgp/gen-native-pgp-vectors.mjs: gopenpgp v3.5.2 (Go program gen-native-pgp/go, deterministic) and openpgp.js 6.3.0 (deterministic shim detpgp.mjs)",
  "versions": {
-  "gopenpgp": "v3.5.2 (commit dcc4859aba4cd912c7562a534912fc8fc688e04b)",
+  "gopenpgp": "v3.5.2 (Go module github.com/ProtonMail/gopenpgp/v3 v3.5.2; go.sum in gen-native-pgp/go)",
   "openpgpjs": "6.3.0",
-  "x19GoSourceSha256": "fb37fe46181af60c0c7af2e34ffd7a03b4b070cd76338d5372e03da466a1d87d"
+  "x19GoSourceSha256": "e82f532c8a191bfbac584dbf486e927d835b66dfd0851b726a20298204b44480",
+  "generatorNote": "x19GoSourceSha256 = sha256 of gen-native-pgp/go/main.go"
  },
- "testKeyNote": "SYNTHETIC test keys only (curve25519Legacy, no passphrase). Not used for any account. Not for production.",
+ "testKeyNote": "SYNTHETIC test keys only (curve25519Legacy, no passphrase), generated deterministically from fixed labels (gen-native-pgp). User IDs marked synthetic. Not used for any account. Not for production.",
  "keys": {
   "recipient": {
-   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEavZtBxYJKwYBBAHaRw8BAQdAANdU7dbJb188EeYnJma8txGCM6hXUwj8\nt/Mr85f54jjNP3N5bnRoZXRpYyByZWNpcGllbnQgYSA8c3ludGhldGljLnJl\nY2lwaWVudC5hQHN5bnRoZXRpYy5pbnZhbGlkPsLAEwQTFgoAhQWCavZtBwML\nCQcJEPWwl85PFk/hRRQAAAAAABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bq\ncy5vcmdy1ziMGKuu2l9lr0RxVi9NwYhKTmk9R1SOhalEnw4gKwUVCggODAQW\nAAIBAhkBApsDAh4BFiEEHWqkahebJ4ByGxxA9bCXzk8WT+EAALj7AP0XCJzv\nwY3sbsMTl7R5AdxH0tGM0LkXic0pW/FT2fWJkwD+JnYwsu1h95EFx8TDx617\nu9kYE2iZX/BXbtnQiXAT5gjOOARq9m0HEgorBgEEAZdVAQUBAQdAYHVZgOzT\n4MO6QNhMp24p1Kri0rSlI4+o2eykqKE6jx8DAQgHwr4EGBYKAHAFgmr2bQcJ\nEPWwl85PFk/hRRQAAAAAABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5v\ncmdFTPdjVXrSB3szYGqcyybLX8GTc8bdkrvWKKd/Ln3TPwKbDBYhBB1qpGoX\nmyeAchscQPWwl85PFk/hAACbOgD+MNhDEy1mNf0t30RjfvYuTdQ3eVIxAV5+\nAlp/6YrsscoA/2R/SrpmZjg7q+Gyh001l1TK5GTT+B8vu5kOej8GUGEC\n=mCFC\n-----END PGP PUBLIC KEY BLOCK-----\n",
-   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZtBxYJKwYBBAHaRw8BAQdAANdU7dbJb188EeYnJma8txGCM6hXUwj8\nt/Mr85f54jgAAP9b78ceSZlPUEyb8cPgKrbi2zrxLt6lEbWjP0Wuf0m+IBHk\nzT9zeW50aGV0aWMgcmVjaXBpZW50IGEgPHN5bnRoZXRpYy5yZWNpcGllbnQu\nYUBzeW50aGV0aWMuaW52YWxpZD7CwBMEExYKAIUFgmr2bQcDCwkHCRD1sJfO\nTxZP4UUUAAAAAAAcACBzYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3Jnctc4\njBirrtpfZa9EcVYvTcGISk5pPUdUjoWpRJ8OICsFFQoIDgwEFgACAQIZAQKb\nAwIeARYhBB1qpGoXmyeAchscQPWwl85PFk/hAAC4+wD9Fwic78GN7G7DE5e0\neQHcR9LRjNC5F4nNKVvxU9n1iZMA/iZ2MLLtYfeRBcfEw8ete7vZGBNomV/w\nV27Z0IlwE+YIx10EavZtBxIKKwYBBAGXVQEFAQEHQGB1WYDs0+DDukDYTKdu\nKdSq4tK0pSOPqNnspKihOo8fAwEIBwAA/0fwHmUP5LjiTDdjV1HZVWgkGC3Q\nbdqCcM00TLaa1vzoETPCvgQYFgoAcAWCavZtBwkQ9bCXzk8WT+FFFAAAAAAA\nHAAgc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ0VM92NVetIHezNgapzL\nJstfwZNzxt2Su9Yop38ufdM/ApsMFiEEHWqkahebJ4ByGxxA9bCXzk8WT+EA\nAJs6AP4w2EMTLWY1/S3fRGN+9i5N1Dd5UjEBXn4CWn/piuyxygD/ZH9KumZm\nODur4bKHTTWXVMrkZNP4Hy+7mQ56PwZQYQI=\n=5xhe\n-----END PGP PRIVATE KEY BLOCK-----\n"
+   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdAhM5DOOJOSMXo+8eXGEsERdSJaqpnX8VOOjcj\nh2bl22zNP3N5bnRoZXRpYyByZWNpcGllbnQgYSA8c3ludGhldGljLXJlY2lwaWVu\ndC1hQHN5bnRoZXRpYy5pbnZhbGlkPsK/BBMWCABxBYJpVbkAAwsJBwkQeF+6h8DZ\ncAg1FAAAAAAAHAAQc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ6ZvEXHYcfAh\nn6DzKMdTCWgCFQgDFgACAhkBApsDAh4BFiEEWDMC++CT9oBhJp0IeF+6h8DZcAgA\nAFRAAPwJi7CPybd1A/DSjmbpMWJJyRft+B5RVoOKoUe4hrvsmAEA6fuLWsoDUkv/\nihsOjwU6Ylz72PmalP6XcHidEYu7LwfOOARpVbkAEgorBgEEAZdVAQUBAQdATLMt\n64Xj8zw+HHhIWh4wp77o8jOD77fN8q63Ps21by8DAQoJwq4EGBYIAGAFgmlVuQAJ\nEHhfuofA2XAINRQAAAAAABwAEHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmf0\n4ZpTHaJtAT35hgRFofJoApsMFiEEWDMC++CT9oBhJp0IeF+6h8DZcAgAAN+OAP9P\nWcPY0CyZl61yjybfB0j3Q7NQp0PULjGYqkcuHbioUQD/df+zAitEyW5D69qVbK4E\nrMYHqDx81hqnUEZQmlt4FQM=\n=bVYZ\n-----END PGP PUBLIC KEY BLOCK-----",
+   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdAhM5DOOJOSMXo+8eXGEsERdSJaqpnX8VOOjcj\nh2bl22wAAP0T+fzCcB2zikLC4vy5GDgUX0xS1ZUzWygf3L1tUiTZYRCCzT9zeW50\naGV0aWMgcmVjaXBpZW50IGEgPHN5bnRoZXRpYy1yZWNpcGllbnQtYUBzeW50aGV0\naWMuaW52YWxpZD7CvwQTFggAcQWCaVW5AAMLCQcJEHhfuofA2XAINRQAAAAAABwA\nEHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmembxFx2HHwIZ+g8yjHUwloAhUI\nAxYAAgIZAQKbAwIeARYhBFgzAvvgk/aAYSadCHhfuofA2XAIAABUQAD8CYuwj8m3\ndQPw0o5m6TFiSckX7fgeUVaDiqFHuIa77JgBAOn7i1rKA1JL/4obDo8FOmJc+9j5\nmpT+l3B4nRGLuy8Hx10EaVW5ABIKKwYBBAGXVQEFAQEHQEyzLeuF4/M8Phx4SFoe\nMKe+6PIzg++3zfKutz7NtW8vAwEKCQAA/1/T51bxqE+W+4OyKIl34gM9QTG5Pl73\niacrQoI1gbbgEY/CrgQYFggAYAWCaVW5AAkQeF+6h8DZcAg1FAAAAAAAHAAQc2Fs\ndEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ/ThmlMdom0BPfmGBEWh8mgCmwwWIQRY\nMwL74JP2gGEmnQh4X7qHwNlwCAAA344A/09Zw9jQLJmXrXKPJt8HSPdDs1CnQ9Qu\nMZiqRy4duKhRAP91/7MCK0TJbkPr2pVsrgSsxgeoPHzWGqdQRlCaW3gVAw==\n=Aplm\n-----END PGP PRIVATE KEY BLOCK-----"
   },
   "signer": {
-   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEavZtBxYJKwYBBAHaRw8BAQdAlPZs3hzHlfwmQxPatrstFli69BLZ0xxk\ngBG7vRHdQHvNOXN5bnRoZXRpYyBzaWduZXIgYiA8c3ludGhldGljLnNpZ25l\nci5iQHN5bnRoZXRpYy5pbnZhbGlkPsLAEwQTFgoAhQWCavZtBwMLCQcJEJ6/\nmzL7JhB4RRQAAAAAABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmcT\nXqXK/XCbuyPqd+32s3A+Gjn88Hm+7Q54WIQI8f3LDwUVCggODAQWAAIBAhkB\nApsDAh4BFiEEceLtMqnytDDelf98nr+bMvsmEHgAAIUjAP9tHSjwuhsvEmLS\nUiZv6+vT56qu8i/uAS7cMrJRdaYFLQD/dn6cmqHTR/cbPBJO12mx9KNSx5KC\nBA1MVDwy5PiliwrOOARq9m0HEgorBgEEAZdVAQUBAQdA1YSVzv7cG2O5R4NF\ng0ccHmFLO1Nw0REV2Disj/X7x2gDAQgHwr4EGBYKAHAFgmr2bQcJEJ6/mzL7\nJhB4RRQAAAAAABwAIHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmeWt/YT\nJH/YJ5OAtH8JLEw3ucfrpiQbGvIwrJoTS8FP9QKbDBYhBHHi7TKp8rQw3pX/\nfJ6/mzL7JhB4AADZigEAqjaLZrBuDN3LyLkPJDbPOEKlzQihgmezkg8Fc3gc\n4bwA/RXaRiMq4AxYmpK6zYv7YtP5pEqVGh4iTkzrD7OE4JYF\n=HNEL\n-----END PGP PUBLIC KEY BLOCK-----\n",
-   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEavZtBxYJKwYBBAHaRw8BAQdAlPZs3hzHlfwmQxPatrstFli69BLZ0xxk\ngBG7vRHdQHsAAP97ar3QLRfv6svv/y2z7eK+cFlNG0Qu7ArnTl/HLtpAgBJw\nzTlzeW50aGV0aWMgc2lnbmVyIGIgPHN5bnRoZXRpYy5zaWduZXIuYkBzeW50\naGV0aWMuaW52YWxpZD7CwBMEExYKAIUFgmr2bQcDCwkHCRCev5sy+yYQeEUU\nAAAAAAAcACBzYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3JnE16lyv1wm7sj\n6nft9rNwPho5/PB5vu0OeFiECPH9yw8FFQoIDgwEFgACAQIZAQKbAwIeARYh\nBHHi7TKp8rQw3pX/fJ6/mzL7JhB4AACFIwD/bR0o8LobLxJi0lImb+vr0+eq\nrvIv7gEu3DKyUXWmBS0A/3Z+nJqh00f3GzwSTtdpsfSjUseSggQNTFQ8MuT4\npYsKx10EavZtBxIKKwYBBAGXVQEFAQEHQNWElc7+3BtjuUeDRYNHHB5hSztT\ncNERFdg4rI/1+8doAwEIBwAA/1wFiejJzyK5QhKHRNwYDumppeqf6pQpd1c6\nRoZGgO14EMvCvgQYFgoAcAWCavZtBwkQnr+bMvsmEHhFFAAAAAAAHAAgc2Fs\ndEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ5a39hMkf9gnk4C0fwksTDe5x+um\nJBsa8jCsmhNLwU/1ApsMFiEEceLtMqnytDDelf98nr+bMvsmEHgAANmKAQCq\nNotmsG4M3cvIuQ8kNs84QqXNCKGCZ7OSDwVzeBzhvAD9FdpGIyrgDFiakrrN\ni/ti0/mkSpUaHiJOTOsPs4TglgU=\n=XcCJ\n-----END PGP PRIVATE KEY BLOCK-----\n"
+   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdAmy9zhPaxhrWp9xv2WtOZHOU9+l2HeMGJdege\n0Mz39UrNOXN5bnRoZXRpYyBzaWduZXIgYiA8c3ludGhldGljLXNpZ25lci1iQHN5\nbnRoZXRpYy5pbnZhbGlkPsK/BBMWCABxBYJpVbkAAwsJBwkQm53HTfGFQsU1FAAA\nAAAAHAAQc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ3y3mn97xvRLvmoiBLnU\nTB4CFQgDFgACAhkBApsDAh4BFiEEP9O5hhjYwDKPWURIm53HTfGFQsUAAHAcAP41\n1XYX3DuZ6AY3JHMAtWP3QS6OVyqbNHiRMD8Y8veIlAD7BnysqlEw/JK7RqVpzzSb\njFmK/1jfCdFekQPPTc+BAAzOOARpVbkAEgorBgEEAZdVAQUBAQdATfvGoPD5vjWS\nbF2rK9VS1yk/kNxNpOln7sjyM69nQREDAQoJwq4EGBYIAGAFgmlVuQAJEJudx03x\nhULFNRQAAAAAABwAEHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmf6Y5wze5xZ\nuxnELN27fQd9ApsMFiEEP9O5hhjYwDKPWURIm53HTfGFQsUAAHWdAQChhhBTy/xi\n1XGFOj88GNX0ahiegPXVVhmjrR8ulhcrTwEAv7sHr0uJ3inIR7JTTvKvTHfiH2Yg\nFKuLD0OQyOJDBAg=\n=6v2N\n-----END PGP PUBLIC KEY BLOCK-----",
+   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdAmy9zhPaxhrWp9xv2WtOZHOU9+l2HeMGJdege\n0Mz39UoAAQD1005Dfeoz1dECg7H4HCvh6eM3MuacHfoYNKtDLAVWRQ/EzTlzeW50\naGV0aWMgc2lnbmVyIGIgPHN5bnRoZXRpYy1zaWduZXItYkBzeW50aGV0aWMuaW52\nYWxpZD7CvwQTFggAcQWCaVW5AAMLCQcJEJudx03xhULFNRQAAAAAABwAEHNhbHRA\nbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmd8t5p/e8b0S75qIgS51EweAhUIAxYAAgIZ\nAQKbAwIeARYhBD/TuYYY2MAyj1lESJudx03xhULFAABwHAD+NdV2F9w7megGNyRz\nALVj90EujlcqmzR4kTA/GPL3iJQA+wZ8rKpRMPySu0alac80m4xZiv9Y3wnRXpED\nz03PgQAMx10EaVW5ABIKKwYBBAGXVQEFAQEHQE37xqDw+b41kmxdqyvVUtcpP5Dc\nTaTpZ+7I8jOvZ0ERAwEKCQAA/11KUbqpnBI3dtMVrGcYNtIw4JWBp5z6D6Ygh/4r\nha3YEMLCrgQYFggAYAWCaVW5AAkQm53HTfGFQsU1FAAAAAAAHAAQc2FsdEBub3Rh\ndGlvbnMub3BlbnBncGpzLm9yZ/pjnDN7nFm7GcQs3bt9B30CmwwWIQQ/07mGGNjA\nMo9ZREibncdN8YVCxQAAdZ0BAKGGEFPL/GLVcYU6PzwY1fRqGJ6A9dVWGaOtHy6W\nFytPAQC/uwevS4neKchHslNO8q9Md+IfZiAUq4sPQ5DI4kMECA==\n=H7c0\n-----END PGP PRIVATE KEY BLOCK-----"
   }
  },
  "gopenpgpEncryptedToAndroid": [
   {
    "id": "GO-E1",
    "plaintext": "synthetic interop v1 plaintext",
-   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4DJxGMD6ego0QSAQdAQA3aJECy6onQgs7o58XK6aLrWIDkduJkyZpNu5dLqxsw\ngS4MXuWvqz0q7vrMEFUJJ4uVUOjxipnYPkXoxbw+Q7rGAu5UnTMeo1sohBt74vyB\n0k8BuD6dV0HzbYaLSwoWKwN7gRy1M3hHOjns8Yv+y+aAWHhvo6967t14mhZSrL4H\n++8dRHKgCdXeYAvXXakb3Ffo00X7Sf8w0/ABXmAusZnP\n=68UP\n-----END PGP MESSAGE-----",
+   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4D5kfqgGMIzMESAQdA47SBKvlXctD4+fQsAoe0V7BoJXLBr1vL5ZmuuDHCA3cw\nnsgwHDlVNlTL6l0v17u5yb4WFQn+GeLOBI2/CudSM6Ge8/TqxcwQOWyKFeLLXtWB\n0k8BVYRXeWEHmiCZuvK3gbDfFE86X58bKgLScovrTYBvj+07qjM9IP9n4BuIdlog\n74fSdGjSpWTFGaQjhhuA9SKX2hnIk+VsiqSuFBsKBO5+\n=2o8P\n-----END PGP MESSAGE-----",
    "decryptWith": "recipient.privateArmored",
    "expect": {
     "decrypt": "ok",
@@ -32,7 +33,7 @@
   {
    "id": "GO-E2",
    "plaintext": "synthetic interop v2: line one\nline two, 中文一行",
-   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4DJxGMD6ego0QSAQdABCR70GcGk/nY5tQpNS8fItadUqmEzmxZTVeOeLlqyV8w\nhC8aRU9kyTO5mgOJzuG50cQep8P16y5084N0wSvkV6M6CPaUZu81afhKcSlAXfLE\n0mYBn37Dh7Z5AbDIzOJRauO16egTuF7FKcj0FETKSYf00+2fJlVrwecxk1fjK+gq\n7Bxb6ETr7AXuBXkREgtfQQXfI+BtYaJvXcLqjcdMR0sgJ7c629F0g2M8QWrx1m9W\nxLP3aGLDv4s=\n=mfJJ\n-----END PGP MESSAGE-----",
+   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4D5kfqgGMIzMESAQdAbnk40bNn2jKff5HB09ihtvg5JxnO0CnEcwPYDz+TOXcw\ngm8i1BFnxc3QqJy69hr2VX3uZyxxmncKIhu4EOl3bkkcf2u5b1Y5mNDjFVP84rhs\n0mYBQAugCEtDoo0IrCKb/OnzOgJ6M6ioHvFjYQX4Be90hcew5tXsLroLf9dDItxd\nO+e6H/SPf1TY0OpL8lSAA5qa4so2QQpiphzP5fSHFDS5u2bmQdTbt6fd87dx0XBx\n6WGyh+9EGR4=\n=C3FF\n-----END PGP MESSAGE-----",
    "decryptWith": "recipient.privateArmored",
    "expect": {
     "decrypt": "ok",
@@ -44,7 +45,7 @@
   {
    "id": "GO-S1",
    "plaintext": "synthetic interop v1 plaintext",
-   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0Fgmr2cHoJEJ6/mzL7JhB4NRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmc4AM33Ivx7bF9CT+MDmbIdFiEEceLtMqnytDDelf98nr+b\nMvsmEHgAAMbuAQCY/t2CMjlE4jQT5H+sVXPpmtjNbTuMPg1+XaU1OpSIEwD/bPxs\naYrTqRR5j88rMy8kZlovAqCEPgxopBVNmHErFQc=\n=jXR/\n-----END PGP SIGNATURE-----",
+   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0FgmlVuQAJEJudx03xhULFNRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmeXgjtwthUY4O9xvjgP16O+FiEEP9O5hhjYwDKPWURIm53H\nTfGFQsUAAIELAQCGzqVMXFC/0rh2bCUt19rxWDDwF5ASqv4rKTF/eN+suwEAjn86\nN34hzf8nbNJV7F+9rkVyG1m91dYOW6c1Q5QCYww=\n=C++H\n-----END PGP SIGNATURE-----",
    "verifyWith": "signer.publicArmored",
    "expect": {
     "verify": true
@@ -53,7 +54,7 @@
   {
    "id": "GO-S2",
    "plaintext": "synthetic interop v2: line one\nline two, 中文一行",
-   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0Fgmr2cHoJEJ6/mzL7JhB4NRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmc24cOLexZmo7/strcMp7cbFiEEceLtMqnytDDelf98nr+b\nMvsmEHgAAIJxAP9WxuqmvcLj1N0HKRPgHW1hS6/4D8OotMuMSX3f1Qh8qwD/Qk/E\npGs7ckwzzG4dsaq4DCWaiWyQIlgoVzkRP2bzcgE=\n=L1p/\n-----END PGP SIGNATURE-----",
+   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0FgmlVuQAJEJudx03xhULFNRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmeb2VutNdkmXTcsF3lZ2pRmFiEEP9O5hhjYwDKPWURIm53H\nTfGFQsUAAAbdAQDhi72ugGAIvX0RwWfxdFnP3tSvVxlw7ihqCoodENhrjAEA9MQN\noxTWaTTjcG8zu2xDDsHaVrZbg6tU7d3/OY6exAY=\n=t9ZD\n-----END PGP SIGNATURE-----",
    "verifyWith": "signer.publicArmored",
    "expect": {
     "verify": true
@@ -62,7 +63,7 @@
   {
    "id": "GO-S-TAMPER",
    "plaintext": "synthetic interop v1 plaintextx",
-   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0Fgmr2cHoJEJ6/mzL7JhB4NRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmc4AM33Ivx7bF9CT+MDmbIdFiEEceLtMqnytDDelf98nr+b\nMvsmEHgAAMbuAQCY/t2CMjlE4jQT5H+sVXPpmtjNbTuMPg1+XaU1OpSIEwD/bPxs\naYrTqRR5j88rMy8kZlovAqCEPgxopBVNmHErFQc=\n=jXR/\n-----END PGP SIGNATURE-----",
+   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwqsEABYIAF0FgmlVuQAJEJudx03xhULFNRQAAAAAABwAEHNhbHRAbm90YXRpb25z\nLm9wZW5wZ3Bqcy5vcmeXgjtwthUY4O9xvjgP16O+FiEEP9O5hhjYwDKPWURIm53H\nTfGFQsUAAIELAQCGzqVMXFC/0rh2bCUt19rxWDDwF5ASqv4rKTF/eN+suwEAjn86\nN34hzf8nbNJV7F+9rkVyG1m91dYOW6c1Q5QCYww=\n=C++H\n-----END PGP SIGNATURE-----",
    "verifyWith": "signer.publicArmored",
    "expect": {
     "verify": false
@@ -74,9 +75,9 @@
   {
    "id": "JS-E1",
    "plaintext": "synthetic interop v1 plaintext",
-   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4DJxGMD6ego0QSAQdAwK0cpUZDDr+51SlsMXpRSRt9DVMZcAOLifsdcMBu\nJWQwQq4aZqEySF17CEL4iiatp9cXs47bIjf5elLfrxhvHVeKGf09Ti4yjYpz\ngMW1sXEq0sBbAUlNd0UyxVHty9vAqnwa8+8Rlw/J3iUS4R7fZl0o00uzvs2p\nTLTjrfef8bcSXYbaolSPU1gayBCp8MeEKbFgcPRMZU+1pKGuSPHbsSUzpv/t\ny67z19Sz/pbCiL4LtiVA+rO12r+wmZ+NO3IFRKZY8y8SeK4vCt2nqyc77cIp\njMGAtMy2G6mtEAn7OXsIsDXX9udC5dHFq99ikGx/fmMkUxkemTygDxJFU47Q\nExDtoQISFqU7xgHVaoy8lap920CKfqC8FRelZzrRciY8PibZZ9bDgBBYDAKl\n1l3CakJgdj7B0q6/dK9jeYCRRKKa3czPHdPq1VG5jOZcaxxKMFuLbUrBUYi6\nCda3zr1bwoE2nWq8SPL+p1I/frcw0g==\n=H3tR\n-----END PGP MESSAGE-----\n",
-   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0Fgmr2bQgJEJ6/mzL7JhB4RRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmdjvl8fdzZk5N4HPFRgaYIBSG13rLiBeZICPiNU\n78uLGxYhBHHi7TKp8rQw3pX/fJ6/mzL7JhB4AAA4TwEArs7cirz2Q+LGaa13\nF9SrMImefBQ/BUEL2bYgBScMqlcBALC7T6+qtrNB6MDkXvvB7GIYq3+Rd5dn\nURLD3dSCK7AM\n=QHHq\n-----END PGP SIGNATURE-----\n",
-   "cleartextArmored": "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nsynthetic interop v1 plaintext\n-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0Fgmr2bQgJEJ6/mzL7JhB4RRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmeR6CEy4H2XC4O+OC9MrMKrQZO3QQwsYiv+UCYX\n8/Ig2hYhBHHi7TKp8rQw3pX/fJ6/mzL7JhB4AACXiAEAz6vCSyoi8qR/KZod\njZtsKKjGgSiQlrXStv50Ard1xzcA/RzQgo10UdcsmmSxTmOLQ/CS68wAF0w9\nWM3qqLDT6xYB\n=GY1X\n-----END PGP SIGNATURE-----\n",
+   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4D5kfqgGMIzMESAQdA8TnQjSPD6eFzRkI1a9uRrqdNzDgBAmHQjTGyxytL\ndgEwHUzqLVhuUyh49IpJYXxUf6rSeFywNerTCGRe99Wgiem/W96uHMzjTGjg\nGPeMDjPp0sBbAcM0LTmjtimk1pOGOY5YoezHOjytX48VsZtFi+9X8hvJ4og/\nz1ESxgOlGgRCnMrPGxBlbvj2w4uc835gvuCLxH2WD7q0BDp4V5kMqUYtcBfF\nTV79i/wXeKSvsxFOBJGNHXVr7JavP5reO9ybSV7nDwmW1eslWtHt5QbSBeRB\n5aLbCgmdKbX5uHDzrHCC4eg+WLsPympe7+/2F5eEDGltRQpLRU7T7GDBQQnF\nDCdB6rDkD33jKMsCiTswnKqiTPl52H99BpB8baOwkp9+n7IpVx/1Kt0rwTdH\n/ztH5VqK+Jds4wf73XpIQioahUYKzswNcmAMIqcnU4s7hbKpL3BzvSkv633d\n26lN3iK+9pnNcoOaH9WcZQC5hB50ow==\n=w+VY\n-----END PGP MESSAGE-----\n",
+   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0FgmlVuQAJEJudx03xhULFRRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmfROHbkPMj3Tp9qWW6RZN+1EXxfcnIj5+6qAG6E\nZdMXjhYhBD/TuYYY2MAyj1lESJudx03xhULFAAAsDwD/TSe314Nxwq6XcD5d\nTzwQ0u74C80rbJm24BJ8yz7LLP8A/RoCakhFMWqak7T7L0i+Sk/vP6sOYu1e\nCtIxFQBgcvUC\n=4AkG\n-----END PGP SIGNATURE-----\n",
+   "cleartextArmored": "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nsynthetic interop v1 plaintext\n-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0FgmlVuQAJEJudx03xhULFRRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmdDcDjSyFbEMORD2mlI9mHtFn8C+0p4JHszRXv9\neU8C+xYhBD/TuYYY2MAyj1lESJudx03xhULFAABVIQD9GZWr54Pw783oW8Fs\nhaRihb36MY4fUNrnfLzFrcguzXkBAMmCCDgPrBNG8AQ0rpk1Q8UxBsDmROUZ\n06JMm5agqhsD\n=PcAj\n-----END PGP SIGNATURE-----\n",
    "decryptWith": "recipient.privateArmored",
    "verifyWith": "signer.publicArmored",
    "expect": {
@@ -88,9 +89,9 @@
   {
    "id": "JS-E2",
    "plaintext": "synthetic interop v2: line one\nline two, 中文一行",
-   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4DJxGMD6ego0QSAQdAbGjTu459bAJxbvRE0pzawBsCB/Rd3DIF+gJJXHap\nsREwntvJZrs2gVPcnkOv/7+HFczEkfYDxBddLutImvuPI5tDEz1NLRlMPD3S\nsUJDvO6U0sBzAULARWskg1v4QY5KdUVbDmhzly/GuzblOxIuJzLoa/Byz+hT\nG20VxOYevnyCmwCKqwPvbVu18q86WLC5ycNSeqarFZnugL39wBF9Tb1OhcDf\nwmSM5sxz5mW20BPple/+sJYfugk8AdtMGY0wO8ngLET3psCZ/fyq+I1m21VO\nvMCGBAI40tfW6R7dbr+2Feue4qIa1sqfFLNS42mi4i5jQMxY04o9U3367sqD\nfakEx42iehcykYZ7D+lntNUNiQ0vOmFKvb9LJA7Om8UVb8ng9ZAygT4lDKBd\nQGiqlWtL5u+3SAGTieNSAZDfkXZ9fQP3FnNisIwXSn0yTzygWw16dzpHG4m9\nk6tktwff2Et3Y5twOCJPZVIajhpkRrvfpbg+61MJRu8PSeNMW+d2gkop93Xv\n8A==\n=Uzfn\n-----END PGP MESSAGE-----\n",
-   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0Fgmr2bQgJEJ6/mzL7JhB4RRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmc/dgSfMOfDGGFuBJ7Iut9BafhkKcpOFuWep5JH\ngyWnShYhBHHi7TKp8rQw3pX/fJ6/mzL7JhB4AADKlwEAhWCR//G+frvn2Dz8\nmZ4MxpAnG6466R2LeGBvwEpQTQwA+wZcVl923qUDl43rsIYR7o3mokFmeoID\nrfm4kQEYYUwA\n=J2i9\n-----END PGP SIGNATURE-----\n",
-   "cleartextArmored": "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nsynthetic interop v2: line one\r\nline two, 中文一行\n-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0Fgmr2bQgJEJ6/mzL7JhB4RRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmcQCv+5aMjqgxp80BQwc0UHnHe4iz34l8bVzUSl\nKe8qHBYhBHHi7TKp8rQw3pX/fJ6/mzL7JhB4AABy0AD/ejHpoodUgVtooTM2\neW5OB4OH7CErDw4vw0FMs9Hr1cwA/3pL1vFABF+lfgTiu1uIGiGs1SyadXjk\n3LoXeZ/Jf4wG\n=WD6l\n-----END PGP SIGNATURE-----\n",
+   "ciphertextArmored": "-----BEGIN PGP MESSAGE-----\n\nwV4D5kfqgGMIzMESAQdAkeDVZ7gRq/y5wgHlF/2ryZMgnCM/9WgAHbVXhfOu\nDGswJOfFYs08Bun17HbyFWtoa3anCEpWko8KJLPdf12Vohkg1cMlXXQ9N5IY\n8Hu5p5SZ0sBzAQVfIh+Nf6WzDLYD4L+XtqW8SXdHd7SKsG/vl04Zn+7HgFH2\n9lzNZZaR1RE7iiCSkt8+z/rE5dmwve3yiXIJ5JU/AZoi/fvTO6ZD0sMD1TI0\noBaEwILqWNLzsndqs0zL74uLH3h1wD2wo1ii/4dJTyIKJJaOeEQVKByPjmYO\nzVHpA4spfinToynLS5KUYvGbW3TZSdIiZSRuXuXqWfdqD0Tt2KdCrQA5vxXA\nY5bRzctETWUU6f+dJMCrZmgsveG8qCFrg8mHeZL74Taaj59kfKsr3+9HKnfB\nZMIqngnwAYOfk/h2gbhVNqTU3y1AlTJz87GA2KX6dngB7YLN/BTCbT8gCpR9\n0Xdwdoh4V4QkW6kjIkX01fHiOOZA56VP8jh91XM3vyqhf8WJjFOeDfzocdFM\nuQ==\n=tqbO\n-----END PGP MESSAGE-----\n",
+   "detachedSignatureArmored": "-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0FgmlVuQAJEJudx03xhULFRRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmf5Fj/085JHe2iHPWwL6zl49kuxY0A5qE2mA7aq\nRJjY0BYhBD/TuYYY2MAyj1lESJudx03xhULFAAAvvQEAi255KJhVpkilwBCl\nbfr0hBpiTzrvGWVMtOk08gVzWroA/RHtFvwqb3UhTl0eNgfZ9ebZJqS/ZXY2\nLurtB0JN4FUI\n=hYk8\n-----END PGP SIGNATURE-----\n",
+   "cleartextArmored": "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nsynthetic interop v2: line one\r\nline two, 中文一行\n-----BEGIN PGP SIGNATURE-----\n\nwrsEARYKAG0FgmlVuQAJEJudx03xhULFRRQAAAAAABwAIHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmdAQEo8Fc0lEMs5jaEDjYJZXccuRrZTzDn0S3q3\nF0lTmxYhBD/TuYYY2MAyj1lESJudx03xhULFAAA0MgEA3H0m21flJkmRp4qF\nzT+7HU0VQnkmIxyIMiEhjKNkYvMBANseDRosj/R9eTbjIlinoNWGK832abog\nD6AfAnA0LXoB\n=ZT7N\n-----END PGP SIGNATURE-----\n",
    "decryptWith": "recipient.privateArmored",
    "verifyWith": "signer.publicArmored",
    "expect": {

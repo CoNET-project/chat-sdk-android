@@ -35,16 +35,15 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("protocolVersion"), result.getInt("protocolVersion"))
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
-        // The shared vector lists the production capabilities. identity.kpresent.v1 (spec 25.52X.5, 25.52Y.93) is declared in every build and is not in
-        // the shared vector yet, so it is added here after the vector names. A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项,
-        // 25.52Y.44; PM R2048); the vector has no QA variant yet, so that one bit is added here only when this build is a QA build.
+        // The shared vector's Android list is the production declaration (spec 25.52Y.116: identity.kpresent.v1 is in it; inbound.generation.v1
+        // is not an Android capability). A QA build also declares wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44; PM R2048); the vector has
+        // no QA variant yet, so that one bit is added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
-            listOf(BeamioConetChatProtocol.KPRESENT_CAPABILITY) +
             (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList()) +
             (if (BuildConfig.NATIVE_KEYS_QA) listOf(BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) else emptyList())
         assertEquals(expected, strings(result.getJSONArray("capabilities")))
         for (cap in BeamioConetChatProtocol.CAPABILITIES) {
-            // Names not yet in the shared vector (see above): every other declared name must be a spec capability.
+            // Names not in the shared vector's top-level union (see above): every other declared name must be a spec capability.
             if (cap == BeamioConetChatProtocol.WALLET_CREDENTIAL_CAPABILITY) continue
             if (cap == BeamioConetChatProtocol.NATIVE_KEYS_CAPABILITY) continue
             if (cap == BeamioConetChatProtocol.KPRESENT_CAPABILITY) continue
