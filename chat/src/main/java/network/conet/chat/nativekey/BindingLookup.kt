@@ -102,7 +102,11 @@ internal object RegistryMapping {
 internal enum class LocalSource { NONE, POSITIVE, UNREADABLE }
 
 /** The device facts of the create path (HH.2, BL-50): whether the account key K is present and whether a wallet private key record is. */
-internal data class BindingDevice(val kPresent: Boolean = false, val walletRecord: Boolean = false)
+/**
+ * [kPresent] is tri-state (Y.104, Y.105 第 3 条): true when a K or a key record is on the device, false only when the K store was read completely and is
+ * empty, null when it could not be read (unknown, never false).
+ */
+internal data class BindingDevice(val kPresent: Boolean? = false, val walletRecord: Boolean = false)
 
 /** The code of a binding lookup (§25.52Z.3, §25.46.6): `create` enters the first screen, the others do not enter creation. */
 internal enum class BindingCode(val wire: String, val page: String, val creationEntered: Boolean) {
@@ -133,7 +137,7 @@ internal object BindingDecision {
             is RegistryRead.Absent -> when (kind) {
                 BindingKind.TAG -> when {
                     local == LocalSource.UNREADABLE -> BindingCode.LOOKUP_UNAVAILABLE
-                    device.kPresent && !device.walletRecord -> BindingCode.LOOKUP_UNAVAILABLE
+                    device.kPresent != false && !device.walletRecord -> BindingCode.LOOKUP_UNAVAILABLE // true, or unknown (null)
                     else -> BindingCode.CREATE
                 }
                 BindingKind.EOA -> when (local) {

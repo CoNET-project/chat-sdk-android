@@ -162,6 +162,12 @@ internal object BindingLocalSources {
             vaultUnreadable || kUnreadable -> LocalSource.UNREADABLE
             else -> LocalSource.NONE
         }
-        return local to BindingDevice(kPresent = keyReady || anyK, walletRecord = keyReady)
+        // kPresent is unknown (null), not false, when the K store could not be read and nothing else shows a K (Y.104).
+        val kPresentKnown: Boolean? = when {
+            keyReady || anyK -> true
+            kUnreadable -> null
+            else -> false
+        }
+        return local to BindingDevice(kPresent = kPresentKnown, walletRecord = keyReady)
     }
 }
