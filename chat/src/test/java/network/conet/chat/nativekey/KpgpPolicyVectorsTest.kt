@@ -13,8 +13,8 @@ class KpgpPolicyVectorsTest {
     private fun strings(a: JSONArray?): List<String> = (0 until (a?.length() ?: 0)).map { a!!.getString(it) }
 
     @Test
-    fun theKpgpGroupHasThirteenCases() {
-        assertEquals(13, doc.getJSONArray("kpgpCases").length())
+    fun theKpgpGroupHasFifteenCases() {
+        assertEquals(15, doc.getJSONArray("kpgpCases").length())
     }
 
     @Test
@@ -38,6 +38,7 @@ class KpgpPolicyVectorsTest {
                 chainBackupPresent = b("chainBackupPresent", false),
                 chainVerify = b("chainVerify", false),
                 userClick = b("userClick", false),
+                nativeConfirm = b("nativeConfirm", false),
             )
             val got = KpgpPolicy.decide(input)
             if (got.action != exp.getString("action")) failures += "$id action ${got.action}"

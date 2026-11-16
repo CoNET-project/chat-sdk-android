@@ -57,11 +57,19 @@ class KpgpUpgradeTest {
     }
 
     @Test
-    fun noRecordWithTheUserClickIsTheGenerateActionOnly() {
+    fun noRecordWithTheConfirmedClickIsTheGenerateActionOnly() {
         // The function reports the action; generating and registering the new key is the caller's step, never done here.
         val backend = MemoryAccountPgpKBackend()
-        val r = KpgpUpgrade.upgrade(AccountPgpK(backend), eoa, null, userClick = true, nowSec = 1L)
+        val r = KpgpUpgrade.upgrade(AccountPgpK(backend), eoa, null, userClick = true, nowSec = 1L, nativeConfirm = true)
         assertEquals("generated_on_user_click", r.action)
+        assertTrue(backend.items.isEmpty())
+    }
+
+    @Test
+    fun aClickWithoutTheNativeConfirmationNeverGenerates() {
+        val backend = MemoryAccountPgpKBackend()
+        val r = KpgpUpgrade.upgrade(AccountPgpK(backend), eoa, null, userClick = true, nowSec = 1L, nativeConfirm = false)
+        assertEquals("pgp_migration_retry", r.action)
         assertTrue(backend.items.isEmpty())
     }
 }

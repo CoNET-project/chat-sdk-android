@@ -19,6 +19,8 @@ internal object KpgpPolicy {
         val chainBackupPresent: Boolean = false,
         val chainVerify: Boolean = false,
         val userClick: Boolean = false,
+        /** The user confirmed on the native confirmation screen (25.52Y.59 第 5 项). A click without it never generates. */
+        val nativeConfirm: Boolean = false,
     )
 
     data class Expect(
@@ -54,7 +56,7 @@ internal object KpgpPolicy {
             return if (i.chainVerify) writeFrom(i, "upgraded_from_chain")
             else Expect("pgp_migration_retry", emptyList(), emptyList(), "pgp_migration_retry", rollback = true)
         }
-        if (i.userClick) return Expect("generated_on_user_click", listOf(K), emptyList(), "home", registryReplace = true)
+        if (i.userClick && i.nativeConfirm) return Expect("generated_on_user_click", listOf(K), emptyList(), "home", registryReplace = true)
         return Expect("pgp_migration_retry", emptyList(), emptyList(), "pgp_migration_retry")
     }
 

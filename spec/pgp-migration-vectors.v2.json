@@ -9926,7 +9926,8 @@
         "kPgpExists": false,
         "lPresent": false,
         "chainBackupPresent": false,
-        "userClick": true
+        "userClick": true,
+        "nativeConfirm": true
       },
       "expect": {
         "action": "generated_on_user_click",
@@ -9959,6 +9960,49 @@
         ],
         "deletes": [],
         "page": "home",
+        "rollback": false
+      }
+    },
+    {
+      "id": "KP-14",
+      "title": "升级：L 存在但无效，无链上备份，用户在原生确认界面确认后点击：生成新钥写入 K_pgp，L 不删除不改写，链上替换按注册流程",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": false,
+        "chainBackupPresent": false,
+        "userClick": true,
+        "nativeConfirm": true
+      },
+      "expect": {
+        "action": "generated_on_user_click",
+        "writes": [
+          "K_pgp"
+        ],
+        "deletes": [],
+        "page": "home",
+        "rollback": false,
+        "registryReplace": true
+      }
+    },
+    {
+      "id": "KP-15",
+      "title": "升级：用户点击但未经原生确认界面确认：不生成，pgp_migration_retry",
+      "input": {
+        "kind": "upgrade",
+        "kPgpExists": false,
+        "lPresent": true,
+        "lValid": false,
+        "chainBackupPresent": false,
+        "userClick": true,
+        "nativeConfirm": false
+      },
+      "expect": {
+        "action": "pgp_migration_retry",
+        "writes": [],
+        "deletes": [],
+        "page": "pgp_migration_retry",
         "rollback": false
       }
     }

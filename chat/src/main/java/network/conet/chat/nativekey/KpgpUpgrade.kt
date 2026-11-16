@@ -12,7 +12,7 @@ internal object KpgpUpgrade {
     internal class LRecord(val privateArmor: String, val subkeyKeyId: String)
 
     /** The decision for [eoa], writing K_pgp from a valid L record. [record] null means no native record. */
-    fun upgrade(k: AccountPgpK, eoa: String, record: LRecord?, userClick: Boolean, nowSec: Long): KpgpPolicy.Expect {
+    fun upgrade(k: AccountPgpK, eoa: String, record: LRecord?, userClick: Boolean, nowSec: Long, nativeConfirm: Boolean = false): KpgpPolicy.Expect {
         val existing = try {
             k.read(eoa, PgpMigrationPolicy.WORKSPACE) != null
         } catch (_: Exception) {
@@ -38,12 +38,13 @@ internal object KpgpUpgrade {
                 lValid = lValid,
                 chainBackupPresent = false,
                 userClick = userClick,
+                nativeConfirm = nativeConfirm,
             ),
         )
     }
 
     /** The device wrapper: reads the account's native PGP record from the vault and runs [upgrade] against the device K store. */
-    fun fromDevice(app: Context, eoa: String, userClick: Boolean, nowSec: Long): KpgpPolicy.Expect {
+    fun fromDevice(app: Context, eoa: String, userClick: Boolean, nowSec: Long, nativeConfirm: Boolean = false): KpgpPolicy.Expect {
         val vault = NativeWallet.pgpFor(app, eoa)
         val record = try {
             val identity = vault.identity()
@@ -52,6 +53,6 @@ internal object KpgpUpgrade {
         } catch (_: Exception) {
             null
         }
-        return upgrade(AccountPgpK.forDevice(app), eoa, record, userClick, nowSec)
+        return upgrade(AccountPgpK.forDevice(app), eoa, record, userClick, nowSec, nativeConfirm)
     }
 }
