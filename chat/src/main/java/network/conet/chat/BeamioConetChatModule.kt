@@ -804,8 +804,14 @@ object BeamioConetChatModule {
             }
             return true
         }
-        NativeWallet.migrateLegacy(ctx)
-        NativeWallet.migrateLegacyPgp(ctx)
+        // An unreadable stored state is unknown: nothing is adopted and the listen does not start (25.52Y.84).
+        runCatching {
+            NativeWallet.migrateLegacy(ctx)
+            NativeWallet.migrateLegacyPgp(ctx)
+        }.onFailure {
+            Log.w(TAG, "legacy adoption unknown; listen not started: ${it.javaClass.simpleName}")
+            return false
+        }
         val vault = NativeWallet.vault(ctx)
         // An unreadable store is unknown: the listen does not start (false), never taken for an absent account (25.52Y.84).
         val walletEoa = try {
