@@ -47,15 +47,67 @@ internal object ChatRouteSubmit {
         return "{" + parts.joinToString(",") + "}"
     }
 
-    /** Tries [bases] in order (IP first, then domain). Each base is an origin such as `https://beamio.ca`; [PATH] is appended. */
-    fun submit(bases: List<String>, json: String, poster: Poster, timeoutMs: Int = 12_000): Outcome {
+    /**
+     * The on-chain check of the registration (read only): `true` when the PGP directory holds the expected keyId, `false` when it does not,
+     * `null` when the read failed (that is not "not registered").
+     */
+    internal fun interface ChainCheck {
+        fun registered(): Boolean?
+    }
+
+    /** Retries after a 5xx answer (PM ruling, 2026-11-15): at most this many, each with a fresh nonce and signature. */
+    const val MAX_5XX_RETRIES = 3
+
+    /**
+     * Tries [bases] in order (IP first, then domain). [bodyFor] gives the body for an attempt (attempt 0 is the first; a retry is re-signed with a new
+     * nonce by the caller, or returns null when signing fails).
+     *
+     * - 2xx with ok:true over the IP base is not trusted by itself: the chain must show the keyId ([chain] true) or the result is network_unavailable.
+     * - 2xx over the domain base is Submitted.
+     * - 5xx: the chain is read first. Registered → Submitted. Unreadable → network_unavailable. Not registered → re-sign and retry, at most
+     *   [MAX_5XX_RETRIES] times with [backoffMs] between them; after that network_unavailable (retryable). A blind resend of the same signature is never made.
+     * - Other non-2xx: chain_refused. Transport failure moves to the next base.
+     * - No base answers: network_unavailable.
+     */
+    fun submit(
+        bases: List<String>,
+        bodyFor: (attempt: Int) -> String?,
+        poster: Poster,
+        chain: ChainCheck,
+        timeoutMs: Int = 12_000,
+        backoffMs: (retry: Int) -> Long = { 1_000L shl it },
+        pause: (Long) -> Unit = { Thread.sleep(it) },
+    ): Outcome {
+        var attempt = 0
         for (base in bases) {
-            when (val t = poster.post(base.trimEnd('/') + PATH, json, timeoutMs)) {
-                is Transport.Unreachable -> continue
-                is Transport.Answer -> {
-                    val ok = t.status in 200..299 && runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)
-                    return if (ok) Outcome.Submitted else Outcome.Refused("chain_refused")
+            val overIp = base.startsWith("http://")
+            var retries = 0
+            while (true) {
+                val body = bodyFor(attempt) ?: return Outcome.Refused("sig_rejected")
+                attempt++
+                when (val t = poster.post(base.trimEnd('/') + PATH, body, timeoutMs)) {
+                    is Transport.Unreachable -> break
+                    is Transport.Answer -> {
+                        if (t.status in 200..299) {
+                            if (!runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)) return Outcome.Refused("chain_refused")
+                            if (!overIp) return Outcome.Submitted
+                            return if (chain.registered() == true) Outcome.Submitted else Outcome.NetworkUnavailable
+                        }
+                        if (t.status in 500..599) {
+                            when (chain.registered()) {
+                                true -> return Outcome.Submitted
+                                null -> return Outcome.NetworkUnavailable
+                                false -> Unit
+                            }
+                            if (retries >= MAX_5XX_RETRIES) return Outcome.NetworkUnavailable
+                            pause(backoffMs(retries))
+                            retries++
+                            continue
+                        }
+                        return Outcome.Refused("chain_refused")
+                    }
                 }
+                break
             }
         }
         return Outcome.NetworkUnavailable
