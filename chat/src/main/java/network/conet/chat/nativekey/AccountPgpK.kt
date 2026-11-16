@@ -82,9 +82,19 @@ internal class AccountPgpK(private val backend: AccountPgpKBackend) {
     fun writeIfAbsent(eoa: String, workspace: String, keyId: String, publicArmor: String, privateArmor: String, createdAt: Long): AccountPgpKWrite {
         if (existsFor(eoa, workspace)) return AccountPgpKWrite.EXISTS
         val name = itemName(eoa, workspace)
-        if (write(eoa, workspace, keyId, publicArmor, privateArmor, createdAt)) return AccountPgpKWrite.WRITTEN
-        // The write or its read-back failed: remove what was written. A removal that also fails leaves the residue visible to the caller.
-        return if (backend.remove(name)) AccountPgpKWrite.FAILED else AccountPgpKWrite.FAILED_RESIDUE
+        // Any exception in the write or its read-back is a failed write too: the same removal and outcome apply (never a half item left silently).
+        val written = try {
+            write(eoa, workspace, keyId, publicArmor, privateArmor, createdAt)
+        } catch (_: Exception) {
+            false
+        }
+        if (written) return AccountPgpKWrite.WRITTEN
+        val removed = try {
+            backend.remove(name)
+        } catch (_: Exception) {
+            false
+        }
+        return if (removed) AccountPgpKWrite.FAILED else AccountPgpKWrite.FAILED_RESIDUE
     }
 
     /** True when the item of [eoa] in [workspace] exists. Throws when the store cannot be read. */

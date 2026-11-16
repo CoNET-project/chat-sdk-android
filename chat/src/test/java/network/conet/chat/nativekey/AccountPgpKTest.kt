@@ -89,6 +89,27 @@ class AccountPgpKTest {
     }
 
     @Test
+    fun anExceptionInTheWriteIsAFailedWriteAndIsRemoved() {
+        // The put succeeds and the read-back throws (the store cannot be read): the item is removed, and the write is FAILED.
+        val backend = object : AccountPgpKBackend {
+            val items = mutableMapOf<String, String>()
+            override fun get(name: String): String? = throw IllegalStateException("read-back failed")
+            override fun put(name: String, value: String): Boolean {
+                items[name] = value
+                return true
+            }
+            override fun names(): Set<String> = items.keys.toSet()
+            override fun remove(name: String): Boolean {
+                items.remove(name)
+                return true
+            }
+        }
+        val k = AccountPgpK(backend)
+        assertEquals(AccountPgpKWrite.FAILED, k.writeIfAbsent(eoa, ws, "KID1", "PUB", "PRIV", 1L))
+        assertTrue(backend.items.isEmpty())
+    }
+
+    @Test
     fun aFailedWriteWhoseRemovalAlsoFailsReportsResidue() {
         val backend = MemBackend().apply { writeOk = false; removeOk = false }
         val k = AccountPgpK(backend)
