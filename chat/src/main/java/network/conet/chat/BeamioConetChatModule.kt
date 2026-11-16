@@ -211,7 +211,9 @@ object BeamioConetChatModule {
             // r3rh 第 2 项 (PY.8 第 7 项): with no account and an interrupted clear, the orphan sweep runs in the background. It never blocks
             // start-up or a command; an offline or failed chain check skips the account until the next start-up.
             if (interrupted && noAccount) {
-                pgpMigrateWorker.execute { runCatching { sweepOrphanMigrations(ctxIn) }.onFailure { Log.w(TAG, "orphan sweep skipped") } }
+                // 2026-11-16 (Y.85 第 6 条, reviewer 76706f6d): the start-up orphan sweep deletes migration residue on a "no W" reading, which is not one of the
+                // allowed deletions (write rollback, confirmed cleanup_old, user's clear or unregister). Disabled until cleanup_old is implemented.
+                if (ORPHAN_SWEEP_ENABLED) pgpMigrateWorker.execute { runCatching { sweepOrphanMigrations(ctxIn) }.onFailure { Log.w(TAG, "orphan sweep skipped") } }
             }
         }
         appContext = ctxIn
@@ -1093,6 +1095,9 @@ object BeamioConetChatModule {
      * M → N → lastCode order; a refused one is kept.
      * Only codes and counts are logged, never an account value. Returns false when a removal failed (clear_incomplete; the redo continues).
      */
+    /** Off: the start-up sweep is not an allowed deletion until the confirmed cleanup_old exists (25.52Y.85). */
+    internal val ORPHAN_SWEEP_ENABLED = false
+
     private fun sweepOrphanMigrations(ctx: Context): Boolean {
         val pointerSet = try {
             pageRecordFiles(ctx).read(DeviceFlagFiles.POINTER) != null
