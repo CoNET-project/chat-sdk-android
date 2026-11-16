@@ -49,9 +49,9 @@ object NativeAccountCreateHost {
      */
     @Synchronized
     internal fun admit(reqId: Any): Admission {
-        val k = reqId.toString()
+        val k = keyOf(reqId)
         if (k in completed) return Admission.REFUSED
-        pageReqId?.let { return if (it.toString() == k) Admission.SAME_PAGE else Admission.REFUSED }
+        pageReqId?.let { return if (keyOf(it) == k) Admission.SAME_PAGE else Admission.REFUSED }
         if (queryKey != null) return Admission.REFUSED
         queryKey = k
         return Admission.LOOKUP
@@ -62,9 +62,15 @@ object NativeAccountCreateHost {
      */
     @Synchronized
     internal fun settle(reqId: Any, code: String?) {
-        val k = reqId.toString()
+        val k = keyOf(reqId)
         if (queryKey == k) queryKey = null
         if (code == "already_bound" || code == "lookup_unavailable") completed += k
+    }
+
+    /** The key of a reqId in the completed set and the slot: the type is part of it, so the number 1 and the string "1" are different requests. */
+    private fun keyOf(reqId: Any): String = when (reqId) {
+        is Int, is Long -> "n:$reqId"
+        else -> "s:$reqId"
     }
 
     /** Tests only: the state of the host is cleared, so each case starts from a fresh host. */
@@ -125,7 +131,7 @@ object NativeAccountCreateHost {
             val eoa = event.optString("eoa", "")
             if (!CANONICAL_EOA.matches(eoa)) return Drop("eoa_invalid")
             forward(id, code, eoa)
-            completed += id.toString()
+            completed += keyOf(id)
             pageReqId = null
             resultSeen = false
             return null
@@ -143,7 +149,7 @@ object NativeAccountCreateHost {
             // A cancelled creation ends its creation transaction (the key is not created, so no copy is written for it).
             ShellRecordState.creationTxn.set(false)
             forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
-            completed += id.toString()
+            completed += keyOf(id)
         }
         pageReqId = null
         resultSeen = false

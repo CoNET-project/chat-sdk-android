@@ -2,7 +2,6 @@ package network.conet.chat.nativekey
 
 import android.content.Context
 import org.json.JSONObject
-import java.io.IOException
 
 /**
  * `pageCopyState(eoa)` (§25.52PY.15 第 15 项, §25.52PY.17; r3rz). The state of the page wallet copy of [eoa] (§25.52W.4): `absent`, `unreadable`, or
@@ -25,9 +24,10 @@ internal object PageCopyState {
      * EOA decoded from the copy is the address of the key in its profile that holds `privateKeyArmor` (PY.17 第 1 項 (a)); no decoded EOA means no match.
      */
     fun of(eoa: String, store: SealedPageRecordStore, keychainEoa: String?): Result {
+        // Any failure to open the copy is fail closed (PY.17): never an exception to the caller, and never absent.
         val record: JSONObject? = try {
             store.read()
-        } catch (_: IOException) {
+        } catch (_: Exception) {
             return Result.Unreadable
         }
         if (record == null) return Result.Absent
@@ -47,15 +47,34 @@ internal object PageCopyState {
         }
         if (held.size != 1) return null
         val (keyId, armor) = held[0]
+        // The key bytes are zeroed after the derivation. The armor string is a JSON value of the record, which cannot be zeroed (a recorded risk).
         val hex = ShellRecordPolicy.normalizeLegacyKey(armor)?.removePrefix("0x") ?: return null
-        val key = ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
-        val derived = WalletAddress.fromPrivateKey(key)?.lowercase() ?: return null
-        return if (derived == keyId) derived else null
+        val key = try {
+            ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        } catch (_: NumberFormatException) {
+            return null
+        }
+        try {
+            val derived = WalletAddress.fromPrivateKey(key)?.lowercase() ?: return null
+            return if (derived == keyId) derived else null
+        } finally {
+            key.fill(0)
+        }
     }
 
     /** The device state of the copy of [eoa] (the default workspace, the native keychain state). */
     fun ofDevice(app: Context, eoa: String): Result {
-        val keychain = (NativeWallet.vault(app).state() as? NativeWalletVault.State.Ready)?.eoa
-        return of(eoa, BeamioShellRecordImport.storeFor(app, eoa), keychain)
+        // A keychain or store that cannot be reached is fail closed: unreadable, not a match.
+        val keychain = try {
+            (NativeWallet.vault(app).state() as? NativeWalletVault.State.Ready)?.eoa
+        } catch (_: Exception) {
+            return Result.Unreadable
+        }
+        val store = try {
+            BeamioShellRecordImport.storeFor(app, eoa)
+        } catch (_: Exception) {
+            return Result.Unreadable
+        }
+        return of(eoa, store, keychain)
     }
 }
