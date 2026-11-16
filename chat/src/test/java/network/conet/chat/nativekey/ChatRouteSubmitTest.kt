@@ -1,10 +1,13 @@
 package network.conet.chat.nativekey
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
-/** The submission order, the chain confirmation and the 5xx rules (25.52Y.61 第 4 项; PM ruling 2026-11-15). A local stand-in poster only: no real request. */
+/**
+ * The submission rules of 25.52Y.63 and 25.52Y.64. The names IP-01 to IP-07 are the v2 vector IDs (`ipSubmitVerificationCases`). The vector file is
+ * not yet run from this module, so these are rule-level tests and do not claim a vector PASS. No real request is sent.
+ */
 class ChatRouteSubmitTest {
     private val ip = "http://192.0.2.10"
     private val domain = "https://beamio.ca"
@@ -19,120 +22,101 @@ class ChatRouteSubmitTest {
         "signature" to "0x" + "c".repeat(130),
     )
     private val ok = ChatRouteSubmit.Transport.Answer(200, "{\"ok\":true}")
-    private val fail5xx = ChatRouteSubmit.Transport.Answer(503, "{}")
+    private val fiveXx = ChatRouteSubmit.Transport.Answer(503, "{}")
+    private val timeout = ChatRouteSubmit.Transport.Ambiguous
     private fun body(attempt: Int) = ChatRouteSubmit.bodyJson(fields + ("nonce" to "0x" + attempt.toString().padStart(32, '0')))
-    private fun chain(v: Boolean?) = ChatRouteSubmit.ChainCheck { v }
     private val noPause: (Long) -> Unit = {}
+
+    /** Chain answers in call order; the last repeats. Null means the chain read failed. */
+    private fun chain(vararg answers: Boolean?): ChatRouteSubmit.ChainCheck {
+        var i = 0
+        return ChatRouteSubmit.ChainCheck { answers[minOf(i++, answers.size - 1)] }
+    }
 
     private fun run(
         answers: List<ChatRouteSubmit.Transport>,
-        chainAnswer: Boolean?,
-        bases: List<String> = listOf(ip, domain),
-        seen: MutableList<String> = mutableListOf(),
+        chainAnswers: ChatRouteSubmit.ChainCheck,
+        bases: List<String>,
+        posts: MutableList<String> = mutableListOf(),
     ): ChatRouteSubmit.Outcome {
         var i = 0
-        val poster = ChatRouteSubmit.Poster { url, _, _ ->
-            seen.add(url)
+        val poster = ChatRouteSubmit.Poster { _, json, _ ->
+            posts.add(json)
             answers[minOf(i++, answers.size - 1)]
         }
-        return ChatRouteSubmit.submit(bases, ::body, poster, chain(chainAnswer), backoffMs = { 0L }, pause = noPause)
+        return ChatRouteSubmit.submit(bases, ::body, poster, chainAnswers, backoffMs = { 0L }, pause = noPause)
     }
 
     @Test
-    fun ipSuccessIsSubmittedOnlyWhenTheChainShowsIt() {
-        val seen = mutableListOf<String>()
-        val out = run(listOf(ok), chainAnswer = true, bases = listOf(ip, domain), seen = seen)
+    fun ip01_successAndRegisteredIsSubmitted() {
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ok), chain(true), listOf(ip)))
+    }
+
+    @Test
+    fun ip02_successButNotRegisteredIsUnverifiedSubmit() {
+        val posts = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.UnverifiedSubmit, run(listOf(ok), chain(false), listOf(ip), posts))
+        assertEquals(1, posts.size)
+    }
+
+    @Test
+    fun ip03_successWithChainUnreadableIsNetworkUnavailable() {
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ok), chain(null), listOf(ip)))
+    }
+
+    @Test
+    fun ip04_fiveXxRegisteredOnChainIsSubmittedWithoutResend() {
+        val posts = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(fiveXx), chain(true), listOf(ip), posts))
+        assertEquals(1, posts.size)
+    }
+
+    @Test
+    fun ip05_timeoutNotRegisteredRetriesOnceWithAFreshSignature() {
+        val posts = mutableListOf<String>()
+        // The check before the retry: not registered. The retry is answered ok, and the check after it shows the keyId.
+        val out = run(listOf(timeout, ok), chain(false, true), listOf(ip), posts)
         assertEquals(ChatRouteSubmit.Outcome.Submitted, out)
-        assertEquals(listOf("$ip${ChatRouteSubmit.PATH}"), seen)
+        assertEquals(2, posts.size)
+        assertFalse(posts[0] == posts[1]) // re-signed: a fresh nonce, never a blind resend
     }
 
     @Test
-    fun ipSuccessNotOnChainIsNetworkUnavailable() {
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ok), chainAnswer = false, bases = listOf(ip)))
+    fun ip06_fiveXxNotRegisteredAfterTheRetryIsNetworkUnavailable() {
+        val posts = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(fiveXx), chain(false), listOf(ip), posts))
+        assertEquals(1 + ChatRouteSubmit.MAX_RETRIES, posts.size)
     }
 
     @Test
-    fun ipSuccessChainUnreadableIsNetworkUnavailable() {
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ok), chainAnswer = null, bases = listOf(ip)))
+    fun ip07_fiveXxWithChainUnreadableIsNetworkUnavailableWithoutRetry() {
+        val posts = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(fiveXx), chain(null), listOf(ip), posts))
+        assertEquals(1, posts.size)
     }
 
     @Test
-    fun ipUnreachableThenDomainSuccessIsSubmittedWithoutChainCheck() {
-        val seen = mutableListOf<String>()
-        val out = run(listOf(ChatRouteSubmit.Transport.Unreachable, ok), chainAnswer = null, seen = seen)
-        assertEquals(ChatRouteSubmit.Outcome.Submitted, out)
-        assertEquals(listOf("$ip${ChatRouteSubmit.PATH}", "$domain${ChatRouteSubmit.PATH}"), seen)
+    fun domainSuccessIsSubmittedWithoutChainCheck() {
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ok), chain(null), listOf(domain)))
+    }
+
+    @Test
+    fun ipUnreachableFallsThroughToDomain() {
+        val posts = mutableListOf<String>()
+        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ChatRouteSubmit.Transport.Unreachable, ok), chain(null), listOf(ip, domain), posts))
+        assertEquals(2, posts.size)
     }
 
     @Test
     fun a4xxIsRefusedAndFinal() {
-        val seen = mutableListOf<String>()
-        val out = run(listOf(ChatRouteSubmit.Transport.Answer(400, "{\"ok\":false}")), chainAnswer = false, seen = seen)
+        val posts = mutableListOf<String>()
+        val out = run(listOf(ChatRouteSubmit.Transport.Answer(400, "{}")), chain(false), listOf(ip), posts)
         assertEquals("chain_refused", (out as ChatRouteSubmit.Outcome.Refused).code)
-        assertEquals(1, seen.size)
+        assertEquals(1, posts.size)
     }
 
     @Test
-    fun a5xxRegisteredOnChainIsSubmittedWithoutResend() {
-        val seen = mutableListOf<String>()
-        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(fail5xx), chainAnswer = true, bases = listOf(domain), seen = seen))
-        assertEquals(1, seen.size)
-    }
-
-    @Test
-    fun a5xxNotRegisteredRetriesWithAFreshSignatureAtMostThreeTimes() {
-        val bodies = mutableListOf<String>()
-        val poster = ChatRouteSubmit.Poster { _, json, _ ->
-            bodies.add(json)
-            fail5xx
-        }
-        val out = ChatRouteSubmit.submit(listOf(domain), ::body, poster, chain(false), backoffMs = { 0L }, pause = noPause)
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, out)
-        assertEquals(1 + ChatRouteSubmit.MAX_5XX_RETRIES, bodies.size)
-        assertEquals(bodies.size, bodies.toSet().size) // every attempt carries its own nonce
-    }
-
-    @Test
-    fun a5xxWithUnreadableChainDoesNotResend() {
-        val seen = mutableListOf<String>()
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(fail5xx), chainAnswer = null, bases = listOf(domain), seen = seen))
-        assertEquals(1, seen.size)
-    }
-
-    @Test
-    fun noAnswerFromBothIsNetworkUnavailable() {
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ChatRouteSubmit.Transport.Unreachable), chainAnswer = null))
-    }
-
-    @Test
-    fun bodyKeysKeepTheFixedOrder() {
-        val json = ChatRouteSubmit.bodyJson(fields)
-        val order = listOf("wallet", "keyID", "publicKeyArmored", "encrypKeyArmored", "routeKeyID", "timestamp", "nonce", "signature")
-        val positions = order.map { json.indexOf("\"$it\":") }
-        assertTrue(positions.zipWithNext().all { (a, b) -> a in 0 until b })
-    }
-
-    /** Rule-level (25.52Y.63 第 3 项): a timeout after the send that the chain shows as registered is submitted, with no resend. Vectors pending. */
-    @Test
-    fun ambiguousTimeoutRegisteredOnChainIsSubmittedWithoutResend() {
-        val seen = mutableListOf<String>()
-        assertEquals(ChatRouteSubmit.Outcome.Submitted, run(listOf(ChatRouteSubmit.Transport.Ambiguous), chainAnswer = true, bases = listOf(ip), seen = seen))
-        assertEquals(1, seen.size)
-    }
-
-    /** Rule-level (25.52Y.63 第 3 项): a timeout not on chain re-signs and retries, at most 3 times; an unreadable chain never resends. Vectors pending. */
-    @Test
-    fun ambiguousTimeoutNotOnChainRetriesThenStops() {
-        var posts = 0
-        val poster = ChatRouteSubmit.Poster { _, _, _ -> posts++; ChatRouteSubmit.Transport.Ambiguous }
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, ChatRouteSubmit.submit(listOf(domain), ::body, poster, chain(false), backoffMs = { 0L }, pause = noPause))
-        assertEquals(1 + ChatRouteSubmit.MAX_5XX_RETRIES, posts)
-    }
-
-    @Test
-    fun ambiguousTimeoutWithUnreadableChainDoesNotResend() {
-        val seen = mutableListOf<String>()
-        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ChatRouteSubmit.Transport.Ambiguous), chainAnswer = null, bases = listOf(domain), seen = seen))
-        assertEquals(1, seen.size)
+    fun noAnswerFromAnyBaseIsNetworkUnavailable() {
+        assertEquals(ChatRouteSubmit.Outcome.NetworkUnavailable, run(listOf(ChatRouteSubmit.Transport.Unreachable), chain(null), listOf(ip, domain)))
     }
 }

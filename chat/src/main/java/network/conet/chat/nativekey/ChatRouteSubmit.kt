@@ -26,6 +26,9 @@ internal object ChatRouteSubmit {
         object Submitted : Outcome()
         class Refused(val code: String) : Outcome()
         object NetworkUnavailable : Outcome()
+
+        /** 25.52Y.64 第 3 项: a success answer the chain does not show as registered. Not submitted; the page must not show success. */
+        object UnverifiedSubmit : Outcome()
     }
 
     /** One POST attempt. [Transport.Unreachable] means no answer (connect, TLS or timeout); any HTTP answer is [Transport.Answer]. */
@@ -58,8 +61,8 @@ internal object ChatRouteSubmit {
         fun registered(): Boolean?
     }
 
-    /** Retries after a 5xx answer (PM ruling, 2026-11-15): at most this many, each with a fresh nonce and signature. */
-    const val MAX_5XX_RETRIES = 3
+    /** Retries after a 5xx or timeout whose chain check is not registered: once (25.52Y.64, IP-05, IP-06). Each retry is re-signed. */
+    const val MAX_RETRIES = 1
 
     /**
      * Tries [bases] in order (IP first, then domain). [bodyFor] gives the body for an attempt (attempt 0 is the first; a retry is re-signed with a new
@@ -68,7 +71,7 @@ internal object ChatRouteSubmit {
      * - 2xx with ok:true over the IP base is not trusted by itself: the chain must show the keyId ([chain] true) or the result is network_unavailable.
      * - 2xx over the domain base is Submitted.
      * - 5xx: the chain is read first. Registered → Submitted. Unreadable → network_unavailable. Not registered → re-sign and retry, at most
-     *   [MAX_5XX_RETRIES] times with [backoffMs] between them; after that network_unavailable (retryable). A blind resend of the same signature is never made.
+     *   [MAX_RETRIES] time with [backoffMs] between them (25.52Y.64); after that network_unavailable (retryable). A blind resend of the same signature is never made.
      * - Other non-2xx: chain_refused. Transport failure moves to the next base.
      * - No base answers: network_unavailable.
      */
@@ -89,41 +92,37 @@ internal object ChatRouteSubmit {
             while (true) {
                 val body = bodyFor(attempt) ?: return Outcome.Refused("sign_failed")
                 attempt++
-                when (val t = poster.post(base.trimEnd('/') + PATH, body, timeoutMs)) {
+                val t = poster.post(base.trimEnd('/') + PATH, body, timeoutMs)
+                // Retry path shared by 5xx and an ambiguous timeout (25.52Y.64): the chain decides first, a resend happens only when unregistered.
+                val retryable: Boolean
+                when (t) {
                     is Transport.Unreachable -> break
-                    is Transport.Ambiguous -> {
-                        // 25.52Y.63 第 3 项: a timeout after the send is checked on chain before any retry.
-                        when (chain.registered()) {
-                            true -> return Outcome.Submitted
-                            null -> return Outcome.NetworkUnavailable
-                            false -> Unit
-                        }
-                        if (retries >= MAX_5XX_RETRIES) return Outcome.NetworkUnavailable
-                        pause(backoffMs(retries))
-                        retries++
-                        continue
-                    }
                     is Transport.Answer -> {
                         if (t.status in 200..299) {
                             if (!runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)) return Outcome.Refused("chain_refused")
                             if (!overIp) return Outcome.Submitted
-                            return if (chain.registered() == true) Outcome.Submitted else Outcome.NetworkUnavailable
-                        }
-                        if (t.status in 500..599) {
-                            when (chain.registered()) {
-                                true -> return Outcome.Submitted
-                                null -> return Outcome.NetworkUnavailable
-                                false -> Unit
+                            return when (chain.registered()) {
+                                true -> Outcome.Submitted // IP-01
+                                false -> Outcome.UnverifiedSubmit // IP-02
+                                null -> Outcome.NetworkUnavailable // IP-03
                             }
-                            if (retries >= MAX_5XX_RETRIES) return Outcome.NetworkUnavailable
-                            pause(backoffMs(retries))
-                            retries++
-                            continue
                         }
-                        return Outcome.Refused("chain_refused")
+                        if (t.status !in 500..599) return Outcome.Refused("chain_refused")
+                        retryable = true
                     }
+                    is Transport.Ambiguous -> retryable = true
                 }
-                break
+                if (retryable) {
+                    when (chain.registered()) {
+                        true -> return Outcome.Submitted // IP-04
+                        null -> return Outcome.NetworkUnavailable // IP-07
+                        false -> Unit
+                    }
+                    if (retries >= MAX_RETRIES) return Outcome.NetworkUnavailable // IP-06
+                    pause(backoffMs(retries))
+                    retries++
+                    continue
+                }
             }
         }
         return Outcome.NetworkUnavailable
