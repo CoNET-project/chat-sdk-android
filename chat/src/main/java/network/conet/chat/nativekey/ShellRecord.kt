@@ -686,6 +686,9 @@ internal class SealedPageRecordStore(
  * kept (project ruling 2026-11-16): it may be recoverable later, so the removal throws IOException and the unregister answers write_failed
  * (not cleared), never ok. Only a readable copy has its W fields removed.
  */
+/** The page copy exists but cannot be read: kept, not erased (25.52Y.84, clear_incomplete). A plain IOException from a write stays write_failed. */
+internal class UnreadableCopy(cause: Throwable) : IOException("page copy unreadable", cause)
+
 internal class PageWalletRemoval(private val store: SealedPageRecordStore) : MigrationWallet {
     override fun present(): Boolean = try {
         store.read()?.let { ShellRecordPolicy.walletIn(it).isNotEmpty() } ?: false
@@ -695,7 +698,11 @@ internal class PageWalletRemoval(private val store: SealedPageRecordStore) : Mig
 
     override fun remove() {
         // An unreadable copy is kept and the removal fails (project ruling 2026-11-16); the caller reports write_failed, never ok.
-        val record: JSONObject = store.read() ?: return
+        val record: JSONObject = try {
+            store.read() ?: return
+        } catch (e: IOException) {
+            throw UnreadableCopy(e)
+        }
         if (ShellRecordPolicy.walletIn(record).isEmpty()) return
         ShellRecordPolicy.removeWallet(record)
         record.put("rev", record.optInt("rev", 0) + 1)

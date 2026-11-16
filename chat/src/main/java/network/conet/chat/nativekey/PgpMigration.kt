@@ -62,6 +62,8 @@ enum class MigrationCode(val wire: String) {
     FINGERPRINT_MISMATCH("fingerprint_mismatch"),
     CHAIN_UNAVAILABLE("chain_unavailable"),
     WRITE_FAILED("write_failed"),
+    /** 25.52Y.84: a clear or unregister step kept an unreadable copy (not erased): not fully cleared, retryable, never ok. */
+    CLEAR_INCOMPLETE("clear_incomplete"),
     REREAD_FAILED("reread_failed"),
     CHALLENGE_FAILED("challenge_failed"),
     VERIFY_UNAVAILABLE("verify_unavailable"),
@@ -512,6 +514,9 @@ internal class PgpMigrationEngine(
         if (walletPresent) {
             try {
                 wallet.remove()
+            } catch (_: UnreadableCopy) {
+                // 25.52Y.84: the copy is kept (unreadable), so the step is not fully cleared: clear_incomplete, never ok.
+                throw Stop(MigrationCode.CLEAR_INCOMPLETE)
             } catch (_: IOException) {
                 throw Stop(MigrationCode.WRITE_FAILED)
             }

@@ -136,6 +136,24 @@ class ShellRecordR424Test {
         assertNotNull(files.read(name))
     }
 
+    /** 25.52Y.84: an unreadable page copy is kept, and the unregister answers clear_incomplete (never ok, never write_failed). */
+    @Test
+    fun anUnreadableCopyMakesTheUnregisterClearIncomplete() {
+        val wrap = NativeTestWrap()
+        val files = NativeTestFiles()
+        seedStagedAndMarker(wrap, files)
+        files.write("page.v1.${ACCOUNT.removePrefix("0x")}.default.rec", ByteArray(40) { 9 })
+        val pageStore = SealedPageRecordStore(wrap, files, "$ACCOUNT:default")
+        // A recovery source exists, so the unregister reaches the wallet step.
+        val engine = migrationEngine(
+            files, wrap, legacyRecord(ACCOUNT, key.priv, key.pub), ChainAnswer.Unavailable,
+            wallet = PageWalletRemoval(pageStore),
+        )
+        val code = engine.unregister().code.wire
+        assertEquals("clear_incomplete", code)
+        assertNotNull(files.read("page.v1.${ACCOUNT.removePrefix("0x")}.default.rec"))
+    }
+
     @Test
     fun theUnregisterRemovesTheWalletCopyAfterTheStagedCopyAndKeepsL() {
         val wrap = NativeTestWrap()

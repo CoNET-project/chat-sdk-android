@@ -178,7 +178,7 @@ internal class PgpRestoreMachine(
         armorBytes.fill(0)
         if (NativePgp.parseSecret(armor) == null) return
         if (dev.old.state() !is NativePgpVault.State.Ready) {
-            if (dev.old.put(dev.account, armor, "") == NativePgpVault.Put.OK) counters.localWrites++
+            if (dev.old.putIfAbsent(dev.account, armor, "") == NativePgpVault.Put.OK) counters.localWrites++
         }
     }
 
@@ -199,7 +199,7 @@ internal class PgpRestoreMachine(
             crash(dev)
             return
         }
-        if (dev.active.put(dev.account, key.privateArmor, "") == NativePgpVault.Put.OK) counters.localWrites++
+        if (dev.active.putIfAbsent(dev.account, key.privateArmor, "") == NativePgpVault.Put.OK) counters.localWrites++
         dev.clearPending()
         dev.setCompletedIdem(idemKey)
         dev.ui = PgpRestoreUi("ok")
@@ -261,7 +261,7 @@ internal class PgpRestoreMachine(
                 dev.ui = PgpRestoreUi("undetermined", code = "pgp_locked")
                 return "undetermined"
             }
-            if (dev.active.put(dev.account, armor, "") != NativePgpVault.Put.OK) {
+            if (dev.active.putIfAbsent(dev.account, armor, "") != NativePgpVault.Put.OK) {
                 dev.ui = PgpRestoreUi("undetermined", code = "write_failed")
                 return "undetermined"
             }
@@ -390,7 +390,7 @@ internal class PgpRestoreMachine(
             val meta = dev.pendingMeta()
             if (key != null && meta != null) {
                 if (chain.identity() == key.identity) {
-                    if (dev.active.put(dev.account, key.privateArmor, "") == NativePgpVault.Put.OK) counters.localWrites++
+                    if (dev.active.putIfAbsent(dev.account, key.privateArmor, "") == NativePgpVault.Put.OK) counters.localWrites++
                     dev.setCompletedIdem(meta.idemKey)
                     dev.clearPending()
                     dev.ui = PgpRestoreUi("ok")

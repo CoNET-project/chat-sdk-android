@@ -49,6 +49,8 @@ internal class NativePgpVault(
 
     enum class Put(val code: String) {
         OK("ok"),
+        /** putIfAbsent refused: a record or marker already exists (25.52Y.80, keep the user's data). Nothing is written. */
+        EXISTS("exists"),
         BAD_EOA("bad_eoa"),
         BAD_KEY("bad_pgp_key"),
         STORE_FAILED("write_failed"),
@@ -86,7 +88,17 @@ internal class NativePgpVault(
      * is written, read back and compared, then the marker is written. On any failure the earlier record is restored, or
      * nothing is left. The passphrase, if any, is sealed with the key and never leaves the vault.
      */
+    /**
+     * Writes only into an empty slot (project ruling 2026-11-16). A record or a marker that already exists, readable or not, is refused with
+     * [Put.EXISTS]: the automatic paths use this, so nothing already stored is overwritten. [put] (overwrite) is for the user's own confirmed
+     * replacement and the restore rollback only.
+     */
     @Synchronized
+    fun putIfAbsent(eoa: String, privateArmor: String, passphrase: String): Put {
+        if (files.read(rec) != null || files.read(mark) != null) return Put.EXISTS
+        return put(eoa, privateArmor, passphrase)
+    }
+
     fun put(eoa: String, privateArmor: String, passphrase: String): Put {
         if (account == NO_ACCOUNT || eoa != account) return Put.BAD_EOA
         val secret = NativePgp.parseSecret(privateArmor) ?: return Put.BAD_KEY

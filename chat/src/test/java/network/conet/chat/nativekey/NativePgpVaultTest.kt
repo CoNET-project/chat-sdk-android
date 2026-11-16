@@ -203,4 +203,20 @@ class NativePgpVaultTest {
             assertFalse(out.code.contains("BEGIN"))
         }
     }
+
+    /** Project ruling 2026-11-16 (keep the user's data): an automatic write goes into an empty slot only; an existing record is refused and kept. */
+    @Test
+    fun putIfAbsentRefusesAnExistingRecordAndKeepsIt() {
+        val (vault, _, files) = fresh()
+        assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
+        val before = files.map[NativePgpVault.recName(SYN_EOA)]!!.copyOf()
+        assertEquals(NativePgpVault.Put.EXISTS, vault.putIfAbsent(SYN_EOA, key("ecc-nopass").getString("privateArmored"), ""))
+        assertTrue(before.contentEquals(files.map[NativePgpVault.recName(SYN_EOA)]!!))
+    }
+
+    @Test
+    fun putIfAbsentWritesIntoAnEmptySlot() {
+        val (vault, _, _) = fresh()
+        assertEquals(NativePgpVault.Put.OK, vault.putIfAbsent(SYN_EOA, key("ecc-pass").getString("privateArmored"), key("ecc-pass").getString("passphrase")))
+    }
 }
