@@ -230,9 +230,12 @@ object NativeWallet {
     @Synchronized
     fun migrateLegacyPgp(context: Context): Boolean {
         val app = context.applicationContext
-        val eoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa ?: return false
+        // Each stored read that cannot be made is unknown: nothing is adopted (false) and nothing is written.
+        val eoa = legacyAdoptionEoa(
+            readWalletEoa = { (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa },
+            readPgpIsNoKey = { pgpFor(app, it).state() is NativePgpVault.State.NoKey },
+        ) ?: return false
         val pgpVault = pgpFor(app, eoa)
-        if (pgpVault.state() !is NativePgpVault.State.NoKey) return false
         val armor = BeamioChatPgpStore.legacyPrivateArmor(app)
         if (!armor.contains("BEGIN PGP PRIVATE KEY")) return false
         // An unreadable stored owner is unknown: nothing is adopted (false) and nothing is written.
@@ -252,3 +255,17 @@ internal fun readLegacyOwnerEoa(read: () -> String?): String? =
     } catch (_: IOException) {
         null
     }
+
+/**
+ * The wallet EOA a legacy PGP key may be adopted into, or null. The wallet is read first; the PGP state is read only when the
+ * wallet is known. A read that throws [IOException] is unknown and refuses the adoption.
+ */
+internal fun legacyAdoptionEoa(readWalletEoa: () -> String?, readPgpIsNoKey: (String) -> Boolean): String? {
+    val eoa: String = (try { readWalletEoa() } catch (_: IOException) { null }) ?: return null
+    val noKey = try {
+        readPgpIsNoKey(eoa)
+    } catch (_: IOException) {
+        return null
+    }
+    return if (noKey) eoa else null
+}
