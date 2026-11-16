@@ -1289,36 +1289,43 @@ object BeamioConetChatModule {
     }
 
     /**
-     * The local sources of the binding lookup (HH.2): a positive source is the account's page copy (K) or the native key of the account; an
-     * unreadable store or vault is fail-closed. For a tag the account is not known, so the page copies and the native key say only whether K exists.
+     * The local sources of the binding lookup (HH.2, §25.52Y.1, §25.48.4). A positive EOA source is the account's wallet key or its SDK account record
+     * K (the per-account PGP record `pgp.v1.<account>.rec` or its marker). The page copy is not K and is not a source. K is read by name:
+     * an unreadable directory is fail closed (unreadable), and a locked keychain is unreadable too (interface ruling: storage_locked is never no-record).
+     * For a tag the account is not known: kPresent is "any K exists" (§25.48.4).
      */
     private fun bindingLocalSources(ctx: Context, eoa: String?): Pair<network.conet.chat.nativekey.LocalSource, BindingDevice> {
         val app = ctx.applicationContext
         val vault = try {
-            NativeWallet.vault(app).state()
+            network.conet.chat.nativekey.NativeWallet.vault(app).state()
         } catch (_: Exception) {
             null
         }
-        val keyReady = vault is network.conet.chat.nativekey.NativeWalletVault.State.Ready && (eoa == null || vault.eoa.equals(eoa, ignoreCase = true))
+        val keyReady = vault is network.conet.chat.nativekey.NativeWalletVault.State.Ready &&
+            (eoa == null || vault.eoa.equals(eoa, ignoreCase = true))
         val vaultUnreadable = vault == null || vault is network.conet.chat.nativekey.NativeWalletVault.State.Locked
-        var copyPositive = false
-        var copyUnreadable = false
+        var kPresent = false
+        var kUnreadable = false
         try {
-            if (eoa != null) {
-                copyPositive = BeamioShellRecordImport.storeFor(app, eoa).read() != null
+            val names = network.conet.chat.nativekey.NativeWallet.pgpFiles(app).names()
+            kPresent = if (eoa != null) {
+                names.contains(network.conet.chat.nativekey.NativePgpVault.recName(eoa)) ||
+                    names.contains(network.conet.chat.nativekey.NativePgpVault.markName(eoa))
             } else {
-                copyPositive = network.conet.chat.nativekey.AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")).names().isNotEmpty()
+                names.any { PGP_K_NAME.matches(it) }
             }
         } catch (_: Exception) {
-            copyUnreadable = true
+            kUnreadable = true
         }
         val local = when {
-            keyReady || copyPositive -> network.conet.chat.nativekey.LocalSource.POSITIVE
-            vaultUnreadable || copyUnreadable -> network.conet.chat.nativekey.LocalSource.UNREADABLE
+            keyReady || kPresent -> network.conet.chat.nativekey.LocalSource.POSITIVE
+            vaultUnreadable || kUnreadable -> network.conet.chat.nativekey.LocalSource.UNREADABLE
             else -> network.conet.chat.nativekey.LocalSource.NONE
         }
-        return local to BindingDevice(kPresent = keyReady || copyPositive, walletRecord = keyReady)
+        return local to BindingDevice(kPresent = keyReady || kPresent, walletRecord = keyReady)
     }
+
+    private val PGP_K_NAME = Regex("pgp\\.v1\\.[0-9a-f]{40}\\.(rec|ok)")
 
     private val pgpRestoreWorker = Executors.newSingleThreadExecutor()
     private val PGP_RESTORE_FIELDS = setOf("type", "reqId", "accountKey")

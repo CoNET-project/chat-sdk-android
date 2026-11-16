@@ -165,6 +165,9 @@ object NativeWallet {
         return pgpFor(app, eoa)
     }
 
+    /** The directory of the account PGP records (K, §25.52Y.1): the same directory as the wallet. Used to read K by name, never to write it. */
+    internal fun pgpFiles(context: Context): AndroidVaultFiles = AndroidVaultFiles(File(context.applicationContext.filesDir, DIR))
+
     /** The active PGP record of [eoa]. A value that is not a canonical address serves no record. */
     internal fun pgpFor(context: Context, eoa: String): NativePgpVault =
         NativePgpVault(
