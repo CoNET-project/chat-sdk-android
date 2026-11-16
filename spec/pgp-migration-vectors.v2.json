@@ -10628,6 +10628,74 @@
       }
     }
   ],
+  "pgpUpgradeStateCases": [
+    {
+      "id": "PU-01",
+      "title": "事件 pgpUpgradeState：L 有效，写入成功：code upgraded_from_L，只含 type 与 code",
+      "input": {
+        "action": "upgraded_from_L"
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "upgraded_from_L"
+      }
+    },
+    {
+      "id": "PU-02",
+      "title": "事件 pgpUpgradeState：链上备份恢复成功：code upgraded_from_chain",
+      "input": {
+        "action": "upgraded_from_chain"
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "upgraded_from_chain"
+      }
+    },
+    {
+      "id": "PU-03",
+      "title": "事件 pgpUpgradeState：K_pgp 已存在：code keep_existing",
+      "input": {
+        "action": "keep_existing"
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "keep_existing"
+      }
+    },
+    {
+      "id": "PU-04",
+      "title": "事件 pgpUpgradeState：L 无效，用户经原生确认后点击：code generated_on_user_click（P-IMP-PGP 方案 A）",
+      "input": {
+        "action": "generated_on_user_click"
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "generated_on_user_click"
+      }
+    },
+    {
+      "id": "PU-05",
+      "title": "事件 pgpUpgradeState：需迁移待重试（自动路径或未确认）：code pgp_migration_retry",
+      "input": {
+        "action": "pgp_migration_retry"
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "pgp_migration_retry"
+      }
+    },
+    {
+      "id": "PU-06",
+      "title": "事件 pgpUpgradeState：fromDevice 等内部异常：一律 pgp_migration_retry，不泄露原因",
+      "input": {
+        "internalError": true
+      },
+      "expect": {
+        "type": "pgpUpgradeState",
+        "code": "pgp_migration_retry"
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",
