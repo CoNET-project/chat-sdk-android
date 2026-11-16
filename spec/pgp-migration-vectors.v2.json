@@ -6571,7 +6571,7 @@
     },
     {
       "id": "AK-43",
-      "title": "第二个账户：指针已置位，建号事务内钥生成，旧存储已确认为空，页面副本缺失：首次写入放行，按 rev 落盘（r3me，R1520b 5）",
+      "title": "PY.18(b)，第二账户建号本版不支持：第二个账户、指针已置位、建号事务内写入：写入答 migrating，不写入、不切换指针、不删钥、不改现有副本（r3rz 总PM 确认 (b)；原“首次写入放行”期望作废）",
       "kind": "write",
       "reqId": "w43",
       "ctx": {
@@ -6596,8 +6596,7 @@
         "reqId": "w43",
         "ok": true,
         "result": {
-          "code": "ok",
-          "rev": 1
+          "code": "migrating"
         }
       }
     },
@@ -6772,7 +6771,7 @@
     },
     {
       "id": "AK-50",
-      "title": "PY.18(b) 同规则（r3rz，待总PM 确认）：指针非空的建号模式读取答 migrating（原 import_not_done 期望作废）；建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）",
+      "title": "建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）。判定依据：legacyFound 的 import_not_done 先于 PY.18(b) 的通用拒绝（总PM 确认 (a)，与 creationModeReadAnswer 顺序一致）",
       "kind": "read",
       "reqId": "r50",
       "ctx": {
@@ -6792,7 +6791,8 @@
         "reqId": "r50",
         "ok": true,
         "result": {
-          "code": "migrating"
+          "code": "error",
+          "sub": "import_not_done"
         }
       }
     },
