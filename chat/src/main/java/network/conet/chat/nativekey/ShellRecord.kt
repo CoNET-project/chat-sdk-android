@@ -879,16 +879,24 @@ internal typealias ShellReplyFields = List<Pair<String, Any?>>
 /** What the bridge needs about the account before it can answer. */
 internal sealed class ShellRecordAccount {
     /**
-     * The account is known, and its page store is [store]. [nativeKeyPresent] is true when the native key store holds the account's EOA key
-     * (§25.52Y.52 AK-60): the copy is then missing, not the key.
+     * The account is known, and its page store is [store]. [nativeKeyPresent] is true when the native key store holds the account's EOA key.
+     * [pointedKeyPresent] is true when the account is the one the pointer names and its key is held (AK-60): the copy is then missing, not the key.
      */
-    class Ready(val store: SealedPageRecordStore, val eoa: String, val nativeKeyPresent: Boolean = false) : ShellRecordAccount()
+    class Ready(
+        val store: SealedPageRecordStore,
+        val eoa: String,
+        val nativeKeyPresent: Boolean = false,
+        val pointedKeyPresent: Boolean = false,
+    ) : ShellRecordAccount()
 
     /** No wallet and no imported account. Nothing can be read or held for it yet. */
     object Unknown : ShellRecordAccount()
 
     /** The page copies cannot be enumerated (§25.52CH.1, AK-40, AK-41): a read answers record_unreadable, a write migrating. */
     object Unreadable : ShellRecordAccount()
+
+    /** The native key store holds an EOA key that cannot be read (r3rv, KR-02): a read answers needs_native_recovery, never no account. */
+    object NeedsRecovery : ShellRecordAccount()
 
     /**
      * Two or more native keys and no pointer (R1533 第 3 条, N 第 2 项): the account is not chosen automatically. A read answers not_ready; a
@@ -1144,6 +1152,8 @@ internal class ShellRecordBridge(
         if (acc is ShellRecordAccount.Mismatch) return reply("error", listOf("sub" to "account_mismatch"))
         // §25.52CH.1, AK-40: the page copies cannot be enumerated, so the record is unreadable (never absent).
         if (acc is ShellRecordAccount.Unreadable) return reply("error", listOf("sub" to "record_unreadable"))
+        // r3rv (KR-02): an unreadable native key is needs_native_recovery, not an absent account.
+        if (acc is ShellRecordAccount.NeedsRecovery) return reply("error", listOf("sub" to "needs_native_recovery"))
         if (acc is ShellRecordAccount.Ready) {
             val current: JSONObject? = try {
                 acc.store.read()
@@ -1198,9 +1208,9 @@ internal class ShellRecordBridge(
     private fun noRecord(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
         if (flags.accountPointer()) {
             // R1520b 第 2 项, AK-60: the pointer's account key is present and only its page copy is missing: migrating (the copy is rebuilt).
-            // With no key for the pointer's account the pointer is fail-closed (AK-08, AK-54).
-            val keyPresent = acc is ShellRecordAccount.Ready && acc.nativeKeyPresent
-            return if (keyPresent) reply("migrating", emptyList()) else reply("error", listOf("sub" to "account_record_missing"))
+            // With no key for the pointer's account the pointer is fail-closed (AK-08, AK-54, KR-07).
+            val pointedKey = acc is ShellRecordAccount.Ready && acc.pointedKeyPresent
+            return if (pointedKey) reply("migrating", emptyList()) else reply("error", listOf("sub" to "account_record_missing"))
         }
         // §25.52U.6 (r3rz): an unreadable or unread legacy store answers migrating, never error(legacy_store_unreadable).
         return when (outcome()) {
@@ -1290,7 +1300,9 @@ internal class ShellRecordBridge(
         if (flags.legacyUnreadable()) return reply("migrating", emptyList())
         if (current == null) {
             // AK-41 (enumeration failed) and AK-58 (two native keys, no pointer): a write answers migrating, never not_ready (R1539).
-            if (acc is ShellRecordAccount.Unreadable || acc is ShellRecordAccount.Ambiguous) return reply("migrating", emptyList())
+            if (acc is ShellRecordAccount.Unreadable || acc is ShellRecordAccount.Ambiguous || acc is ShellRecordAccount.NeedsRecovery) {
+                return reply("migrating", emptyList())
+            }
             // §25.52W.3, AK-23 to AK-25, AK-27, R445: with no native record, a write waits for a completed read. A pointer, a marker, or any
             // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed
             // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
@@ -1377,6 +1389,12 @@ internal object ShellRecordState {
     val outcome: AtomicReference<ImportOutcome?> = AtomicReference(null)
     val bound: AtomicReference<String?> = AtomicReference(null)
     val migrationPending: AtomicBoolean = AtomicBoolean(false)
+
+    /**
+     * The explicit creation transaction (25.52Y.54 PY.18(b), AK-42): set when the user confirms the native account creation, and ended by the first
+     * ok write (the copy of the new key), or by a cancelled or failed creation. While it is set, the creation mode is on with the explicit choice.
+     */
+    val creationTxn: AtomicBoolean = AtomicBoolean(false)
 }
 
 /**
@@ -1415,7 +1433,9 @@ internal object ShellRecordAccounts {
         return when (vault) {
             is NativeWalletVault.State.Ready, is NativeWalletVault.State.Locked -> when {
                 sessionGate && !sessionReady -> ShellRecordAccount.NotReady
-                vault is NativeWalletVault.State.Locked && bound == null -> ShellRecordAccount.Locked
+                // r3rv (KR-02): a key that is held but unreadable (the vault reason `unreadable`) is needs_native_recovery, with no pointer account.
+            vault is NativeWalletVault.State.Locked && vault.reason == "unreadable" && bound == null -> ShellRecordAccount.NeedsRecovery
+            vault is NativeWalletVault.State.Locked && bound == null -> ShellRecordAccount.Locked
                 else -> byKeys(held, bound, storeOf) ?: ShellRecordAccount.Locked
             }
             is NativeWalletVault.State.NoKey -> byKeys(held, bound, storeOf) ?: run {
@@ -1440,7 +1460,7 @@ internal object ShellRecordAccounts {
     private fun byKeys(held: List<String>, bound: String?, storeOf: (String) -> SealedPageRecordStore): ShellRecordAccount? {
         val pointer = bound?.lowercase()
         return when {
-            pointer != null && pointer in held -> ShellRecordAccount.Ready(storeOf(pointer), pointer, nativeKeyPresent = true)
+            pointer != null && pointer in held -> ShellRecordAccount.Ready(storeOf(pointer), pointer, nativeKeyPresent = true, pointedKeyPresent = true)
             pointer != null -> ShellRecordAccount.Ready(storeOf(pointer), pointer, nativeKeyPresent = false)
             held.size == 1 -> ShellRecordAccount.Ready(storeOf(held[0]), held[0], nativeKeyPresent = true)
             held.size >= 2 -> ShellRecordAccount.Ambiguous
@@ -1495,8 +1515,14 @@ object BeamioShellRecordImport {
     }
 
     /** Answers one page request. [requestBytes] is the size of the message as received, in UTF-8 bytes. */
-    fun handle(context: Context, origin: ShellOrigin, body: JSONObject, requestBytes: Int): JSONObject =
-        bridge(context).handle(origin, body, requestBytes)
+    fun handle(context: Context, origin: ShellOrigin, body: JSONObject, requestBytes: Int): JSONObject {
+        val out = bridge(context).handle(origin, body, requestBytes)
+        // The creation transaction ends with its first ok write: the page copy of the key the user just created.
+        if (body.optString("type") == "shellRecordWrite" && out.optJSONObject("result")?.optString("code") == "ok") {
+            ShellRecordState.creationTxn.set(false)
+        }
+        return out
+    }
 
     /**
      * The window channel on Android (§25.52AB.2, §25.52AB.5): the shell's `WebViewCompat.addWebMessageListener` hands over the message with the
@@ -1558,8 +1584,8 @@ object BeamioShellRecordImport {
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
         flags = flagsOf(context.applicationContext),
-        creationMode = { creationTxn },
-        explicitChoice = { creationTxn },
+        creationMode = { creationTxn || ShellRecordState.creationTxn.get() },
+        explicitChoice = { creationTxn || ShellRecordState.creationTxn.get() },
         walletEoaAddress = walletCurrent(context),
         walletCredential = walletCurrent(context),
     )

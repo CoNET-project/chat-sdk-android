@@ -93,7 +93,11 @@ object NativeAccountCreateHost {
     @Synchronized
     fun pageClosed() {
         val id = pageReqId ?: return
-        if (!resultSeen) forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
+        if (!resultSeen) {
+            // A cancelled creation ends its creation transaction (the key is not created, so no copy is written for it).
+            ShellRecordState.creationTxn.set(false)
+            forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
+        }
         pageReqId = null
         resultSeen = false
     }
@@ -151,11 +155,14 @@ object NativeAccountCreate {
                 if (denial != null) {
                     Result(Code.WRITE_FAILED)
                 } else {
+                    // The explicit creation transaction starts here (25.52Y.54 PY.18(b)): the first page copy write is the creation write.
+                    ShellRecordState.creationTxn.set(true)
                     create(NativeWallet.vault(app))
                 }
             } catch (_: Exception) {
                 Result(Code.WRITE_FAILED)
             }
+            if (result.code != Code.OK) ShellRecordState.creationTxn.set(false)
             NativeAccountCreateHost.finish(result.code, result.eoa)
             onResult(result)
         }

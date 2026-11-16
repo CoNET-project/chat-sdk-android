@@ -201,6 +201,10 @@ class BridgeKeyAuditTest {
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"privateKeyHex\", \"privateKeyArmored\", \"privateKeyArmor\", \"pgpPrivateKeyArmored\",",
             ),
+            "ShellReplica.kt" to listOf(
+                // replicaAnswer (r3rv, KR-01, 25.52W.4): the copy built from the native key's own EOA; the armor is the keystore key, not a payload.
+                "JSONArray().put(JSONObject().put(\"keyID\", eoa).put(\"privateKeyArmor\", armor)),",
+            ),
             "ShellRecord.kt" to listOf(
                 // Stored-record reads: the EOA key of the page record already held on the device (25.52H.2, 25.52I.2). They judge the stored copy,
                 // and no payload value reaches a reply from them.
