@@ -5,6 +5,7 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import network.conet.chat.BeamioChatPgpStore
+import java.io.IOException
 import network.conet.chat.BeamioChatWalletKeyStore
 import network.conet.chat.ConetChatCryptoUtil
 import java.io.File
@@ -235,8 +236,20 @@ object NativeWallet {
         if (pgpVault.state() !is NativePgpVault.State.NoKey) return false
         val armor = BeamioChatPgpStore.legacyPrivateArmor(app)
         if (!armor.contains("BEGIN PGP PRIVATE KEY")) return false
-        val legacyEoa = BeamioChatPgpStore.load(app)?.eoa?.trim()?.lowercase().orEmpty()
+        // An unreadable stored owner is unknown: nothing is adopted (false) and nothing is written.
+        val legacyEoa = readLegacyOwnerEoa { BeamioChatPgpStore.load(app)?.eoa } ?: return false
         if (legacyEoa.isNotEmpty() && legacyEoa != eoa) return false
         return pgpVault.put(eoa, armor, "") == NativePgpVault.Put.OK
     }
 }
+
+/**
+ * Owner of the stored legacy PGP record: `""` when none is stored, the normalised EOA otherwise, and `null` when the stored
+ * value cannot be read. `null` is unknown: the caller adopts nothing and writes nothing.
+ */
+internal fun readLegacyOwnerEoa(read: () -> String?): String? =
+    try {
+        read()?.trim()?.lowercase().orEmpty()
+    } catch (_: IOException) {
+        null
+    }
