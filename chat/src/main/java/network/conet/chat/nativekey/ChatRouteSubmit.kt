@@ -76,6 +76,7 @@ internal object ChatRouteSubmit {
         chain: ChainCheck,
         timeoutMs: Int = 12_000,
         backoffMs: (retry: Int) -> Long = { 1_000L shl it },
+        // Production callers run this on the module's io executor, never on the command or main thread (the default sleeps).
         pause: (Long) -> Unit = { Thread.sleep(it) },
     ): Outcome {
         var attempt = 0
@@ -83,7 +84,7 @@ internal object ChatRouteSubmit {
             val overIp = base.startsWith("http://")
             var retries = 0
             while (true) {
-                val body = bodyFor(attempt) ?: return Outcome.Refused("sig_rejected")
+                val body = bodyFor(attempt) ?: return Outcome.Refused("sign_failed")
                 attempt++
                 when (val t = poster.post(base.trimEnd('/') + PATH, body, timeoutMs)) {
                     is Transport.Unreachable -> break
