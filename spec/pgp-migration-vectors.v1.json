@@ -10088,6 +10088,338 @@
       }
     }
   ],
+  "registrationMaterialCases": [
+    {
+      "id": "RM-01",
+      "title": "登记材料成功：返回公钥 armor、大写子钥 keyId、备份密文、登记签名与地址；不返回私钥",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "routeKeyID",
+          "timestamp",
+          "nonce"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true
+      },
+      "expect": {
+        "code": "ok",
+        "returned": [
+          "pubArmor",
+          "keyId",
+          "backupCiphertext",
+          "walletSignature",
+          "wallet"
+        ]
+      }
+    },
+    {
+      "id": "RM-02",
+      "title": "请求载荷含 privateKeyArmor：key_over_bridge_refused，不处理",
+      "input": {
+        "payloadKeys": [
+          "accountKey",
+          "privateKeyArmor"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true
+      },
+      "expect": {
+        "code": "key_over_bridge_refused",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-03",
+      "title": "账户不符：account_mismatch，无字段",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": false,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true
+      },
+      "expect": {
+        "code": "account_mismatch",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-04",
+      "title": "存储派生 Locked：not_ready（§25.52CS.2），无字段",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": false,
+        "storageLocked": true,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true
+      },
+      "expect": {
+        "code": "not_ready",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-05",
+      "title": "口令锁定（iOS）：locked，无字段",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": false,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true
+      },
+      "expect": {
+        "code": "locked",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-06",
+      "title": "K_pgp 不存在：no_pgp_key，不生成备份，不签名",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": false
+      },
+      "expect": {
+        "code": "no_pgp_key",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-07",
+      "title": "备份加密失败：backup_failed，无字段（失败关闭）",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": false
+      },
+      "expect": {
+        "code": "backup_failed",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-08",
+      "title": "备份回读解封失败：backup_readback_failed，不返回备份密文",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": false
+      },
+      "expect": {
+        "code": "backup_readback_failed",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-09",
+      "title": "备份解出的私钥与 K_pgp 的 keyId 不一致：key_mismatch，无字段",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": false
+      },
+      "expect": {
+        "code": "key_mismatch",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-10",
+      "title": "签名失败：sign_failed，无字段（不返回未签名的备份）",
+      "input": {
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": false
+      },
+      "expect": {
+        "code": "sign_failed",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-11",
+      "title": "壳内：备份、签名齐备，登记提交被接受：submitted，页面不收到备份密文与签名",
+      "input": {
+        "mode": "shell",
+        "payloadKeys": [
+          "accountKey",
+          "routeKeyID",
+          "timestamp",
+          "nonce"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true,
+        "submitOk": "accepted",
+        "ipReachable": true
+      },
+      "expect": {
+        "code": "submitted",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-12",
+      "title": "壳内：IP 路不通，域名 HTTPS 路提交被接受：submitted（回退顺序见 Y.61 第 4 项）",
+      "input": {
+        "mode": "shell",
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true,
+        "submitOk": "accepted",
+        "ipReachable": false
+      },
+      "expect": {
+        "code": "submitted",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-13",
+      "title": "壳内：IP 与域名两路都不通：network_unavailable，不留下可提交的备份给页面",
+      "input": {
+        "mode": "shell",
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true,
+        "submitOk": "unreachable",
+        "ipReachable": false
+      },
+      "expect": {
+        "code": "network_unavailable",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-14",
+      "title": "壳内：服务端拒绝登记（验签不通过等）：chain_refused，无字段",
+      "input": {
+        "mode": "shell",
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": true,
+        "submitOk": "refused"
+      },
+      "expect": {
+        "code": "chain_refused",
+        "returned": []
+      }
+    },
+    {
+      "id": "RM-15",
+      "title": "壳内：签名失败：sign_failed，不提交（不以未签名内容提交）",
+      "input": {
+        "mode": "shell",
+        "payloadKeys": [
+          "accountKey"
+        ],
+        "accountMatch": true,
+        "unlocked": true,
+        "storageLocked": false,
+        "kPgpExists": true,
+        "sealOk": true,
+        "openOk": true,
+        "keyIdMatchesStored": true,
+        "signOk": false
+      },
+      "expect": {
+        "code": "sign_failed",
+        "returned": []
+      }
+    }
+  ],
   "newUserCases": [
     {
       "id": "NU-01",

@@ -201,6 +201,10 @@ class BridgeKeyAuditTest {
                 "\"pgpPassphrase\", \"walletPrivateKey\", \"mnemonic\",",
                 "\"privateKeyHex\", \"privateKeyArmored\", \"privateKeyArmor\", \"pgpPrivateKeyArmored\",",
             ),
+            "RegistrationMaterialPolicy.kt" to listOf(
+                // pgpRegistrationMaterial (25.52Y.61, RM-02): a refusal check. A payload that names privateKeyArmor is refused; membership only, no value is read.
+                "if (\"privateKeyArmor\" in i.payloadKeys) return Result(\"key_over_bridge_refused\", emptyList())",
+            ),
             "AccountPgpK.kt" to listOf(
                 // K (25.52Y.1): the SDK account PGP item is written to the encrypted SDK store, with its private armor, and never over the bridge.
                 ".put(\"privateKeyArmor\", privateArmor)",
