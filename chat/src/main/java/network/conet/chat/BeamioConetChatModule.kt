@@ -1856,8 +1856,9 @@ object BeamioConetChatModule {
         val locked = NativeDerivationCommands.Outcome.fail(NativeDerivationCommands.LOCKED)
         val ctx = appContext ?: return locked
         val vault = NativeWallet.vault(ctx)
-        val ready = vault.state() as? NativeWalletVault.State.Ready ?: return locked
-        val key = vault.unlock() ?: return locked
+        // An unreadable vault is unknown: the derivation answers locked and never reads the key (25.52Y.84).
+        val ready = (try { vault.state() } catch (_: Exception) { null }) as? NativeWalletVault.State.Ready ?: return locked
+        val key = (try { vault.unlock() } catch (_: Exception) { null }) ?: return locked
         try {
             return run(key, ready.eoa)
         } finally {
