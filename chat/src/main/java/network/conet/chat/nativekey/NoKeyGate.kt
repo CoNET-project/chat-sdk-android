@@ -128,7 +128,12 @@ object NoKeyGate {
 
     /** The `notReadyReason` of a G1 answer (spec §25.52Y.39 第 9 项): readable and not initialised, or unreadable. */
     fun notReadyReasonOf(state: NativeWalletVault.State): String =
-        if (state is NativeWalletVault.State.Ready) NOT_READY_G1_UNINITIALIZED else NOT_READY_UNREADABLE
+        // A readable record that is not initialised, and a readable phrase without the key record (25.52Y.106 第 1 条), are has (g1_uninitialized).
+        if (state is NativeWalletVault.State.Ready || (state as? NativeWalletVault.State.Locked)?.reason == NativeWalletVault.PHRASE_ONLY) {
+            NOT_READY_G1_UNINITIALIZED
+        } else {
+            NOT_READY_UNREADABLE
+        }
 
     /**
      * `passcodeStatus` for a gate (25.25.4, table D): G0 `hasKey:false`; G1 and G2 `hasKey:true`. The SDK has no

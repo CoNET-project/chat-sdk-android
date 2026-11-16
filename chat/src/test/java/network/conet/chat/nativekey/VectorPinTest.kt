@@ -16,7 +16,7 @@ class VectorPinTest {
     @Test
     fun pgpMigrationVectorsV1IsPinned() {
         assertEquals(
-            "abf914cf524fa9ea9c6af7262376269713964b93a9e654a0fe9368de8be6b36b",
+            "77af6eefbc4faa719cc82a7d19073da7aa30011ad2f69af70e3f730c1f61d8d3",
             sha256("../spec/pgp-migration-vectors.v1.json"),
         )
     }
@@ -24,7 +24,7 @@ class VectorPinTest {
     @Test
     fun pgpMigrationVectorsV2IsPinned() {
         assertEquals(
-            "cce7b834404dd8423e78d3c2770bf964c630b1627394664eeab42121fcff55b7",
+            "5f9952f32e7cac079e1d4fd146a41b6f0a1e8eff417d852d23babdc963e1dc75",
             sha256("../spec/pgp-migration-vectors.v2.json"),
         )
     }

@@ -79,10 +79,11 @@ class NativeMnemonicTriStateTest {
 
     /** TS-06: G0 no_key but a K is on the device (kPresent true): unknown, never confirmed none. A missing kPresent is unknown too. */
     @Test
-    fun ts06_keyPresentWithoutAKeyIsUnknown() {
+    fun ts06_keyPresentTrueWithReadsCompleteIsConfirmedNone() {
+        // 25.52Y.108 第 3 条: no_key with kPresent true and a complete read is confirmed none (TS-06 corrected).
         val ws = NoKeyGate.walletStatusFor(NoKeyGate.Gate.G0, NativeWalletVault.State.NoKey)
         assertEquals(
-            NativeMnemonicTriState.UNKNOWN,
+            NativeMnemonicTriState.CONFIRMED_NONE,
             NativeMnemonicTriState.classify(false, ws.getString("status"), null, kPresentOnTheWire(true)),
         )
         assertEquals(

@@ -21,8 +21,9 @@ internal object NativeMnemonicTriState {
             "unlocked", "locked" -> HAS
             // G1 with a readable record that is not initialised: the record exists.
             "not_ready" -> if (reason == NoKeyGate.NOT_READY_G1_UNINITIALIZED) HAS else UNKNOWN
-            // G0: confirmed none only when no K is on the device either. kPresent true (a K without a key) or missing is unknown.
-            "no_key" -> if (kPresent == false) CONFIRMED_NONE else UNKNOWN
+            // G0 with the reads complete: confirmed none whatever kPresent is (25.52Y.107 第 3 条, 25.52Y.108 第 1 条). kPresent missing or not a boolean
+            // is a read error (Y.90): unknown.
+            "no_key" -> if (kPresent == null) UNKNOWN else CONFIRMED_NONE
             else -> UNKNOWN
         }
     }

@@ -171,9 +171,13 @@ class NativeWalletVault(
         val mnem = files.read(MNEM)
         val commit = files.read(COMMIT)
         if (rec == null) {
-            // A marker, a phrase or a commit record without the key record cannot be used, and an account once existed: an unknown state, never
-            // no_key (25.52Y.84). A read never removes it (project ruling 2026-11-16).
-            if (mark != null || mnem != null || commit != null) return State.Locked("record_missing")
+            // Project ruling (2026-11-16, urgent): no key record and a readable phrase is has (the original account continues by recovery).
+            if (mnem != null) {
+                // A phrase that cannot be read or opened is unknown (unreadable, retryable), never confirmed none.
+                return if (phraseReadable(mnem)) State.Locked(PHRASE_ONLY) else State.Locked("record_missing")
+            }
+            // Every read completed and no phrase is held: confirmed absent (no_key). Marker, commit, intent and other residues do not block
+            // (the ruling); a read that failed throws before this point and is never taken for absence.
             return State.NoKey
         }
         // 25.52Y.92 第 2 項: the legacy pure-key record is accepted only with a readable key record and no phrase, intent, commit marker or
@@ -186,6 +190,14 @@ class NativeWalletVault(
         val opened = openRecord(rec) ?: return State.Locked("unreadable")
         opened.key.fill(0)
         return State.Ready(opened.eoa)
+    }
+
+    /** True when the phrase record opens under its own EOA (the envelope's clear `eoa`): a readable phrase, 25.52Y.106 第 1 条. */
+    private fun phraseReadable(mnem: ByteArray): Boolean = try {
+        val eoa = JSONObject(String(mnem, Charsets.UTF_8)).optString("eoa", "")
+        isCanonicalEoa(eoa) && openMnemonic(mnem, eoa) != null
+    } catch (_: Exception) {
+        false
     }
 
     /** A fresh copy of the key for a usable record. The caller must zero it after use. */
@@ -528,6 +540,9 @@ class NativeWalletVault(
 
     companion object {
         const val REC = "wallet.v1.rec"
+
+        /** The locked reason of a vault with a readable phrase and no key record: the account continues by recovery (25.52Y.106 第 1 条). */
+        const val PHRASE_ONLY = "phrase_only"
         const val MARK = "wallet.v1.ok"
         /** The sealed recovery phrase (spec §25.52Y.42), written only by a phrase import. */
         const val MNEM = "wallet.v1.mnem"

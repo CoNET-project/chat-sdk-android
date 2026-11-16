@@ -86,16 +86,16 @@ class NativeUnknownStateTest {
         assertEquals("unreadable", (state as NativeWalletVault.State.Locked).reason)
     }
 
-    /** A commit record without the key record is an account that once existed: unknown (record_missing), never no_key. */
+    /**
+     * A commit record without the key record and without a phrase: every read completed, so it is confirmed none (no_key). Residues other than the
+     * phrase do not block (project ruling 2026-11-16, urgent); a read that fails throws instead (see the tests above).
+     */
     @Test
-    fun aCommitWithoutTheKeyRecordIsLockedNotNoKey() {
+    fun aCommitWithoutTheKeyRecordAndWithoutAPhraseIsNoKeyByTheRuling() {
         val files = NativeTestFiles()
         files.map[NativeWalletVault.COMMIT] = "commit".toByteArray(Charsets.UTF_8)
 
-        val state = NativeWalletVault(NativeTestWrap(), files).state()
-
-        assertTrue(state is NativeWalletVault.State.Locked)
-        assertEquals("record_missing", (state as NativeWalletVault.State.Locked).reason)
+        assertEquals(NativeWalletVault.State.NoKey, NativeWalletVault(NativeTestWrap(), files).state())
     }
 
     /** Only a vault with no record at all, read successfully, is NoKey (the one confirmed-absent state the gate maps to G0). */

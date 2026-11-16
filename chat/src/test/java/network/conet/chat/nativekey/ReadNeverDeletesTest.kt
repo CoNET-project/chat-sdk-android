@@ -74,7 +74,8 @@ class ReadNeverDeletesTest {
 
         val s = NativeWalletVault(wrap, files).state()
 
-        assertEquals("record_missing", (s as NativeWalletVault.State.Locked).reason)
+        // 25.52Y.107 第 3 条: the marker is not a phrase, and the reads completed: no_key. The marker is kept and nothing is removed or generated.
+        assertEquals(NativeWalletVault.State.NoKey, s)
         assertArrayEquals("the marker is kept", mark, files.map[NativeWalletVault.MARK])
         assertFalse("no record is generated", files.map.containsKey(NativeWalletVault.REC))
     }

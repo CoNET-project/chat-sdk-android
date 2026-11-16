@@ -11191,7 +11191,7 @@
   "nativeMnemonicTriStateCases": [
     {
       "id": "TS-01",
-      "title": "双边确认无：walletStatus no_key 且 kPresent 假，快照已知：confirmed_none",
+      "title": "双边确认无：walletStatus no_key 且 kPresent 假，读取成功：confirmed_none",
       "input": {
         "ws": "no_key",
         "kPresent": false,
@@ -11240,13 +11240,13 @@
     },
     {
       "id": "TS-06",
-      "title": "no_key 但 kPresent 为真（有 K 而无钥）：unknown，不判确认无",
+      "title": "no_key 且 kPresent 为真，读取成功：confirmed_none（kPresent 不阻挡 onboarding，Y.107）",
       "input": {
         "ws": "no_key",
         "kPresent": true,
         "snapshotUnknown": false
       },
-      "expect": "unknown"
+      "expect": "confirmed_none"
     }
   ],
   "onboardingCompatCases": [
@@ -11416,6 +11416,47 @@
         "statusKeyPresent": true
       },
       "expect": "has"
+    }
+  ],
+  "nativeResidueTriStateCases": [
+    {
+      "id": "TS-07",
+      "title": "钥记录缺失，助记词可读：has（恢复原账户，不进入 onboarding）",
+      "input": {
+        "mnemonic": "readable",
+        "snapshotUnknown": false
+      },
+      "expect": "has"
+    },
+    {
+      "id": "TS-08",
+      "title": "钥记录缺失，仅余留提交标记，读取成功：confirmed_none（残留不阻挡 onboarding）",
+      "input": {
+        "mnemonic": "absent",
+        "commitOnly": true,
+        "readError": false,
+        "snapshotUnknown": false
+      },
+      "expect": "confirmed_none"
+    },
+    {
+      "id": "TS-09",
+      "title": "钥记录与所有余留均不存在，读取成功：confirmed_none",
+      "input": {
+        "mnemonic": "absent",
+        "readError": false,
+        "snapshotUnknown": false
+      },
+      "expect": "confirmed_none"
+    },
+    {
+      "id": "TS-10",
+      "title": "助记词条目存在但读取出错：unknown，保留重试，不进入 onboarding",
+      "input": {
+        "mnemonic": "error",
+        "snapshotUnknown": false
+      },
+      "expect": "unknown"
     }
   ],
   "accountCleanupOldCases": [
