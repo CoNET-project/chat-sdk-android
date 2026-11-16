@@ -10,8 +10,8 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v1.json`
- * (r3ei; spec v1 sha256 d5b9c948…, 146 cases; v2 34dcaf66…).
+ * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v2.json`
+ * (r3pb: the authoritative file, sha256 34dcaf66…, 146 cases; the v1 file d5b9c948… is superseded).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  *
  * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an
@@ -19,7 +19,7 @@ import java.security.MessageDigest
  * that the answer is none of `forbiddenCodes`. The other cases are decided by name and gate only.
  */
 class GateStateVectorsTest {
-    private val bytes = File(System.getenv("GATE_STATE_VECTORS") ?: "../spec/gate-state-vectors.v1.json").readBytes()
+    private val bytes = File(System.getenv("GATE_STATE_VECTORS") ?: "../spec/gate-state-vectors.v2.json").readBytes()
     private val v = JSONObject(String(bytes, Charsets.UTF_8))
     private val cases = v.getJSONArray("cases")
     /** 25.52CK.3 (r3ek): the names the inner layer answers unknown_command before the gate, in every state. */
@@ -31,7 +31,7 @@ class GateStateVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("d5b9c948672ec1cde8a04c05f04be18aeaa04c375af81918cbb48a846f7c19a7", sha256Hex(bytes))
+        assertEquals("34dcaf66d4334c8a02e3706fa64f44fed6279657b2774f2f69005efb952fdbaa", sha256Hex(bytes))
     }
 
     @Test
