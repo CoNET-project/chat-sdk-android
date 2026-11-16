@@ -1,6 +1,10 @@
 {
   "meta": {
     "file": "pgp-migration-vectors.v2.json",
+    "harnessRules": [
+      "AK-18 不种原生钥（§25.52Y.110 与本次裁定）：ctx.eoa 仅作标识，不种钥。原生钥只由 ctx.keys（AK-56）或 ctx.nativeKey === true（AK-60）种入。",
+      "AK-56 符号名映射（§25.52Y.110 第 1 条）：a1、a2 映射为固定派生的测试专用 EOA 私钥（公开测试值，非真实钱包，两把不同）；占位 \"EOA\" 替换为 a1 的规范 W 形式；派生校验（derivationMismatch）不放宽。"
+    ],
     "spec": "interface/spec.md §25.52X.2（r3kf；本文件的 newUser、本地三态与 init 向量以 §25.52X.2 为准）。其余批次的 spec 注见各组向量的 meta；§25.52H 为旧注（r3bb），不再作为本文件的依据。",
     "status": "final-pending-review-r3po",
     "generator": "gen-pgp-migration-vectors.mjs（r3bz）",
