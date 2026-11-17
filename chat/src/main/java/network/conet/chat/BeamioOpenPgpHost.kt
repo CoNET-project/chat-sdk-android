@@ -151,6 +151,16 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         }
     }
 
+    /**
+     * Runs [js] and ignores its return value. The script answers through `BeamioOpenPgpAndroid.postResult` in every
+     * branch; Chromium 124 returns `{}` for an async IIFE here, so this return is never an answer.
+     */
+    private fun evaluateIgnoringReturn(wv: WebView, js: String, requestId: String) {
+        wv.evaluateJavascript(js) { raw ->
+            Log.d(TAG, "js_return_ignored id=$requestId len=${raw?.length ?: -1}")
+        }
+    }
+
     fun decryptAndVerifyOffer(
         privateKeyArmor: String,
         offerArmor: String,
@@ -489,20 +499,8 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             """.trimIndent()
             main.post {
                 decryptTiming[requestId]?.set(1, SystemClock.elapsedRealtime())
-                wv.evaluateJavascript(js) { raw ->
-                    // Secondary path: Bridge.postResult is primary.
-                    if (!pendingJsResults.containsKey(requestId)) return@evaluateJavascript
-                    val parsed = parseJsJsonResult(raw)
-                    if (parsed == null) {
-                        Log.e(
-                            TAG,
-                            "decrypt_inbound: empty/null evaluateJavascript raw=${raw?.take(120)}",
-                        )
-                        // Do not fail yet — Bridge.postResult may still arrive.
-                        return@evaluateJavascript
-                    }
-                    deliverJsResult(requestId, parsed)
-                }
+                // The answer comes only from postResult (or the timeout); the evaluate return is ignored.
+                evaluateIgnoringReturn(wv, js, requestId)
             }
         }
     }
@@ -584,13 +582,9 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
               }
             })()
             """.trimIndent()
-            main.post {
-                wv.evaluateJavascript(js) { raw ->
-                    if (!pendingJsResults.containsKey(requestId)) return@evaluateJavascript
-                    val parsed = parseJsJsonResult(raw) ?: return@evaluateJavascript
-                    deliverJsResult(requestId, parsed)
-                }
-            }
+            // The answer comes only from postResult (or the timeout). The evaluate return is never a completion:
+            // Chromium 124 returns {} for an async IIFE here, which used to complete the call as encrypt_fail.
+            main.post { evaluateIgnoringReturn(wv, js, requestId) }
         }
     }
 
@@ -891,6 +885,11 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             // Bridge thread, before the hop to main: when the JS finished.
             decryptTiming[requestId]?.let { if (it[2] == 0L) it[2] = SystemClock.elapsedRealtime() }
             main.post {
+                // Only an object with ok or error answers the call; anything else keeps it waiting for its real answer or its timeout.
+                if (!BridgeResultRule.isAnswer(json)) {
+                    Log.w(TAG, "postResult ignored id=$requestId (no ok/error object)")
+                    return@post
+                }
                 val parsed = parseJsJsonResult(json)
                     ?: JsJsonResult(ok = false, error = "bad_bridge_json")
                 deliverJsResult(requestId, parsed)
