@@ -34,6 +34,34 @@ object BeamioConetChatModule {
         fun asStoreNode() = BeamioChatPgpStore.SiNode(ip, domain, region)
     }
 
+    /** The entry choice of one post or listen: candidates, or the explicit reason none exists. */
+    internal sealed class EntryPlan {
+        data class Candidates(val nodes: List<Node>) : EntryPlan()
+        data class Refused(val reason: String) : EntryPlan()
+    }
+
+    /**
+     * Entry candidates (3689188 `keyedEntries`, ported onto the module [Node]): only a node with a PGP route key can be an
+     * entry, one per normalized IP, minus [exclude]. A keyless node is never posted to, so no armor goes out unwrapped.
+     */
+    internal fun keyedEntries(nodes: List<Node>, exclude: Set<String>): List<Node> {
+        val seen = HashSet<String>()
+        val out = ArrayList<Node>()
+        for (node in nodes) {
+            if (!node.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) continue
+            val ip = BeamioSiCipherPost.normalizeIp(node.ip) ?: continue
+            if (ip in exclude) continue
+            if (seen.add(ip)) out.add(node)
+        }
+        return out
+    }
+
+    /** Empty candidates are an explicit refusal (`no_entry_key`), never a silent send. */
+    internal fun entryPlan(nodes: List<Node>, exclude: Set<String>): EntryPlan {
+        val keyed = keyedEntries(nodes, exclude)
+        return if (keyed.isEmpty()) EntryPlan.Refused("no_entry_key") else EntryPlan.Candidates(keyed)
+    }
+
     class Session {
         @Volatile var eoa: String = ""
         @Volatile var pgpPrivateKeyArmored: String = ""
@@ -1399,10 +1427,12 @@ object BeamioConetChatModule {
         }
         val host = BeamioOpenPgpHost.shared(ctx)
         // Only keyed entries: a node without a PGP route key cannot be wrapped, so it is never posted to.
-        val candidates = s.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in exclude && n.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")
-        }.shuffled()
+        val plan = entryPlan(s.nodes, exclude)
+        if (plan is EntryPlan.Refused) {
+            Log.e(TAG, "post_to_entries: ${plan.reason}; nothing sent")
+            return false
+        }
+        val candidates = (plan as EntryPlan.Candidates).nodes.shuffled()
 
         // One entry at a time; the next only after a clear failure (connection
         // error or reset, non-2xx, `ok:false`, or no answer in 8 s). A timed-out

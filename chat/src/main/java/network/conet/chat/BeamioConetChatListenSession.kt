@@ -187,17 +187,11 @@ internal class BeamioConetChatListenSession {
         }
         if (!stillAlive(gen)) return false
 
-        val withPgp = session.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in mailboxIps && n.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")
+        // Only nodes with a PGP route key are entries (3689188 keyedEntries); no keyless fallback.
+        val roster = when (val plan = BeamioConetChatModule.entryPlan(session.nodes, mailboxIps)) {
+            is BeamioConetChatModule.EntryPlan.Refused -> throw IllegalStateException(plan.reason)
+            is BeamioConetChatModule.EntryPlan.Candidates -> plan.nodes.associateBy { BeamioSiCipherPost.normalizeIp(it.ip) }
         }
-        val fallback = session.nodes.filter { n ->
-            val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in mailboxIps
-        }
-        val roster = (if (withPgp.isNotEmpty()) withPgp else fallback)
-            .associateBy { BeamioSiCipherPost.normalizeIp(it.ip) }
-        if (roster.isEmpty()) throw IllegalStateException("no_entry_c")
         val siNodes = roster.values.map { BeamioChatPgpStore.SiNode(it.ip, it.domain, it.region) }
 
         val skip = mailboxIps.toMutableSet()
