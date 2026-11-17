@@ -69,47 +69,29 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
         }
     }
 
-    private data class JsJsonResult(
-        val ok: Boolean,
-        val armor: String = "",
-        val text: String = "",
-        val armorHash: String = "",
-        val error: String = "",
-        val value: String = "",
-    )
-
-    private fun parseJsJsonResult(raw: String?): JsJsonResult? {
-        val out = unwrapJsString(raw)
-        if (out.isBlank()) return null
-        return try {
-            val obj = JSONObject(out)
-            JsJsonResult(
-                ok = obj.optBoolean("ok", false),
-                armor = obj.optString("armor", ""),
-                text = obj.optString("text", ""),
-                armorHash = obj.optString("armorHash", ""),
-                error = obj.optString("error", ""),
-                value = obj.optString("value", ""),
-            )
-        } catch (_: Exception) {
-            // Legacy plain armor / ERROR: prefix
-            if (out.startsWith("ERROR:")) {
-                JsJsonResult(ok = false, error = out.removePrefix("ERROR:"))
-            } else if (out.contains("BEGIN PGP MESSAGE")) {
-                JsJsonResult(ok = true, armor = out)
-            } else {
-                JsJsonResult(ok = false, error = "unparseable_js_result")
-            }
-        }
-    }
-
     private val main = Handler(Looper.getMainLooper())
     private var webView: WebView? = null
     private val ready = AtomicBoolean(false)
     private val bootstrapped = AtomicBoolean(false)
     private val pendingReady = ConcurrentLinkedQueue<(Boolean) -> Unit>()
-    /** Primary delivery for async IIFE results (evaluateJavascript Promise return is flaky). */
-    private val pendingJsResults = ConcurrentHashMap<String, (JsJsonResult) -> Unit>()
+    /**
+     * Answers to host calls come only from `postResult` (or the timeout). The `evaluateJavascript` value never
+     * completes a call; see [JsResultRouter].
+     */
+    private val jsRouter = JsResultRouter(
+        timeoutMs = 25_000L,
+        schedule = { delayMs, task ->
+            val r = Runnable { task() }
+            main.postDelayed(r, delayMs)
+            val cancel: () -> Unit = { main.removeCallbacks(r) }
+            cancel
+        },
+        onTimeout = { id ->
+            Log.e(TAG, "js_bridge_timeout id=$id")
+            // No answer in 25 s: the page is wedged or gone. Rebuild it for the next call.
+            resetHost("js bridge timeout")
+        },
+    )
     private val jsRequestSeq = AtomicLong(0)
     /**
      * decrypt_inbound timing, diagnostics only: [start, main-thread dispatch, JS
@@ -133,22 +115,7 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
     }
 
     private fun registerJsResult(requestId: String, onResult: (JsJsonResult) -> Unit) {
-        pendingJsResults[requestId] = onResult
-        main.postDelayed({
-            val stale = pendingJsResults.remove(requestId) ?: return@postDelayed
-            Log.e(TAG, "js_bridge_timeout id=$requestId")
-            // No answer in 25 s: the page is wedged or gone. Rebuild it for the next call.
-            resetHost("js bridge timeout")
-            stale(JsJsonResult(ok = false, error = "js_bridge_timeout"))
-        }, 25_000L)
-    }
-
-    private fun deliverJsResult(requestId: String, parsed: JsJsonResult) {
-        val cb = pendingJsResults.remove(requestId) ?: return
-        try {
-            cb(parsed)
-        } catch (_: Exception) {
-        }
+        jsRouter.register(requestId, onResult)
     }
 
     /**
@@ -158,121 +125,6 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
     private fun evaluateIgnoringReturn(wv: WebView, js: String, requestId: String) {
         wv.evaluateJavascript(js) { raw ->
             Log.d(TAG, "js_return_ignored id=$requestId len=${raw?.length ?: -1}")
-        }
-    }
-
-    fun decryptAndVerifyOffer(
-        privateKeyArmor: String,
-        offerArmor: String,
-        callback: (Result<JSONObject>) -> Unit,
-    ) {
-        ensureReady { ok ->
-            if (!ok) {
-                callback(Result.failure(IllegalStateException("openpgp host not ready")))
-                return@ensureReady
-            }
-            val wv = webView
-            if (wv == null) {
-                callback(Result.failure(IllegalStateException("webview missing")))
-                return@ensureReady
-            }
-            val js = """
-            (async function(){
-              try {
-                const message = await openpgp.readMessage({ armoredMessage: ${jsString(offerArmor)} });
-                const privateKey = await openpgp.readPrivateKey({ armoredKey: ${jsString(privateKeyArmor)} });
-                const { data } = await openpgp.decrypt({ message, decryptionKeys: privateKey });
-                const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
-                let payload = null;
-                try { payload = JSON.parse(text); } catch (_) {
-                  try {
-                    const b64 = atob(text.replace(/\s+/g,''));
-                    payload = JSON.parse(b64);
-                  } catch (e2) {
-                    return JSON.stringify({ ok:false, error:'parse_fail' });
-                  }
-                }
-                if (!payload || typeof payload !== 'object') {
-                  return JSON.stringify({ ok:false, error:'empty_payload' });
-                }
-                const type = String(payload.type || '');
-                if (type !== 'voice_call_offer_v1') {
-                  return JSON.stringify({ ok:false, error:'not_offer' });
-                }
-                const from = String(payload.from || '').toLowerCase();
-                const callerSignature = String(payload.callerSignature || '');
-                const callId = String(payload.callId || '');
-                const sessionId = String(payload.sessionId || '');
-                const to = String(payload.to || '').toLowerCase();
-                const createdAt = String(payload.createdAt || '');
-                const expiresAt = String(payload.expiresAt || '');
-                const timestamp = String(payload.timestamp || '');
-                const sessionKey = String(payload.sessionKey || '');
-                const tempWalletAddress = String(payload.tempWalletAddress || '').toLowerCase();
-                const entryDomains = Array.isArray(payload.entryDomains)
-                  ? payload.entryDomains.map(String).join(',')
-                  : String(payload.entryDomains || '');
-                const codec = String(payload.codec || '');
-                const lines = [
-                  'CoNET voice_call_offer_v1',
-                  'callId:' + callId,
-                  'sessionId:' + sessionId,
-                  'to:' + to,
-                  'createdAt:' + createdAt,
-                  'expiresAt:' + expiresAt,
-                  'timestamp:' + timestamp,
-                  'sessionKey:' + sessionKey,
-                  'tempWalletAddress:' + tempWalletAddress,
-                  'entryDomains:' + entryDomains,
-                  'codec:' + codec,
-                ].join('\\n');
-                let recovered = '';
-                try {
-                  recovered = String(ethers.verifyMessage(lines, callerSignature) || '').toLowerCase();
-                } catch (e) {
-                  return JSON.stringify({ ok:false, error:'verify_fail', detail:String(e) });
-                }
-                if (!recovered || !from || recovered !== from) {
-                  return JSON.stringify({
-                    ok:false,
-                    error:'caller_mismatch',
-                    recovered: recovered,
-                    claimed: from,
-                  });
-                }
-                return JSON.stringify({
-                  ok:true,
-                  callerEoa: recovered,
-                  callId: callId,
-                  sessionId: sessionId,
-                  sessionKey: sessionKey,
-                  to: to,
-                  claimedTag: String(payload.beamioTag || payload.tag || ''),
-                });
-              } catch (e) {
-                return JSON.stringify({ ok:false, error:String(e) });
-              }
-            })()
-            """.trimIndent()
-            main.post {
-                wv.evaluateJavascript(js) { raw ->
-                    try {
-                        val unquoted = unwrapJsString(raw)
-                        val obj = JSONObject(unquoted.ifBlank { "{}" })
-                        if (obj.optBoolean("ok", false)) {
-                            callback(Result.success(obj))
-                        } else {
-                            callback(
-                                Result.failure(
-                                    IllegalStateException(obj.optString("error", "decrypt_fail")),
-                                ),
-                            )
-                        }
-                    } catch (error: Exception) {
-                        callback(Result.failure(error))
-                    }
-                }
-            }
         }
     }
 
@@ -333,48 +185,48 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
               }
             })()
             """.trimIndent()
-            main.post {
-                wv.evaluateJavascript(js) { raw ->
-                    if (!pendingJsResults.containsKey(requestId)) return@evaluateJavascript
-                    val parsed = parseJsJsonResult(raw)
-                    if (parsed == null) {
-                        Log.e(TAG, "encrypt_to_route: empty/null evaluateJavascript raw=${raw?.take(120)}")
-                        deliverJsResult(requestId, JsJsonResult(ok = false, error = "encrypt_fail_null"))
-                    } else {
-                        deliverJsResult(requestId, parsed)
-                    }
-                }
-            }
+            main.post { evaluateIgnoringReturn(wv, js, requestId) }
         }
     }
 
     /**
-     * Encrypt already-built inner OpenPGP armor to an entry route public key.
-     * Literal plaintext is the **raw inner armor** (SI `tryReadInnerPgpMessage`).
-     * Returns the inner armor unchanged when wrap is unsafe or encrypt fails.
+     * Encrypt already-built inner OpenPGP armor to an entry route public key. The literal is the **raw inner armor**
+     * (SI `tryReadInnerPgpMessage`). Any failure is a failure result: the caller skips this entry. The inner armor is
+     * never returned unwrapped, not even when the wrap is unsafe.
      */
     fun wrapArmorToEntryRoute(
         innerArmor: String,
         entryRoutePublicArmor: String,
         callback: (Result<String>) -> Unit,
     ) {
-        if (!innerArmor.contains("BEGIN PGP MESSAGE") || entryRoutePublicArmor.isBlank()) {
-            callback(Result.success(innerArmor))
+        EntryWrapPolicy.preflight(innerArmor, entryRoutePublicArmor)?.let { reason ->
+            callback(Result.failure(IllegalStateException(reason)))
             return
         }
         ensureReady { ok ->
             if (!ok) {
-                callback(Result.success(innerArmor))
+                callback(Result.failure(IllegalStateException("openpgp host not ready")))
                 return@ensureReady
             }
             val wv = webView
             if (wv == null) {
-                callback(Result.success(innerArmor))
+                callback(Result.failure(IllegalStateException("webview missing")))
                 return@ensureReady
+            }
+            val requestId = nextJsRequestId()
+            registerJsResult(requestId) { parsed ->
+                val result = EntryWrapPolicy.outcome(parsed, innerArmor)
+                if (result.isFailure) Log.w(TAG, "wrap_to_entry: ${parsed.error.ifBlank { "wrap_fail" }}")
+                callback(result)
             }
             val js = """
             (async function(){
               $JS_ARMOR_TO_STRING
+              const requestId = ${jsString(requestId)};
+              function post(payload) {
+                try { BeamioOpenPgpAndroid.postResult(requestId, payload); } catch (_) {}
+                return payload;
+              }
               try {
                 const innerArmor = ${jsString(innerArmor)};
                 const entryArmor = ${jsString(entryRoutePublicArmor)};
@@ -382,7 +234,8 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
                 const entryIds = new Set(entryKey.getKeyIDs().map(id => id.toHex().toUpperCase()));
                 const innerMsg = await openpgp.readMessage({ armoredMessage: innerArmor });
                 const innerIds = innerMsg.getEncryptionKeyIDs().map(id => id.toHex().toUpperCase());
-                if (!innerIds.length || innerIds.some(id => entryIds.has(id))) return innerArmor;
+                if (!innerIds.length) return post(JSON.stringify({ ok: false, error: 'inner_no_key_id' }));
+                if (innerIds.some(id => entryIds.has(id))) return post(JSON.stringify({ ok: false, error: 'same_node_entry' }));
                 const pgpMsg = await openpgp.createMessage({ text: innerArmor });
                 const encrypted = await openpgp.encrypt({
                   message: pgpMsg,
@@ -391,18 +244,17 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
                   config: { preferredCompressionAlgorithm: openpgp.enums.compression.zlib },
                 });
                 const out = await armorToString(encrypted);
-                return out.includes('BEGIN PGP MESSAGE') ? out : innerArmor;
+                if (!out || out.indexOf('BEGIN PGP MESSAGE') < 0) {
+                  return post(JSON.stringify({ ok: false, error: 'wrap_no_armor' }));
+                }
+                return post(JSON.stringify({ ok: true, armor: out }));
               } catch (e) {
-                return ${jsString(innerArmor)};
+                const msg = (e && e.message) ? e.message : String(e);
+                return post(JSON.stringify({ ok: false, error: msg }));
               }
             })()
             """.trimIndent()
-            main.post {
-                wv.evaluateJavascript(js) { raw ->
-                    val armor = unwrapJsString(raw)
-                    callback(Result.success(if (armor.contains("BEGIN PGP MESSAGE")) armor else innerArmor))
-                }
-            }
+            main.post { evaluateIgnoringReturn(wv, js, requestId) }
         }
     }
 
@@ -536,8 +388,7 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             webView = null
             ready.set(false)
             bootstrapped.set(false)
-            val waiting = pendingJsResults.keys.toList()
-            for (id in waiting) deliverJsResult(id, JsJsonResult(ok = false, error = "host_reset"))
+            for (id in jsRouter.pendingIds()) jsRouter.complete(id, JsJsonResult(ok = false, error = "host_reset"))
         }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }
@@ -885,14 +736,9 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             // Bridge thread, before the hop to main: when the JS finished.
             decryptTiming[requestId]?.let { if (it[2] == 0L) it[2] = SystemClock.elapsedRealtime() }
             main.post {
-                // Only an object with ok or error answers the call; anything else keeps it waiting for its real answer or its timeout.
-                if (!BridgeResultRule.isAnswer(json)) {
+                if (!jsRouter.onBridgeMessage(requestId, json)) {
                     Log.w(TAG, "postResult ignored id=$requestId (no ok/error object)")
-                    return@post
                 }
-                val parsed = parseJsJsonResult(json)
-                    ?: JsJsonResult(ok = false, error = "bad_bridge_json")
-                deliverJsResult(requestId, parsed)
             }
         }
     }
@@ -904,18 +750,5 @@ class BeamioOpenPgpHost private constructor(private val appContext: Context) {
             .replace("\n", "\\n")
             .replace("\r", "\\r")
         return "'$escaped'"
-    }
-
-    private fun unwrapJsString(raw: String?): String {
-        if (raw.isNullOrBlank() || raw == "null") return ""
-        var s = raw.trim()
-        if (s.startsWith("\"") && s.endsWith("\"") && s.length >= 2) {
-            s = s.substring(1, s.length - 1)
-                .replace("\\\"", "\"")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\\\", "\\")
-        }
-        return s
     }
 }

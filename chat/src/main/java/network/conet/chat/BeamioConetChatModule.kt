@@ -1398,9 +1398,10 @@ object BeamioConetChatModule {
             }
         }
         val host = BeamioOpenPgpHost.shared(ctx)
+        // Only keyed entries: a node without a PGP route key cannot be wrapped, so it is never posted to.
         val candidates = s.nodes.filter { n ->
             val ip = BeamioSiCipherPost.normalizeIp(n.ip) ?: return@filter false
-            ip !in exclude
+            ip !in exclude && n.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")
         }.shuffled()
 
         // One entry at a time; the next only after a clear failure (connection
@@ -1410,14 +1411,17 @@ object BeamioConetChatModule {
         val started = System.currentTimeMillis()
         for (entry in candidates.take(4)) {
             if (System.currentTimeMillis() - started > 25_000L) break
-            var postArmor = armor
-            if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
-                val latch = CountDownLatch(1)
-                host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
-                    r.getOrNull()?.let { postArmor = it }
-                    latch.countDown()
-                }
-                latch.await(8, TimeUnit.SECONDS)
+            var wrapped: String? = null
+            val latch = CountDownLatch(1)
+            host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
+                wrapped = r.getOrNull()
+                latch.countDown()
+            }
+            latch.await(8, TimeUnit.SECONDS)
+            val postArmor = wrapped
+            if (postArmor == null) {
+                Log.w(TAG, "post_to_entries: wrap failed or timed out for entry=${entry.ip}; entry skipped")
+                continue
             }
             val result = BeamioSiCipherPost.post(
                 postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1, timeoutMs = 8_000L,
@@ -1427,13 +1431,8 @@ object BeamioConetChatModule {
                 return true
             }
         }
-        if (candidates.isNotEmpty()) return false
-        // No node list in the session yet: the stored roster (same one-at-a-time post).
-        val result = BeamioSiCipherPost.post(
-            armor, BeamioChatPgpStore.loadSiNodes(ctx), exclude, maxAttempts = 4, timeoutMs = 8_000L,
-        )
-        if (result.ok) onBody?.invoke(result.body)
-        return result.ok
+        // No unwrapped fallback: the stored-roster POST of the inner armor is removed (3689188).
+        return false
     }
 
     /** `true` the first time [armorHash] is seen (bounded, last 512). */

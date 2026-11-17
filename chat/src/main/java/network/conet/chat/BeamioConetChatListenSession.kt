@@ -209,16 +209,14 @@ internal class BeamioConetChatListenSession {
             skip.add(entryIp)
             val entry = roster[entryIp] ?: continue
             val url = BeamioSiCipherPost.postUrl(entryIp) ?: continue
-            val armored = if (entry.armoredPublicKey.contains("BEGIN PGP PUBLIC KEY")) {
-                try {
-                    await(15) { cb ->
-                        BeamioOpenPgpHost.shared(app).wrapArmorToEntryRoute(innerArmor, entry.armoredPublicKey, cb)
-                    }
-                } catch (_: Exception) {
-                    innerArmor
+            // A failed wrap skips this entry. The inner armor is never posted unwrapped (3689188).
+            val armored: String = try {
+                await<String>(15) { cb ->
+                    BeamioOpenPgpHost.shared(app).wrapArmorToEntryRoute(innerArmor, entry.armoredPublicKey, cb)
                 }
-            } else {
-                innerArmor
+            } catch (e: Exception) {
+                Log.w(TAG, "mailbox_listen entry=$entryIp wrap failed: ${e.message}; entry skipped")
+                continue
             }
             Log.i(TAG, "mailbox_listen entry=$entryIp domain=${entry.domain} route=${routeKeyId.ifEmpty { "?" }}")
             val started = System.currentTimeMillis()
