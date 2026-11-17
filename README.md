@@ -6,7 +6,7 @@ Native CoNET Chat module for Android apps. Implements the same `WorkerCommand` /
 
 | Item | Value |
 |---|---|
-| **Maven coordinates** | `network.conet:chat:0.2.6` |
+| **Maven coordinates** | `network.conet:chat:0.2.8` |
 | **Namespace** | `network.conet.chat` |
 | **minSdk** | 24 |
 | **Entry point** | `BeamioConetChatModule.handleCommand(context, body, emit)` |
@@ -77,7 +77,7 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("network.conet:chat:0.2.6")
+    implementation("network.conet:chat:0.2.8")
 }
 ```
 
