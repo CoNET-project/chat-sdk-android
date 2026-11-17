@@ -62,6 +62,52 @@ object BeamioConetChatModule {
         return if (keyed.isEmpty()) EntryPlan.Refused("no_entry_key") else EntryPlan.Candidates(keyed)
     }
 
+    /** Ack `result.error` codes for a send that reached no entry; `sent` stays false (PWA compatible). */
+    internal const val ERR_NO_KEYED_ENTRY = "no_keyed_entry"
+    internal const val ERR_ENTRIES_EXHAUSTED = "entries_exhausted"
+
+    /** The result of one post to the entries, with the counts for the summary log. */
+    internal data class PostOutcome(
+        val ok: Boolean,
+        val error: String? = null,
+        val candidates: Int = 0,
+        val wrapFailed: Int = 0,
+        val postFailed: Int = 0,
+    )
+
+    /**
+     * One entry at a time (0.2.6 / 3689188 semantics): wrap to the entry's route key, POST once; the next entry only after a
+     * failure. Wrap and POST failures are counted apart. [wrap] returns null on failure; [post] returns true on a 2xx answer
+     * (it records the body itself). At most 4 entries, and none is tried once [overBudget] is true. No candidates is
+     * `no_keyed_entry`; candidates that all fail is `entries_exhausted`. Nothing is sent without a wrapped armor.
+     */
+    internal fun runEntries(
+        candidates: List<Node>,
+        overBudget: () -> Boolean,
+        wrap: (Node) -> String?,
+        post: (Node, String) -> Boolean,
+    ): PostOutcome {
+        if (candidates.isEmpty()) return PostOutcome(false, ERR_NO_KEYED_ENTRY)
+        var wrapFailed = 0
+        var postFailed = 0
+        for (entry in candidates.take(4)) {
+            if (overBudget()) break
+            val wrapped = wrap(entry)
+            if (wrapped == null) {
+                wrapFailed++
+                continue
+            }
+            if (post(entry, wrapped)) return PostOutcome(true, null, candidates.size, wrapFailed, postFailed)
+            postFailed++
+        }
+        return PostOutcome(false, ERR_ENTRIES_EXHAUSTED, candidates.size, wrapFailed, postFailed)
+    }
+
+    /** One summary line per post. Counts and codes only: no armor, key, or address. */
+    internal fun postSummaryLine(o: PostOutcome, elapsedMs: Long): String =
+        "post_to_entries: candidates=${o.candidates} wrap_failed=${o.wrapFailed} post_failed=${o.postFailed} " +
+            "elapsed_ms=$elapsedMs ok=${o.ok} error=${o.error ?: "-"}"
+
     class Session {
         @Volatile var eoa: String = ""
         @Volatile var pgpPrivateKeyArmored: String = ""
@@ -701,8 +747,10 @@ object BeamioConetChatModule {
                 }
                 val finish = { finalArmor: String ->
                     io.execute {
-                        val ok = postToEntries(ctx, finalArmor, mailboxRoute, s)
-                        ack(reqId, true, result = JSONObject().put("sent", ok).put("sendId", sendId))
+                        val out = postToEntriesOutcome(ctx, finalArmor, mailboxRoute, s)
+                        val res = JSONObject().put("sent", out.ok).put("sendId", sendId)
+                        out.error?.let { res.put("error", it) }
+                        ack(reqId, true, result = res)
                     }
                 }
                 host.wrapArmorToMailboxWork(armor, mailboxRoute, noPush) { wrapped ->
@@ -1403,17 +1451,26 @@ object BeamioConetChatModule {
         }
     }
 
-    /**
-     * POST via entry ≠ B (blocking). Wraps the armor to the entry route PGP when known, like the
-     * TS gossip core (`outerWrap`). [onBody] receives the 2xx response body (mailbox JSON replies).
-     */
+    /** Boolean view for the callers that only need delivered or not. */
     private fun postToEntries(
         ctx: Context,
         armor: String,
         mailboxRoute: String,
         s: Session,
         onBody: ((String) -> Unit)? = null,
-    ): Boolean {
+    ): Boolean = postToEntriesOutcome(ctx, armor, mailboxRoute, s, onBody).ok
+
+    /**
+     * POST via entry ≠ B (blocking). Wraps the armor to the entry route PGP, only keyed entries. Returns the outcome with its
+     * error code and counts; logs one summary line. [onBody] receives the 2xx response body (mailbox JSON replies).
+     */
+    private fun postToEntriesOutcome(
+        ctx: Context,
+        armor: String,
+        mailboxRoute: String,
+        s: Session,
+        onBody: ((String) -> Unit)? = null,
+    ): PostOutcome {
         val exclude = HashSet<String>()
         BeamioSiCipherPost.normalizeIp(s.mailboxIp)?.let { exclude.add(it) }
         if (mailboxRoute.contains("BEGIN PGP")) {
@@ -1426,43 +1483,37 @@ object BeamioConetChatModule {
             }
         }
         val host = BeamioOpenPgpHost.shared(ctx)
-        // Only keyed entries: a node without a PGP route key cannot be wrapped, so it is never posted to.
-        val plan = entryPlan(s.nodes, exclude)
-        if (plan is EntryPlan.Refused) {
-            Log.e(TAG, "post_to_entries: ${plan.reason}; nothing sent")
-            return false
+        val candidates = when (val plan = entryPlan(s.nodes, exclude)) {
+            is EntryPlan.Refused -> emptyList()
+            is EntryPlan.Candidates -> plan.nodes.shuffled()
         }
-        val candidates = (plan as EntryPlan.Candidates).nodes.shuffled()
-
-        // One entry at a time; the next only after a clear failure (connection
-        // error or reset, non-2xx, `ok:false`, or no answer in 8 s). A timed-out
-        // POST may have arrived: the mailbox keeps one copy per ciphertext and
-        // the recipient dedupes by sendId. At most 4 entries, about 25 s.
+        // About 25 s in total: a timed-out POST may have arrived, and the mailbox dedupes by sendId.
         val started = System.currentTimeMillis()
-        for (entry in candidates.take(4)) {
-            if (System.currentTimeMillis() - started > 25_000L) break
-            var wrapped: String? = null
-            val latch = CountDownLatch(1)
-            host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
-                wrapped = r.getOrNull()
-                latch.countDown()
-            }
-            latch.await(8, TimeUnit.SECONDS)
-            val postArmor = wrapped
-            if (postArmor == null) {
-                Log.w(TAG, "post_to_entries: wrap failed or timed out for entry=${entry.ip}; entry skipped")
-                continue
-            }
-            val result = BeamioSiCipherPost.post(
-                postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1, timeoutMs = 8_000L,
-            )
-            if (result.ok) {
-                onBody?.invoke(result.body)
-                return true
-            }
-        }
-        // No unwrapped fallback: the stored-roster POST of the inner armor is removed (3689188).
-        return false
+        val outcome = runEntries(
+            candidates,
+            overBudget = { System.currentTimeMillis() - started > 25_000L },
+            wrap = { entry ->
+                var wrapped: String? = null
+                val latch = CountDownLatch(1)
+                host.wrapArmorToEntryRoute(armor, entry.armoredPublicKey) { r ->
+                    wrapped = r.getOrNull()
+                    latch.countDown()
+                }
+                latch.await(8, TimeUnit.SECONDS)
+                wrapped.also {
+                    if (it == null) Log.w(TAG, "post_to_entries: wrap failed or timed out for entry=${entry.ip}; entry skipped")
+                }
+            },
+            post = { entry, postArmor ->
+                val result = BeamioSiCipherPost.post(
+                    postArmor, listOf(entry.asStoreNode()), exclude, maxAttempts = 1, timeoutMs = 8_000L,
+                )
+                if (result.ok) onBody?.invoke(result.body)
+                result.ok
+            },
+        )
+        Log.i(TAG, postSummaryLine(outcome, System.currentTimeMillis() - started))
+        return outcome
     }
 
     /** `true` the first time [armorHash] is seen (bounded, last 512). */
