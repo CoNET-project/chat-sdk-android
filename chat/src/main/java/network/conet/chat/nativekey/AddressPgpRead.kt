@@ -114,6 +114,40 @@ internal object AddressPgpRead {
     )
 
     /**
+     * The hash of block [n] as the endpoint returns it for [tag] (eth_getBlockByNumber). Null when the call fails or the endpoint answers another
+     * block. Shared by every two-endpoint read (draft 第 6 版 T-3, r2.5.20 第 7 版).
+     */
+    fun blockHashAt(rpc: Rpc, tag: String, n: Long): String? = try {
+        val o = rpc.call("eth_getBlockByNumber", JSONArray().put(tag).put(false)) as? JSONObject
+        if (o == null || o.getString("number").removePrefix("0x").toLong(16) != n) null else o.getString("hash")
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * The record and the backup at one block [tag] (draft r2.5.20 第 6 版 T-3: both endpoints are read at the same block N). Any transport or decode
+     * failure is a failure of this endpoint; the caller decides what a failure means.
+     */
+    fun snapshotAt(rpc: Rpc, contract: String, eoa: String, tag: String): Result<Snapshot> = runCatching {
+        val recordHex = rpc.call(
+            "eth_call",
+            JSONArray().put(JSONObject().put("to", contract).put("data", encodeCall(SIG_PGP_KEYS, eoa))).put(tag),
+        ) as? String ?: error(SOURCE_UNAVAILABLE)
+        val backupHex = rpc.call(
+            "eth_call",
+            JSONArray()
+                .put(JSONObject().put("from", eoa).put("to", contract).put("data", encodeCall(SIG_ENCRYPTED_BACKUP, null)))
+                .put(tag),
+        ) as? String ?: error(SOURCE_UNAVAILABLE)
+        val record = decodeRecord(recordHex) ?: error(SOURCE_UNAVAILABLE)
+        val backup = decodeString(backupHex) ?: error(SOURCE_UNAVAILABLE)
+        Snapshot(tag.removePrefix("0x").toLong(16), record, backup)
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(IllegalStateException(SOURCE_UNAVAILABLE)) },
+    )
+
+    /**
      * The production transport: JSON-RPC over HTTPS POST. No WebSocket. Only https endpoints are accepted, and the
      * endpoint itself is supplied by the caller (25.36.4 item 3 is pending).
      */

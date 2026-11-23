@@ -62,8 +62,6 @@ class NativePgpMigrationDeviceTest {
     private fun removeEverything() {
         NativeWallet.pgp(context).forget()
         NativeWallet.vault(context).forget()
-        BeamioChatPgpStore.clearLegacyPrivateArmor(context)
-        BeamioChatPgpStore.clear(context)
     }
 
     /**

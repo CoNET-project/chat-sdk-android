@@ -5,7 +5,7 @@ import org.json.JSONObject
 import java.util.TreeSet
 
 /**
- * The credential field names (CRED, 25.52AQ.2, r3co; the extension of five names confirmed by R649, r3cq 25.52AS.2). For the commands in
+ * The credential field names (CRED, 25.52AQ.2, r3co; the extension of five names confirmed by r3cq 25.52AS.2). For the commands in
  * [COMMANDS] a credential field is refused with `key_over_bridge_refused` before the gate (25.52AT.1 step 2). The refusal names the field, and
  * never returns or logs a value. Matching is on the canonical form N ([IdentityProvisionContract.normalize]), case-insensitively, at any depth.
  */

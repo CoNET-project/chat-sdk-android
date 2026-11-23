@@ -1,6 +1,6 @@
 {
   "file": "domain-tags-vectors.v1.json",
-  "spec": "spec §25.27.3、§25.27.6、§25.27.9（r3ed，PM R727）",
+  "spec": "spec §25.27.3、§25.27.6、§25.27.9",
   "purpose": "PGP 域标签的非重叠与不可生成性。两端的 SDK 内部标签须与本文件逐字节相同，并通过 DT-T1 至 DT-T3。",
   "generator": "gen-domain-tags.mjs",
   "signingConvention": {

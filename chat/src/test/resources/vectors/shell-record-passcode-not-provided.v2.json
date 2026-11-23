@@ -1,0 +1,165 @@
+{
+  "schema": "shell-record-passcode-not-provided.v2",
+  "date": "2026-11-22",
+  "status": "NEW FILE. Supersedes the shellRecord locked answers in the iOS handoff (storage_locked / write_failed) for passcode accounts.",
+  "basis": "裁定（沿用现有码，不新增名字）；answer-shape v3 SHAPE-09（record_unreadable）；v286 第 306.2 节（更正）",
+  "note": "合成数据。仅使用已实现的现有码。",
+  "cases": [
+    {
+      "id": "SRP-01-read-passcode-account-no-passcode-not_ready",
+      "command": "shellRecordRead",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": false
+      },
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "code": "not_ready",
+          "notReadyReason": "passcode_not_provided",
+          "retryable": true
+        }
+      },
+      "notStorageLocked": true
+    },
+    {
+      "id": "SRP-02-write-passcode-account-no-passcode-not_ready",
+      "command": "shellRecordWrite",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": false
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "notReadyReason": "passcode_not_provided",
+        "retryable": true
+      },
+      "notWriteFailed": true,
+      "dataWritten": false
+    },
+    {
+      "id": "SRP-03-read-storage-fault-record_unreadable",
+      "command": "shellRecordRead",
+      "state": {
+        "passcodeAccount": false,
+        "storageFault": true
+      },
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "code": "error",
+          "sub": "record_unreadable"
+        }
+      },
+      "notPasscodeNotProvided": true,
+      "dataKept": true,
+      "notStorageUnreadable": true
+    },
+    {
+      "id": "SRP-04-write-storage-fault-write_failed",
+      "command": "shellRecordWrite",
+      "state": {
+        "passcodeAccount": false,
+        "storageFault": true
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "write_failed"
+      },
+      "notPasscodeNotProvided": true,
+      "dataKept": true,
+      "dataWritten": false,
+      "note": "write_failed 仅表示真实写入故障"
+    },
+    {
+      "id": "SRP-05-read-unknown-state-not_ready-unreadable",
+      "command": "shellRecordRead",
+      "state": {
+        "stateUnknown": true
+      },
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "code": "not_ready",
+          "notReadyReason": "unreadable",
+          "retryable": true
+        }
+      },
+      "notPasscodeNotProvided": true,
+      "dataKept": true,
+      "note": "不新增 unknown 码；PWA 按非确认缺失、保数据处理"
+    },
+    {
+      "id": "SRP-06-passcode-provided-read-ok-no-not_ready",
+      "command": "shellRecordRead",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": true,
+        "unlocked": true
+      },
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "code": "ok"
+        }
+      },
+      "notPasscodeNotProvided": true
+    },
+    {
+      "id": "SRP-07-storage_locked-not-used-for-app-passcode",
+      "command": "shellRecordRead",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": false
+      },
+      "expect": {
+        "forbiddenCodes": [
+          "storage_locked",
+          "write_failed_for_passcode_state",
+          "unknown"
+        ]
+      }
+    },
+    {
+      "id": "SRP-08-preread-not-affected",
+      "command": "nativeMnemonicPreread",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": false
+      },
+      "expect": {
+        "allowedCodes": [
+          "ok",
+          "confirmed_missing",
+          "unknown",
+          "read_error"
+        ],
+        "passcodeNotProvidedAllowed": false
+      }
+    },
+    {
+      "id": "SRP-09-write-passcode-state-not-write_failed",
+      "command": "shellRecordWrite",
+      "state": {
+        "passcodeAccount": true,
+        "passcodeProvided": false
+      },
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "notReadyReason": "passcode_not_provided",
+        "retryable": true
+      },
+      "notWriteFailed": true
+    }
+  ],
+  "supersedes": "shell-record-passcode-not-provided.v1.json（v1 原件不改）；存储故障改用现有码：read→record_unreadable，write→write_failed；未知状态不新增码，沿用 not_ready（带原因）"
+}

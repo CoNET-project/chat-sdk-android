@@ -8,7 +8,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * Review finding (76706f6d on ced0bfc), with the coordinator's ruling: an unreadable clear_pending starts no redo and deletes nothing. It is
+ * Review finding, with the coordinator's : an unreadable clear_pending starts no redo and deletes nothing. It is
  * unknown, not "no pending clear": nothing is written or consumed, the block stays (clear_incomplete), and the next successful read resumes the
  * clear. Test directories are in memory; no device or real directory is touched.
  */
@@ -42,7 +42,7 @@ class ClearPendingReadFailureTest {
     @Test
     fun unreadableClearPendingNeverStartsTheRedoAndDeletesNothing() {
         val inner = NativeTestFiles()
-        inner.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        inner.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         inner.map["wallet.v1.rec"] = byteArrayOf(7, 7)
         inner.map["wallet.v1.mark"] = byteArrayOf(8)
         val before = inner.map.mapValues { it.value.copyOf() }
@@ -62,7 +62,7 @@ class ClearPendingReadFailureTest {
     @Test
     fun readableClearPendingRunsTheRedo() {
         val inner = NativeTestFiles()
-        inner.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        inner.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         val calls = IntArray(1)
 
         val result = clearWith(ClearFlagFiles(inner), calls).redoIfInterrupted()
@@ -96,7 +96,7 @@ class ClearPendingReadFailureTest {
         val inner = NativeTestFiles()
         val involved = "0x" + "a".repeat(40)
         val other = "0x" + "b".repeat(40)
-        inner.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        inner.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         val before = inner.map.mapValues { it.value.copyOf() }
         val files = FailsOnceFor(inner, ClearFlagFiles.CLEAR_PENDING)
         val calls = IntArray(1)
@@ -106,7 +106,7 @@ class ClearPendingReadFailureTest {
         assertEquals("the failed read is unknown: the block stays", IdentityClearCode.CLEAR_INCOMPLETE, first)
         assertEquals("the redo did not run on the failed read", 0, calls[0])
         assertEquals("the failed read wrote and removed nothing", before.keys, inner.map.keys)
-        assertArrayEquals("the pending marker is not consumed", byteArrayOf(1), inner.map[ClearFlagFiles.CLEAR_PENDING])
+        assertArrayEquals("the pending marker is not consumed", ownedMarker(), inner.map[ClearFlagFiles.CLEAR_PENDING])
 
         val second = clearWith(ClearFlagFiles(files), calls).redoIfInterrupted()
 
@@ -119,4 +119,7 @@ class ClearPendingReadFailureTest {
             OrphanSweepRule.accountsToRemove(clearPending = true, involved = involved, live = null, accounts = listOf(involved, other)),
         )
     }
+
+    /** A clear_pending that names its owner. The legacy single byte is unknown and resumes nothing. */
+    private fun ownedMarker(): ByteArray = ("0x" + "c".repeat(40)).toByteArray(Charsets.UTF_8)
 }

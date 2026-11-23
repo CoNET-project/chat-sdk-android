@@ -50,7 +50,7 @@ class DerivationVectorsTest {
     fun vectorFileIsPinned() {
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
         // The r3cb copy (spec r3cb, 14 cases, D-11 to D-13 added). Previously 6b51f6f9… (11 cases).
-        assertEquals("0c055b817026813b3a6cae38f8b4218a3b0655a22f2fa0352cdeec2be01d4d51", sha)
+        assertEquals("90fa56833f7e18c65a76ee08831013df10a3e848428327da3d0ce2996cafcae8", sha)
     }
 
     @Test

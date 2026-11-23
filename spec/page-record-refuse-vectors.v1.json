@@ -1,7 +1,7 @@
 {
   "file": "page-record-refuse-vectors.v1.json",
-  "purpose": "T-263 页面记录写入的拒绝用例（PR-02、PR-02b、PR-03、PR-04）。期望码按 spec §25.52AQ.3（r3co）：PGP 类为 pgp_private_in_payload；其它键形态为 key_shaped_content；白名单外为 bad_request；key_over_bridge_refused 不用于 shellRecordWrite。",
-  "generator": "gen-page-record-refuse-vectors.mjs（r3cq）",
+  "purpose": "T-263 页面记录写入的拒绝用例（PR-02、PR-02b、PR-03、PR-04）。期望码按 spec §25.52AQ.3：PGP 类为 pgp_private_in_payload；其它键形态为 key_shaped_content；白名单外为 bad_request；key_over_bridge_refused 不用于 shellRecordWrite。",
+  "generator": "gen-page-record-refuse-vectors.mjs",
   "order": [
     "pgp_private_in_payload",
     "key_shaped_content",
@@ -11,7 +11,7 @@
   "cases": [
     {
       "id": "PR-02",
-      "title": "r3cq（T-263，§25.52AQ.3）：PGP 类禁止路径与其它非白名单字段同时出现：pgp_private_in_payload，names 只列禁止路径前缀；先于白名单判定；不写入",
+      "title": "（T-263，§25.52AQ.3）：PGP 类禁止路径与其它非白名单字段同时出现：pgp_private_in_payload，names 只列禁止路径前缀；先于白名单判定；不写入",
       "ctx": {
         "migrating": false
       },
@@ -41,7 +41,7 @@
     },
     {
       "id": "PR-02b",
-      "title": "r3cq（§25.52AQ.3）：非 PGP 的键形态（privateKeyHex）：key_shaped_content，只记路径名；不使用 key_over_bridge_refused；先于白名单判定",
+      "title": "（§25.52AQ.3）：非 PGP 的键形态（privateKeyHex）：key_shaped_content，只记路径名；不使用 key_over_bridge_refused；先于白名单判定",
       "ctx": {
         "migrating": false
       },
@@ -67,7 +67,7 @@
     },
     {
       "id": "PR-03",
-      "title": "r3cq（T-263，§25.52B.4）：白名单外的字段：bad_request，names 列全部非白名单路径（UTF-8 字节序）；不回显值；不写入",
+      "title": "（T-263，§25.52B.4）：白名单外的字段：bad_request，names 列全部非白名单路径（UTF-8 字节序）；不回显值；不写入",
       "ctx": {
         "migrating": false
       },
@@ -94,7 +94,7 @@
     },
     {
       "id": "PR-04",
-      "title": "r3cq（T-263，§25.52AQ.3）：迁移中，且含 PGP 禁止路径：pgp_private_in_payload，不返回 migrating（禁止路径先于门控判定）",
+      "title": "（T-263，§25.52AQ.3）：迁移中，且含 PGP 禁止路径：pgp_private_in_payload，不返回 migrating（禁止路径先于门控判定）",
       "ctx": {
         "migrating": true
       },

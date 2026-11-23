@@ -83,7 +83,7 @@ class AccountCleanupDispatchTest {
         assertEquals("r1", ack.getString("reqId"))
         assertTrue(ack.getBoolean("ok"))
         assertFalse(ack.getJSONObject("result").getBoolean("cleanupPending"))
-        assertEquals("the two inbox entries are retained and counted", 2, ack.getJSONObject("result").getInt("retainedUnattributed"))
+        assertEquals("the two inbox entries are retained and counted", 2, ack.getJSONObject("result").getInt("keptUnattributed"))
     }
 
     @Test
@@ -115,7 +115,7 @@ class AccountCleanupDispatchTest {
             runFor = { runner(run) },
         )
 
-        assertEquals("not_available", ack.getString("error"))
+        assertEquals("not_ready", ack.getString("error"))
         assertTrue(adapter.removed.isEmpty())
     }
 
@@ -158,7 +158,7 @@ class AccountCleanupDispatchTest {
             runFor = { runner(run) },
         )
 
-        assertEquals("not_available", ack.getString("error"))
+        assertEquals("not_ready", ack.getString("error"))
         assertTrue(adapter.removed.isEmpty())
     }
 

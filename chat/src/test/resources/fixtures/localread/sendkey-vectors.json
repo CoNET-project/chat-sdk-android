@@ -1,0 +1,227 @@
+{
+  "spec": "spec v1.1-r1 第 4、7.2、7.1、23 节",
+  "warning": "全部为公开测试材料（测试私钥 P、测试设备密钥 K_dev 均由固定字符串派生）。不是任何账号或钱包的密钥，不得用于真实地址或资金。",
+  "byteRepresentation": {
+    "P": "32 字节大端，小写十六进制（64 字符，无 0x）",
+    "S": "EIP-191 签名字符串：小写 0x + 130 位十六进制，utf8 编码后 132 字节，不是原始字节",
+    "eoa": "小写 0x + 40 位十六进制",
+    "ts": "十进制整数字符串，无前导零，无正负号",
+    "body": "存储时的 UTF-8 字节原样，不做 JSON 重新序列化或 Unicode 归一化",
+    "base64url": "RFC 4648 §5，无填充，字符集 A-Z a-z 0-9 - _",
+    "separator": "0x1f（单字节）"
+  },
+  "inputs": {
+    "P": "78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd",
+    "K_dev": "bd30e6a23704a2764a9dcf930f3870c9d3f234ae5a369cbd59168c3eb1adaf32",
+    "eoa": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+    "workspace": "default",
+    "chainId": 224422,
+    "domain": "beamio.chat.history.v1|224422|0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+    "accountKey": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa:default"
+  },
+  "roots": {
+    "S": "0xc0cbedb7cd1b952e7fc845e4dcdade738bccb4ca6c4ef01508ee54db062d58ba5c71afdfc6cb8246e6ec90819bca93598e4d03c846dfc563e731632200d1ab9e1b",
+    "R_proto": "49243452d83162603136b9770537a777c76220f28647af38e8b0fdd29fdc6092",
+    "R_db": "0a52945e412e493b20d50d1f52d751f837139b9cc1ac17ca2769fd6e3eb9d126",
+    "note": "R_proto 只用于既有历史路径（index-enc、frag-genesis、frag|…、pending-enc）。R_db 用于全部新派生（K_id、K_idx、DEK、kcv、布局键、盲索引、文件名前的本地路径）。两者的输入（签名与私钥）与 info 标签互不重叠。"
+  },
+  "derivations": {
+    "K_id": {
+      "ikm": "R_db",
+      "salt": "",
+      "info": "chat-local-id-v1",
+      "hex": "9ecb155e9755c52edf104d63d5a546dc6b86de09335989c38b1786643fc7a6c7"
+    },
+    "K_idx": {
+      "ikm": "R_db",
+      "salt": "",
+      "info": "chat-local-idx-v1",
+      "hex": "ed79171a8a074104287adf9b5caef87fd16e8d24ce57e40441c96ce0453974b1"
+    },
+    "DEK": {
+      "ikm": "R_db",
+      "salt": "beamio-chat-local-db|salt|v1",
+      "info": "beamio-chat-local-db|v1|0x39581c72b8c7d0de85ff22cf3ae178ae813957aa|default",
+      "hex": "b9a0f253381311f14f1b2c023841da3a60a09926b48aa952dd670a7cd017db34"
+    },
+    "kcv": {
+      "key": "DEK",
+      "message": "kcv",
+      "hex": "368075d4ab581609a8389a0ed513623b84889d3efc7b6be09801e627702ca685"
+    },
+    "R_db_from": {
+      "ikm": "P（32 字节私钥）",
+      "salt": "beamio-chat-local-root|salt|v1",
+      "info": "beamio-chat-local-root|v1|0x39581c72b8c7d0de85ff22cf3ae178ae813957aa|default"
+    }
+  },
+  "blindIndexes": {
+    "conv_blind": {
+      "convKey": "0x1234567890abcdef1234567890abcdef12345678",
+      "value": "BZKrBJX8u3VAVkYeKc-rq7T1C1riyKj37JkY1FJE3Zs"
+    },
+    "layout_key": {
+      "params": "392|portrait|10|1",
+      "value": "mjpY2mdkoKE-QbDvmmInfrfshB812VaBWAlCXzxw-q0"
+    },
+    "cid_blind": {
+      "cid": "0xabababababababababababababababababababababababababababababababab",
+      "value": "ROjAJctIhUHvlHUmMItwZjjGx77RcUdIj3QcMLjH9j8"
+    }
+  },
+  "fileName": {
+    "accountKey": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa:default",
+    "value": "chat-local-v1-wSpQYV_fqlhSubUW07N0_z",
+    "rule": "chat-local-v1-base64url(HMAC-SHA256(K_dev, accountKey))[0:22]"
+  },
+  "sendKeyCases": [
+    {
+      "name": "pwa-format-sendId-preserved",
+      "input": {
+        "peer": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "dir": "out",
+        "ts": "1767225601234",
+        "sendId": "1767225601234-q9w8e7r6",
+        "bodyUtf8": "你好，世界",
+        "bodyHex": "e4bda0e5a5bdefbc8ce4b896e7958c"
+      },
+      "rule": "sendId-preserved",
+      "sendKey": "1767225601234-q9w8e7r6",
+      "stableId": "o2hiF0Wf7coP_n2P4BA_hnUs9aJyUeCxUluFYfF9Wb8",
+      "collapseDigestHex": "2d282d329f8392419c5e3eb369ebe6d3c981d76573fbf46d2a1eb42f8ed5d93f"
+    },
+    {
+      "name": "real-uuid-sendId-preserved",
+      "input": {
+        "peer": "0x1234567890abcdef1234567890abcdef12345678",
+        "dir": "out",
+        "ts": "1767225600500",
+        "sendId": "d3b07384-d113-4ec6-8e3f-8b0c5c3d2a11",
+        "bodyUtf8": "receipt",
+        "bodyHex": "72656365697074"
+      },
+      "rule": "sendId-preserved",
+      "sendKey": "d3b07384-d113-4ec6-8e3f-8b0c5c3d2a11",
+      "stableId": "BZ5q0QBn6fFLhZrZb8blBbvb4Av5sIpKs9SnR9_oJYI",
+      "collapseDigestHex": "0cae4ca21ac40abb4dfa4a583edaa7eca54ee2a8a5561be2d8e6db5f6e2b33ff"
+    },
+    {
+      "name": "empty-sendId-text-cjk-newline",
+      "input": {
+        "peer": "0x1234567890abcdef1234567890abcdef12345678",
+        "dir": "in",
+        "ts": "1767225602000",
+        "sendId": null,
+        "bodyUtf8": "第一行\n第二行 second line",
+        "bodyHex": "e7acace4b880e8a18c0ae7acace4ba8ce8a18c207365636f6e64206c696e65"
+      },
+      "rule": "derived",
+      "sendKey": "xMNmShNCiVIiW2uFVLRlvW8euN94wEJOGtyGy1SjZhNI",
+      "stableId": "rGklS01ds0U-CQF3OoUht-grTBhuUQpjDe7DgFvTeYM",
+      "collapseDigestHex": "ebd05c12189cabb508f83327d57400e4308e15d5f930faf80c9b094fee295f94"
+    },
+    {
+      "name": "empty-sendId-media-json",
+      "input": {
+        "peer": "0x1234567890abcdef1234567890abcdef12345678",
+        "dir": "out",
+        "ts": "1767225603500",
+        "sendId": null,
+        "bodyUtf8": "{\"v\":1,\"kind\":\"image\",\"text\":\"合影 photo\",\"media\":{\"mime\":\"image/jpeg\",\"size\":20480,\"name\":\"a.jpg\",\"width\":1080,\"height\":720,\"blob\":\"blob-0001\"}}",
+        "bodyHex": "7b2276223a312c226b696e64223a22696d616765222c2274657874223a22e59088e5bdb12070686f746f222c226d65646961223a7b226d696d65223a22696d6167652f6a706567222c2273697a65223a32303438302c226e616d65223a22612e6a7067222c227769647468223a313038302c22686569676874223a3732302c22626c6f62223a22626c6f622d30303031227d7d"
+      },
+      "rule": "derived",
+      "sendKey": "xeiMe9MXnN4pQDLl3P3yrWqjiI62lMR8pjs43ufap9cE",
+      "stableId": "6Ac4fiFqBJoTGbRfNvkB_7cOPztfSDz799IspNUMlWA",
+      "collapseDigestHex": "06ea348ca9e547d3c3de9f7758d54551331ceda1acf927e197fcf0270a03d3e5"
+    },
+    {
+      "name": "empty-body-ts-zero",
+      "input": {
+        "peer": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "dir": "out",
+        "ts": "0",
+        "sendId": null,
+        "bodyUtf8": "",
+        "bodyHex": ""
+      },
+      "rule": "derived",
+      "sendKey": "xKX3lX9j6JgWs28_fJVCl8fIuTNSFTf3GlSoaFcV33Uk",
+      "stableId": "rymdbBiyQZ6kntWkycYSexPjtd6Oatxgh_a810kGKAQ",
+      "collapseDigestHex": "2404ba34c9033e7e5901f1e6f0159caa33f55c104f7e464e637d4f9b35bbf693"
+    },
+    {
+      "name": "max-safe-ts",
+      "input": {
+        "peer": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "dir": "in",
+        "ts": "9007199254740991",
+        "sendId": null,
+        "bodyUtf8": "edge",
+        "bodyHex": "65646765"
+      },
+      "rule": "derived",
+      "sendKey": "xu9VVnstATtz3_RGLYlc4L01n1fTdElgFEYatVeOd2Xw",
+      "stableId": "MSDbsB5G2_36FTeF8RLs07NeBuiZ2oYr_Xj3J3Os9uQ",
+      "collapseDigestHex": "d590652258943ab49979f4d2ea44fb667fc95d9e7985bff0d8a44ff482e93cfa"
+    },
+    {
+      "name": "legacy-mirror-uuid-A",
+      "input": {
+        "peer": "0x1234567890abcdef1234567890abcdef12345678",
+        "dir": "in",
+        "ts": "1767225604000",
+        "sendId": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+        "bodyUtf8": "legacy mirror",
+        "bodyHex": "6c6567616379206d6972726f72"
+      },
+      "rule": "sendId-preserved",
+      "sendKey": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      "stableId": "zyfgTCqxwXFCcK9pyq7Kc5nb2aXKCbZ0YFVmrqQJsWY",
+      "collapseDigestHex": "534e337410927c38a11b3c1f15e08f0699f538c46c0ee290715979fda872d43e"
+    },
+    {
+      "name": "legacy-mirror-uuid-B-same-content",
+      "input": {
+        "peer": "0x1234567890abcdef1234567890abcdef12345678",
+        "dir": "in",
+        "ts": "1767225604000",
+        "sendId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+        "bodyUtf8": "legacy mirror",
+        "bodyHex": "6c6567616379206d6972726f72"
+      },
+      "rule": "sendId-preserved",
+      "sendKey": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "stableId": "374icAliGWmB5cPpOyUNIj2lEuv2hz-QuyVES77S5oQ",
+      "collapseDigestHex": "534e337410927c38a11b3c1f15e08f0699f538c46c0ee290715979fda872d43e"
+    }
+  ],
+  "collapse": {
+    "first": "legacy-mirror-uuid-A",
+    "second": "legacy-mirror-uuid-B-same-content",
+    "equalDigest": true,
+    "aliasBlindOfSecond": "374icAliGWmB5cPpOyUNIj2lEuv2hz-QuyVES77S5oQ",
+    "survivorStableId": "zyfgTCqxwXFCcK9pyq7Kc5nb2aXKCbZ0YFVmrqQJsWY"
+  },
+  "aesGcm": {
+    "nonceHex": "000102030405060708090a0b",
+    "aadUtf8": "BZKrBJX8u3VAVkYeKc-rq7T1C1riyKj37JkY1FJE3Zs\u001fBZ5q0QBn6fFLhZrZb8blBbvb4Av5sIpKs9SnR9_oJYI\u001f0",
+    "aadHex": "425a4b72424a583875335641566b59654b632d727137543143317269794b6a33374a6b5931464a45335a731f425a35713051426e3666464c685a725a6238626c42627662344176357349704b7339536e52395f6f4a59491f30",
+    "plaintextUtf8": "hello 你好",
+    "sealedBase64": "AAECAwQFBgcICQoLWkxsVqWq1nMF9E60mH6Aj39a4OHOcQiaomRNIw=="
+  },
+  "infoLabelsRoot": {
+    "R_proto": [
+      "index-enc",
+      "frag-genesis",
+      "frag|<seq>|<prevCid>",
+      "pending-enc（Android，既有）"
+    ],
+    "R_db": [
+      "beamio-chat-local-root|v1|…（输入为 P）",
+      "beamio-chat-local-db|salt|v1 与 beamio-chat-local-db|v1|…",
+      "chat-local-idx-v1",
+      "chat-local-id-v1"
+    ]
+  }
+}

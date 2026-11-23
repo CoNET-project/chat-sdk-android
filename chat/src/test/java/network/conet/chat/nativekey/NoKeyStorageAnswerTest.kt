@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * rc2.2-qa item 3 (25.52Y.88, reviewer corrections 76706f6d): the answer while the snapshot is unknown or the store is storage-derived
+ * rc2.2-qa item 3 (25.52Y.88): the answer while the snapshot is unknown or the store is storage-derived
  * Locked. One test per class: A lifecycle and status, B page-open entries, C family commands, D historical reads, E other keystore
  * commands, and G0 `no_key` (unchanged).
  */

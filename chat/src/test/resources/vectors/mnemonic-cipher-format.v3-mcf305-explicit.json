@@ -1,0 +1,46 @@
+{
+  "schema": "mnemonic-cipher-format.v3-mcf305-explicit",
+  "status": "NEW FILE. Clarifies MCF3-05 construction; v3 unchanged. Synthetic data only.",
+  "basisSpec": "定稿节第 11 节；判定顺序（写死）",
+  "order": [
+    "1. 版本与参数检查（不符 verify_failed，不解密）",
+    "2. 用信封里的 eoa 组 AAD 解密；GCM 校验失败（口令错误、密文被篡改、AAD 不符）→ unlock_failed",
+    "3. 解密成功后由助记词派生地址；派生地址与信封 eoa 不一致 → verify_failed"
+  ],
+  "construction": {
+    "MCF3-05-verify_failed": {
+      "envelopeEoa": "0x2222222222222222222222222222222222222222",
+      "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816SNVFJ919dazVSo6aqSKTno=",
+      "ctEncryptedWithAADEoa": "0x2222222222222222222222222222222222222222",
+      "why": "密文以错误 eoa 作 AAD 正确加密，解密成功，派生地址 0xd49251e1…986f 与信封 eoa 不符",
+      "expect": {
+        "code": "verify_failed",
+        "decryptSucceeds": true,
+        "addressMatch": false
+      }
+    },
+    "MCF3-05b-unlock_failed-envelope-eoa-edited-after-encrypt": {
+      "envelopeEoa": "0x2222222222222222222222222222222222222222",
+      "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0=",
+      "ctEncryptedWithAADEoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+      "why": "先以真实 eoa 加密，再把信封 eoa 改为 0x2222…；AAD 不符，GCM 认证失败",
+      "expect": {
+        "code": "unlock_failed",
+        "decryptSucceeds": false
+      }
+    },
+    "MCF3-06-reference": {
+      "envelopeEoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+      "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816SNVFJ919dazVSo6aqSKTno=",
+      "ctEncryptedWithAADEoa": "0x2222222222222222222222222222222222222222",
+      "expect": {
+        "code": "unlock_failed",
+        "decryptSucceeds": false,
+        "note": "AAD 与信封 eoa 不符"
+      }
+    }
+  },
+  "reference": {
+    "android_v2_MCF-05": "verify_failed（Android 参照）"
+  }
+}

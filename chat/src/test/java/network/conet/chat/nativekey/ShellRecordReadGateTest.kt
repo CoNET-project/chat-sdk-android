@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The read gate of shellRecordRead on the SDK side (spec §25.52Y.41 第 4、5、6、7 项; PM R1890). The source and main frame are checked
+ * The read gate of shellRecordRead on the SDK side (spec §25.52Y.41 第 4、5、6、7 项). The source and main frame are checked
  * by the shell before the SDK is called and again at the SDK boundary (origin_refused). A read that names a key-shaped field is refused
  * as key material, with names only. Other unknown names stay bad_request. A read never returns a value in a refusal.
  */

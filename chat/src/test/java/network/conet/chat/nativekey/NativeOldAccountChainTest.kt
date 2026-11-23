@@ -41,7 +41,7 @@ class NativeOldAccountChainTest {
         val dev = m.devices.getValue("A")
 
         // 1. Native import from the mnemonic; the derived address must be the account's address.
-        val imported = NativeImport.submitMnemonic(mnemonic, eoa, wallet)
+        val imported = NativeImport.importRecoveryPhrase(mnemonic, eoa, wallet)
         assertEquals("import", NativeImport.Code.OK, imported.code)
         assertEquals(account, imported.eoa!!.lowercase())
 
@@ -97,12 +97,12 @@ class NativeOldAccountChainTest {
         }
         files.crashAfterWrite = null
         assertTrue("the half-written record is on disk", files.map.containsKey(NativePgpVault.recName(account)))
-        // Rewritten 2026-11-16 (project ruling: a read never deletes user data). The unconfirmed record stays and reads as an unknown state
+        // Rewritten 2026-11-16 (a read never deletes user data). The unconfirmed record stays and reads as an unknown state
         // (pgp_locked, retry), not as no key: a read must not remove what a write left. The retry below is the write path that completes it.
         assertEquals("unconfirmed record is unknown, not a key", "pgp_locked", dev.active.decryptInbound(test.getString("armored")).code)
         assertTrue("and it is kept", files.map.containsKey(NativePgpVault.recName(account)))
 
-        // 8. Retry (rewritten 2026-11-16, project ruling: keep the user's data): the locked record is an unknown state, so the automatic restore does
+        // 8. Retry (rewritten 2026-11-16, : keep the user's data): the locked record is an unknown state, so the automatic restore does
         // not overwrite it. The retry answers pgp_locked and leaves the record as it is; a user-initiated recovery is the way out (Y.83).
         val before = files.map[NativePgpVault.recName(account)]!!.copyOf()
         assertEquals("retry is refused, not overwritten", "undetermined", m.restore("A").result)
@@ -117,7 +117,7 @@ class NativeOldAccountChainTest {
         val wallet = NativeWalletVault(wrap, files)
         val m = restoreMachineForOneDevice(StaticChain(onChain(), backup), wallet, wrap, files, account)
         val dev = m.devices.getValue("A")
-        assertEquals(NativeImport.Code.OK, NativeImport.submitMnemonic(mnemonic, eoa, wallet).code)
+        assertEquals(NativeImport.Code.OK, NativeImport.importRecoveryPhrase(mnemonic, eoa, wallet).code)
 
         files.failWrite = NativePgpVault.markName(account)
         assertEquals("a failed local write is undetermined, not ok", "undetermined", m.restore("A").result)

@@ -19,7 +19,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * The PGP literal newline rule (spec r3n §25.32; `pgp-literal-newline-vectors.v1.json`, sha256 ed245685…, synthetic). For a
+ * The PGP literal newline rule (spec r3n §25.32; `pgp-literal-newline-vectors.v1.json`, sha256 b5653576…, synthetic). For a
  * text literal (format `u` or `t`) CRLF becomes LF and a lone CR stays; for a binary literal (`b`) nothing changes. Each case
  * is checked three ways: the literal inside the ciphertext is the raw bytes the vector names (so the conversion is really
  * exercised), its format is the vector's, and the native decrypt returns the expected bytes.
@@ -74,7 +74,7 @@ class PgpLiteralNewlineVectorsTest {
 
     @Test
     fun theVectorFileIsTheHashedCopy() {
-        assertEquals("ed24568502654995f972422f69f2fc5c94539f1b59588edcb7284781656bb81b", sha256Hex(raw))
+        assertEquals("b5653576ccd422f3780c7daeb346b0e588d34e2db474c7921cc52e9b52bb19b5", sha256Hex(raw))
         assertEquals(6, vectors.getJSONArray("cases").length())
     }
 

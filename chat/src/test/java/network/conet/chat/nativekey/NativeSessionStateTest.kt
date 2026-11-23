@@ -23,7 +23,7 @@ class NativeSessionStateTest {
     @Test
     fun theFlagStartsFalseAndFollowsMarkAndReset() {
         assertFalse(NativeSessionState.isReady())
-        NativeSessionState.markReady()
+        NativeSessionState.markReady("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa")
         assertTrue(NativeSessionState.isReady())
         NativeSessionState.reset()
         assertFalse(NativeSessionState.isReady())
@@ -34,14 +34,14 @@ class NativeSessionStateTest {
         // With a record and no successful init: G1, so every name except init answers not_ready.
         assertEquals(NoKeyGate.Gate.G1, NoKeyGate.gateOf(record, NativeSessionState.isReady()))
         assertEquals("not_ready", NoKeyGate.answerFor("deriveLocalKeys", NoKeyGate.gateOf(record, NativeSessionState.isReady())))
-        NativeSessionState.markReady()
+        NativeSessionState.markReady("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa")
         assertEquals(NoKeyGate.Gate.G2, NoKeyGate.gateOf(record, NativeSessionState.isReady()))
         assertEquals("dispatch", NoKeyGate.answerFor("send", NoKeyGate.gateOf(record, NativeSessionState.isReady())))
     }
 
     @Test
     fun aSessionClearedAfterInitIsG1AgainWhileTheRecordStays() {
-        NativeSessionState.markReady()
+        NativeSessionState.markReady("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa")
         NativeSessionState.reset()
         // G2 -> G1 on destroy or clear (25.26.4c): the record is still there.
         assertEquals(NoKeyGate.Gate.G1, NoKeyGate.gateOf(record, NativeSessionState.isReady()))
@@ -49,7 +49,7 @@ class NativeSessionStateTest {
 
     @Test
     fun withoutARecordTheGateIsG0RegardlessOfTheFlag() {
-        NativeSessionState.markReady()
+        NativeSessionState.markReady("0x39581c72b8c7d0de85ff22cf3ae178ae813957aa")
         assertEquals(NoKeyGate.Gate.G0, NoKeyGate.gateOf(NativeWalletVault.State.NoKey, NativeSessionState.isReady()))
     }
 }

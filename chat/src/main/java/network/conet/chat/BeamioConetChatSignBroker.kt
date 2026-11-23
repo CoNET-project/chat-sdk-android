@@ -1,5 +1,7 @@
 package network.conet.chat
 
+import network.conet.chat.nativekey.NativeWalletVault
+
 import network.conet.chat.nativekey.Eip191Signer
 import network.conet.chat.nativekey.Eip712
 import org.json.JSONObject
@@ -14,29 +16,60 @@ import org.json.JSONObject
  * fallback that asked the page to sign (model 1B) is removed.
  */
 object BeamioConetChatSignBroker {
-    /** Answer for a signing request made while no native key is held. */
+    /** Answer for a signing request made while no native key is held, and the vault state confirms there is no key. */
     const val NO_KEY = "no_key"
+    /** The vault is locked. */
+    const val LOCKED = "locked"
+    /** Unreadable, not loaded, or a read failed: unknown, retryable. Never `no_key` (v187 §207.1). */
+    const val NOT_READY = "not_ready"
 
     /**
-     * Local signer: the hex key, in memory only. Signing runs in native code (EIP-191 and EIP-712 in nativekey), so the
-     * key never reaches the WebView (AND-K-c2, A-4).
+     * The answer when no key is held, decided by the vault state (not by the session alone). Set by the module, which holds the context. Until it is
+     * set, and if it throws, the answer is not_ready (fail closed).
      */
     @Volatile
-    private var localKey: String = ""
+    private var absentAnswer: () -> String = { NOT_READY }
 
-    /** Called only with a key read from the native vault. */
-    fun setNativeSigner(privateKeyHex: String) {
-        localKey = BeamioChatWalletKeyStore.normalizeKey(privateKeyHex)
+    fun setAbsentAnswer(provider: () -> String) {
+        absentAnswer = provider
+    }
+
+    /** The answer for a vault state with no held key: `no_key` only when the state confirms there is no key; `locked` when locked; otherwise not_ready. */
+    internal fun absentAnswerOf(state: NativeWalletVault.State): String = when (state) {
+        NativeWalletVault.State.NoKey -> NO_KEY
+        is NativeWalletVault.State.Locked -> LOCKED
+        is NativeWalletVault.State.Ready -> NOT_READY
+    }
+
+    /** The answer for a published snapshot: null (not known yet) is not_ready, never a read on the caller's thread. */
+    internal fun absentAnswerOfSnapshot(state: NativeWalletVault.State?): String = state?.let { absentAnswerOf(it) } ?: NOT_READY
+
+    private fun absent(): String = runCatching { absentAnswer() }.getOrDefault(NOT_READY)
+
+    /**
+     * Local signer: the private key bytes (32), in memory only, zeroed at every clear (spec: no String residence of a private key, T-49).
+     * Signing runs in native code (EIP-191 and EIP-712 in nativekey), so the key never reaches the WebView (AND-K-c2, A-4).
+     */
+    @Volatile
+    private var localKey: ByteArray? = null
+
+    /** Called only with a key read from the native vault. The argument is copied; the caller clears its own buffer. */
+    @Synchronized
+    fun setNativeSigner(privateKey: ByteArray) {
+        val held = privateKey.copyOf()
+        val previous = localKey
+        localKey = held
+        previous?.fill(0)
     }
 
     /**
      * R_db for the local DB, derived here inside the wallet boundary from the in-memory private key
      * (spec v1.1-r1 22.2). The key itself never leaves this object. Null when no local key is held.
      */
+    @Synchronized
     fun deriveLocalRoot(eoa: String, workspace: String): ByteArray? {
-        val key = localKey
-        if (key.isEmpty()) return null
-        val p = ConetChatCryptoUtil.hexToBytes(key) ?: return null
+        val key = localKey ?: return null
+        val p = key.copyOf()
         try {
             return network.conet.chat.localread.LocalChatIds.rootDbFromPrivateKey(p, eoa.lowercase(), workspace)
         } finally {
@@ -44,14 +77,17 @@ object BeamioConetChatSignBroker {
         }
     }
 
+    /** Lock and session clear: the held key is zeroed in place, then the reference is dropped. */
+    @Synchronized
     fun clearNativeSigner() {
-        localKey = ""
+        localKey?.fill(0)
+        localKey = null
     }
 
-    fun hasNativeSigner(): Boolean = localKey.isNotEmpty()
+    fun hasNativeSigner(): Boolean = localKey != null
 
     /**
-     * Compatibility alias for the application's voice path (PM decision, §38). It answers the same question as
+     * Compatibility alias for the application's voice path (§38). It answers the same question as
      * [hasNativeSigner]: whether the native vault key is held in this session. It does not mean that a page holds a key.
      */
     @Deprecated(
@@ -69,21 +105,21 @@ object BeamioConetChatSignBroker {
      */
     fun requestEip191(message: String, completion: (Result<String>) -> Unit) {
         val key = localKey
-        if (key.isEmpty()) {
-            completion(Result.failure(IllegalStateException(NO_KEY)))
+        if (key == null) {
+            completion(Result.failure(IllegalStateException(absent())))
             return
         }
-        val p = ConetChatCryptoUtil.hexToBytes(key)
+        val p = key.copyOf()
         val sig = try {
-            p?.let { Eip191Signer.sign(it, message.toByteArray(Charsets.UTF_8)) }
+            Eip191Signer.sign(p, message.toByteArray(Charsets.UTF_8))
         } finally {
-            p?.fill(0)
+            p.fill(0)
         }
         completion(sig?.let { Result.success(it) } ?: Result.failure(IllegalStateException("sign_failed")))
     }
 
     /**
-     * Compatibility shim for the application's voice path (PM decision, §38). It takes no key and opens no key path:
+     * Compatibility shim for the application's voice path (§38). It takes no key and opens no key path:
      * [timeoutMs] is ignored, because native signing answers at once, and the call delegates to [requestEip191].
      */
     @Suppress("UNUSED_PARAMETER")
@@ -101,15 +137,15 @@ object BeamioConetChatSignBroker {
      */
     fun requestEip712(typedData: JSONObject, completion: (Result<String>) -> Unit) {
         val key = localKey
-        if (key.isEmpty()) {
-            completion(Result.failure(IllegalStateException(NO_KEY)))
+        if (key == null) {
+            completion(Result.failure(IllegalStateException(absent())))
             return
         }
-        val p = ConetChatCryptoUtil.hexToBytes(key)
+        val p = key.copyOf()
         val sig = try {
-            p?.let { Eip712.signTypedData(it, typedData) }
+            Eip712.signTypedData(p, typedData)
         } finally {
-            p?.fill(0)
+            p.fill(0)
         }
         completion(sig?.let { Result.success(it) } ?: Result.failure(IllegalStateException("sign_failed")))
     }

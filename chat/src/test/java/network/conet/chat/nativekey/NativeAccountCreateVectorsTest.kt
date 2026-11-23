@@ -115,6 +115,6 @@ class NativeAccountCreateVectorsTest {
 
     companion object {
         /** sha256 of `spec/native-account-create-vectors.v1.json` as published with r3ap (§25.50.5). */
-        const val PINNED_SHA256 = "136dac1eb206e3cb6faae943e61e49d145e528d1ea628854a534a206080d618e"
+        const val PINNED_SHA256 = "d6fbdce3c71f50a2d71718a008942f0b6358a0cd21488dc03e7c515c238f8dea"
     }
 }

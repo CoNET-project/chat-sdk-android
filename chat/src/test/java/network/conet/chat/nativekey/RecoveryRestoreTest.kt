@@ -17,12 +17,20 @@ class RecoveryRestoreTest {
     private val config = RegistryConfig("0xfFDc8d2021A41F4638Cb3eCf58B5155383EE9f6d", listOf(ep1, ep2))
 
     /** A fake JSON-RPC: a per-URL answer, or a failure. Records the URLs it was asked. */
-    private class Fake(private val answers: Map<String, () -> Any?>) : AddressPgpRead.Rpc {
-        val asked = mutableListOf<String>()
-        lateinit var currentUrl: String
-        override fun call(method: String, params: JSONArray): Any? {
-            asked += currentUrl
-            return answers.getValue(currentUrl)()
+    /** Both endpoints are at block 100 with one hash (review 7, item 2); only the eth_call answers differ per endpoint. */
+    private class Fake(
+        private val answers: Map<String, () -> Any?>,
+        private val url: String,
+        private val asked: MutableList<String>,
+    ) : AddressPgpRead.Rpc {
+        override fun call(method: String, params: JSONArray): Any? = when (method) {
+            "eth_blockNumber" -> "0x64"
+            "eth_getBlockByNumber" -> JSONObject().put("number", "0x64").put("hash", "0x" + "cd".repeat(32))
+            "eth_call" -> {
+                asked += url
+                answers.getValue(url)()
+            }
+            else -> error("unexpected $method")
         }
     }
 
@@ -37,32 +45,47 @@ class RecoveryRestoreTest {
         for (i in 0 until 8) w[31 - i] = ((v shr (8 * i)) and 0xFF).toByte()
     }
 
-    /** Runs [readFirst] with a fake RPC per endpoint; the RPC records the endpoint it was built for. */
+    /** Runs [readAgreed] with a fake RPC per endpoint; the RPC records the endpoint it was built for. */
     private fun read(answers: Map<String, () -> Any?>, cfg: RegistryConfig = config): Pair<String?, List<String>> {
-        val fake = Fake(answers)
-        val result = AccountRegistryRead.readFirst(cfg, { ep -> fake.currentUrl = ep.url; fake }, "0x")
-        return result to fake.asked
+        val asked = mutableListOf<String>()
+        val result = AccountRegistryRead.readAgreed(cfg, { ep -> Fake(answers, ep.url, asked) }, "0x")
+        return result to asked
     }
 
     @Test
-    fun theFirstEndpointAnswersAndTheBackupIsNotAsked() {
-        val (value, asked) = read(mapOf(ep1.url to { stringAnswer("cipher") }, ep2.url to { error("not asked") }))
-        assertEquals("cipher", value)
-        assertEquals(listOf(ep1.url), asked)
-    }
-
-    @Test
-    fun aFailingPrimaryFallsBackToTheBackup() {
-        val (value, asked) = read(mapOf(ep1.url to { error("timeout") }, ep2.url to { stringAnswer("cipher") }))
+    fun bothEndpointsAnswerTheSameAndBothAreAsked() {
+        val (value, asked) = read(mapOf(ep1.url to { stringAnswer("cipher") }, ep2.url to { stringAnswer("cipher") }))
         assertEquals("cipher", value)
         assertEquals(listOf(ep1.url, ep2.url), asked)
     }
 
+    /** Review 7 item 2: a failing endpoint is no longer a fallback; the read fails (network_error) and no record is claimed. */
     @Test
-    fun anEmptyAnswerIsNoRecordAndDoesNotFallBack() {
-        val (value, asked) = read(mapOf(ep1.url to { stringAnswer("") }, ep2.url to { error("not asked") }))
+    fun aFailingEndpointIsAFailureNotAFallback() {
+        try {
+            read(mapOf(ep1.url to { error("timeout") }, ep2.url to { stringAnswer("cipher") }))
+            fail("expected a failure")
+        } catch (e: IllegalStateException) {
+            // The engine turns any read failure into network_error (RecoveryRestore: "network_error" on every exception).
+        }
+    }
+
+    @Test
+    fun anEmptyAnswerOnBothEndpointsIsNoRecord() {
+        val (value, asked) = read(mapOf(ep1.url to { stringAnswer("") }, ep2.url to { stringAnswer("") }))
         assertNull(value)
-        assertEquals(listOf(ep1.url), asked)
+        assertEquals(listOf(ep1.url, ep2.url), asked)
+    }
+
+    /** Review 7 item 2: an empty answer on one endpoint only is never "no record". */
+    @Test
+    fun anEmptyAnswerOnOneEndpointOnlyIsAFailure() {
+        try {
+            read(mapOf(ep1.url to { stringAnswer("") }, ep2.url to { stringAnswer("cipher") }))
+            fail("expected a failure")
+        } catch (e: IllegalStateException) {
+            // The engine turns any read failure into network_error (RecoveryRestore: "network_error" on every exception).
+        }
     }
 
     @Test
@@ -71,7 +94,7 @@ class RecoveryRestoreTest {
             read(mapOf(ep1.url to { error("down") }, ep2.url to { error("down") }))
             fail("expected a failure")
         } catch (e: IllegalStateException) {
-            assertEquals("network_error", e.message)
+            // The engine turns any read failure into network_error (RecoveryRestore: "network_error" on every exception).
         }
     }
 

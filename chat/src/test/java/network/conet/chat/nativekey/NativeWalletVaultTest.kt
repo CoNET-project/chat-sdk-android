@@ -42,7 +42,7 @@ class NativeWalletVaultTest {
         val v = vault(NativeTestWrap(), files)
         assertTrue(v.state() is State.NoKey)
         assertNull(v.unlock())
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     // ---- B. upgrade with an existing key (legacy record adopted natively) ------------------
@@ -87,7 +87,7 @@ class NativeWalletVaultTest {
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.ADDRESS_MISMATCH, v.importKey(eoaB, keyA, NativeWalletVault.SOURCE_LEGACY))
         assertTrue(v.state() is State.NoKey)
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     // ---- D. native import succeeds ---------------------------------------------------------
@@ -131,7 +131,7 @@ class NativeWalletVaultTest {
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.OK, v.importKey(eoaA, keyA))
         v.forget()
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
         assertNull(v.unlock())
     }
@@ -143,7 +143,7 @@ class NativeWalletVaultTest {
         val files = NativeTestFiles()
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.ADDRESS_MISMATCH, v.importKey(eoaB, keyA))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
     }
 
@@ -155,7 +155,7 @@ class NativeWalletVaultTest {
         assertEquals(Import.BAD_EOA, v.importKey(eoaA.removePrefix("0x"), keyA))
         assertEquals(Import.BAD_KEY, v.importKey(eoaA, ByteArray(31) { 1 }))
         assertEquals(Import.BAD_KEY, v.importKey(eoaA, ByteArray(32)))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     @Test
@@ -163,8 +163,9 @@ class NativeWalletVaultTest {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap().apply { failSeal = true }
         val v = vault(wrap, files)
-        assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
-        assertTrue(files.map.isEmpty())
+        // 25.52Y.136 第 7 項: a seal that cannot run is not_ready (WRAP_KEY_MISSING), never a write failure.
+        assertEquals(Import.WRAP_KEY_MISSING, v.importKey(eoaA, keyA))
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
     }
 
@@ -173,7 +174,7 @@ class NativeWalletVaultTest {
         val files = NativeTestFiles().apply { failWrite = NativeWalletVault.REC }
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     @Test
@@ -181,7 +182,7 @@ class NativeWalletVaultTest {
         val files = NativeTestFiles().apply { failWrite = NativeWalletVault.MARK }
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importKey(eoaA, keyA))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
     }
 
@@ -191,12 +192,12 @@ class NativeWalletVaultTest {
         val wrap = NativeTestWrap().apply { openOverride = { keyB } }
         val v = vault(wrap, files)
         assertEquals(Import.READBACK_FAILED, v.importKey(eoaA, keyA))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
     }
 
     @Test
-    fun crashAfterTheRecordIsRecoveredToNoKeyOnNextOpen() {
+    fun crashAfterTheRecordLeavesUnknownUntilTheNextWrite() {
         val files = NativeTestFiles().apply { crashAfterWrite = NativeWalletVault.REC }
         val wrap = NativeTestWrap()
         assertThrows(NativeTestCrash::class.java) { vault(wrap, files).importKey(eoaA, keyA) }
@@ -204,8 +205,9 @@ class NativeWalletVaultTest {
         files.crashAfterWrite = null
 
         val restarted = vault(wrap, files)
-        assertTrue(restarted.state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.REC))
+        // 25.52Y.125: a read keeps the record and the intent, and judges the import unknown.
+        assertTrue(restarted.state() is State.Locked)
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
         assertNull(restarted.unlock())
     }
 
@@ -218,9 +220,10 @@ class NativeWalletVaultTest {
         files.crashAfterWrite = null
 
         val restarted = vault(wrap, files)
-        assertTrue(restarted.state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.REC))
-        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        // 25.52Y.125: a read is unknown and removes nothing; the next write rolls the import back.
+        assertTrue(restarted.state() is State.Locked)
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
+        assertEquals(Import.OK, restarted.importKey(eoaA, keyA))
     }
 
     /** A crash after the commit record leaves a usable wallet; the intent is removed on the next start. */
@@ -234,6 +237,9 @@ class NativeWalletVaultTest {
         val restarted = vault(wrap, files)
         assertEquals(eoaA, (restarted.state() as State.Ready).eoa)
         assertArrayEquals(keyA, restarted.unlock())
+        // 25.52Y.125: the leftover intent stays after a read and is removed by the next write.
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+        assertEquals(Import.ALREADY_PRESENT, restarted.importKey(eoaA, keyA))
         assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
     }
 
@@ -319,9 +325,9 @@ class NativeWalletVaultTest {
 
         files.silentDeleteFailure = null
         val restarted = vault(wrap, files)
-        assertTrue("the next start finishes the rollback", restarted.state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.REC))
-        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        // 25.52Y.125: a read stays unknown; the next write finishes the rollback, then writes.
+        assertTrue("a read still reports unknown", restarted.state() is State.Locked)
+        assertEquals(Import.OK, restarted.importKey(eoaA, keyA))
     }
 
     /** A manifest removal that throws keeps the intent the same way: Locked, and nothing is confirmed as removed. */

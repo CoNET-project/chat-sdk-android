@@ -1,0 +1,211 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E6-add.json",
+  "scope": "sdk-preread-restricted-return-59e-synthetic",
+  "status": "pending_review",
+  "text_basis": "spec-59e-errata-v3.3.1-E6.md (决定)",
+  "note": "Synthetic data only (E6-1 第 5 项). Positive and negative cases; not pinned; not in spec.md.",
+  "cases": [
+    {
+      "id": "PE-01",
+      "kind": "positive",
+      "title": "PWA 确认无有效助记词 + 原生 valid + 受信主框架 → 回传 phrase，PWA 派生 EOA 与原生一致后接回",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "valid",
+        "native_eoa": "0xaaaa000000000000000000000000000000000001"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "origin": "top_frame",
+        "seq": 1,
+        "reqId": 21
+      },
+      "expect": {
+        "ok": true,
+        "result": {
+          "state": "valid",
+          "eoa": "0xaaaa000000000000000000000000000000000001",
+          "phrase": "<synthetic>"
+        },
+        "pwa_derived_eoa_equals_native": true,
+        "pwa_rebinds_existing_wallet": true,
+        "log_contains_phrase": false
+      }
+    },
+    {
+      "id": "NE-01",
+      "kind": "negative",
+      "title": "原生 unknown → 不回传助记词",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "unknown"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "origin": "top_frame",
+        "seq": 2,
+        "reqId": 22
+      },
+      "expect": {
+        "ok": true,
+        "result": {
+          "state": "unknown"
+        },
+        "has_phrase_field": false
+      }
+    },
+    {
+      "id": "NE-02",
+      "kind": "negative",
+      "title": "原生 unreadable → 不回传助记词",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "unreadable"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "origin": "top_frame",
+        "seq": 3,
+        "reqId": 23
+      },
+      "expect": {
+        "ok": true,
+        "result": {
+          "state": "unknown"
+        },
+        "has_phrase_field": false
+      }
+    },
+    {
+      "id": "NE-03",
+      "kind": "negative",
+      "title": "PWA 本地读取结果 unknown → PWA 不得发起预读",
+      "pre": {
+        "pwa_local_mnemonic": "unknown",
+        "native_state": "valid"
+      },
+      "op": {
+        "command": "none_issued_by_pwa"
+      },
+      "expect": {
+        "nativeMnemonicPreread_sent": false,
+        "native_reply": null,
+        "has_phrase_field": false
+      }
+    },
+    {
+      "id": "NE-04",
+      "kind": "negative",
+      "title": "请求来自子框架 → untrusted_source，不含 phrase",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "valid"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": false,
+        "origin": "child_frame",
+        "seq": 4,
+        "reqId": 24
+      },
+      "expect": {
+        "ok": false,
+        "error": "untrusted_source",
+        "has_phrase_field": false,
+        "read_performed": false
+      }
+    },
+    {
+      "id": "NE-05",
+      "kind": "negative",
+      "title": "请求来自非受信 origin → untrusted_source，不含 phrase",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "valid"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": false,
+        "origin": "untrusted_origin",
+        "seq": 5,
+        "reqId": 25
+      },
+      "expect": {
+        "ok": false,
+        "error": "untrusted_source",
+        "has_phrase_field": false,
+        "read_performed": false
+      }
+    },
+    {
+      "id": "NE-06",
+      "kind": "negative",
+      "title": "请求含 phrase 字段（E1）→ key_over_bridge_refused，不读取预读结果",
+      "pre": {
+        "pwa_local_mnemonic": "confirmed_empty",
+        "native_state": "valid"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "origin": "top_frame",
+        "seq": 6,
+        "reqId": 26,
+        "extra_field": "phrase"
+      },
+      "expect": {
+        "ok": false,
+        "error": "key_over_bridge_refused",
+        "has_phrase_field": false,
+        "read_performed": false
+      }
+    },
+    {
+      "id": "NE-07",
+      "kind": "negative",
+      "title": "日志断言：任何路径（含 PE-01）的日志不含助记词明文，只含状态字段",
+      "pre": {
+        "runs": [
+          "PE-01",
+          "NE-01",
+          "NE-02",
+          "NE-04",
+          "NE-05"
+        ]
+      },
+      "op": {
+        "command": "scan_logs_and_traces"
+      },
+      "expect": {
+        "mnemonic_substring_found": false,
+        "logs_contain_state_only": true
+      }
+    },
+    {
+      "id": "NE-08",
+      "kind": "negative",
+      "title": "遥测与崩溃报告断言：同 NE-07；不上传",
+      "pre": {
+        "runs": [
+          "PE-01",
+          "NE-01",
+          "NE-02",
+          "NE-04",
+          "NE-05"
+        ]
+      },
+      "op": {
+        "command": "scan_telemetry_and_crash_reports"
+      },
+      "expect": {
+        "mnemonic_substring_found": false,
+        "uploaded": false
+      }
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

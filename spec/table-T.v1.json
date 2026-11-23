@@ -1,25 +1,25 @@
 {
   "file": "table-T.v1.json",
-  "spec": "spec §25.52AU.4、§25.52AV.2、§25.52BW.2（r3dy）",
-  "purpose": "分派表审计的参照表 T（桥接命令总表），66 名（r3il：mailboxProbeSign 加入 T1，§25.52GM；r3ik 为 65 名）。规范文件：iOS 与 Android 的 QA 产物引用本文件，不另行维护。",
+  "spec": "spec §25.52AU.4、§25.52AV.2、§25.52BW.2",
+  "purpose": "分派表审计的参照表 T（桥接命令总表），66 名（：mailboxProbeSign 加入 T1，§25.52GM； 为 65 名）。规范文件：iOS 与 Android 的 QA 产物引用本文件，不另行维护。",
   "generator": "gen-table-T.mjs",
   "derivation": {
     "T0": "无密钥向量 no-key-reject-vectors.v1.json 的 walletCommands、chatCommands、retiredCommands、allowedUnderNoKey、lifecycleExcluded、specialStatus 的命令名，mapping 的 bridgeName，加 shellRecordRead、shellRecordWrite（§25.52）",
     "T1": "§25.52AV.2 的 7 名加 chatRouteRegister（§25.52CK.2）及 voiceEphemeralRegister（§25.52GK）、voiceEphemeralSeal（§25.52GL）、mailboxProbeSign（§25.52GM），共 11 名",
     "excluded": {
       "pgpSign": "§25.52BP.1：已删除，不在 T 中",
-      "pgpDecrypt": "§25.52CK.1：已删除（iOS 与 Android 均无分派，R739）",
+      "pgpDecrypt": "§25.52CK.1：已删除（iOS 与 Android 均无分派）",
       "identity.provision": "§25.52BW.3：规格名，不是桥接名；桥接名为 provisionIdentity",
-      "signMessage": "§25.52CN.5（r3en）：W5 signMessage 为钱包层函数，不是桥接命令，桥接层不暴露（§25.52AQ.4）",
-      "deriveLocalKeys": "§25.52DP.1（r3fp）：W2 为钱包层函数，不是桥接命令（§25.37.4 补充 r3al）",
-      "protocolKeys": "§25.52DP.1（r3fp）：W3 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充 r3al）",
-      "fragmentKeys": "§25.52DP.1（r3fp）：W4 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充 r3al）"
+      "signMessage": "§25.52CN.5：W5 signMessage 为钱包层函数，不是桥接命令，桥接层不暴露（§25.52AQ.4）",
+      "deriveLocalKeys": "§25.52DP.1：W2 为钱包层函数，不是桥接命令（§25.37.4 补充）",
+      "protocolKeys": "§25.52DP.1：W3 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充）",
+      "fragmentKeys": "§25.52DP.1：W4 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充）"
     }
   },
   "counts": {
-    "T0": 55,
+    "T0": 57,
     "T1": 13,
-    "total": 68
+    "total": 70
   },
   "names": [
     "accountCleanupOld",
@@ -52,7 +52,7 @@
     "mailboxCommand",
     "mailboxProbeSign",
     "nativeAccountCreateOpen",
-    "nativeImportOpen",
+    "nativeMnemonicPreread",
     "nativeRecoveryOpen",
     "nodesResponse",
     "ownMailboxCommand",
@@ -66,6 +66,8 @@
     "pgpRestoreEvaluate",
     "pgpUpgradeRetry",
     "provisionIdentity",
+    "pwaEmptySignal",
+    "pwaWalletSync",
     "queryNativeWake",
     "queryPresence",
     "resume",
@@ -202,13 +204,13 @@
       "mapping.bridgeName"
     ],
     "mailboxProbeSign": [
-      "spec §25.52GM（r3il）T1"
+      "spec §25.52GMT1"
     ],
     "nativeAccountCreateOpen": [
       "allowedUnderNoKey",
       "mapping.bridgeName"
     ],
-    "nativeImportOpen": [
+    "nativeMnemonicPreread": [
       "allowedUnderNoKey",
       "mapping.bridgeName"
     ],
@@ -261,6 +263,12 @@
       "chatCommands",
       "mapping.bridgeName"
     ],
+    "pwaEmptySignal": [
+      "mapping.bridgeName"
+    ],
+    "pwaWalletSync": [
+      "mapping.bridgeName"
+    ],
     "queryNativeWake": [
       "chatCommands",
       "mapping.bridgeName"
@@ -297,10 +305,10 @@
       "§25.52"
     ],
     "voiceEphemeralRegister": [
-      "spec §25.52GK（r3ij）T1"
+      "spec §25.52GKT1"
     ],
     "voiceEphemeralSeal": [
-      "spec §25.52GL（r3ik）T1"
+      "spec §25.52GLT1"
     ],
     "voiceFrame": [
       "chatCommands",
@@ -359,13 +367,13 @@
   "selfCheck": {
     "result": "pass",
     "checks": [
-      "T0=55",
-      "T1=12",
-      "total=67",
+      "T0=57",
+      "T1=13",
+      "total=70",
       "voiceEphemeralRegister 在内",
       "voiceEphemeralSeal 在内",
       "mailboxProbeSign 在内",
-      "pgpUpgradeRetry 在内（r3rz，§25.52Y.63 第 2 项）",
+      "pgpUpgradeRetry 在内（§25.52Y.63 第 2 项）",
       "shellRecordRead/Write 在内",
       "provisionIdentity 在内",
       "chatRouteRegister 在内",

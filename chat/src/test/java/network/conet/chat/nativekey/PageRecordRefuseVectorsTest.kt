@@ -10,7 +10,7 @@ import java.security.MessageDigest
 
 /**
  * T-263, 25.52AQ.3 (r3co), 25.52AS.4 (r3cq), 25.52BG.1 (r3de): the page-record refusal vectors PR-02, PR-02b, PR-03 and PR-04. The vector file is a
- * byte copy of the interface file (`protocol/page-record-refuse-vectors.v1.json`, sha256 44b7f0dd…, rebuilt in r3de with leaf-path names). It is not
+ * byte copy of the interface file (`protocol/page-record-refuse-vectors.v1.json`, sha256 49e1133c…, rebuilt in r3de with leaf-path names). It is not
  * edited here. The cases run through the shellRecordWrite bridge: the PGP path and key-shape refusals come before the whitelist, the migrating check
  * comes after both, and nothing is stored.
  */
@@ -34,7 +34,7 @@ class PageRecordRefuseVectorsTest {
     @Test
     fun theVectorFileIsTheInterfaceCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("44b7f0dd0a9cbfa33b7640fc0a1d2bb8071768fb66fdf8bef59a6c9ee03e90bf", sha)
+        assertEquals("49e1133c052952157330af652a8abfb3922d3bbddd13f3ad73bd32e823629d3d", sha)
     }
 
     @Test

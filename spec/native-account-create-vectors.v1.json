@@ -1,6 +1,6 @@
 {
   "meta": {
-    "spec": "v1.1-r3ap §25.50（测试 T-249、T-250）；补充 §25.46.9 所指的 native-account-create-vectors",
+    "spec": "v1.1- §25.50（测试 T-249、T-250）；补充 §25.46.9 所指的 native-account-create-vectors",
     "generator": "gen-native-account-create-vectors.mjs",
     "synthetic": true,
     "containsCredentials": false,
@@ -24,7 +24,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-01"
+            "reqId": "NC-01",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -43,8 +44,12 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-01",
-            "code": "ok",
-            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+              "cleanupPending": false
+            }
           }
         ],
         "dropped": [],
@@ -63,7 +68,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-02"
+            "reqId": "NC-02",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -99,7 +105,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-03"
+            "reqId": "NC-03",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -134,7 +141,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-04"
+            "reqId": "NC-04",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -170,7 +178,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-05"
+            "reqId": "NC-05",
+            "account": "alice"
           },
           {
             "op": "close"
@@ -182,7 +191,10 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-05",
-            "code": "cancelled"
+            "ok": false,
+            "result": {
+              "code": "cancelled"
+            }
           }
         ],
         "dropped": [],
@@ -201,7 +213,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-06"
+            "reqId": "NC-06",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -222,7 +235,10 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-06",
-            "code": "write_failed"
+            "ok": false,
+            "result": {
+              "code": "write_failed"
+            }
           }
         ],
         "dropped": [],
@@ -241,7 +257,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-07"
+            "reqId": "NC-07",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -259,7 +276,10 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-07",
-            "code": "readback_failed"
+            "ok": false,
+            "result": {
+              "code": "readback_failed"
+            }
           }
         ],
         "dropped": [],
@@ -278,7 +298,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-08"
+            "reqId": "NC-08",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -296,7 +317,10 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-08",
-            "code": "already_exists"
+            "ok": false,
+            "result": {
+              "code": "already_exists"
+            }
           }
         ],
         "dropped": [],
@@ -315,7 +339,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-09"
+            "reqId": "NC-09",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -337,8 +362,12 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-09",
-            "code": "ok",
-            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+              "cleanupPending": false
+            }
           }
         ],
         "dropped": [],
@@ -357,7 +386,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-10"
+            "reqId": "NC-10",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -393,7 +423,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-11"
+            "reqId": "NC-11",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -428,7 +459,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-12"
+            "reqId": "NC-12",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -468,7 +500,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-13"
+            "reqId": "NC-13",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -507,7 +540,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-14"
+            "reqId": "NC-14",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -549,7 +583,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-15"
+            "reqId": "NC-15",
+            "account": "alice"
           },
           {
             "op": "native",
@@ -577,13 +612,20 @@
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-15",
-            "code": "write_failed"
+            "ok": false,
+            "result": {
+              "code": "write_failed"
+            }
           },
           {
             "type": "nativeAccountCreateResult",
             "reqId": "NC-15",
-            "code": "ok",
-            "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+            "ok": true,
+            "result": {
+              "code": "ok",
+              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+              "cleanupPending": false
+            }
           }
         ],
         "dropped": [],
@@ -602,7 +644,8 @@
         "steps": [
           {
             "op": "open",
-            "reqId": "NC-16"
+            "reqId": "NC-16",
+            "account": "alice"
           },
           {
             "op": "native",

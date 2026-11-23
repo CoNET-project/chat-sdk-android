@@ -20,7 +20,12 @@ internal object NativeMnemonicTriState {
             // G2: an unlocked or locked record with its account (25.52Y.89 第 2 項).
             "unlocked", "locked" -> HAS
             // G1 with a readable record that is not initialised: the record exists.
-            "not_ready" -> if (reason == NoKeyGate.NOT_READY_G1_UNINITIALIZED) HAS else UNKNOWN
+            //  (c, Q3, E9): key_only is a native record that confirms no valid phrase (noValidPhraseConfirmed: every phrase position read).
+            "not_ready" -> when (reason) {
+                NoKeyGate.NOT_READY_G1_UNINITIALIZED -> HAS
+                NoKeyGate.NOT_READY_KEY_ONLY -> CONFIRMED_NONE
+                else -> UNKNOWN
+            }
             // G0 with the reads complete: confirmed none whatever kPresent is (25.52Y.107 第 3 条, 25.52Y.108 第 1 条). kPresent missing or not a boolean
             // is a read error (Y.90): unknown.
             "no_key" -> if (kPresent == null) UNKNOWN else CONFIRMED_NONE

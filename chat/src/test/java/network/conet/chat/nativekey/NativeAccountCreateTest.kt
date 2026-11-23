@@ -225,7 +225,7 @@ class NativeAccountCreateTest {
         assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
         assertNull(r.eoa)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     @Test
@@ -233,9 +233,10 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap().apply { failSeal = true }
         val vault = NativeWalletVault(wrap, files)
-        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
+        // 25.52Y.136 第 7 項: an unconfirmed wrap is not_ready, not a write failure.
+        assertEquals(NativeAccountCreate.Code.NOT_READY, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     @Test
@@ -246,7 +247,7 @@ class NativeAccountCreateTest {
         val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
         assertEquals(NativeAccountCreate.Code.READBACK_FAILED, r.code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     // ---- T-240: result and boundaries ---------------------------------------------------------
@@ -257,16 +258,16 @@ class NativeAccountCreateTest {
         assertTrue(NativeAccountCreateHost.open("A-1"))
         NativeAccountCreateHost.finish(NativeAccountCreate.Code.WRITE_FAILED, null)
         assertEquals(1, payloads.size)
-        assertEquals(setOf("type", "reqId", "code"), keysOf(payloads[0]))
+        assertEquals(setOf("type", "reqId", "ok", "result"), keysOf(payloads[0]))
         assertEquals("nativeAccountCreateResult", payloads[0].getString("type"))
         assertEquals("A-1", payloads[0].get("reqId"))
-        assertEquals("write_failed", payloads[0].getString("code"))
+        assertEquals("write_failed", payloads[0].getJSONObject("result").getString("code"))
 
         // The page is still open after a failure, so a retry can succeed.
         NativeAccountCreateHost.finish(NativeAccountCreate.Code.OK, eoaOfAbandon)
         assertEquals(2, payloads.size)
-        assertEquals(setOf("type", "reqId", "code", "eoa"), keysOf(payloads[1]))
-        assertEquals(eoaOfAbandon, payloads[1].getString("eoa"))
+        assertEquals(setOf("type", "reqId", "ok", "result"), keysOf(payloads[1]))
+        assertEquals(eoaOfAbandon, payloads[1].getJSONObject("result").getString("eoa"))
 
         // ok ends the page: nothing more is sent when it closes.
         NativeAccountCreateHost.pageClosed()
@@ -280,9 +281,9 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.pageClosed()
         NativeAccountCreateHost.pageClosed()
         assertEquals(1, payloads.size)
-        assertEquals("cancelled", payloads[0].getString("code"))
+        assertEquals("cancelled", payloads[0].getJSONObject("result").getString("code"))
         assertEquals("A-2", payloads[0].get("reqId"))
-        assertFalse(payloads[0].has("eoa"))
+        assertFalse(payloads[0].getJSONObject("result").has("eoa"))
     }
 
     @Test
@@ -292,7 +293,7 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.finish(NativeAccountCreate.Code.READBACK_FAILED, null)
         NativeAccountCreateHost.pageClosed()
         assertEquals(1, payloads.size)
-        assertEquals("readback_failed", payloads[0].getString("code"))
+        assertEquals("readback_failed", payloads[0].getJSONObject("result").getString("code"))
     }
 
     @Test
@@ -300,13 +301,17 @@ class NativeAccountCreateTest {
         NativeAccountCreateHost.launcher = { true }
         NativeAccountCreateHost.open("A-4")
         NativeAccountCreateHost.finish(NativeAccountCreate.Code.OK, eoaOfAbandon)
-        val allowedKeys = setOf("type", "reqId", "code", "eoa")
+        // 25.52Y.137 第 6 項: the result object carries code, eoa and cleanupPending only.
+        val allowedKeys = setOf("type", "reqId", "ok", "result")
+        val allowedResultKeys = setOf("code", "eoa", "cleanupPending")
         val forbidden = listOf("mnemonic", "phrase", "privateKey", "key", "seed", "recoveryCode", "pin", "password", "hash", "img", "stored")
         for (p in payloads) {
             assertTrue(keysOf(p).all { it in allowedKeys })
-            assertTrue(keysOf(p).none { k -> forbidden.any { k.equals(it, ignoreCase = true) } })
-            for (k in keysOf(p)) {
-                val v = p.get(k).toString()
+            val r = p.getJSONObject("result")
+            assertTrue(keysOf(r).all { it in allowedResultKeys })
+            assertTrue((keysOf(p) + keysOf(r)).none { k -> forbidden.any { k.equals(it, ignoreCase = true) } })
+            for (k in keysOf(r)) {
+                val v = r.get(k).toString()
                 assertFalse("value of $k looks like a phrase", v.contains(' '))
                 assertFalse("value of $k looks like a 32-byte key", Regex("0x[0-9a-fA-F]{64}").containsMatchIn(v))
             }

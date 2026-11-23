@@ -1,26 +1,30 @@
 {
   "file": "no-key-reject-vectors.v1.json",
-  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "spec": "spec §25.26（第二十七批，裁定）",
   "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
   "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",
-  "ethers": "6.17.0",
+  "ethers": "6.16.0",
   "derivationPath": "m/44'/60'/0'/0/0",
   "passphrase": "",
   "testEoa12": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
-  "revision": "spec r3x（允许项新增 nativeAccountCreateOpen，AL-7，§25.46.10）；spec r3f（第二十八批：三端分派名映射、清单补遗 8 条）；r3e 的哈希作废",
+  "revision": "spec（允许项新增 nativeAccountCreateOpen，AL-7，§25.46.10）；spec（第二十八批：三端分派名映射、清单补遗 8 条）； 的哈希作废",
   "state": "no_key（原生无钱包记录）",
-  "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）；不在 T 中的桥接名（NOT_BRIDGE_NAMES）先于门控返回 unknown_command（r3fz，DX.3）",
+  "defaultDeny": "未列入允许清单的名称一律返回 no_key（含未知名称与 history* 前缀）；不在 T 中的桥接名（NOT_BRIDGE_NAMES）先于门控返回 unknown_command（DX.3）",
   "allowedUnderNoKey": [
     "destroy",
     "hello",
     "nativeAccountCreateOpen",
-    "nativeImportOpen",
+    "nativeMnemonicPreread",
     "nativeRecoveryOpen",
     "passcodeStatus",
     "pause",
     "resume",
     "walletStatus"
+  ],
+  "lifecycleRoutes": [
+    "pwaEmptySignal",
+    "pwaWalletSync"
   ],
   "lifecycleExcluded": [
     "hello",
@@ -656,7 +660,7 @@
         "hasKey": false,
         "walletState": "absent"
       },
-      "note": "状态查询，允许（r3me：键集合含 walletState，GX.2、GX.5）"
+      "note": "状态查询，允许（：键集合含 walletState，GX.2、GX.5）"
     }
   ],
   "secretPayloadControls": [
@@ -1346,7 +1350,7 @@
       "kind": null,
       "ios": "walletTransferOnce",
       "android": "pre-gate",
-      "pwa": "已删除（PWA 回执 17345c6f）",
+      "pwa": "已删除",
       "expect": "not_supported"
     },
     {
@@ -1357,7 +1361,7 @@
       "kind": null,
       "ios": "walletTransferStatus",
       "android": "pre-gate",
-      "pwa": "已删除（PWA 回执 17345c6f）",
+      "pwa": "已删除",
       "expect": "not_supported"
     },
     {
@@ -1368,7 +1372,7 @@
       "kind": null,
       "ios": "walletTransferSwitched",
       "android": "pre-gate",
-      "pwa": "已删除（PWA 回执 17345c6f）",
+      "pwa": "已删除",
       "expect": "not_supported"
     },
     {
@@ -1438,15 +1442,37 @@
       "expect": "allowed（语义不变，不在 T-155 预期码内）"
     },
     {
-      "id": "AL-5",
-      "spec": "nativeImportOpen",
-      "bridgeName": "nativeImportOpen",
+      "id": "AL-8",
+      "spec": "nativeMnemonicPreread",
+      "bridgeName": "nativeMnemonicPreread",
       "mode": null,
       "kind": null,
-      "ios": "nativeImportOpen",
-      "android": "nativeImportOpen",
-      "pwa": "nativeKeyState.ts（PWA 回执 17345c6f）",
-      "expect": "allowed（ack ok，25.25.1）"
+      "ios": null,
+      "android": null,
+      "pwa": null,
+      "expect": "allowed（42(2)、46(4)，无钥可查询预读结果）"
+    },
+    {
+      "id": "AL-9",
+      "spec": "pwaWalletSync",
+      "bridgeName": "pwaWalletSync",
+      "mode": null,
+      "kind": null,
+      "ios": null,
+      "android": null,
+      "pwa": null,
+      "expect": "lifecycle route（48，trustedOrigin 加当前序号；任何状态（G0/G1/G2）不经 no-key 门控；不在 allowedUnderNoKey）"
+    },
+    {
+      "id": "AL-10",
+      "spec": "pwaEmptySignal",
+      "bridgeName": "pwaEmptySignal",
+      "mode": null,
+      "kind": null,
+      "ios": null,
+      "android": null,
+      "pwa": null,
+      "expect": "lifecycle route（53，trustedOrigin 加当前序号；任何状态不经门控；不在 allowedUnderNoKey）"
     },
     {
       "id": "AL-6",
@@ -1496,7 +1522,7 @@
     {
       "name": "saveRecoveryQrToPhotos",
       "class": "恢复二维码（是否携带钱包材料待定）",
-      "recommendation": "待 PM",
+      "recommendation": "待 ",
       "listed": false,
       "pendingPm": true
     },
@@ -1510,7 +1536,7 @@
     {
       "name": "scanRecoveryQr",
       "class": "恢复二维码（是否携带钱包材料待定）",
-      "recommendation": "待 PM",
+      "recommendation": "待 ",
       "listed": false,
       "pendingPm": true
     },

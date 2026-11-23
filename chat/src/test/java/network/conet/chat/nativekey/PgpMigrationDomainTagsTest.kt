@@ -8,8 +8,8 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * 25.27.9 (r3ed, PM R727): the SDK-internal sign labels of the migration flow (PRECHECK, CHALLENGE) are byte-identical to
- * `spec/domain-tags-vectors.v1.json` (r3el: sha256 01a77f65…). The tags are pairwise distinct (DT-T1), no tag is a byte prefix of another
+ * 25.27.9 (r3ed): the SDK-internal sign labels of the migration flow (PRECHECK, CHALLENGE) are byte-identical to
+ * `spec/domain-tags-vectors.v1.json` (r3el: sha256 11310f71…). The tags are pairwise distinct (DT-T1), no tag is a byte prefix of another
  * (DT-T2), and the internal sign tags are not producible from a purposeId (DT-T3, the middle part holds a dot). The vector file is a byte
  * copy and is not edited. DT-T3 rests on the purposeId syntax of §25.27.3, which this test does not check.
  */
@@ -27,7 +27,7 @@ class PgpMigrationDomainTagsTest {
     @Test
     fun vectorFileIsTheRegisteredCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("01a77f6514225aa4045bbefb08664ed325ab142e6faad14fb071c0511d9ff651", sha)
+        assertEquals("11310f711d448ea6dc5716ee91b10f2b9404e322d7380ca275a56dc4bfae1aff", sha)
     }
 
     @Test

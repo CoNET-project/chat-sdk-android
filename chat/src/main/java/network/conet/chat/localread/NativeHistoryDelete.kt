@@ -35,7 +35,7 @@ object NativeHistoryDelete {
         if (type == MESSAGE && (messageId == null || !isMessageId(messageId))) names += "messageId"
         if (names.isNotEmpty()) return shellAck(reqId, "bad_request", listOf("names" to JSONArray(names)))
 
-        // R565: a closed store (logged out: the handle is gone) is not ready. A locked store (the key is gone, the handle is still open) is busy.
+        // a closed store (logged out: the handle is gone) is not ready. A locked store (the key is gone, the handle is still open) is busy.
         val history = store ?: return notReady(reqId)
         if (!history.isOpen) return notReady(reqId)
         if (!history.isUnlocked) return shellAck(reqId, "busy", emptyList())

@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The creation transaction (§25.52Y.1 第 6 项, PM ruling): W and K are written together, and a failure leaves no half account. */
+/** The creation transaction (§25.52Y.1 第 6 项): W and K are written together, and a failure leaves no half account. */
 class CreateAccountKTest {
     private val zero = ByteArray(16)
 

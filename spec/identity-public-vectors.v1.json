@@ -1,8 +1,8 @@
 {
   "file": "identity-public-vectors.v1.json",
-  "purpose": "identityPublic：G2 专用只读命令，只返回公开材料（spec r3ae §25.48，项目方定案 2026-11-13）。合成数据，不含任何凭据或密钥。",
-  "spec": "v1.1-r3ae §25.48（测试 T-246 至 T-248）",
-  "revision": "spec r3ae（新增，项目方定案 2026-11-13）",
+  "purpose": "identityPublic：G2 专用只读命令，只返回公开材料（spec §25.48，定案 2026-11-13）。合成数据，不含任何凭据或密钥。",
+  "spec": "v1.1- §25.48（测试 T-246 至 T-248）",
+  "revision": "spec（新增，定案 2026-11-13）",
   "generator": "gen-identity-public-vectors.mjs",
   "names": {
     "canonical": "identity.public",
@@ -601,7 +601,7 @@
   },
   "notCovered": [
     "旧布局记录的迁移（由已有的加载路径完成，不由 identityPublic 完成）：IP-14 只固定 pgpReady false 的结果。",
-    "本向量不并入 no-key-reject-vectors.v1.json 与 gate-state-vectors.v1.json 的清单（二者固定为 r3ab 的 59 条与 102 项）。G0、G1 的行为由本向量与 §25.26.4 默认拒绝规则覆盖。两份清单在下次修订时并入（§25.48.7）。",
+    "本向量不并入 no-key-reject-vectors.v1.json 与 gate-state-vectors.v1.json 的清单（二者固定为的 59 条与 102 项）。G0、G1 的行为由本向量与 §25.26.4 默认拒绝规则覆盖。两份清单在下次修订时并入（§25.48.7）。",
     "原生侧的公开材料来源（PGP 记录的读取）：由 pgpRestore 与 pgpIdentityCreate 的既有用例覆盖。",
     "界面文案与 PWA 的启动流程：由 PWA Chat SDK 的启动用例覆盖。"
   ]

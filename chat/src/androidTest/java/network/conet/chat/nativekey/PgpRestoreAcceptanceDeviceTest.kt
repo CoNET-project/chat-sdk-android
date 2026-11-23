@@ -95,9 +95,12 @@ class PgpRestoreAcceptanceDeviceTest {
         val wallet = NativeWalletVault(wrap, files)
 
         // 1. Native import from the mnemonic; the derived address must be the account's address.
-        val imported = NativeImport.submitMnemonic(mnemonic, eoa, wallet)
-        assertEquals("import", NativeImport.Code.OK, imported.code)
-        assertEquals(account, imported.eoa!!.lowercase())
+        // The page entry is removed (r2.3 41); the internal import is the same vault write the recovery path uses.
+        val key = checkNotNull(network.conet.chat.nativekey.MnemonicDerivation.deriveKey(mnemonic))
+        val derivedEoa = checkNotNull(network.conet.chat.nativekey.WalletAddress.fromPrivateKey(key))
+        val phrase = checkNotNull(network.conet.chat.nativekey.MnemonicDerivation.canonicalPhrase(mnemonic))
+        assertEquals("import", NativeWalletVault.Import.OK, wallet.importMnemonicKey(derivedEoa, key, phrase))
+        assertEquals(account, derivedEoa.lowercase())
 
         // 2. Restore from the on-chain backup (the fixed chain of the vector: P-1's identity and backup).
         val chain = StaticChain(

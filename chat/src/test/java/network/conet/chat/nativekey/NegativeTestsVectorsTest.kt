@@ -27,12 +27,12 @@ class NegativeTestsVectorsTest {
     private val bytes = File("../spec/negative-tests-v2.json").readBytes()
     private val v = JSONObject(String(bytes, Charsets.UTF_8))
 
-    /** The cases that are not run here, with the reason. Each is a pending ruling, a vector gap, or a surface run elsewhere. */
+    /** The cases that are not run here, with the reason. Each is a pending, a vector gap, or a surface run elsewhere. */
     private val pending: Map<String, String> = buildMap {
         put("T-control-sign", "only the domain tag check runs (25.52CG.2); the signature output is not applicable (25.52BW.1, CA.2, CD.1)")
         put("T-130-06", "status pending-mapping (25.52BZ.5): family W5 has no bridge name (25.52AR.3), so there is no command to run")
         for (id in listOf("T-130-09", "T-130-10", "T-130-11", "T-130-12")) {
-            put(id, "status pending-mapping (25.52BZ.5): family N1-N4 has no command mapping in the vector; ruling pending")
+            put(id, "status pending-mapping (25.52BZ.5): family N1-N4 has no command mapping in the vector; pending")
         }
         put("T-131", "native-log surface: run by scripts/log-scan.py on the device logcat, not in the JVM tests (see the receipt)")
         put("T-132", "WebView console and storage surface: run by scripts/log-scan.py on the device capture, not in the JVM tests (see the receipt)")
@@ -184,7 +184,7 @@ class NegativeTestsVectorsTest {
     }
 
     /**
-     * PM R2099, R2101, interface r3pk (spec 25.52GQ.3b): the passcode-group cases and NR-15 that do not apply on Android (no passcode layer). They are
+     * interface r3pk (spec 25.52GQ.3b): the passcode-group cases and NR-15 that do not apply on Android (no passcode layer). They are
      * excluded explicitly (not counted as failures, not silently skipped), and replaced by T-133-01 to T-133-15, T-133-19 and T-133-C4. They are listed here
      * with their replacement, not silently skipped. Each replacement must exist in the storage-lock group (storageLocked). The mapping of
      * T-130-01 to T-130-13 onto T-133-01 to T-133-12 is the interface seat's range statement, applied in order; the interface seat to confirm.

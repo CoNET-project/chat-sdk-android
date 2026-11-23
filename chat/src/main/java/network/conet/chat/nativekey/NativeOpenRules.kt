@@ -22,6 +22,22 @@ internal object NativeOpenRules {
     const val NOT_SUPPORTED = "not_supported"
     const val NOT_AVAILABLE = "not_available"
 
+    /** 25.52Y.140: an open command whose state cannot be read is `not_ready` (ack only; no page, no event). */
+    const val NOT_READY = "not_ready"
+
+    /**
+     * The result event after an ack (25.52Y.138 第 1 項, 25.52Y.140): `nativeAccountCreateResult` is nested, `{type, reqId, ok: false, result: {code}}`;
+     * every other result type is flat, `{type, reqId, code}`. Used by the module and by the vector runner, so both emit one shape.
+     */
+    fun resultPayload(type: String, reqId: Any?, code: String): JSONObject {
+        val ev = JSONObject().put("type", type).put("reqId", reqId ?: JSONObject.NULL)
+        return if (type == "nativeAccountCreateResult") {
+            ev.put("ok", false).put("result", JSONObject().put("code", code))
+        } else {
+            ev.put("code", code)
+        }
+    }
+
     /** Credential fields (vector `credentialFields`). A payload with one is refused before any other check. */
     val CREDENTIAL_FIELDS: Set<String> = setOf(
         "privateKeyHex", "privateKeyArmored", "pgpPrivateKeyArmored", "pgpPassphrase", "walletPrivateKey", "mnemonic",
@@ -63,17 +79,26 @@ internal object NativeOpenRules {
     /** The first credential field name, for the log line only. */
     fun firstCredentialField(fields: Collection<String>): String? = fields.firstOrNull { it in CREDENTIAL_FIELDS }
 
-    fun importOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply =
-        decide(fields, reqId, host, gate = null, allowed = ALLOWED_FIELDS)
+    /** `nativeRecoveryOpen` (25.52Y.142 第 3 項). The import page is removed (r2.3 41), so its decision is removed with it. */
+    fun recoveryOpen(fields: Collection<String>, reqId: Any?, host: Host, storageNotReady: Boolean = false): Reply =
+        decide(fields, reqId, host, gate = null, allowed = ALLOWED_FIELDS, storageNotReady = storageNotReady)
 
-    fun recoveryOpen(fields: Collection<String>, reqId: Any?, host: Host): Reply =
-        decide(fields, reqId, host, gate = null, allowed = ALLOWED_FIELDS)
+    /**
+     * Whether the vault cannot answer for an entry command (25.52Y.88 第 3 項, 25.52Y.142 第 3 項): the snapshot is unknown (`null`: not computed yet, or a
+     * write in progress), or the storage locks the vault. A phrase-only record is not a lock: it is decided as has (25.52Y.106 第 1 条), and the recovery
+     * page is the way to restore its key. Reads the snapshot only; never the keystore.
+     */
+    fun storageNotReady(snapshot: NativeWalletVault.State?): Boolean = when (snapshot) {
+        null -> true
+        is NativeWalletVault.State.Locked -> snapshot.reason != NativeWalletVault.PHRASE_ONLY
+        else -> false
+    }
 
     /**
      * `nativeAccountCreateOpen` (§25.46.10, §25.52Z.2). [account] is the value of the `account` field (`null` when absent).
      * Missing or malformed `account` is `bad_request`, checked with the input, before the host is asked.
      *
-     * [binding] is the binding lookup (§25.52Z.3, R1487), run after the gate and the guard and before the page opens.
+     * [binding] is the binding lookup (§25.52Z.3), run after the gate and the guard and before the page opens.
      * Already bound and a failed lookup answer `ok` with `page: "none"` and the result code (no page, no eoa); a confirmed absence opens the page.
      * With no [binding] the lookup is not run (the vectors of the create checks only).
      */
@@ -104,12 +129,15 @@ internal object NativeOpenRules {
         accountRequired: Boolean = false,
         guardDenial: String? = null,
         binding: (() -> BindingCode)? = null,
+        storageNotReady: Boolean = false,
     ): Reply {
         if (fields.any { it in CREDENTIAL_FIELDS }) return Reply(KEY_REFUSED)
         if (fields.any { it !in allowed }) return Reply(BAD_REQUEST)
         if (accountRequired && !isValidAccount(account)) return Reply(BAD_REQUEST)
         val id = reqId ?: return Reply(BAD_REQUEST)
         if (!host.registered()) return Reply(NOT_SUPPORTED)
+        // 25.52Y.88 第 3 項: an entry command over an unknown snapshot or a storage lock is not_ready, once; no page, no event.
+        if (storageNotReady) return Reply(NOT_READY)
         if (gate != null && gate != NoKeyGate.Gate.G0) return Reply(NOT_AVAILABLE)
         // The create guard (AccountCreateGuard): a create that is not allowed never opens the page; the diagnostic code stays in the SDK.
         if (guardDenial != null) return Reply(NOT_AVAILABLE)
@@ -119,7 +147,7 @@ internal object NativeOpenRules {
             NativeAccountCreateHost.Admission.SAME_PAGE -> return Reply(null, page = if (accountRequired) PAGE_OPENED else null)
             NativeAccountCreateHost.Admission.LOOKUP -> Unit
         }
-        // R1487: the binding lookup answers before the page opens. Already bound and a failed lookup never open the page.
+        // the binding lookup answers before the page opens. Already bound and a failed lookup never open the page.
         val code = if (binding == null) {
             BindingCode.CREATE
         } else {
@@ -134,7 +162,7 @@ internal object NativeOpenRules {
     }
 
     /**
-     * The reply once the binding answer is known (R1487, §25.46.2). The answer releases the lookup slot; `already_bound` and `lookup_unavailable`
+     * The reply once the binding answer is known (§25.46.2). The answer releases the lookup slot; `already_bound` and `lookup_unavailable`
      * are final for the `reqId`, and only a confirmed absence opens the page. Also used by the asynchronous answer of a lookup (N-39, N-40).
      */
     fun afterBinding(reqId: Any, host: Host, code: BindingCode, accountRequired: Boolean): Reply {
@@ -162,12 +190,6 @@ internal object NativeOpenRules {
         reply.error?.let { payload.put("error", it) }
         reply.page?.let { payload.put("page", it) }
         return payload
-    }
-
-    /** The shell's page for each command. A page that is not registered is `not_supported`. */
-    val importHost: Host = object : Host {
-        override fun registered(): Boolean = NativeImportHost.launcher != null
-        override fun open(reqId: Any): Boolean = NativeImportHost.open(reqId)
     }
 
     val recoveryHost: Host = object : Host {

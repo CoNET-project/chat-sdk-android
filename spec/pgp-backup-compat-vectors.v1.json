@@ -1,6 +1,6 @@
 {
   "file": "pgp-backup-compat-vectors.v1.json",
-  "purpose": "PWA 现行 PGP 私钥加密备份（aesGcmEncrypt，chat.ts:758–766；恢复见 chat.ts:585–595）的三端兼容向量。派单：2026-11-12 P-IMP-PGP。",
+  "purpose": "PWA 现行 PGP 私钥加密备份（aesGcmEncrypt，chat.ts:758–766；恢复见 chat.ts:585–595）的三端兼容向量。",
   "generator": "gen-pgp-backup-compat-vectors.mjs",
   "pwaCheck": "run-pgp-backup-pwa-check.mjs（只读执行 PWA 源码，不改 PWA）",
   "testKeyNote": "全部为合成数据。EOA 私钥由 BIP-39 公开测试助记词派生，不是真实钱包；PGP 密钥为合成 curve25519，口令为空。禁止用于生产。",
@@ -286,7 +286,7 @@
       "id": "D-2",
       "kind": "base64_whitespace",
       "source": "P-1",
-      "note": "文本中插入换行。PWA 写入端 aesGcmEncrypt（btoa）不产生空白；PWA 读取端 atob 忽略 ASCII 空白。三端统一为严格拒绝（spec r3l §25.30.2）。",
+      "note": "文本中插入换行。PWA 写入端 aesGcmEncrypt（btoa）不产生空白；PWA 读取端 atob 忽略 ASCII 空白。三端统一为严格拒绝（spec §25.30.2）。",
       "backup": {
         "base64": "GR+uIMnC/Fo8cPkDv4tXHOehB75qFtxRKr3z/v6o\ns25QVNHXoLGAI849/SH7IV9WN4uknDk88VQcDWJ+OnHsVEmykUt/jfVuZn1BDkwzhy+SZU1wTxYRtF9lldFPIks13x4Iyn5UjgdSMfl1ZjdaLMQjyMIBZ5qx73bRlrM8K6bhO+dr5wfmr/3WLbeGACXtWFEvYAzBvDg2EZuhVl442VZ+5CY46+z8P8rtd/jAfX3MxXHJopzZr7C1m/bX89aOo9mCl3KyiQZ/XzRuB714Vfx60htkOe26+xZ2EleTiGX+xgerqDcWdg+qT+b8ZYfDKgyB2p9W+Hl9zVh8eHRmaeUWiUpLH7faUkTOfWYh3pwS1IkjacW3Aed7BlkmRzd3DX6uF/km9F/3LcJL+KlnuDvFiighS0F8W7uRfewpYqlk1Pvch8m1m76bMC0D6W9aurG0T2FJd/8gmnkstQUt/+EOTA6SszRV9pYsHScqIgAkgDLsCYKFgIGDZ04T0B5gI9z9+MgNuAsjX44M+CKwxmk0e4cXct3Y3wENH+OIKvA4Y5sOrmvZiehz/a6lANPUhnvFATYe/rzPVZdMppBVMICoo2ffV7Nm8gH01CsWeC01SEMNT5u68nCjYzBFsG8+dg74JkyPPJo8x4jW2Le2EtxN687GHnM04TqQzxBf9VDYjdpDo3IYMUq3X7x0dLLQbm068oyIUXWbwYixlaRa5Dl3UFqyQUSaguugo1ZM8jR/VrXdrkQuVQLNEcr6+L5aMFgdnfQcFBDVg+AQaTQneqmPk87uEmwvOGjULLKJO0KSCSFkf63rAwRQkbfTldK6VeVhu1/xCTinEVToXf4ApGZgIv4IM3PaPyf3ltEEnzOUOgTzIouOShCz30CJa2lyjYD+RirzlP/zkqYgvHk3BxZeZ7QjoF87XZEMo1SPQ3juJRFKQUpusxvqroB9IcvyFTec2rQz/spTFQAUPrb0BNMeM0uOVzTNvLHCboafbiVfa3nvFWmBQ6u3ErnF0tsWjk9r7leu9c2lM4jzY14F0IrBfV8iKDD/gcTJ+aQuv0S680aPdYdM02xa4iL4flJwDOdPN4frKs76AJrbp6lLwO26yCEB15PlUCL7ElEqGiOsb+r9j/iONWdDg0U4ZOA1xv3uzqOyTHyV7rp7uqGGrWzpreGznRVAEoXjXF6jf5ArPrFYVZ5RYeXbelkpi1UNOHctWhOWHGeXN+5bnUIeeigHDm4Ie5MRROuj",
         "binaryBytes": 939,
@@ -300,7 +300,7 @@
         "pwa": "decrypt_failed",
         "pwaCurrent": "ok_lenient",
         "native": "decrypt_failed",
-        "note": "严格口径（spec r3l §25.30.2，PM 裁定）：PWA 读取端改造后须拒绝；pwaCurrent 为 2026-11-13 现行 PWA 实测（atob 宽容解析）"
+        "note": "严格口径（spec §25.30.2，裁定）：PWA 读取端改造后须拒绝；pwaCurrent 为 2026-11-13 现行 PWA 实测（atob 宽容解析）"
       }
     }
   ],
@@ -328,7 +328,183 @@
   },
   "rules": [
     "解出的私钥只用于本地比对，不得交给 WebView，不得写入日志。",
-    "负例必须失败。D-1、D-2 的期望已按 spec r3l §25.30.2（PM 裁定）改为严格拒绝；PWA 现行结果记入 pwaCurrent，改造前的 PWA 检查显示为已记录差异，属预期。",
+    "负例必须失败。D-1、D-2 的期望已按 spec §25.30.2（裁定）改为严格拒绝；PWA 现行结果记入 pwaCurrent，改造前的 PWA 检查显示为已记录差异，属预期。",
     "不得修改向量以迁就实现。"
-  ]
+  ],
+  "pgpRestoreEvaluateReply": {
+    "$comment": "口令协议 v1 §13 附加节（单 RPC 口径，2026-11-20）：pgpRestoreEvaluate 答复增加 legacy 与 chain；字段缺失或取值未知一律视为 unknown（失败即关闭）。由 gen-pgp-evaluate-reply.mjs 生成。附加节，不改动各文件原有 cases。",
+    "reply": {
+      "fields": {
+        "state": "既有字段（ui state，如 first_identity）",
+        "legacy": {
+          "enum": [
+            "ABSENT",
+            "PRESENT",
+            "UNREADABLE"
+          ]
+        },
+        "chain": {
+          "enum": [
+            "unregistered",
+            "registered",
+            "unknown"
+          ]
+        }
+      },
+      "missingOrUnknownMeans": "unknown_fail_closed"
+    },
+    "rules": [
+      "首个身份：仅当 state=first_identity 且 legacy=ABSENT 且 chain=unregistered 同时成立，才开放创建入口。",
+      "其余一律身份待恢复：无创建入口，显示“聊天身份待恢复”（键 chat.identity_pending.*，中英两版）。",
+      "legacy=UNREADABLE 或 PRESENT：这台设备只能恢复或迁移，不能创建。",
+      "chain 口径（2026-11-20，单 RPC）：单 RPC 读到已登记 → registered；读取成功且无登记 → unregistered；读取失败、超时或答复畸形 → unknown（失败即关闭）。",
+      "客户端只使用单 RPC，不要求第二个独立端点、不要求同一区块交叉核对。（取代 §13 第 3 条与冻结件 §十三第 3 条的双端点要求。）",
+      "读取不携带任何秘密；页面不发起此类网络请求。"
+    ],
+    "rpcOutcomes": {
+      "registered": "chain=registered",
+      "unregistered": "chain=unregistered（仅当读取成功且无登记）",
+      "timeout": "chain=unknown",
+      "error": "chain=unknown",
+      "malformed": "chain=unknown"
+    },
+    "cases": [
+      {
+        "id": "RE-01",
+        "title": "首个身份：单 RPC 读取成功且无登记",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "chain": "unregistered",
+          "creationEntry": "open",
+          "display": "first_identity"
+        }
+      },
+      {
+        "id": "RE-02",
+        "title": "单 RPC 读到已登记：registered，不开放创建",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "registered"
+        },
+        "expect": {
+          "chain": "registered",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-03",
+        "title": "RPC 超时：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "timeout"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-04",
+        "title": "RPC 读取失败：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "error"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-05",
+        "title": "RPC 答复畸形（无法解析）：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "malformed"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-06",
+        "title": "legacy=PRESENT 不得创建（即使 RPC 无登记）",
+        "input": {
+          "state": "first_identity",
+          "legacy": "PRESENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-07",
+        "title": "legacy=UNREADABLE 不得创建（即使 RPC 无登记）",
+        "input": {
+          "state": "first_identity",
+          "legacy": "UNREADABLE",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-08",
+        "title": "legacy 字段缺失视为 unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "legacy": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-09",
+        "title": "chain 取值不在枚举内（畸形）视为 unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "chainRaw": "maybe"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-10",
+        "title": "状态非 first_identity 时即使 legacy=ABSENT 且无登记，也不开放创建",
+        "input": {
+          "state": "ok",
+          "legacy": "ABSENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      }
+    ]
+  }
 }

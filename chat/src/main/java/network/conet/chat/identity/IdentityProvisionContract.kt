@@ -6,7 +6,7 @@ import java.text.Normalizer
 
 /**
  * identity.native-keys.v1: request checks and ready report (spec r3b 25.19.2, batch 24 vectors
- * `spec/identity-native-keys-vectors.v1.json`, sha256 7aa7b4db…). Batch 24 is the last change to the character set.
+ * `spec/identity-native-keys-vectors.v1.json`, sha256 88208134…). Batch 24 is the last change to the character set.
  *
  * Field placement: `provisionIdentity` carries the public fields flat in the payload; `init` carries
  * them under `payload.identity`, never at the top level of `init`.

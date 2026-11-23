@@ -406,7 +406,7 @@ internal class BeamioConetChatListenSession {
             // only the plaintext comes back. The callback runs on the main thread, as it did from the WebView host.
             // An unreadable store is a failed decrypt (unknown, retried by the listen), never an uncaught exception on the listen thread (25.52Y.84).
             val outcome = try {
-                NativeWallet.pgp(app).decryptInbound(armored)
+                NativeWallet.decryptInbound(app, armored)
             } catch (_: Exception) {
                 network.conet.chat.nativekey.NativePgp.Outcome.fail("store_unreadable")
             }

@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * 25.52X.4 (rc2.2-qa, coordinator ruling): `already_exists` carries the public lower-case `eoa` when the native derivation and storage both
+ * 25.52X.4 (rc2.2-qa): `already_exists` carries the public lower-case `eoa` when the native derivation and storage both
  * succeed. Other answers carry none, and the key itself is never returned. In memory only.
  */
 class AlreadyExistsEoaTest {

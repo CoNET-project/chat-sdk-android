@@ -23,7 +23,7 @@ class NativeRecoveryVectorsTest {
     @Test
     fun vectorFileIsThePinnedBatch() {
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        assertEquals("817957b9bb63fd31de9bb82f739405260ca998752b3fe7afc660601604c12b80", sha)
+        assertEquals("8b4e66c1488504b29a6b04c3ca275f0ef183e8a15259b82292bf47f3946d43b2", sha)
     }
 
     @Test
@@ -85,7 +85,7 @@ class NativeRecoveryVectorsTest {
             if (e.has("eoa")) {
                 assertEquals("$id[$i] eoa", e.getString("eoa"), g.eoa)
             } else if (g.code == "already_exists") {
-                // 25.52X.4 (r3kg, coordinator ruling): already_exists carries the public lower-case eoa when derivation and storage succeed. This
+                // 25.52X.4 (r3kg): already_exists carries the public lower-case eoa when derivation and storage succeed. This
                 // vector predates r3kg and has no eoa field; the vector is re-pinned with the unified re-pin. The eoa is absent or a valid EOA.
                 assertTrue("$id[$i] eoa is absent or the public lower-case EOA", g.eoa == null || Regex("^0x[0-9a-f]{40}$").matches(g.eoa))
             } else {

@@ -82,7 +82,7 @@ object NativeAccountCreateHost {
         queryKey = null
     }
 
-    private val ALLOWED_FIELDS = setOf("type", "reqId", "code", "eoa")
+    private val ALLOWED_FIELDS = setOf("type", "reqId", "code", "eoa", "cleanupPending")
     private val RESULT_CODES = setOf("ok", "cancelled", "already_exists", "write_failed", "readback_failed")
     private val CANONICAL_EOA = Regex("^0x[0-9a-f]{40}$")
 
@@ -130,14 +130,22 @@ object NativeAccountCreateHost {
             if (!hasEoa) return Drop("eoa_invalid")
             val eoa = event.optString("eoa", "")
             if (!CANONICAL_EOA.matches(eoa)) return Drop("eoa_invalid")
-            forward(id, code, eoa)
+            forward(id, code, eoa, event.optBoolean("cleanupPending", false))
             completed += keyOf(id)
             pageReqId = null
             resultSeen = false
             return null
         }
-        if (hasEoa) return Drop("eoa_not_allowed")
-        forward(id, code, null)
+        // 25.52Y.137 第 6 項: the account of an already_exists answer is carried; any other failure answer carries no eoa.
+        val eoaOut = if (hasEoa && code == NativeAccountCreate.Code.ALREADY_EXISTS.wire) {
+            val e = event.optString("eoa", "")
+            if (!CANONICAL_EOA.matches(e)) return Drop("eoa_invalid")
+            e
+        } else {
+            if (hasEoa) return Drop("eoa_not_allowed")
+            null
+        }
+        forward(id, code, eoaOut, null)
         return null
     }
 
@@ -148,7 +156,7 @@ object NativeAccountCreateHost {
         if (!resultSeen) {
             // A cancelled creation ends its creation transaction (the key is not created, so no copy is written for it).
             ShellRecordState.creationTxn.set(false)
-            forward(id, NativeAccountCreate.Code.CANCELLED.wire, null)
+            forward(id, NativeAccountCreate.Code.CANCELLED.wire, null, null)
             completed += keyOf(id)
         }
         pageReqId = null
@@ -157,19 +165,31 @@ object NativeAccountCreateHost {
 
     /** The engine's own result for the open page. It goes through the same checks as a result from the shell. */
     @Synchronized
-    internal fun finish(code: NativeAccountCreate.Code, eoa: String?) {
+    internal fun finish(code: NativeAccountCreate.Code, eoa: String?, cleanupPending: Boolean = false) {
         val id = pageReqId ?: return
+        if (code == NativeAccountCreate.Code.NOT_READY) {
+            // 25.52Y.140: not_ready is not an event. Nothing is pushed; the page stays open and no nativeAccountCreateResult is sent for it.
+            return
+        }
         val event = JSONObject().put("type", "nativeAccountCreateResult").put("reqId", id).put("code", code.wire)
         if (eoa != null) event.put("eoa", eoa)
+        if (code == NativeAccountCreate.Code.OK) event.put("cleanupPending", cleanupPending)
         report(event)
     }
 
-    private fun forward(id: Any, code: String, eoa: String?) {
+    /**
+     * 25.52Y.137 第 6 項: `{type, reqId, ok, result: {code, eoa?, cleanupPending?}}`. `eoa` only for `already_exists` and `ok`; `cleanupPending` only
+     * when `ok` is true (true while the marker removal is pending, false when it is complete).
+     */
+    private fun forward(id: Any, code: String, eoa: String?, cleanupPending: Boolean?) {
+        val result = JSONObject().put("code", code)
+        if (eoa != null && (code == NativeAccountCreate.Code.OK.wire || code == NativeAccountCreate.Code.ALREADY_EXISTS.wire)) result.put("eoa", eoa)
+        if (code == NativeAccountCreate.Code.OK.wire && cleanupPending != null) result.put("cleanupPending", cleanupPending)
         val payload = JSONObject()
             .put("type", "nativeAccountCreateResult")
             .put("reqId", id)
-            .put("code", code)
-        if (eoa != null) payload.put("eoa", eoa)
+            .put("ok", code == NativeAccountCreate.Code.OK.wire)
+            .put("result", result)
         events?.invoke(payload)
     }
 }
@@ -187,13 +207,15 @@ object NativeAccountCreate {
         WRITE_FAILED("write_failed"),
         READBACK_FAILED("readback_failed"),
         ROLLBACK_PENDING("rollback_pending"),
+        /** Not decided: the wrap is unconfirmed (25.52Y.136 第 7 項). Retryable. */
+        NOT_READY("not_ready"),
     }
 
     /**
      * [residue] is true when the creation failed and the K item that was written could not be removed: a half PGP item may remain on the device for
      * an account that has no wallet. The code stays write_failed; the caller records the residue (code only, never the key) for a later sweep.
      */
-    class Result(val code: Code, val eoa: String? = null, val residue: Boolean = false)
+    class Result(val code: Code, val eoa: String? = null, val residue: Boolean = false, val cleanupPending: Boolean = false)
 
     private val worker = Executors.newSingleThreadExecutor()
 
@@ -205,7 +227,7 @@ object NativeAccountCreate {
         val app = context.applicationContext
         worker.execute {
             val result = try {
-                // The guard runs again at confirm (review 76706f6d): the legacy report, pointer, page copies or key may have changed since
+                // The guard runs again at confirm: the legacy report, pointer, page copies or key may have changed since
                 // the page opened. A denial writes nothing and answers write_failed, the only code that says nothing was stored.
                 val denial = AccountCreateGuard.denial(AccountCreateGuard.inputsFor(app))
                 // The denial code is not logged here: this file is under the no-log rule (KeyPathGuardTest).
@@ -220,13 +242,13 @@ object NativeAccountCreate {
                 Result(Code.WRITE_FAILED)
             }
             if (result.code != Code.OK) ShellRecordState.creationTxn.set(false)
-            NativeAccountCreateHost.finish(result.code, result.eoa)
+            NativeAccountCreateHost.finish(result.code, result.eoa, result.cleanupPending)
             onResult(result)
         }
     }
 
     /**
-     * Creates and stores a new account (§25.46.5 steps 2 to 4, §25.52Y.1 第 6 项, PM ruling): the wallet W and the new account PGP item K are written
+     * Creates and stores a new account (§25.46.5 steps 2 to 4, §25.52Y.1 第 6 项): the wallet W and the new account PGP item K are written
      * together. A new PGP key pair is generated for the account inside this transaction. Any failure after W is written removes W again, so the device
      * holds no key for the account; an existing K is never overwritten (EXISTS answers already_exists and removes the new W). A record that already
      * exists is never overwritten. The caller's [entropy] is copied and zeroed; so are the derived key and the copy.
@@ -239,19 +261,28 @@ object NativeAccountCreate {
             val key = MnemonicDerivation.deriveKey(phrase) ?: return Result(Code.WRITE_FAILED)
             try {
                 val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.WRITE_FAILED)
-                // r3nw 第 1 项 (PM R1872): the account keeps the phrase its entropy spells (12 words, m/44'/60'/0'/0/0); the phrase is sealed
+                // r3nw 第 1 项: the account keeps the phrase its entropy spells (12 words, m/44'/60'/0'/0/0); the phrase is sealed
                 // beside the key and is never returned from here.
                 return when (vault.importMnemonicKey(eoa, key, phrase, NativeWalletVault.SOURCE_NATIVE_CREATE)) {
                     NativeWalletVault.Import.OK -> writeKOrRollBack(vault, pgp, eoa)
+                    NativeWalletVault.Import.OK_CLEANUP_PENDING -> writeKOrRollBack(vault, pgp, eoa).let { Result(it.code, it.eoa, it.residue, cleanupPending = true) }
                     NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                         Result(Code.ALREADY_EXISTS, vault.publicEoaIfReadable())
                     NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
-                    NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.ROLLBACK_PENDING)
+                    // v2 §三 seal and readback reasons: only the sync path produces them; a failed write on this path.
+                    NativeWalletVault.Import.SEALING_FAILED -> Result(Code.WRITE_FAILED)
+                    // 25.52Y.138 第 4 項: rollback_pending is not sent outbound by account creation; it is write_failed.
+                    NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.WRITE_FAILED)
+                    // Only the sync path (requireOpenable) produces it: a failed write on this path.
+                    NativeWalletVault.Import.OLD_COPY_UNVERIFIED -> Result(Code.WRITE_FAILED)
                     // Store failures roll back inside the vault. A derived key that the vault refuses is treated the same:
                     // nothing was stored.
+                    // wrap_key_missing (25.52Y.124): nothing was written. No wire code is defined for it yet; reported as a failed write.
                     NativeWalletVault.Import.STORE_FAILED, NativeWalletVault.Import.BAD_KEY,
                     NativeWalletVault.Import.BAD_EOA, NativeWalletVault.Import.ADDRESS_MISMATCH,
                     -> Result(Code.WRITE_FAILED)
+                    // Not decided: nothing was written; not_ready (25.52Y.136 第 7 項).
+                    NativeWalletVault.Import.WRAP_KEY_MISSING -> Result(Code.NOT_READY)
                 }
             } finally {
                 key.fill(0)
@@ -267,8 +298,9 @@ object NativeAccountCreate {
      */
     private fun writeKOrRollBack(vault: NativeWalletVault, pgp: AccountPgpK, eoa: String): Result {
         fun rollBackW(): Result {
-            // A forget that fails leaves W behind: the device is not clean, which the caller reports as write_failed.
-            vault.forget()
+            // The new account's records are kept: moved to isolated names and audited, never erased (no stored bytes are deleted by a failed
+            // write). A failed move or audit row leaves them isolated; the caller reports write_failed.
+            vault.isolateWrittenRecords(mnemonicPlanned = true)
             return Result(Code.WRITE_FAILED)
         }
         val gen = try {

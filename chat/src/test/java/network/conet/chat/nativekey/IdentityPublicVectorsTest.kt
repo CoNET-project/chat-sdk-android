@@ -75,7 +75,7 @@ class IdentityPublicVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("47c9b1e324afac4e1dae409c782107be7cd5482c9783393e192fc32b2de47465", sha256Hex(bytes))
+        assertEquals("4a8b27a9265a123a16fff895f0d5330d666ca29aee974505638a384a67f4b02c", sha256Hex(bytes))
     }
 
     @Test

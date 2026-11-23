@@ -17,8 +17,8 @@ object BeamioConetChatProtocol {
     const val MIN_PROTOCOL_VERSION = 1
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
-    /** The artifact version (spec 25.52Y.45, PM R2054); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
-    const val SDK_VERSION = "0.2.23"
+    /** The artifact version (spec 25.52Y.45); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
+    const val SDK_VERSION = "0.2.28"
 
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
@@ -48,25 +48,58 @@ object BeamioConetChatProtocol {
     const val KPRESENT_CAPABILITY = "identity.kpresent.v1"
 
     /**
-     * The native-keys capability (identity.native-keys.v1). Declared by every build since 2026-11-16 (project owner decision): the formal
+     * The native-keys capability (identity.native-keys.v1). Declared by every build since 2026-11-16: the formal
      * release hello carries it. It is not yet in the shared hello vector; the conformance test appends it until the interface seat
      * updates the vector.
      */
     const val NATIVE_KEYS_CAPABILITY = "identity.native-keys.v1"
 
     /**
-     * The window-channel capability for walletCredential (spec 25.52Y.38 第 2 项 (e), 25.52Y.44; PM R2042). Declared only in a QA build
+     * The window-channel capability for walletCredential (spec 25.52Y.38 第 2 项 (e), 25.52Y.44). Declared only in a QA build
      * (-PchatWalletCredentialQa=true). The shell's manifest must carry it too; the SDK checks its own declaration before it answers.
      */
     const val WALLET_CREDENTIAL_CAPABILITY = "wallet.credential.v1"
 
-    /** `hello` answer (`ack.result`). */
-    fun helloResult(): JSONObject = JSONObject()
+    /**
+     * `hello` answer (`ack.result`). [nativeApp] is the host app's installed native version (v156 §176.2), or null when it could not be read or is
+     * invalid; then the field is absent and the shell treats the host as old (§176.1).
+     */
+    fun helloResult(nativeApp: JSONObject? = null): JSONObject = JSONObject()
         .put("protocolVersion", PROTOCOL_VERSION)
         .put("minProtocolVersion", MIN_PROTOCOL_VERSION)
         .put("sdkVersion", SDK_VERSION)
         .put("implementation", "android")
         .put("capabilities", JSONArray(CAPABILITIES))
+        .apply { if (nativeApp != null) put("nativeApp", nativeApp) }
+
+    /**
+     * The `nativeApp` object (v156 §176.2–176.3) for Android. The version and build are read at run time from the host process's PackageManager
+     * (`versionName`, `longVersionCode`; `versionCode` below API 28), never from a compile-time constant, the SDK version or the PWA version.
+     * Returns null when the package info cannot be read or the values are not valid.
+     */
+    fun readHostNativeApp(context: android.content.Context): JSONObject? {
+        val info = try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (_: Exception) {
+            return null
+        }
+        val build = if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+        return nativeAppOf("android", info.versionName, build.toString())
+    }
+
+    /**
+     * Validates a `nativeApp` object (v156 §176.2, §176.4): platform ios or android; version matches `^\d+(\.\d+){1,3}$`; build matches `^\d+$`.
+     * Returns null for any invalid value; the caller then omits the field.
+     */
+    fun nativeAppOf(platform: String, version: String?, build: String?): JSONObject? {
+        if (platform != "ios" && platform != "android") return null
+        if (version == null || !NATIVE_VERSION_RE.matches(version)) return null
+        if (build == null || !NATIVE_BUILD_RE.matches(build)) return null
+        return JSONObject().put("platform", platform).put("version", version).put("build", build)
+    }
+
+    private val NATIVE_VERSION_RE = Regex("^\\d+(\\.\\d+){1,3}$")
+    private val NATIVE_BUILD_RE = Regex("^\\d+$")
 }
 
 /**

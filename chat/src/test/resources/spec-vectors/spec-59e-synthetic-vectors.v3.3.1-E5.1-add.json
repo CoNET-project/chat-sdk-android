@@ -1,0 +1,76 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E5.1-add.json",
+  "scope": "sdk-overwrite-59e-decided-synthetic",
+  "status": "pending_review",
+  "extends": "v2 (SO-01..17), v3.2-add (SO-18..24), v3.3-add (SO-22E, SO-22F, SO-23, SO-25, SO-25b), v3.3.1-add (SO-25c), E5.1",
+  "text_basis": "spec-59e-errata-v3.3.1-E5.1.md (裁定 2026-11-17)",
+  "cases": [
+    {
+      "id": "SO-26",
+      "title": "PHRASE_ONLY + pwaWalletSync → write_failed/internal_state；残留与 PWA 数据不动，可重试（同账户亦然，不做幂等成功）",
+      "policy": "decided (E5.1-2)",
+      "pre": {
+        "files": {
+          "native.residue_phrase_only": "PHRASE_ONLY_RESIDUE",
+          "native.rec": "absent",
+          "pointer": "set",
+          "pwa_idb": "PWA_DATA"
+        },
+        "audit_rows": 0,
+        "intent_marker": false
+      },
+      "op": [
+        {
+          "command": "pwaWalletSync",
+          "trustedOrigin": true,
+          "reqId": 11,
+          "seq": 1,
+          "eoa": "RESIDUE.eoa",
+          "phrase": "<synthetic; derives to RESIDUE.eoa (same account)>",
+          "note": "同账户情形"
+        },
+        {
+          "command": "pwaWalletSync",
+          "trustedOrigin": true,
+          "reqId": 12,
+          "seq": 2,
+          "eoa": "OTHER.eoa",
+          "phrase": "<synthetic; derives to OTHER.eoa (different account)>",
+          "note": "不同账户情形"
+        }
+      ],
+      "expect": {
+        "answers": [
+          {
+            "ok": false,
+            "error": "write_failed",
+            "reason": "internal_state"
+          },
+          {
+            "ok": false,
+            "error": "write_failed",
+            "reason": "internal_state"
+          }
+        ],
+        "no_ok_idempotent_on_same_account": true,
+        "native_residue_after_read_back": {
+          "unchanged": true,
+          "phrase_only_still_present": true
+        },
+        "pwa_data_after": {
+          "unchanged": true
+        },
+        "sealed_or_renamed": [],
+        "deleted": [],
+        "audit_append": [],
+        "intent_marker": false,
+        "retryable": true
+      },
+      "read_back_check": "写后读回 nativeState 仍为 valid（PHRASE_ONLY，§56(3)）；残留助记词字节与操作前相同。",
+      "status": "pending_review",
+      "assert": "PHRASE_ONLY 遇 pwaWalletSync 不覆盖、不封存、不改名、不清理、不写意图；同账户亦不做幂等成功；读回确认残留未变；可重试。"
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

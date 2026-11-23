@@ -38,7 +38,12 @@ class NativeMnemonicImportTest {
     @Test
     fun eightImportCasesMatch() {
         assertEquals(8, cases.length())
-        for (i in 0 until cases.length()) runCase(cases.getJSONObject(i))
+        // r2.3 41(1): the page's cancel is gone with the page (no bridge command, no page submit). MI-7 is the page's cancel, so it is not run here.
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            if (c.optJSONObject("ctx")?.optBoolean("cancelled", false) == true) continue
+            runCase(c)
+        }
     }
 
     private fun runCase(c: JSONObject) {
@@ -64,11 +69,10 @@ class NativeMnemonicImportTest {
         if (ctx.optBoolean("writeFail", false)) files.failWrite = NativeWalletVault.REC
         if (ctx.optBoolean("readbackFail", false)) wrap.openOverride = { ByteArray(32) { 1 } }
 
-        val result = NativeImport.submitMnemonic(
+        val result = NativeImport.importRecoveryPhrase(
             raw = input,
             expectedEoa = if (ctx.has("expectedEoa")) ctx.getString("expectedEoa") else null,
             vault = vault,
-            cancelled = ctx.optBoolean("cancelled", false),
         )
 
         assertEquals("$id code", expect.getString("code"), result.code.wire)

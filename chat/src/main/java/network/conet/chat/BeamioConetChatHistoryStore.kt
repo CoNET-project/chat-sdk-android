@@ -100,7 +100,7 @@ class BeamioConetChatHistoryStore(
     /** Opens the local SQLite handle (null file = in-memory). Android by default; tests inject JDBC. */
     private val sqlDbFactory: (File?) -> SqlDb = { AndroidSqlDb.open(it) },
     /**
-     * R559 switch: false means nothing is written. The queue still takes entries locally; no fragment, index or pointer is uploaded or
+     * switch: false means nothing is written. The queue still takes entries locally; no fragment, index or pointer is uploaded or
      * submitted. Production builds take the build value (true), so their behaviour is unchanged.
      */
     private val writesEnabled: Boolean = BuildConfig.HISTORY_WRITES,
@@ -139,7 +139,7 @@ class BeamioConetChatHistoryStore(
     }
 
     /**
-     * DISABLED: the build switched history writes off (QA switch, R559). Nothing was written; the entries stay in the local queue. It is not
+     * DISABLED: the build switched history writes off (QA switch). Nothing was written; the entries stay in the local queue. It is not
      * EMPTY, which means there was nothing to write.
      */
     enum class FlushResult { OK, EMPTY, CONFLICT, ERROR, NOT_READY, DISABLED }
@@ -271,8 +271,12 @@ class BeamioConetChatHistoryStore(
         queue.shutdownNow()
         readQueue.shutdownNow()
         fetchPool.shutdownNow()
+        // T-49 / spec 6.5 zeroize: the four key buffers are zeroed in place, then their references are dropped.
+        KeyWipe.wipe(master, indexKey, pendingKey, kIdDb)
         master = null
         indexKey = null
+        pendingKey = null
+        kIdDb = null
         ready = false
     }
 

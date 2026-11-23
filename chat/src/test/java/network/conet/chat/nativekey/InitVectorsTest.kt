@@ -7,11 +7,11 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Runs every `init` case of the gate-state vector file through the rules the module applies (PM R1861; spec §25.52Y.29,
+ * Runs every `init` case of the gate-state vector file through the rules the module applies (spec §25.52Y.29,
  * §25.52Y.32, §25.52GJ): the EOA check first (NoKeyGate.initAnswer), then, in G1 only, the nodes verdict (InitNodesGate).
  * The Keychain roster is the case's `keychainNodes` field.
  * It runs only when GATE_STATE_VECTORS names the authoritative file (r3pb: gate-state-vectors.v2.json, 146 cases, sha256 34dcaf66...).
- * The v1 file (d5b9c948...) is superseded and is not used here.
+ * The v1 file (83ae0be1...) is superseded and is not used here.
  */
 class InitVectorsTest {
     private val envFile = System.getenv("GATE_STATE_VECTORS")

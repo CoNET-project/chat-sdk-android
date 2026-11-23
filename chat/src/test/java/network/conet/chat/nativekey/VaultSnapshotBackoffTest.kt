@@ -3,7 +3,7 @@ package network.conet.chat.nativekey
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The snapshot refresh backoff (project ruling 2026-11-16): 1 s, 2 s, 4 s, …, capped at 30 s; cleared by one success. Rule-level. */
+/** The snapshot refresh backoff: 1 s, 2 s, 4 s, …, capped at 30 s; cleared by one success. Rule-level. */
 class VaultSnapshotBackoffTest {
     @Test
     fun noFailureNoBackoff() {

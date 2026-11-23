@@ -13,7 +13,7 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The review items of R424 (spec r3bh): the key-shape scan (TR-16, TR-17), the first-run entry's own migrating mark (§25.52L.3), the
+ * The review items of (spec r3bh): the key-shape scan (TR-16, TR-17), the first-run entry's own migrating mark (§25.52L.3), the
  * account slot's conditional fallback (§25.52B.6, documented), and the W field removal at the unregister (§25.52H.2 rule 5, §25.52J.3).
  */
 class ShellRecordR424Test {
@@ -131,7 +131,7 @@ class ShellRecordR424Test {
         files.write(name, ByteArray(40) { 7 })
         val removal = PageWalletRemoval(SealedPageRecordStore(wrap, files, "$ACCOUNT:default"))
         assertTrue("an unreadable copy counts as present", removal.present())
-        // Rewritten 2026-11-16 (project ruling): an unreadable copy is kept, and the removal fails instead of erasing it.
+        // Rewritten 2026-11-16: an unreadable copy is kept, and the removal fails instead of erasing it.
         assertTrue(runCatching { removal.remove() }.isFailure)
         assertNotNull(files.read(name))
     }

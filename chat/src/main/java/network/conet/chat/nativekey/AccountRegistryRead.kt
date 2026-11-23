@@ -43,26 +43,32 @@ internal object AccountRegistryRead {
     }
 
     /**
-     * One `eth_call` against [registry] on the first endpoint that answers. An empty answer is a definitive "no record"
-     * (returned as null), not a failure. Throws when every endpoint fails (transport, HTTP, RPC or decode).
+     * One `eth_call` against [registry], read at one block on both endpoints (draft r2.5.20 第 7 版, the same rule as the binding lookup): the
+     * block is the first endpoint's number N, each endpoint must return block N with the same hash, and both must answer the same text. Both empty
+     * is "no record" (null). A single empty answer, a disagreement, or any failure throws (network_error): never "no record".
      */
-    fun readFirst(
+    fun readAgreed(
         config: RegistryConfig,
         rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
         data: String,
     ): String? {
-        var last: Exception? = null
-        for (ep in config.endpoints) {
-            try {
-                val call = JSONObject().put("to", config.registry).put("data", data)
-                val hex = rpcFor(ep).call("eth_call", JSONArray().put(call).put("latest")) as? String
-                    ?: throw IllegalStateException("no result")
-                val text = AddressPgpRead.decodeString(hex) ?: throw IllegalStateException("undecodable")
-                return text.ifEmpty { null }
-            } catch (e: Exception) {
-                last = e
-            }
-        }
-        throw IllegalStateException("network_error", last)
+        if (config.endpoints.size < 2) throw IllegalStateException("network_error")
+        val rpcA = rpcFor(config.endpoints[0])
+        val rpcB = rpcFor(config.endpoints[1])
+        val tag = rpcA.call("eth_blockNumber", JSONArray()) as? String ?: throw IllegalStateException("network_error")
+        val n = tag.removePrefix("0x").toLongOrNull(16) ?: throw IllegalStateException("network_error")
+        val hashA = AddressPgpRead.blockHashAt(rpcA, tag, n) ?: throw IllegalStateException("network_error")
+        val hashB = AddressPgpRead.blockHashAt(rpcB, tag, n) ?: throw IllegalStateException("network_error")
+        if (hashA != hashB) throw IllegalStateException("network_error")
+        val textA = textAt(rpcA, config.registry, data, tag)
+        val textB = textAt(rpcB, config.registry, data, tag)
+        if (textA != textB) throw IllegalStateException("network_error")
+        return textA.ifEmpty { null }
+    }
+
+    private fun textAt(rpc: AddressPgpRead.Rpc, registry: String, data: String, tag: String): String {
+        val call = JSONObject().put("to", registry).put("data", data)
+        val hex = rpc.call("eth_call", JSONArray().put(call).put(tag)) as? String ?: throw IllegalStateException("network_error")
+        return AddressPgpRead.decodeString(hex) ?: throw IllegalStateException("network_error")
     }
 }

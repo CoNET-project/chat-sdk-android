@@ -1,0 +1,411 @@
+{
+  "file": "table-T.v3.json",
+  "spec": "spec §25.52AU.4、§25.52AV.2、§25.52BW.2",
+  "purpose": "分派表审计的参照表 T（桥接命令总表），75 名（v2，2026-11-20：口令与修复五名经无密钥向量 allowedUnderNoKey 进入 T0，冻结协议第十二节；v1 的 70 名保留不改）。规范文件：iOS 与 Android 的 QA 产物引用本文件，不另行维护。；v3（2026-11-20，按裁决“原生解锁保持至冷启动”及修订）：新增 nativeIdentityCheck（页面→原生，同词核对，原生锁定时应答 locked，非放行命令）与 uiLockState（页面→原生，UI 上锁报告，方向：页面→壳→SDK uiLock，非事件）。v2 保留不改。",
+  "generator": "gen-table-T.mjs",
+  "derivation": {
+    "T0": "无密钥向量 no-key-reject-vectors.v1.json 的 walletCommands、chatCommands、retiredCommands、allowedUnderNoKey、lifecycleExcluded、specialStatus 的命令名，mapping 的 bridgeName，加 shellRecordRead、shellRecordWrite（§25.52）",
+    "T1": "§25.52AV.2 的 7 名，加 chatRouteRegister（§25.52CK.2）、voiceEphemeralRegister（§25.52GK）、voiceEphemeralSeal（§25.52GL）、mailboxProbeSign（§25.52GM），共 11 名；另加 pgpUpgradeRetry（§25.52Y.63 第 2 项）与 accountCleanupOld（T1 数组所列，来源见 sources 字段），共 13 名（2026-11-20 更正：原文“共 11 名”漏计后两名）；v3 追加 nativeIdentityCheck（补充 45.3）与 uiLockState（补充 44.2、45.4）两名，T1 共 15 名。T0 不变（62 名）。",
+    "excluded": {
+      "pgpSign": "§25.52BP.1：已删除，不在 T 中",
+      "pgpDecrypt": "§25.52CK.1：已删除（iOS 与 Android 均无分派）",
+      "identity.provision": "§25.52BW.3：规格名，不是桥接名；桥接名为 provisionIdentity",
+      "signMessage": "§25.52CN.5：W5 signMessage 为钱包层函数，不是桥接命令，桥接层不暴露（§25.52AQ.4）",
+      "deriveLocalKeys": "§25.52DP.1：W2 为钱包层函数，不是桥接命令（§25.37.4 补充）",
+      "protocolKeys": "§25.52DP.1：W3 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充）",
+      "fragmentKeys": "§25.52DP.1：W4 为 SDK 进程内函数，不是桥接命令（§25.37.4 补充）"
+    }
+  },
+  "counts": {
+    "T0": 62,
+    "T1": 15,
+    "total": 77
+  },
+  "names": [
+    "accountCleanupOld",
+    "ackInbound",
+    "chatRouteRegister",
+    "clearIdentity",
+    "deriveSubkeys",
+    "destroy",
+    "ephemeralSign",
+    "gossipSign",
+    "hello",
+    "historyAppend",
+    "historyClearCache",
+    "historyDeleteConversation",
+    "historyDeleteMessage",
+    "historyFullSync",
+    "historyImportBatch",
+    "historyListConversations",
+    "historyLoad",
+    "historyLoadOlder",
+    "historyOpenConversation",
+    "historyRead",
+    "historyReportLayout",
+    "historySign",
+    "historyVerifyImport",
+    "identityPublic",
+    "init",
+    "issueGroupRoster",
+    "issueGroupTombstone",
+    "mailboxCommand",
+    "mailboxProbeSign",
+    "nativeAccountCreateOpen",
+    "nativeMnemonicPreread",
+    "nativeRecoveryOpen",
+    "nativeRepairProvide",
+    "nodesResponse",
+    "ownMailboxCommand",
+    "passcodeChange",
+    "passcodeDisable",
+    "passcodeProvision",
+    "passcodeRun",
+    "passcodeStatus",
+    "passcodeUnlock",
+    "pause",
+    "pgpDecryptInbound",
+    "pgpIdentityCreate",
+    "pgpMigrate",
+    "pgpRestore",
+    "pgpRestoreEvaluate",
+    "pgpUpgradeRetry",
+    "provisionIdentity",
+    "pwaEmptySignal",
+    "pwaWalletSync",
+    "queryNativeWake",
+    "queryPresence",
+    "resume",
+    "send",
+    "sendGroup",
+    "setNodes",
+    "setRoutes",
+    "shellRecordRead",
+    "shellRecordWrite",
+    "voiceEphemeralRegister",
+    "voiceEphemeralSeal",
+    "voiceFrame",
+    "voiceListen",
+    "voiceUnlisten",
+    "walletAddress",
+    "walletSendTransaction",
+    "walletSignMessage",
+    "walletSignTypedData",
+    "walletSignUserOp",
+    "walletStatus",
+    "walletTransfer",
+    "walletTransferOnce",
+    "walletTransferStatus",
+    "walletTransferSwitched",
+    "nativeIdentityCheck",
+    "uiLockState"
+  ],
+  "sources": {
+    "accountCleanupOld": [
+      "spec §25.52AV.2 T1"
+    ],
+    "ackInbound": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "chatRouteRegister": [
+      "spec §25.52AV.2 T1"
+    ],
+    "clearIdentity": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "deriveSubkeys": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "destroy": [
+      "allowedUnderNoKey",
+      "lifecycleExcluded",
+      "mapping.bridgeName"
+    ],
+    "ephemeralSign": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "gossipSign": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "hello": [
+      "allowedUnderNoKey",
+      "lifecycleExcluded",
+      "mapping.bridgeName"
+    ],
+    "historyAppend": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyClearCache": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyDeleteConversation": [
+      "spec §25.52AV.2 T1"
+    ],
+    "historyDeleteMessage": [
+      "spec §25.52AV.2 T1"
+    ],
+    "historyFullSync": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyImportBatch": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyListConversations": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyLoad": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyLoadOlder": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyOpenConversation": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyRead": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historyReportLayout": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "historySign": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "historyVerifyImport": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "identityPublic": [
+      "spec §25.52AV.2 T1"
+    ],
+    "init": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "issueGroupRoster": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "issueGroupTombstone": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "mailboxCommand": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "mailboxProbeSign": [
+      "spec §25.52GMT1"
+    ],
+    "nativeAccountCreateOpen": [
+      "allowedUnderNoKey",
+      "mapping.bridgeName"
+    ],
+    "nativeMnemonicPreread": [
+      "allowedUnderNoKey",
+      "mapping.bridgeName"
+    ],
+    "nativeRecoveryOpen": [
+      "allowedUnderNoKey",
+      "mapping.bridgeName"
+    ],
+    "nativeRepairProvide": [
+      "allowedUnderNoKey"
+    ],
+    "nodesResponse": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "ownMailboxCommand": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "passcodeChange": [
+      "allowedUnderNoKey"
+    ],
+    "passcodeDisable": [
+      "allowedUnderNoKey"
+    ],
+    "passcodeProvision": [
+      "allowedUnderNoKey"
+    ],
+    "passcodeRun": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "passcodeStatus": [
+      "allowedUnderNoKey",
+      "mapping.bridgeName",
+      "specialStatus"
+    ],
+    "passcodeUnlock": [
+      "allowedUnderNoKey"
+    ],
+    "pause": [
+      "allowedUnderNoKey",
+      "lifecycleExcluded",
+      "mapping.bridgeName"
+    ],
+    "pgpDecryptInbound": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "pgpIdentityCreate": [
+      "spec §25.52AV.2 T1"
+    ],
+    "pgpMigrate": [
+      "spec §25.52AV.2 T1"
+    ],
+    "pgpRestore": [
+      "spec §25.52AV.2 T1"
+    ],
+    "pgpRestoreEvaluate": [
+      "spec §25.52AV.2 T1"
+    ],
+    "pgpUpgradeRetry": [
+      "spec §25.52AV.2 T1"
+    ],
+    "provisionIdentity": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "pwaEmptySignal": [
+      "mapping.bridgeName"
+    ],
+    "pwaWalletSync": [
+      "mapping.bridgeName"
+    ],
+    "queryNativeWake": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "queryPresence": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "resume": [
+      "allowedUnderNoKey",
+      "lifecycleExcluded",
+      "mapping.bridgeName"
+    ],
+    "send": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "sendGroup": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "setNodes": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "setRoutes": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "shellRecordRead": [
+      "§25.52"
+    ],
+    "shellRecordWrite": [
+      "§25.52"
+    ],
+    "voiceEphemeralRegister": [
+      "spec §25.52GKT1"
+    ],
+    "voiceEphemeralSeal": [
+      "spec §25.52GLT1"
+    ],
+    "voiceFrame": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "voiceListen": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "voiceUnlisten": [
+      "chatCommands",
+      "mapping.bridgeName"
+    ],
+    "walletAddress": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletSendTransaction": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletSignMessage": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletSignTypedData": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletSignUserOp": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletStatus": [
+      "allowedUnderNoKey",
+      "mapping.bridgeName",
+      "specialStatus"
+    ],
+    "walletTransfer": [
+      "mapping.bridgeName",
+      "walletCommands"
+    ],
+    "walletTransferOnce": [
+      "mapping.bridgeName",
+      "retiredCommands"
+    ],
+    "walletTransferStatus": [
+      "mapping.bridgeName",
+      "retiredCommands"
+    ],
+    "walletTransferSwitched": [
+      "mapping.bridgeName",
+      "retiredCommands"
+    ]
+  },
+  "selfCheck": {
+    "result": "pass",
+    "checks": [
+      "T0=62",
+      "T1=13",
+      "total=75",
+      "voiceEphemeralRegister 在内",
+      "voiceEphemeralSeal 在内",
+      "mailboxProbeSign 在内",
+      "pgpUpgradeRetry 在内（§25.52Y.63 第 2 项）",
+      "shellRecordRead/Write 在内",
+      "provisionIdentity 在内",
+      "chatRouteRegister 在内",
+      "pgpSign、pgpDecrypt、signMessage、identity.provision 不在内",
+      "无重复",
+      "v3 新增 nativeIdentityCheck、uiLockState（T1）",
+      "T0=62 不变",
+      "total=77",
+      "无重复"
+    ]
+  },
+  "supersedes": "table-T.v2.json（75 名，保留不改）"
+}

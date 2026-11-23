@@ -21,11 +21,11 @@ private object LockedKeyWrap : KeyWrap {
 }
 
 class ShellRecordAckVectorsTest {
-    private val doc = VectorSidecar.map(JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json").readText(Charsets.UTF_8)))
+    private val doc = VectorSidecar.map(JSONObject(File(System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v3.1.json").readText(Charsets.UTF_8)))
 
     @Test
     fun theAckGroupHasTwentyEightCases() {
-        assertEquals(62, doc.getJSONArray("ackCases").length())
+        assertEquals(64, doc.getJSONArray("ackCases").length())
     }
 
     @Test
@@ -34,12 +34,14 @@ class ShellRecordAckVectorsTest {
         val list = doc.getJSONArray("ackCases")
         for (i in 0 until list.length()) {
             val c = list.getJSONObject(i)
-            failures += runAck(c).map { "${c.getString("id")}: $it" }
+            val problems = runAck(c)
+            VectorResultLog.record("ackCases", c.getString("id"), problems)
+            failures += problems.map { "${c.getString("id")}: $it" }
         }
         assertEquals(emptyList<String>(), failures)
     }
 
-    private fun runAck(c: JSONObject): List<String> {
+    internal fun runAck(c: JSONObject, after: (SealedPageRecordStore, NativeTestFiles) -> List<String> = { _, _ -> emptyList() }): List<String> {
         val ctx = c.optJSONObject("ctx") ?: JSONObject()
         val files = NativeTestFiles()
         val store = SealedPageRecordStore(NativeTestWrap(), files, "$ACCOUNT:default")
@@ -62,7 +64,8 @@ class ShellRecordAckVectorsTest {
             else -> ShellOrigin.OTHER
         }
         val body = if (c.optString("kind") == "read") {
-            JSONObject().put("type", "shellRecordRead").put("reqId", c.get("reqId"))
+            // A case that carries its own `req` (the shape vectors) is sent as written, with its top-level fields; otherwise the plain read.
+            if (c.has("req")) a1(c.getJSONObject("req")) as JSONObject else JSONObject().put("type", "shellRecordRead").put("reqId", c.get("reqId"))
         } else {
             // The write request is the case's `req` as sent: an AK case without a reqId in `req` sends none (AK-13).
             val req = a1(c.getJSONObject("req")) as JSONObject
@@ -102,6 +105,7 @@ class ShellRecordAckVectorsTest {
                 }
             }
         }
+        out += after(store, files)
         return out
     }
 
@@ -114,7 +118,7 @@ class ShellRecordAckVectorsTest {
     private fun accountFor(ctx: JSONObject, c: JSONObject, store: SealedPageRecordStore): ShellRecordAccount {
         val keys: List<String> = when {
             ctx.has("keys") -> ctx.getJSONArray("keys").let { arr -> (0 until arr.length()).map { label(arr.getString(it)) } }
-            ctx.optBoolean("nativeKey") -> listOf(ACCOUNT)
+            ctx.optBoolean("nativeKey") || ctx.optBoolean("nativeMnemonic") -> listOf(ACCOUNT)
             else -> emptyList()
         }
         val vault: NativeWalletVault.State = keys.firstOrNull()?.let { NativeWalletVault.State.Ready(it) } ?: NativeWalletVault.State.NoKey
@@ -135,6 +139,9 @@ class ShellRecordAckVectorsTest {
             },
             storeOf = { store },
             keys = keys,
+            // v3.1 harness rule (AK-65): ctx.nativeKey seeds a private key only (key-only); ctx.nativeMnemonic seeds a valid phrase account. A key from
+            // ctx.keys is a phrase account (as before).
+            phraseHeld = !(ctx.optBoolean("nativeKey") && !ctx.optBoolean("nativeMnemonic") && !ctx.has("keys")),
         )
     }
 

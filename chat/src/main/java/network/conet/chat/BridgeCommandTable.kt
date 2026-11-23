@@ -28,10 +28,11 @@ internal object BridgeCommandTable {
         "ackInbound", "clearIdentity", "deriveSubkeys", "destroy", "ephemeralSign", "gossipSign", "hello",
         "historyAppend", "historyClearCache", "historyFullSync", "historyImportBatch", "historyLoad", "historyLoadOlder",
         "historyOpenConversation", "historyRead", "historyReportLayout", "historySign", "historyVerifyImport", "init",
-        "issueGroupRoster", "issueGroupTombstone", "mailboxCommand", "nativeAccountCreateOpen", "nativeImportOpen",
-        "nativeRecoveryOpen", "nodesResponse", "ownMailboxCommand", "pause", "pgpIdentityCreate", "pgpRestore",
+        "issueGroupRoster", "issueGroupTombstone", "mailboxCommand", "nativeAccountCreateOpen",
+        "nativeRecoveryOpen", "nodesResponse", "nativeMnemonicPreread", "pwaEmptySignal", "pwaWalletSync", "ownMailboxCommand", "pause", "pgpIdentityCreate", "pgpRestore",
         "accountCleanupOld", "pgpRestoreEvaluate", "pgpUpgradeRetry", "provisionIdentity", "queryNativeWake", "queryPresence", "resume", "send", "chatRouteRegister",
         "sendGroup", "setNodes", "setRoutes", "voiceFrame", "voiceListen", "voiceUnlisten", "walletAddress",
+        "nativeIdentityCheck", "uiLockState", "passcodeProvision", "passcodeUnlock",
     )
 
     /** Decided in `handleCommand` before the table (25.34, 25.48, 25.52.4, 25.52AC). */
@@ -56,8 +57,8 @@ internal object BridgeCommandTable {
     fun chatChannelShellRecordCode(type: String): String? = if (type.startsWith(SHELL_RECORD_PREFIX)) "not_supported" else null
 
     /**
-     * Names answered on the window channel behind the origin boundary (not the chat channel): `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c);
-     * PM R1907). They are not in [DISPATCH], so the chat channel answers them `unknown_command`.
+     * Names answered on the window channel behind the origin boundary (not the chat channel): `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c)).
+     * They are not in [DISPATCH], so the chat channel answers them `unknown_command`.
      */
     val WINDOW_CHANNEL: Set<String> = setOf(WalletEoaAddressBridge.NAME, WalletCredentialBridge.NAME)
 

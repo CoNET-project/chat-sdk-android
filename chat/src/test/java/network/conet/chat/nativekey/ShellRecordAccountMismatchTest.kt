@@ -96,7 +96,7 @@ class ShellRecordAccountMismatchTest {
 
     @Test
     fun aNativeReplacementThatDoesNotDeriveTheAccountIsBadRequestAndNothingIsStored() {
-        // 25.52AO.2 (r3cm, R645 a): the derivation check covers native writes too. A native create or recovery whose key does not derive the account
+        // 25.52AO.2 (r3cm a): the derivation check covers native writes too. A native create or recovery whose key does not derive the account
         // is bad_request naming the path, and the store is unchanged.
         val store = emptyStore()
         val resp = write(store, JSONArray().put(profile(account, DerivedAccount.KEY2)), nativeWrite = true)

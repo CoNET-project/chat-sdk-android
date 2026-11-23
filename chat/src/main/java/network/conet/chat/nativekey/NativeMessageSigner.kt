@@ -37,14 +37,59 @@ object NativeMessageSigner {
         if (kind !in KINDS) return NativeOutcome("kind")
         val key = vault.unlock() ?: return NativeOutcome("locked")
         try {
-            val eoa = WalletAddress.fromPrivateKey(key) ?: return NativeOutcome("locked")
-            val gate = check(kind, message, eoa)
-            if (gate != null) return NativeOutcome(gate)
-            val signature = Eip191Signer.sign(key, message) ?: return NativeOutcome("locked")
-            return NativeOutcome("ok", value = signature, address = eoa)
+            return signWithKey(key, kind, message)
         } finally {
             key.fill(0)
         }
+    }
+
+    /**
+     * Signs from the current set of the two-state store (order, step 1): a plain set gives its account key in memory (StoreKeyAdapter), read
+     * only. Null when the set gives no key (absent, unknown, a v3 set, or a phrase that does not derive the set's EOA); the caller then uses the
+     * vault path as the fallback.
+     */
+    internal fun signFromStore(current: MnemonicSetStore.Current, kind: String, message: ByteArray): NativeOutcome? {
+        val key = StoreKeyAdapter.plainKey(current) ?: StoreKeyAdapter.sessionKey(current) ?: return null
+        try {
+            return signWithKey(key, kind, message)
+        } finally {
+            key.fill(0)
+        }
+    }
+
+    /**
+     * Whether the store may answer a signature (store-primary): a plain set answers; a v3 set answers only while the session is ready
+     * for its account. The vault is not consulted here (see [NativeSource]).
+     */
+    internal fun storeMayAnswer(current: MnemonicSetStore.Current): Boolean {
+        val found = current as? MnemonicSetStore.Current.Found ?: return false
+        return found.kind == MnemonicSetStore.Kind.PLAIN || NativeSessionState.isReadyFor(found.eoa)
+    }
+
+    /**
+     * The signature for the effective [source] (see [NativeSource]). A store source signs with its key; a blocked source answers its code without
+     * any fallback to the vault; a vault source runs [vaultSign], which keeps its own codes.
+     */
+    internal fun signBySource(
+        source: NativeSource.Source,
+        current: MnemonicSetStore.Current,
+        kind: String,
+        message: ByteArray,
+        vaultSign: () -> NativeOutcome,
+    ): NativeOutcome = when (source) {
+        is NativeSource.Source.Store -> signFromStore(current, kind, message) ?: NativeOutcome("locked")
+        is NativeSource.Source.Vault -> vaultSign()
+        is NativeSource.Source.Blocked -> NativeOutcome("locked")
+    }
+
+    /** The signature of [message] for [kind] with [key]; the key is not zeroed here (the caller owns it). */
+    private fun signWithKey(key: ByteArray, kind: String, message: ByteArray): NativeOutcome {
+        if (kind !in KINDS) return NativeOutcome("kind")
+        val eoa = WalletAddress.fromPrivateKey(key) ?: return NativeOutcome("locked")
+        val gate = check(kind, message, eoa)
+        if (gate != null) return NativeOutcome(gate)
+        val signature = Eip191Signer.sign(key, message) ?: return NativeOutcome("locked")
+        return NativeOutcome("ok", value = signature, address = eoa)
     }
 
     /** `null` when the bytes may be signed for [kind], otherwise the refusal code. */

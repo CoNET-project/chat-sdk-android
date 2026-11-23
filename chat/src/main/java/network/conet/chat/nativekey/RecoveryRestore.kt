@@ -67,10 +67,10 @@ internal class EndpointRegistryReader(
     private val rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
 ) : RecoveryRegistryReader {
     override fun byNameHash(indexHash: ByteArray): String? =
-        AccountRegistryRead.readFirst(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByNameHash(indexHash))
+        AccountRegistryRead.readAgreed(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByNameHash(indexHash))
 
     override fun byAccountName(name: String): String? =
-        AccountRegistryRead.readFirst(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByAccountName(name))
+        AccountRegistryRead.readAgreed(AccountRegistryRead.current, rpcFor, AccountRegistryRead.callDataByAccountName(name))
 }
 
 /**
@@ -118,7 +118,7 @@ internal class RecoveryEngine(
         // Cooldown (§25.42.7): no read and no decrypt while it lasts.
         val wait = RecoveryBackoff.remainingSeconds(failures, clock.nowMs())
         if (wait > 0) return RecoveryOutcome.backoff(wait)
-        // Step 4: the current registry only. The pre-migration registry is deprecated (R1451, r3jz): path B does not query it, so
+        // Step 4: the current registry only. The pre-migration registry is deprecated (r3jz): path B does not query it, so
         // no legacy_record is produced and a name with no current record is not_found, whatever the old registry holds (B-06, B-12).
         val record = try {
             registry.byAccountName(name)
@@ -159,33 +159,42 @@ internal class RecoveryEngine(
             } catch (_: Exception) {
                 return RecoveryOutcome.fail("record_invalid")
             }
-            // Step 8: m/44'/60'/0'/0/0.
-            val key = MnemonicDerivation.deriveKey(text) ?: return RecoveryOutcome.fail("record_invalid")
-            try {
-                val eoa = WalletAddress.fromPrivateKey(key) ?: return RecoveryOutcome.fail("record_invalid")
-                // Step 9: check the native record again before the write.
-                if (hasKey()) return RecoveryOutcome.existing(vault.publicEoaIfReadable())
-                // Step 10: write, read back, roll back (importKey, §25.25.3).
-                return when (vault.importKey(eoa, key)) {
-                    NativeWalletVault.Import.OK -> {
-                        failures.clear()
-                        RecoveryOutcome.ok(eoa)
-                    }
-                    NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
-                        RecoveryOutcome.existing(vault.publicEoaIfReadable())
-                    NativeWalletVault.Import.STORE_FAILED -> RecoveryOutcome.fail("write_failed")
-                    NativeWalletVault.Import.READBACK_FAILED -> RecoveryOutcome.fail("readback_failed")
-                    NativeWalletVault.Import.ROLLBACK_PENDING -> RecoveryOutcome.fail("rollback_pending")
-                    NativeWalletVault.Import.ADDRESS_MISMATCH, NativeWalletVault.Import.BAD_KEY,
-                    NativeWalletVault.Import.BAD_EOA -> RecoveryOutcome.fail("record_invalid")
+            // D1 (r2.3 41(3), review R2): the recovered object is the phrase. The phrase import derives the EOA at m/44'/60'/0'/0/0 and writes the
+            // phrase with its key (importRecoveryPhrase, internal to the two recovery paths). A key-only write is not a recovery.
+            // Step 9: check the native record again before the write.
+            if (hasKey()) return RecoveryOutcome.existing(vault.publicEoaIfReadable())
+            // Step 10: write, read back, roll back (importMnemonicKey, §25.25.3).
+            val r = NativeImport.importRecoveryPhrase(text, null, vault)
+            return when (r.code) {
+                NativeImport.Code.OK -> {
+                    failures.clear()
+                    RecoveryOutcome.ok(checkNotNull(r.eoa))
                 }
-            } finally {
-                key.fill(0)
+                NativeImport.Code.ALREADY_EXISTS -> RecoveryOutcome.existing(vault.publicEoaIfReadable())
+                NativeImport.Code.WRITE_FAILED -> RecoveryOutcome.fail("write_failed")
+                NativeImport.Code.READBACK_FAILED -> RecoveryOutcome.fail("readback_failed")
+                NativeImport.Code.ROLLBACK_PENDING -> RecoveryOutcome.fail("rollback_pending")
+                // An unconfirmed wrap is not_ready, unreadable: retryable, never a write failure (25.52Y.136 第 7 項).
+                NativeImport.Code.NOT_READY -> RecoveryOutcome.fail("not_ready")
+                NativeImport.Code.INVALID_MNEMONIC, NativeImport.Code.INVALID_KEY, NativeImport.Code.INVALID_FORMAT,
+                NativeImport.Code.ADDRESS_MISMATCH, NativeImport.Code.CANCELLED,
+                -> RecoveryOutcome.fail("record_invalid")
             }
         } finally {
             phrase.fill(0)
         }
     }
 
-    private fun hasKey(): Boolean = vault.state() !is NativeWalletVault.State.NoKey
+    /**
+     * hasKey (25.52Y.136 第 11 項, §25.25.4 表 D): false only with no key record (G0), a confirmed wrap loss (25.52Y.122 第 1 項), or the residue
+     * shape (25.52Y.127). A locked or unknown record that exists is a key.
+     */
+    private fun hasKey(): Boolean = hasKeyOf(vault.state())
 }
+
+/**
+ * hasKey (25.52Y.136 第 11 項, §25.25.4 表 D, and the vector values of 25.52Y.137 第 5 項): false only with no key record (G0), a confirmed wrap loss
+ * (25.52Y.122 第 1 項), or the residue shape (25.52Y.127). A locked or unknown record that exists is a key; a state whose record cannot be decided is
+ * not asserted (the vector null).
+ */
+internal fun hasKeyOf(state: NativeWalletVault.State): Boolean = state !is NativeWalletVault.State.NoKey

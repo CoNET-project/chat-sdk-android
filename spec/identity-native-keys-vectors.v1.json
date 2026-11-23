@@ -1,5 +1,5 @@
 {
-  "spec": "spec v1.1-r3b §25.19.2、§25.19.3（identity.native-keys.v1），第十八批：字段位置、I-3、I-4",
+  "spec": "spec v1.1- §25.19.2、§25.19.3（identity.native-keys.v1），第十八批：字段位置、I-3、I-4",
   "status": "能力位 identity.native-keys.v1 仍未声明。两端都通过全部用例并实现就绪回报后，才可加入 hello（12.3）。",
   "note": "合成数据。请求校验与响应形状；就绪语义取决于原生存储，见 readyVariants。",
   "fieldPlacement": {

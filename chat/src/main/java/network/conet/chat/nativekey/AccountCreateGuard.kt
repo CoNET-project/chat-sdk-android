@@ -11,23 +11,25 @@ internal enum class KeyState { NONE, READABLE, UNREADABLE }
  */
 internal data class CreateGuardInputs(
     val key: KeyState,
-    val legacyReport: String?,
+    val legacyReport: LegacyReportState,
     val legacyUnreadable: Boolean,
     val pointer: Boolean,
     val pageCopy: Boolean,
     val migrating: Boolean,
+    /** The identity_cleared state: a kept wallet copy is reported found, and it does not block a create. */
+    val identityCleared: Boolean = false,
 )
 
 /**
- * The data-safety gate of account creation (PM ruling, §25.46.5, §25.52W.4, §25.52T.3, §25.52U.6). Creating a new wallet must never
+ * The data-safety gate of account creation (§25.46.5, §25.52W.4, §25.52T.3, §25.52U.6). Creating a new wallet must never
  * overwrite a wallet held elsewhere. A create is allowed only when the legacy store is confirmed empty, no account pointer is set, no native
  * key exists, no page copy exists, and no migration or write is pending.
  *
  * Not atomic: the guard is checked at open and again at confirm, but the write itself follows the check. A change between the last check and
- * the write is not covered by this gate. This residual window is recorded in the SDK receipt (review 76706f6d, residual risk 2).
+ * the write is not covered by this gate. This residual window is recorded in the SDK receipt (residual risk 2).
  *
  * The refusal is answered on the bridge as the existing `not_available` (§25.46.10) and the page is not opened. The diagnostic codes below
- * are logged inside the SDK only; they never reach the page, and the page-visible state is driven by the read side (PM ruling).
+ * are logged inside the SDK only; they never reach the page, and the page-visible state is driven by the read side.
  */
 internal object AccountCreateGuard {
     const val MIGRATING = "migrating"
@@ -51,7 +53,9 @@ internal object AccountCreateGuard {
         // PY.19 (1): create mode has no account context, so a key present or unreadable is migrating here. replicaAnswer and
         // needs_native_recovery are told apart only on the normal read path that has an account.
         i.key != KeyState.NONE -> MIGRATING
-        i.migrating || i.legacyUnreadable || i.legacyReport != "absent" -> MIGRATING
+        i.migrating || i.legacyUnreadable -> MIGRATING
+        // After an identity clear the kept wallet copy is found and never migrated: only that found state is allowed.
+        i.legacyReport != LegacyReportState.ABSENT && !(i.identityCleared && i.legacyReport == LegacyReportState.FOUND) -> MIGRATING
         i.pointer -> POINTER_SET
         i.pageCopy -> REPLICA_PRESENT
         else -> null
@@ -73,17 +77,15 @@ internal object AccountCreateGuard {
         } catch (_: Exception) {
             KeyState.UNREADABLE
         }
-        val report = try {
-            files.read(ClearFlagFiles.LEGACY_REPORT)?.toString(Charsets.UTF_8)
-        } catch (_: Exception) {
-            null
-        }
+        // The create guard reads the report only through LegacyStoreReport.readReport (E9.11.33 r2-amend6, G-LR-2, G-LR-3).
+        val report = LegacyStoreReport.readReport(context)
         val pageCopy = try {
             files.names().any { PAGE_COPY.matches(it) }
         } catch (_: Exception) {
             true
         }
         return CreateGuardInputs(
+            identityCleared = ClearFlagFiles(files).identityCleared(),
             key = key,
             legacyReport = report,
             legacyUnreadable = flags.legacyUnreadable(),

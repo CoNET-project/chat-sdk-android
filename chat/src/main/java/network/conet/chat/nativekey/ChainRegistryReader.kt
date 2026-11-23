@@ -19,23 +19,36 @@ internal sealed class EthCallResult {
     class Failed(val outcome: RawOutcome) : EthCallResult()
 }
 
-/** One read-only `eth_call` to one URL, within [timeoutMs]. Never throws. */
-internal fun interface EthTransport {
-    fun call(url: String, to: String, data: String, timeoutMs: Long): EthCallResult
+/**
+ * The JSON-RPC reads of the registry (draft r2.5.20 第 7 版, confirmed by the interface seat): one `eth_call` at a block tag, the block number, and the
+ * block by number. None throws; a failure is a failed result or null.
+ */
+internal interface EthTransport {
+    /** One read-only `eth_call` at [blockTag] to one URL, within [timeoutMs]. */
+    fun call(url: String, to: String, data: String, blockTag: String, timeoutMs: Long): EthCallResult
+
+    /** `eth_blockNumber` as a `0x` hex string, or null on any failure. */
+    fun blockNumber(url: String, timeoutMs: Long): String?
+
+    /** `eth_getBlockByNumber(blockTag, false)`: the number and the hash the endpoint returns, or null on any failure. */
+    fun blockByNumber(url: String, blockTag: String, timeoutMs: Long): BlockRef?
 }
+
+/** A block as an endpoint reports it: its number (`0x` hex) and its hash. */
+internal data class BlockRef(val number: String, val hash: String)
 
 /**
  * The live read of the current registry (§25.52HH.1, HI.2): `getAccount(address)` and `getOwnerByAccountName(string)`, as `eth_call` only. A revert is
  * classified exactly (HH.4); every failure is an invalid result, and no failure is "no record".
  *
- * [endpoints] are tried in order within the one total budget. A valid answer (found, or the exact AccountNotFound) ends the read at once: a valid
- * "no record" never queries the next endpoint (PM ruling, R2213). Only an invalid result (network, timeout, or node failure) moves to the next one.
- * The binding path uses the primary endpoint only, so the default is that single endpoint.
+ * Two endpoints, agreed (draft r2.5.20 第 7 版): both are read at one block N (A's block number), each must return block N with the same hash, and
+ * both must give the same answer. Only both exact AccountNotFound (or both zero owner) is absent. A single absence, a disagreement, or any error is
+ * invalid, which the binding decision reports as `lookup_unavailable` (retry, never create).
  */
 internal class ChainRegistryReader(
     private val transport: EthTransport = HttpEthTransport(),
     private val registry: String = AccountRegistryRead.current.registry,
-    private val endpoints: List<RegistryEndpoint> = listOf(AccountRegistryRead.current.endpoints.first()),
+    private val endpoints: List<RegistryEndpoint> = AccountRegistryRead.current.endpoints.take(2),
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
 ) : RegistryReader {
 
@@ -52,24 +65,47 @@ internal class ChainRegistryReader(
         return one(BindingKind.TAG, deadlineMs, data, ::decodeOwner)
     }
 
-    private fun one(kind: BindingKind, deadlineMs: Long, data: String, decode: (String) -> Decoded): RegistryRead {
-        var last: RegistryRead = RegistryRead.Invalid("rpc_error")
-        for (ep in endpoints) {
-            val timeout = RegistryBudget.perCallTimeout(deadlineMs, nowMs()) ?: return RegistryRead.Invalid("budget_exceeded")
-            val decoded = when (val r = transport.call(ep.url, registry, data, timeout)) {
-                is EthCallResult.Value -> decode(r.hex)
-                is EthCallResult.Reverted -> Decoded(RegistryMapping.classifyRevertData(r.data))
-                is EthCallResult.Failed -> Decoded(r.outcome)
-            }
-            val out: RegistryRead = when (val reg = RegistryMapping.map(kind, decoded.raw)) {
-                is RegistryRead.Found -> RegistryRead.Found(decoded.eoa)
-                else -> reg
-            }
-            // A valid answer (found, or the exact no-record) ends the read; only an invalid one tries the next endpoint.
-            if (out !is RegistryRead.Invalid) return out
-            last = out
+    private fun budget(deadlineMs: Long): Long? = RegistryBudget.perCallTimeout(deadlineMs, nowMs())
+
+    private fun interpret(kind: BindingKind, r: EthCallResult, decode: (String) -> Decoded): RegistryRead {
+        val decoded = when (r) {
+            is EthCallResult.Value -> decode(r.hex)
+            is EthCallResult.Reverted -> Decoded(RegistryMapping.classifyRevertData(r.data))
+            is EthCallResult.Failed -> Decoded(r.outcome)
         }
-        return last
+        return when (val reg = RegistryMapping.map(kind, decoded.raw)) {
+            is RegistryRead.Found -> RegistryRead.Found(decoded.eoa)
+            else -> reg
+        }
+    }
+
+    private fun one(kind: BindingKind, deadlineMs: Long, data: String, decode: (String) -> Decoded): RegistryRead {
+        if (endpoints.size < 2) return RegistryRead.Invalid("endpoints_short")
+        val a = endpoints[0].url
+        val b = endpoints[1].url
+        // The block is A's number N. Both endpoints must answer at N with the same hash (RP-05, RP-08 of the rpc-state vectors).
+        val tagTimeout = budget(deadlineMs) ?: return RegistryRead.Invalid("budget_exceeded")
+        val tag = transport.blockNumber(a, tagTimeout) ?: return RegistryRead.Invalid("rpc_error")
+        val n = tag.removePrefix("0x").toLongOrNull(16) ?: return RegistryRead.Invalid("decode_failed")
+        val ta0 = budget(deadlineMs) ?: return RegistryRead.Invalid("budget_exceeded")
+        val blockA = transport.blockByNumber(a, tag, ta0) ?: return RegistryRead.Invalid("rpc_error")
+        val tb0 = budget(deadlineMs) ?: return RegistryRead.Invalid("budget_exceeded")
+        val blockB = transport.blockByNumber(b, tag, tb0) ?: return RegistryRead.Invalid("rpc_error")
+        if (blockA.number.removePrefix("0x").toLongOrNull(16) != n || blockB.number.removePrefix("0x").toLongOrNull(16) != n) {
+            return RegistryRead.Invalid("block_mismatch")
+        }
+        if (blockA.hash != blockB.hash) return RegistryRead.Invalid("hash_mismatch")
+        val tA = budget(deadlineMs) ?: return RegistryRead.Invalid("budget_exceeded")
+        val ra = interpret(kind, transport.call(a, registry, data, tag, tA), decode)
+        val tB = budget(deadlineMs) ?: return RegistryRead.Invalid("budget_exceeded")
+        val rb = interpret(kind, transport.call(b, registry, data, tag, tB), decode)
+        return when {
+            ra is RegistryRead.Absent && rb is RegistryRead.Absent -> RegistryRead.Absent
+            ra is RegistryRead.Found && rb is RegistryRead.Found && ra.eoa == rb.eoa -> ra
+            ra is RegistryRead.Invalid -> ra
+            rb is RegistryRead.Invalid -> rb
+            else -> RegistryRead.Invalid("disagree")
+        }
     }
 
     companion object {
@@ -133,17 +169,39 @@ internal class ChainRegistryReader(
     }
 }
 
+/** One JSON-RPC POST for the block reads. Null on any failure; nothing is logged. */
+internal fun postRpc(url: String, method: String, params: JSONArray, timeoutMs: Long): JSONObject? {
+    var conn: HttpURLConnection? = null
+    return try {
+        val ms = timeoutMs.toInt().coerceAtLeast(1)
+        conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = ms
+            readTimeout = ms
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+        }
+        val body = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", method).put("params", params)
+        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        if (conn.responseCode !in 200..299) null else JSONObject(conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+    } catch (_: Exception) {
+        null
+    } finally {
+        conn?.disconnect()
+    }
+}
+
 /**
  * The production transport: HTTPS JSON-RPC, POST, with the read timeout of the call. Errors are sorted into [EthCallResult]; nothing is logged, and
  * no request value is written to a log.
  */
 internal class HttpEthTransport : EthTransport {
-    override fun call(url: String, to: String, data: String, timeoutMs: Long): EthCallResult {
+    override fun call(url: String, to: String, data: String, blockTag: String, timeoutMs: Long): EthCallResult {
         val body = JSONObject()
             .put("jsonrpc", "2.0")
             .put("id", 1)
             .put("method", "eth_call")
-            .put("params", JSONArray().put(JSONObject().put("to", to).put("data", data)).put("latest"))
+            .put("params", JSONArray().put(JSONObject().put("to", to).put("data", data)).put(blockTag))
         val ms = timeoutMs.toInt().coerceAtLeast(1)
         var conn: HttpURLConnection? = null
         return try {
@@ -166,6 +224,16 @@ internal class HttpEthTransport : EthTransport {
         } finally {
             conn?.disconnect()
         }
+    }
+
+    override fun blockNumber(url: String, timeoutMs: Long): String? =
+        postRpc(url, "eth_blockNumber", JSONArray(), timeoutMs)?.opt("result") as? String
+
+    override fun blockByNumber(url: String, blockTag: String, timeoutMs: Long): BlockRef? {
+        val r = postRpc(url, "eth_getBlockByNumber", JSONArray().put(blockTag).put(false), timeoutMs)?.optJSONObject("result") ?: return null
+        val number = r.optString("number")
+        val hash = r.optString("hash")
+        return if (number.isEmpty() || hash.isEmpty()) null else BlockRef(number, hash)
     }
 
     companion object {

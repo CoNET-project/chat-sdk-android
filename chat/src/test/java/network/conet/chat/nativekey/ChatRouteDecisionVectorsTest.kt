@@ -9,7 +9,7 @@ import java.security.MessageDigest
 
 /**
  * chat-route-decision-vectors.v1.json (spec 25.29, 25.28.9, the ack envelope of 25.19.2 I-3 and 25.28.3, reqId of 25.28.3, 25.52CO.3, 25.52CQ.1,
- * 25.52CT.3, EOA password of 25.28.4; PM R2153-R2156 segment).
+ * 25.52CT.3, EOA password of 25.28.4; segment).
  *  A: the ack envelope (success carries result, no code; failure carries error, no result).
  *  B: the reqId rules, JSON-text and structured entries.
  *  C: the EOA password is the canonical "0x"+64 lower-case hex form; other forms do not open a canonical backup.

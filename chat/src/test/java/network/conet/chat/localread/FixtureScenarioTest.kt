@@ -59,9 +59,11 @@ class FixtureScenarioTest {
 
     @Test
     fun fixtureVectorsAndFullWalk() {
-        val dirPath = requireNotNull(System.getenv("CHAT_FIXTURE_DIR")) {
-            "CHAT_FIXTURE_DIR is not set: point it at interface/fixtures/out-10k"
-        }
+        // The 10k fixture (about 106 MB) is not vendored in the repository. It runs only when CHAT_FIXTURE_DIR names it; otherwise it is reported
+        // as skipped with this reason (not a failure, and not a pass).
+        val dirPath = System.getenv("CHAT_FIXTURE_DIR")
+        org.junit.Assume.assumeTrue("CHAT_FIXTURE_DIR not set: the 10k fixture is not in the repository", dirPath != null)
+        dirPath!!
         val dir = File(dirPath)
         val scenarios = JSONObject(File(dir, "expected/scenarios.json").readText(Charsets.UTF_8))
         val fx = scenarios.getJSONObject("fixture")

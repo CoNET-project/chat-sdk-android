@@ -1,6 +1,6 @@
 {
   "file": "pgp-literal-newline-vectors.v1.json",
-  "purpose": "PGP 字面量换行的互通向量（spec r3n §25.32）。规则：格式 u、t 的 CRLF 转为 LF；单独的 CR 保留；格式 b 不变。合成数据，只用于测试。",
+  "purpose": "PGP 字面量换行的互通向量（spec §25.32）。规则：格式 u、t 的 CRLF 转为 LF；单独的 CR 保留；格式 b 不变。合成数据，只用于测试。",
   "generator": "gen-pgp-literal-newline-vectors.mjs",
   "rule": {
     "text": "读取 PGP 字面量数据时：格式为 UTF-8（u）或文本（t）时，把 CRLF（0x0D 0x0A）转为 LF（0x0A），单独的 CR 保留；格式为二进制（b）时，不变。",

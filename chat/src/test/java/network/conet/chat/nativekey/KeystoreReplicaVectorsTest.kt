@@ -13,11 +13,19 @@ import java.io.File
  * with the creation flow is checked as `ok`. A fresh install with no key (`none`) is not a bridge write; that path is the native creation flow.
  */
 class KeystoreReplicaVectorsTest {
-    private val doc = JSONObject(File(System.getenv("KEYSTORE_REPLICA_VECTORS") ?: "../spec/keystore-replica-vectors.v1.json").readText(Charsets.UTF_8))
+    private val vectorFile = File(System.getenv("KEYSTORE_REPLICA_VECTORS") ?: "../spec/keystore-replica-vectors.v2.1.json")
+    private val doc = JSONObject(vectorFile.readText(Charsets.UTF_8))
+
+    /** The v2.1 vector (7ba89af4…, KR-05 correction over v2 e541f899…) is pinned by its SHA-256 (byte copy). v1 is superseded for KR-01 and is not used. */
+    @Test
+    fun theVectorFileIsThePinnedV21() {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(vectorFile.readBytes()).joinToString("") { "%02x".format(it) }
+        assertEquals("7ba89af4afe29e021d55137cc4427c2acc6d57e7c6241f4ecdaceb8f605ad18b", digest)
+    }
 
     @Test
-    fun theReplicaGroupHasSevenCases() {
-        assertEquals(7, doc.getJSONArray("cases").length())
+    fun theReplicaGroupHasEightCases() {
+        assertEquals(8, doc.getJSONArray("cases").length())
     }
 
     @Test
@@ -44,6 +52,7 @@ class KeystoreReplicaVectorsTest {
             outcome = ImportOutcome.ABSENT,
             pointerSet = false,
             store = store,
+            validPhraseOf = { VectorSidecar.ACCOUNT },
         )
         assertEquals(true, ok is ShellReplica.Answer.Ok)
         assertEquals(true, captured!!.all { it == 0.toByte() })
@@ -59,10 +68,74 @@ class KeystoreReplicaVectorsTest {
             outcome = ImportOutcome.ABSENT,
             pointerSet = true,
             store = store2,
+            validPhraseOf = { VectorSidecar.ACCOUNT },
         )
         assertEquals(true, refused is ShellReplica.Answer.NotApplied)
         assertEquals(true, captured2!!.all { it == 0.toByte() })
         assertEquals(null, store2.read())
+    }
+
+    /** REP-01 (v227 §247.4; Y.163 第 32 项 A): a key-only orphan key is not read, not derived and no copy is made. */
+    @Test
+    fun keyOnlyAccountGetsNoCopyAndItsKeyIsNeverRead() {
+        val armorBytes = hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT)
+        val files = NativeTestFiles()
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "${VectorSidecar.ACCOUNT}:default")
+        var unlocks = 0
+        val answer = ShellReplica.fromUnlock(
+            unlock = { unlocks++; armorBytes.copyOf() },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = false,
+            store = store,
+            validPhraseOf = { null },
+        )
+        assertEquals(true, answer is ShellReplica.Answer.NotApplied)
+        assertEquals("the key is never unlocked", 0, unlocks)
+        assertEquals(null, store.read())
+    }
+
+    /** A valid phrase for another account does not authorise a copy of this account's orphan key. */
+    @Test
+    fun aPhraseForAnotherAccountDoesNotAuthoriseTheCopy() {
+        val armorBytes = hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT)
+        val files = NativeTestFiles()
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "${VectorSidecar.ACCOUNT}:default")
+        var unlocks = 0
+        val answer = ShellReplica.fromUnlock(
+            unlock = { unlocks++; armorBytes.copyOf() },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = false,
+            store = store,
+            validPhraseOf = { "0x0000000000000000000000000000000000000001" },
+        )
+        assertEquals(true, answer is ShellReplica.Answer.NotApplied)
+        assertEquals("the key is never unlocked", 0, unlocks)
+        assertEquals(null, store.read())
+    }
+
+    /** A valid-phrase account is copied as before: the key is unlocked, the copy is built and the key is zeroed. */
+    @Test
+    fun aValidPhraseAccountStillGetsItsCopy() {
+        val armorBytes = hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT)
+        val files = NativeTestFiles()
+        val store = SealedPageRecordStore(NativeTestWrap(), files, "${VectorSidecar.ACCOUNT}:default")
+        var unlocks = 0
+        var captured: ByteArray? = null
+        val answer = ShellReplica.fromUnlock(
+            unlock = { unlocks++; armorBytes.copyOf().also { captured = it } },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = ImportOutcome.ABSENT,
+            pointerSet = false,
+            store = store,
+            validPhraseOf = { VectorSidecar.ACCOUNT },
+        )
+        // REP-02 (v227 §247.4): a valid-phrase account gets its page copy, built from its own key (checked from the stored record), and the key is zeroed.
+        assertEquals(true, answer is ShellReplica.Answer.Ok)
+        assertEquals(1, unlocks)
+        assertEquals(VectorSidecar.ACCOUNT, store.read()!!.getJSONArray("profiles").getJSONObject(0).getString("keyID"))
+        assertEquals(true, captured!!.all { it == 0.toByte() })
     }
 
     private fun runCase(c: JSONObject): List<String> {
@@ -76,7 +149,7 @@ class KeystoreReplicaVectorsTest {
         if (st.getBoolean("pointer")) flags.setAccountPointer()
         if (st.getBoolean("marker")) flags.setLegacyUnreadable()
         val vault = when (st.getString("native_key")) {
-            "readable" -> NativeWalletVault.State.Ready(VectorSidecar.ACCOUNT)
+            "readable", "key_only_orphan", "valid_mnemonic_readable" -> NativeWalletVault.State.Ready(VectorSidecar.ACCOUNT)
             "unreadable" -> NativeWalletVault.State.Locked("unreadable")
             "none" -> NativeWalletVault.State.NoKey
             else -> throw IllegalArgumentException("unknown native_key")
@@ -107,7 +180,7 @@ class KeystoreReplicaVectorsTest {
                 explicitChoice = { creation },
             )
         }
-        val creation = expect.optString("create_write") == "allowed"
+        val creation = expect.optString("create_write") in setOf("allowed", "allowed_append_only")
         // KR-03: the create write is checked after the key is generated (a readable key), with the creation flow.
         val writeVault = if (creation) NativeWalletVault.State.Ready(VectorSidecar.ACCOUNT) else vault
         val bridge = bridgeFor(vault, creation = false)
@@ -123,18 +196,36 @@ class KeystoreReplicaVectorsTest {
         val writeAck = bridgeFor(writeVault, creation).handle(ShellOrigin.EMBEDDED_PAGE, writeBody, writeBody.toString().toByteArray(Charsets.UTF_8).size)
         val writeWant = expect.getString("create_write")
         val writeGot = writeAck.optJSONObject("result")?.optString("code") ?: writeAck.optString("error")
-        val writeExpect = if (writeWant == "allowed") "ok" else writeWant
+        // allowed_append_only (KR-01 v2): the write is allowed and only appends; checked as ok here.
+        val writeExpect = if (writeWant == "allowed" || writeWant == "allowed_append_only") "ok" else writeWant
         if (writeGot != writeExpect) out += "create_write $writeGot != $writeExpect"
 
-        // The replica answer: `ok_same_eoa` (from the readable key, the EOA of the key) or `not_applied`.
-        val key = if (vaultReadable(st)) hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT) else null
-        val replica = ShellReplica.answer(key, VectorSidecar.ACCOUNT, outcome, st.getBoolean("pointer"), store)
+        // The replica answer through the production glue (fromUnlock), with the valid-phrase gate (v227 §247.2): a key-only orphan key is never unlocked,
+        // read or derived; a valid-mnemonic account is copied from its key. `ok_same_eoa` or `not_applied`.
+        val validPhrase = st.optBoolean("valid_mnemonic", false)
+        var unlocks = 0
+        // Its own files and wrap: the create write above must not share a copy with the replica step.
+        val replicaWrap = NativeTestWrap()
+        val replicaFiles = NativeTestFiles()
+        val replicaStore = SealedPageRecordStore(replicaWrap, replicaFiles, "${VectorSidecar.ACCOUNT}:default")
+        val replica = ShellReplica.fromUnlock(
+            unlock = { unlocks++; if (vaultReadable(st)) hexBytes(VectorSidecar.ARMOR_OF_ACCOUNT) else null },
+            expectedEoa = VectorSidecar.ACCOUNT,
+            outcome = outcome,
+            pointerSet = st.getBoolean("pointer"),
+            store = replicaStore,
+            validPhraseOf = { if (validPhrase) VectorSidecar.ACCOUNT else null },
+        )
         val replicaWant = expect.getString("replica")
         val replicaGot = when (replica) {
             is ShellReplica.Answer.Ok -> if (replica.eoa == VectorSidecar.ACCOUNT) "ok_same_eoa" else "ok_other_eoa"
             ShellReplica.Answer.NotApplied -> "not_applied"
         }
         if (replicaGot != replicaWant) out += "replica $replicaGot != $replicaWant"
+        // The orphan key is never read or derived, and never overwritten: no unlock and no copy written for a key-only orphan.
+        if (expect.has("orphan_key_read") && !expect.getBoolean("orphan_key_read") && unlocks != 0) out += "orphan key read ($unlocks unlocks)"
+        if (expect.has("orphan_key_derived") && !expect.getBoolean("orphan_key_derived") && unlocks != 0) out += "orphan key derived"
+        if (expect.has("orphan_key_overwritten") && !expect.getBoolean("orphan_key_overwritten") && replicaStore.read() != null && !validPhrase) out += "orphan key overwritten"
         return out
     }
 
@@ -148,7 +239,8 @@ class KeystoreReplicaVectorsTest {
         }
     }
 
-    private fun vaultReadable(st: JSONObject): Boolean = st.getString("native_key") == "readable"
+    /** A readable key is present (the orphan key of KR-01 and the valid-mnemonic key of KR-08 are readable keys too). */
+    private fun vaultReadable(st: JSONObject): Boolean = st.getString("native_key") in setOf("readable", "key_only_orphan", "valid_mnemonic_readable")
 
     private fun hexBytes(hex: String): ByteArray = hex.removePrefix("0x").chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

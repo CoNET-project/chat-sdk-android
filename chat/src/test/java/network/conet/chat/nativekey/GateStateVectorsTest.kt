@@ -11,7 +11,7 @@ import java.security.MessageDigest
 
 /**
  * T-160, T-161 (spec 25.26.4c), 25.52BK (r3di), 25.52BL (r3dj), 25.52BO.1 and 25.52BP.1 (r3dl, r3dm) against `spec/gate-state-vectors.v2.json`
- * (r3pb: the authoritative file, sha256 34dcaf66…, 146 cases; the v1 file d5b9c948… is superseded).
+ * (r3pb: the authoritative file, sha256 34dcaf66…, 146 cases; the v1 file 83ae0be1… is superseded).
  * G0 cases answer `no_key`; G1 cases answer `not_ready`, except `init` (EOA check) and the status queries (table D).
  *
  * The 26 cases with `forbiddenCodes` (25.52BK.2) are shell-layer actions that the gate does not refuse. The SDK does not register them, so an
@@ -36,7 +36,7 @@ class GateStateVectorsTest {
 
     @Test
     fun caseCountsMatchTheVector() {
-        // Canonical spec pack (R2190 segment 6): 146 cases (G0 34, G1 109, G2 3); counts.g1Commands 67, g1Init 10, shell-layer not gated 26,
+        // Canonical spec pack (segment 6): 146 cases (G0 34, G1 109, G2 3); counts.g1Commands 67, g1Init 10, shell-layer not gated 26,
         // shell rejects 8.
         assertEquals(146, cases.length())
         val counts = v.getJSONObject("counts")
@@ -92,8 +92,14 @@ class GateStateVectorsTest {
                     // expect is the outer layer's (no_key, not_ready), so for those rows only the inner answer is checked.
                     // W2 to W4 and the W5 signMessage name are not bridge names (25.52DP.1, 25.52AR.3): unknown_command before the gate.
                     val code = if (command == "clearIdentity" && gate != NoKeyGate.Gate.G2 && c.optBoolean("clearPending")) {
-                        // 25.26.4c 第 3a 項: with clear_pending set, clearIdentity finishes the interrupted clear in G0 and G1 (no wallet here: ok).
-                        "ok"
+                        // 25.26.4c 第 3a 項, G0 plan B (item 3): `ok` here is the gate's pass, not the final answer. With clear_pending set the gate does
+                        // not answer no_key / not_ready; the command goes on to the handler layer, which decides (G0 + Owned X answers clear_incomplete, see
+                        // G0PlanBVectorsTest). The check runs the production gate step for each marker the case can stand for.
+                        val g0 = c.getString("state") == "G0"
+                        val current: String? = if (g0) null else recordEoa
+                        val markers = if (g0) listOf(PendingOwner.NoAccount, PendingOwner.Owned(recordEoa)) else listOf(PendingOwner.Owned(recordEoa))
+                        if (markers.all { clearGateStep(g2 = false, g0 = g0, owner = it, currentEoa = current) != ClearGateStep.GATE }) "ok"
+                        else NoKeyGate.answerFor(command, gate)
                     } else if (command in innerUnknown || NoKeyGate.route(command) == NoKeyGate.Route.UNKNOWN_NAME) {
                         assertFalse("$id: $command is not a bridge name", BridgeCommandTable.isRegistered(command))
                         BridgeCommandTable.UNKNOWN_COMMAND

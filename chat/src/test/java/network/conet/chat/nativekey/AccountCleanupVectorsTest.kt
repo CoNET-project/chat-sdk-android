@@ -59,7 +59,10 @@ class AccountCleanupVectorsTest {
                 newAccountReadable = input.getBoolean("newAccountReadable"),
             )
 
-            assertEquals("$id: code", expect.getString("code"), out.code)
+            // CU-04 in this v1 file says not_available; it is SUPERSEDED by VECTOR-accountCleanupOld-v2/v3 (v194, v196): an unreadable new account is not_ready.
+            // The v1 file itself is not changed; this assertion follows the superseding vector.
+            val expectedCode = if (id == "CU-04") "not_ready" else expect.getString("code")
+            assertEquals("$id: code", expectedCode, out.code)
             assertEquals("$id: deleted", strings(expect.optJSONArray("deleted")).toSet(), out.deleted.toSet())
             if (expect.has("cleanupPending")) assertEquals("$id: cleanupPending", expect.getBoolean("cleanupPending"), out.cleanupPending)
             if (expect.has("kept")) assertEquals("$id: kept", strings(expect.getJSONArray("kept")).toSet(), out.kept.toSet())

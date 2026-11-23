@@ -22,7 +22,7 @@ private val OTHER: String = VectorSidecar.OTHER
 
 class ShellRecordVectorsTest {
     private val bytes = File(
-        System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v1.json",
+        System.getenv("PGP_MIGRATION_VECTORS") ?: "../spec/pgp-migration-vectors.v3.1.json",
     ).readBytes()
     private val doc = VectorSidecar.map(JSONObject(String(bytes, Charsets.UTF_8)))
 
@@ -43,7 +43,9 @@ class ShellRecordVectorsTest {
         val list = doc.getJSONArray("shellRecordCases")
         for (i in 0 until list.length()) {
             val c = list.getJSONObject(i)
-            failures += runBridgeCase(c).map { "${c.getString("id")}: $it" }
+            val problems = runBridgeCase(c)
+            VectorResultLog.record("shellRecordCases", c.getString("id"), problems)
+            failures += problems.map { "${c.getString("id")}: $it" }
         }
         assertEquals(emptyList<String>(), failures)
     }
@@ -195,7 +197,9 @@ class ShellRecordVectorsTest {
         val list = doc.getJSONArray("importCases")
         for (i in 0 until list.length()) {
             val c = list.getJSONObject(i)
-            failures += runImportCase(c).map { "${c.getString("id")}: $it" }
+            val problems = runImportCase(c)
+            VectorResultLog.record("importCases", c.getString("id"), problems)
+            failures += problems.map { "${c.getString("id")}: $it" }
         }
         assertEquals(emptyList<String>(), failures)
     }

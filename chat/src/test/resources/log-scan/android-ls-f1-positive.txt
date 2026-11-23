@@ -1,0 +1,6 @@
+01-01 00:00:00.000  1234  1234 I BeamioConetChat: synthetic positive sample (LS-F1 canary, not a wallet)
+01-01 00:00:00.001  1234  1234 D BeamioConetChat: key 0x78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd
+01-01 00:00:00.002  1234  1234 D BeamioConetChat: key 78c08ce2d2b3fcc5674235d61587b11daebeb0bd4b44a263b827f0ba7743b0bd
+01-01 00:00:00.003  1234  1234 D BeamioConetChat: phrase abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
+01-01 00:00:00.004  1234  1234 D BeamioConetChat: run abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon
+01-01 00:00:00.005  1234  1234 D BeamioConetChat: digest 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

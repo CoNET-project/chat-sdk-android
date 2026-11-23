@@ -79,19 +79,33 @@ object BeamioChatWalletKeyStore {
     internal fun ownerEoa(context: Context): String? =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_EOA, "").orEmpty().trim().lowercase().ifEmpty { null }
 
-    /** Removes the legacy wallet copy of an old account. True only when the copy is gone and the wrapping key is removed. */
-    internal fun clearRecord(context: Context): Boolean = clear(context) && runCatching { ownerEoa(context) == null }.getOrDefault(false)
-
-    /** True only when the preferences are committed and the wrapping key is gone (spec 25.52PY.8 (3)). */
-    fun clear(context: Context): Boolean {
-        val prefsOk = runCatching {
-            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
-        }.getOrDefault(false)
-        val keyOk = runCatching {
-            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            ks.deleteEntry(KEY_ALIAS)
-            !ks.containsAlias(KEY_ALIAS)
-        }.getOrDefault(false)
-        return prefsOk && keyOk
+    /**
+     * Read-only presence of the published copy for the key-only criterion. Reads the ciphertext field only; it
+     * does not decrypt, so a copy that cannot be decrypted still counts as present. A read failure is Unknown. When the platform reads the copy as
+     * empty, the backing file (and its .bak) is checked: a file that exists and is not a clean empty map (corrupt XML read as empty) is Unknown, never
+     * Absent. Writes and removes nothing.
+     */
+    internal fun publishedCopyState(context: Context): network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy {
+        val app = context.applicationContext
+        return classifyPublishedCopy(
+            readCiphertext = { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_CT, "").orEmpty() },
+            // The directory is resolved inside the read, so a failure to resolve it is Unknown, never a crash of the caller.
+            readFile = { name -> java.io.File(java.io.File(app.applicationInfo.dataDir, "shared_prefs"), name).let { f -> if (f.exists()) f.readBytes() else null } },
+        )
     }
+
+    private val EMPTY_MAP = Regex("^(<\\?xml[^>]*\\?>)?\\s*(<map\\s*/>|<map>\\s*</map>)\\s*$")
+
+    /** [readFile] returns the bytes of a file under shared_prefs, or null when it does not exist; it may throw. */
+    internal fun classifyPublishedCopy(
+        readCiphertext: () -> String,
+        readFile: (String) -> ByteArray? = { null },
+    ): network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy =
+        try {
+            if (readCiphertext().isNotEmpty()) network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy.Present
+            else if (listOf("$PREFS.xml", "$PREFS.xml.bak").any { n -> readFile(n)?.let { b -> !EMPTY_MAP.matches(String(b, Charsets.UTF_8).trim()) } == true }) network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy.Unknown
+            else network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy.Absent
+        } catch (_: Exception) {
+            network.conet.chat.nativekey.NativeWalletVault.PublishedWalletCopy.Unknown
+        }
 }

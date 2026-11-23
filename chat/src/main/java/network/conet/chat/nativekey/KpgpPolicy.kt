@@ -1,7 +1,7 @@
 package network.conet.chat.nativekey
 
 /**
- * The decision for the account PGP item K_pgp (§25.52Y.59, PM ruling): creation with W in one transaction, and the upgrade of an account that has W
+ * The decision for the account PGP item K_pgp (§25.52Y.59): creation with W in one transaction, and the upgrade of an account that has W
  * but no K_pgp. Pure: the caller performs the writes, deletes and reads it asks for. The vector group `kpgpCases` (KP-01 to KP-13) checks it.
  *
  * Upgrade order: an existing K_pgp is kept; then the native PGP record L (valid: K_pgp is written from it, L is never deleted); then the chain backup

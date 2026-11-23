@@ -40,7 +40,7 @@ class PgpBackupCompatVectorsTest {
 
     @Test
     fun theVectorFileIsTheCurrentCopy() {
-        assertEquals("7c1515fc8f7468386db8195348f5e784caa77d1462dd33f997b865c2d3b8850c", sha256Hex(raw))  // r3l: D-1, D-2 strict
+        assertEquals("d112fe566387a27ca292b0139b6f0648cde1ce919fea5e2ee22738f3dd47b77a", sha256Hex(raw))  // r3l: D-1, D-2 strict
     }
 
     @Test

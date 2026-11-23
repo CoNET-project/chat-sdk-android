@@ -182,7 +182,7 @@ class ClearIdentityTest {
     @Test
     fun aRestartRedoRunsOnlyWhenTheMarkerIsSetAndNoWalletIsHeld() {
         val files = NativeTestFiles()
-        files.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        files.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         val held = Steps(files).apply { holds = true }
         assertEquals("the block stays while W is held", IdentityClearCode.CLEAR_INCOMPLETE, held.build().redoIfInterrupted())
         assertTrue("nothing is erased while a wallet is held", held.log == listOf("holds"))
@@ -293,7 +293,7 @@ class ClearIdentityTest {
         assertFalse("no marker, no sweep", orphanSweepMayRun(ClearFlagFiles(absent)))
 
         val marked = NativeTestFiles()
-        marked.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        marked.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         assertTrue("an interrupted clear is marked", orphanSweepMayRun(ClearFlagFiles(marked)))
 
         val unreadable = object : VaultFiles {
@@ -311,7 +311,7 @@ class ClearIdentityTest {
         val b = "0x" + "b".repeat(40)
         ClearFlagFiles(files).setRecoveryBackupConfirmed(a)
         ClearFlagFiles(files).setRecoveryBackupConfirmed(b)
-        files.map[ClearFlagFiles.CLEAR_PENDING] = byteArrayOf(1)
+        files.map[ClearFlagFiles.CLEAR_PENDING] = ownedMarker()
         assertTrue(eraseBackupFlagsOfUnknownAccount(files.map.keys.toList()) { eraseChecked(files, it) })
         assertFalse("account a's flag is gone", ClearFlagFiles(files).recoveryBackupConfirmed(a))
         assertFalse("account b's flag is gone", ClearFlagFiles(files).recoveryBackupConfirmed(b))
@@ -325,4 +325,7 @@ class ClearIdentityTest {
         files.failDelete = ClearFlagFiles.backupFlagName("0x" + "a".repeat(40))
         assertFalse(eraseBackupFlagsOfUnknownAccount(files.map.keys.toList()) { eraseChecked(files, it) })
     }
+
+    /** A clear_pending that names its owner. The legacy single byte is unknown and resumes nothing. */
+    private fun ownedMarker(): ByteArray = ("0x" + "c".repeat(40)).toByteArray(Charsets.UTF_8)
 }

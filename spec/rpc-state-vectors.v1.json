@@ -1,0 +1,261 @@
+{
+  "meta": {
+    "file": "rpc-state-vectors.v1.json",
+    "status": "第 6 版草案向量（未升 pin；拟定条款见草案第 2 节与第 5B 节）",
+    "generator": "gen-rpc-state-vectors.mjs",
+    "rule": "RPC 三态：两端点同一区块 N；任一错误、超时、区块不一致或结果不一致一律 unknown。本地 Locked = 有条目但读取失败；待用钥存在 = 非 NoKey。"
+  },
+  "cases": [
+    {
+      "id": "RP-01",
+      "kind": "rpc",
+      "title": "两端点同一区块 N，均 absent：absent",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "absent"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "absent"
+          }
+        ]
+      },
+      "expect": {
+        "state": "absent"
+      }
+    },
+    {
+      "id": "RP-02",
+      "kind": "rpc",
+      "title": "两端点同一区块 N，均 present 且 keyId、指纹一致：present",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "present",
+            "keyId": "KEY-7F3A",
+            "fingerprint": "FP-7F3A"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "present",
+            "keyId": "KEY-7F3A",
+            "fingerprint": "FP-7F3A"
+          }
+        ]
+      },
+      "expect": {
+        "state": "present"
+      }
+    },
+    {
+      "id": "RP-03",
+      "kind": "rpc",
+      "title": "端点 A 超时：unknown（不当作无记录）",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "timeout"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "absent"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "RP-04",
+      "kind": "rpc",
+      "title": "端点 B 报错：unknown",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "absent"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "error"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "RP-05",
+      "kind": "rpc",
+      "title": "区块不一致（B 在 N+1 应答）：unknown",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "absent"
+          },
+          {
+            "endpoint": "B",
+            "block": 101,
+            "result": "absent"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "RP-06",
+      "kind": "rpc",
+      "title": "结果不一致（A present，B absent）：unknown（部分结果）",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "present",
+            "keyId": "KEY-7F3A",
+            "fingerprint": "FP-7F3A"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "absent"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "RP-07",
+      "kind": "rpc",
+      "title": "两端点 present 但 keyId 不同（端点不一致）：unknown",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 100,
+            "result": "present",
+            "keyId": "KEY-7F3A",
+            "fingerprint": "FP-7F3A"
+          },
+          {
+            "endpoint": "B",
+            "block": 100,
+            "result": "present",
+            "keyId": "KEY-OTHER",
+            "fingerprint": "FP-OTHER"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "RP-08",
+      "kind": "rpc",
+      "title": "两端点 absent 但请求区块与 headBlock 不一致（应答 block 不等于 N）：unknown",
+      "request": {
+        "N": 100,
+        "eps": [
+          {
+            "endpoint": "A",
+            "block": 99,
+            "result": "absent"
+          },
+          {
+            "endpoint": "B",
+            "block": 99,
+            "result": "absent"
+          }
+        ]
+      },
+      "expect": {
+        "state": "unknown"
+      }
+    },
+    {
+      "id": "LK-01",
+      "kind": "localProbe",
+      "title": "本地探测：枚举成功无条目：absent（NoKey）",
+      "probe": {
+        "enumerated": true,
+        "items": 0
+      },
+      "expect": {
+        "state": "absent",
+        "pendingExists": false
+      }
+    },
+    {
+      "id": "LK-02",
+      "kind": "localProbe",
+      "title": "本地探测：有条目且读取成功：present",
+      "probe": {
+        "enumerated": true,
+        "items": 1,
+        "readAll": true
+      },
+      "expect": {
+        "state": "present",
+        "pendingExists": true
+      }
+    },
+    {
+      "id": "LK-03",
+      "kind": "localProbe",
+      "title": "本地探测：有条目但读取失败（存在但不可读）：Locked，计为待用钥存在",
+      "probe": {
+        "enumerated": true,
+        "items": 1,
+        "readAll": false
+      },
+      "expect": {
+        "state": "Locked",
+        "pendingExists": true
+      }
+    },
+    {
+      "id": "LK-04",
+      "kind": "localProbe",
+      "title": "本地探测：枚举失败：failed（unknown），不得当作 absent",
+      "probe": {
+        "enumerated": false
+      },
+      "expect": {
+        "state": "failed",
+        "pendingExists": false
+      }
+    }
+  ],
+  "selfCheck": {
+    "cases": 12,
+    "result": "pass"
+  }
+}

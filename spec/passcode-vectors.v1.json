@@ -1,6 +1,6 @@
 {
-  "spec": "spec v1.1-r3b §25.16.2、§25.17.6、§25.17.7、§25.17.10（第十批）",
-  "status": "第十批：生日格式拒绝（PM 维持）；PWA 补充的 3 条转移已采纳；P-LEN 定为 8–12 位。三端实现前以本文件为准。",
+  "spec": "spec v1.1- §25.16.2、§25.17.6、§25.17.7、§25.17.10（第十批）",
+  "status": "第十批：生日格式拒绝（维持）；PWA 补充的 3 条转移已采纳；P-LEN 定为 8–12 位。三端实现前以本文件为准。",
   "note": "全部为合成测试材料。结果码与消息键由 PWA 定义；原生不回送口令。",
   "policy": {
     "minDigits": 8,
@@ -257,53 +257,138 @@
     "note": "KAT：三端派生结果逐字节一致。口令仅为测试材料。"
   },
   "backoff": {
-    "schedule": [
-      {
-        "consecutiveFailures": 0,
-        "cooldownSec": 0
-      },
-      {
-        "consecutiveFailures": 1,
-        "cooldownSec": 0
-      },
-      {
-        "consecutiveFailures": 2,
-        "cooldownSec": 0
-      },
-      {
-        "consecutiveFailures": 3,
-        "cooldownSec": 0
-      },
-      {
-        "consecutiveFailures": 4,
-        "cooldownSec": 0
-      },
-      {
-        "consecutiveFailures": 5,
-        "cooldownSec": 30
-      },
-      {
-        "consecutiveFailures": 6,
-        "cooldownSec": 60
-      },
-      {
-        "consecutiveFailures": 7,
-        "cooldownSec": 300
-      },
-      {
-        "consecutiveFailures": 8,
-        "cooldownSec": 900
-      },
-      {
-        "consecutiveFailures": 9,
-        "cooldownSec": 3600
-      },
-      {
-        "consecutiveFailures": 12,
-        "cooldownSec": 3600
-      }
+    "note": "口令解锁失败退避（2026-11-20）。只在 UI 层执行；原生对 passcodeUnlock 一律不计数、不冷却、不返回 backoff。旧 schedule（秒级递增）已废止，不再使用。",
+    "enforcedBy": "ui_layer_only",
+    "nativeCountsUnlockFailures": false,
+    "nativeCooldown": false,
+    "unit": "ms",
+    "threshold": 3,
+    "cooldownMs": 300000,
+    "afterExpiry": "one_attempt_then_full_cooldown",
+    "reCooldownMs": 300000,
+    "clearOn": "ui_correct_unlock",
+    "countPerInput": true,
+    "nonCountingFailures": [
+      "native_sync_failure",
+      "storage_failure"
     ],
-    "note": "连续错误次数；成功即清零；不擦除数据。"
+    "persistAcrossRestart": true,
+    "cases": [
+      {
+        "id": "B-1",
+        "title": "前两次错误不冷却",
+        "events": [
+          "wrong",
+          "wrong"
+        ],
+        "expect": {
+          "failures": 2,
+          "silentMs": 0,
+          "attemptAllowed": true
+        }
+      },
+      {
+        "id": "B-2",
+        "title": "第三次错误立即静默 300000 ms",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong"
+        ],
+        "expect": {
+          "failures": 3,
+          "silentMs": 300000,
+          "attemptAllowed": false
+        }
+      },
+      {
+        "id": "B-3",
+        "title": "静默期内拒绝验证（不比对口令）",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong",
+          "correct_during_silence"
+        ],
+        "expect": {
+          "compared": false,
+          "unlocked": false,
+          "failures": 3
+        }
+      },
+      {
+        "id": "B-4",
+        "title": "期满只给一次机会，正确即解锁并清零",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong",
+          "expire",
+          "correct"
+        ],
+        "expect": {
+          "unlocked": true,
+          "failures": 0,
+          "silentMs": 0
+        }
+      },
+      {
+        "id": "B-5",
+        "title": "期满后第一次仍错，重新静默完整 300000 ms",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong",
+          "expire",
+          "wrong"
+        ],
+        "expect": {
+          "failures": 4,
+          "silentMs": 300000,
+          "attemptAllowed": false
+        }
+      },
+      {
+        "id": "B-6",
+        "title": "重启后失败状态与到期时间保持",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong",
+          "restart"
+        ],
+        "expect": {
+          "failures": 3,
+          "silentUntilPersisted": true
+        }
+      },
+      {
+        "id": "B-7",
+        "title": "原生同步失败、存储故障不计为输错",
+        "events": [
+          "wrong",
+          "wrong",
+          "native_sync_failure",
+          "storage_failure"
+        ],
+        "expect": {
+          "failures": 2,
+          "silentMs": 0
+        }
+      },
+      {
+        "id": "B-8",
+        "title": "一次输入只计一次（重复提交同一输入不重复计数）",
+        "events": [
+          "wrong",
+          "wrong",
+          "wrong_same_input_twice"
+        ],
+        "expect": {
+          "failures": 3
+        }
+      }
+    ]
   },
   "wrapping": {
     "layers": [

@@ -66,7 +66,7 @@ class NativeHistoryDeleteTest {
 
     @Test
     fun aClosedStoreIsNotReadyThroughTheAckAndChangesNothing() {
-        // R565: lock() is logging out. It closes the handle, so the store is closed and answers not_ready (envelope), not busy.
+        // lock() is logging out. It closes the handle, so the store is closed and answers not_ready (envelope), not busy.
         val file = File.createTempFile("native-delete-closed", ".db").apply { deleteOnExit() }
         val store = seeded(mapOf(CONV_A to listOf("m1" to 0)), file)
         store.lock()
@@ -88,7 +88,7 @@ class NativeHistoryDeleteTest {
 
     @Test
     fun aLockedStoreWithAnOpenHandleIsBusyThroughTheAckAndChangesNothing() {
-        // R565: markLocked keeps the handle open and loses only the key: locked, not closed, so busy.
+        // markLocked keeps the handle open and loses only the key: locked, not closed, so busy.
         val file = File.createTempFile("native-delete-locked", ".db").apply { deleteOnExit() }
         val store = seeded(mapOf(CONV_A to listOf("m1" to 0)), file)
         store.markLocked("kcv_mismatch")

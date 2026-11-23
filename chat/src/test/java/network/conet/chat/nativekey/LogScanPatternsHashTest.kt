@@ -19,12 +19,12 @@ class LogScanPatternsHashTest {
         // The canonical copy interface/protocol/log-scan-patterns.v1.json (spec r3cj, unchanged since r3ch), byte for byte. Previously 90ee2122… (r3ce) and e5d2fa13… (r3cc, which still
         // listed the spec's own hash) and d8cffc70… (r3i, without the chat-route sources).
         val sha = MessageDigest.getInstance("SHA-256").digest(raw).joinToString("") { "%02x".format(it) }
-        // r3dm (R700, R693): the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
-        // r3dp (R705): the protocol version is c2df8584…; 884391e5… is withdrawn.
-        // r3dz (R721, R722): the protocol version is 273947fe…; c2df8584… is withdrawn.
+        // r3dm : the protocol version is 884391e5…; the previous 8169b1bb… is withdrawn.
+        // r3dp : the protocol version is c2df8584…; 884391e5… is withdrawn.
+        // r3dz : the protocol version is 273947fe…; c2df8584… is withdrawn.
         // r3eh (registry, 2026-11-14): the protocol version is 9803a2ba…; 62ae7afd… and 6e38a8ad… are withdrawn.
-        // r3el (registry, 2026-11-14): the protocol version is 1c118738… (spec r3rl sync, 2026-11-15); 714b96e2… is withdrawn.
-        assertEquals("1c118738c95d4c01ed99ae691ed67abe1a390bedbc2b41f0c417dc6666b341f1", sha)
+        // r3el (registry, 2026-11-14): the protocol version is c1928a74… (spec r3rl sync, 2026-11-15); 714b96e2… is withdrawn.
+        assertEquals("c1928a74156394b49e60002b6baaeb6b9d0e31cb3b3637733ba944e861af13e0", sha)
     }
 
     @Test

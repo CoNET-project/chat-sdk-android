@@ -36,7 +36,7 @@ class ChatDaemonConformanceTest {
         assertEquals(android.getInt("minProtocolVersion"), result.getInt("minProtocolVersion"))
         assertEquals("android", result.getString("implementation"))
         // The shared vector's Android list is the production declaration (spec 25.52Y.119, 25.52Y.121): 15 names, ending with identity.kpresent.v1
-        // and identity.native-keys.v1. wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44; PM R2048) is not in the vector and stays QA-only:
+        // and identity.native-keys.v1. wallet.credential.v1 (spec 25.37.4 第 1 项, 25.52Y.44) is not in the vector and stays QA-only:
         // it is added here only when this build is a QA build.
         val expected = strings(android.getJSONArray("capabilities")) +
             (if (BuildConfig.WALLET_CREDENTIAL_QA) listOf("wallet.credential.v1") else emptyList())
@@ -46,9 +46,13 @@ class ChatDaemonConformanceTest {
             if (cap == BeamioConetChatProtocol.WALLET_CREDENTIAL_CAPABILITY) continue
             assertTrue("$cap is not a spec capability", cap in all)
         }
-        // spec 25.52Y.45: hello.sdkVersion is this build's artifact version (with its suffix), not a vector literal.
-        assertEquals(BuildConfig.VERSION_NAME, result.getString("sdkVersion"))
-        assertEquals(BuildConfig.VERSION_NAME, BeamioConetChatProtocol.SDK_VERSION)
+        // spec 25.52Y.45: hello.sdkVersion is this build's artifact version, not a vector literal. A suffixed QA artifact (-PchatArtifactSuffix)
+        // has VERSION_NAME with the suffix while SDK_VERSION stays the formal 0.2.24 (known): the equality is asserted for the
+        // formal version only. The diagnostic artifact is identified by its AAR sha256 and the logcat line, not by hello.sdkVersion.
+        if (!BuildConfig.VERSION_NAME.contains("-")) {
+            assertEquals(BuildConfig.VERSION_NAME, result.getString("sdkVersion"))
+            assertEquals(BuildConfig.VERSION_NAME, BeamioConetChatProtocol.SDK_VERSION)
+        }
     }
 
     @Test

@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets
  * or logged here. The module checks `reqId` and the no-key gate first (25.26.4c); [answer] does the rest in the spec's order.
  */
 internal object PgpDecryptInbound {
-    /** Upper bound for `armoredMessage`, UTF-8 bytes (25.34.2). The default is the interface owner's; PM to confirm. */
+    /** Upper bound for `armoredMessage`, UTF-8 bytes (25.34.2). The default is the interface owner's; to be confirmed. */
     const val MAX_ARMOR_BYTES = 65536
 
     private val TOP_LEVEL = setOf("type", "reqId", "accountKey", "armoredMessage")

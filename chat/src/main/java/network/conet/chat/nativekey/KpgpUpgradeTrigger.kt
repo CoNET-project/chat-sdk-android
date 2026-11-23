@@ -3,7 +3,7 @@ package network.conet.chat.nativekey
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * When the K_pgp upgrade runs (PM ruling): after the account exists and the keychain is readable (unlocked), once per process, asynchronously. A locked
+ * When the K_pgp upgrade runs: after the account exists and the keychain is readable (unlocked), once per process, asynchronously. A locked
  * keychain never runs it; it runs after the unlock. The page is not blocked and the wallet is not affected by the result.
  */
 internal object KpgpUpgradeTrigger {

@@ -61,7 +61,7 @@ class PgpDecryptInboundTest {
         val sha = MessageDigest.getInstance("SHA-256")
             .digest(File(System.getenv("PGP_BRIDGE_VECTORS") ?: "../spec/pgp-bridge-command-vectors.v1.json").readBytes())
             .joinToString("") { "%02x".format(it) }
-        assertEquals("d5b032d274192088e82d52f1529c42f3eb766e9e8b43b50429935ec5abba51d0", sha)
+        assertEquals("93b396fa57c2ef86364d7e1f62deace4bff0930d9a02a45cfafc866d66caa057", sha)
     }
 
     @Test

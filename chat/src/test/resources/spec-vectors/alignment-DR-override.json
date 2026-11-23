@@ -1,0 +1,127 @@
+{
+  "file": "spec-59e-synthetic-vectors.alignment-DR-override.json",
+  "scope": "account-select-dr-override-33-5-no-delete",
+  "status": "pending_review",
+  "applies_to": "account-select-vectors.v2.json (原件为协议目录中的 account-select-vectors.v2.json，SHA256 7fd918cc9e6604b9c4d561587411f4cac9eb40a4f08e2cfbbafe7233528336d0；原件不改)",
+  "overlay_rule": "两端测试读取原件后叠加本覆盖执行；覆盖项的期望替换原件同 id 的期望，其余原件不变。",
+  "basis": "对照表 v2/v3 第六节（33(5) 不删，保持原样；依常设约束）",
+  "overrides": [
+    {
+      "id": "DR-01",
+      "old_expect": {
+        "deletedIds": [
+          "n-pk-0"
+        ],
+        "deletedExactlyPrivateOnly": true,
+        "otherBytesUnchanged": true,
+        "retainedPrivateIds": []
+      },
+      "new_expect": {
+        "deletedIds": [],
+        "deletedExactlyPrivateOnly": false,
+        "otherBytesUnchanged": true,
+        "retainedPrivateIds": [
+          "n-pk-0"
+        ],
+        "n-pk-0_bytes_unchanged": true
+      }
+    },
+    {
+      "id": "DR-06",
+      "old_expect": {
+        "deletedIds": [
+          "n-pk-0",
+          "n-pk-1",
+          "p-pk-0"
+        ],
+        "deletedExactlyPrivateOnly": true,
+        "otherBytesUnchanged": true,
+        "retainedPrivateIds": []
+      },
+      "new_expect": {
+        "deletedIds": [],
+        "deletedExactlyPrivateOnly": false,
+        "otherBytesUnchanged": true,
+        "retainedPrivateIds": [
+          "n-pk-0",
+          "n-pk-1",
+          "p-pk-0"
+        ],
+        "all_private_bytes_unchanged": true
+      }
+    },
+    {
+      "id": "DR-07",
+      "old_expect": {
+        "deletedIds": [
+          "n-pk-0",
+          "p-pk-0"
+        ],
+        "retainedPrivateIds": []
+      },
+      "new_expect": {
+        "deletedIds": [],
+        "retainedPrivateIds": [
+          "n-pk-0",
+          "p-pk-0"
+        ],
+        "all_private_bytes_unchanged": true
+      }
+    },
+    {
+      "id": "DR-09",
+      "old_expect": {
+        "complete": false,
+        "partial": false,
+        "storeUnchanged": true,
+        "remaining": [
+          "p-pk-0",
+          "n-pk-0",
+          "n-mn-0"
+        ]
+      },
+      "new_expect": {
+        "deletion_performed": false,
+        "complete": false,
+        "partial": false,
+        "storeUnchanged": true,
+        "remaining": [
+          "p-pk-0",
+          "n-pk-0",
+          "n-mn-0"
+        ],
+        "note": "窄丢弃不执行删除；原子性场景以‘不删、保持原状’判定"
+      }
+    },
+    {
+      "id": "DR-10",
+      "old_expect": {
+        "complete": true,
+        "partial": false,
+        "remaining": [
+          "n-mn-0"
+        ]
+      },
+      "new_expect": {
+        "deletion_performed": false,
+        "complete": false,
+        "partial": false,
+        "remaining": [
+          "n-pk-0",
+          "p-pk-0",
+          "n-mn-0"
+        ],
+        "private_records_retained": true
+      }
+    }
+  ],
+  "unchanged_original_ids": [
+    "DR-02",
+    "DR-03",
+    "DR-04",
+    "DR-05",
+    "DR-08"
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

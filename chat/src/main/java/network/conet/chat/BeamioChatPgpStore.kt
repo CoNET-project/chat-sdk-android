@@ -30,6 +30,8 @@ object BeamioChatPgpStore {
     private const val KEY_SI_NODES = "siNodesJson"
     private const val KEY_MAILBOX_IP = "mailboxIp"
     private const val KEY_EOA = "recipientEoa"
+    /** The web-written EOA while a legacy private armor exists (2026-11-20, option A): the owner EOA [KEY_EOA] is not rewritten. */
+    private const val KEY_EOA_WEB = "recipientEoaWeb"
     private const val TAG = "BeamioChatPgp"
 
     /**
@@ -87,20 +89,6 @@ object BeamioChatPgpStore {
         context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
     }
 
-    /**
-     * Logout that keeps the legacy private copy L (r3av §25.52C.3): removes every other entry in both stores. L is the recovery
-     * source of the PGP migration, so logout never removes it here.
-     */
-    fun clearKeepingLegacy(context: Context): Boolean {
-        val stores = listOf(prefs(context), context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE))
-        return stores.all { store ->
-            runCatching {
-                val editor = store.edit()
-                store.all.keys.filter { it != KEY_PRIVATE }.forEach { editor.remove(it) }
-                editor.commit()
-            }.getOrDefault(false)
-        }
-    }
 
     /**
      * The EOA named by the legacy record L, for the account cleanup (25.52Y.91, `L` only of an old account). Null when there is no record;
@@ -109,27 +97,29 @@ object BeamioChatPgpStore {
     internal fun legacyOwnerEoa(context: Context): String? =
         prefs(context).getString(KEY_EOA, "").orEmpty().trim().lowercase().ifEmpty { null }
 
-    /** Removes the legacy record L of an old account. True only when no owner remains in the store. */
-    internal fun clearLegacyRecord(context: Context): Boolean {
-        clear(context)
-        return runCatching { legacyOwnerEoa(context) == null }.getOrDefault(false)
-    }
 
-    /** Logout / wallet switch: forget the PGP key, route key and wallet binding. */
-    fun clear(context: Context) {
-        runCatching { prefs(context).edit().clear().commit() }
-        runCatching {
-            context.applicationContext.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE).edit().clear().commit()
-        }
-    }
 
     /** Legacy copy of the PGP private key (written before the vault held it). Read once, for migration only. */
     fun legacyPrivateArmor(context: Context): String =
         prefs(context).getString(KEY_PRIVATE, "").orEmpty()
 
-    /** Removes the legacy private copy. Not called by the PGP migration (r3as §25.52.3: L is kept in this version). */
-    fun clearLegacyPrivateArmor(context: Context): Boolean =
-        prefs(context).edit().remove(KEY_PRIVATE).commit()
+    /**
+     * The legacy armor for the adoption (2026-11-20, F2 fix): the secure store only. A store that cannot be opened or read is null (unknown),
+     * never "" (absent): the plain fallback of [prefs] holds no private armor, so it must not answer absence. "" means the store was read and
+     * holds no armor.
+     */
+    fun legacyPrivateArmorStrict(context: Context): String? = try {
+        EncryptedSharedPreferences.create(
+            context.applicationContext,
+            PREFS,
+            MasterKey.Builder(context.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        ).getString(KEY_PRIVATE, "").orEmpty()
+    } catch (_: Exception) {
+        null
+    }
+
 
     /** The legacy account record as stored: the account, the private armor and the public armor. Read only, no write path. */
     data class LegacyCopy(val eoa: String, val privateArmor: String, val publicArmor: String)
@@ -162,7 +152,10 @@ object BeamioChatPgpStore {
             entryDomains = parseStoredEntryDomains(p.getString(KEY_ENTRIES, null)),
             siNodes = decodeSiNodes(p.getString(KEY_SI_NODES, "[]")),
             mailboxIp = p.getString(KEY_MAILBOX_IP, "").orEmpty(),
-            eoa = p.getString(KEY_EOA, "").orEmpty(),
+            // Single meaning (2026-11-20): Secrets.eoa is the web-reported CURRENT account, KEY_EOA_WEB only. It never falls back to
+            // KEY_EOA (the armor owner, read only by the adoption through legacyOwnerEoa). Empty when the web has not reported one; the callers
+            // then use the native wallet's current EOA.
+            eoa = p.getString(KEY_EOA_WEB, "").orEmpty(),
         )
 
     /**
@@ -201,7 +194,14 @@ object BeamioChatPgpStore {
         }
         editor.putString(KEY_ENTRIES, JSONArray(secrets.entryDomains).toString())
         if (secrets.eoa.isNotBlank()) {
-            editor.putString(KEY_EOA, secrets.eoa)
+            // Option A (2026-11-20): with a legacy private armor, KEY_EOA (the armor's owner, compared by the adoption) is never
+            // rewritten by a web upsert; the web EOA is kept in KEY_EOA_WEB. Without an armor the behaviour is unchanged.
+            // 2026-11-20 (single meaning): the web-reported current account is ALWAYS KEY_EOA_WEB. KEY_EOA (the armor owner) is written
+            // only when no armor exists, as before; with an armor it is never rewritten.
+            editor.putString(KEY_EOA_WEB, secrets.eoa)
+            if (store.getString(KEY_PRIVATE, "").orEmpty().isEmpty()) {
+                editor.putString(KEY_EOA, secrets.eoa)
+            }
         }
         val ok = editor.commit()
         Log.i(

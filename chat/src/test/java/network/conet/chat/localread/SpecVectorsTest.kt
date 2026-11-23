@@ -27,10 +27,10 @@ class SpecVectorsTest {
 
     @Test
     fun recomputesEveryVector() {
-        val path = requireNotNull(System.getenv("CHAT_VECTORS")) {
-            "CHAT_VECTORS is not set: point it at interface/fixtures/vectors/sendkey-vectors.json"
-        }
-        val v = JSONObject(File(path).readText(Charsets.UTF_8))
+        // Vendored under test resources; CHAT_VECTORS, when set, names another copy of the same file.
+        val text = System.getenv("CHAT_VECTORS")?.let { File(it).readText(Charsets.UTF_8) }
+            ?: javaClass.classLoader!!.getResourceAsStream("fixtures/localread/sendkey-vectors.json")!!.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val v = JSONObject(text)
         val inputs = v.getJSONObject("inputs")
         val eoa = inputs.getString("eoa")
         val workspace = inputs.getString("workspace")

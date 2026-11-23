@@ -1,6 +1,6 @@
 {
   "file": "pgp-purpose-vectors.v1.json",
-  "spec": "spec §25.27 REGISTERED_PURPOSES（r3i，PM 加派 2026-11-13）",
+  "spec": "spec §25.27 REGISTERED_PURPOSES（加派 2026-11-13）",
   "generator": "gen-pgp-purpose-vectors.mjs",
   "testKeyNote": "本向量不含任何密钥，也不含签名。输出为确定性数据。",
   "registeredPurposes": [],

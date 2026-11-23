@@ -75,6 +75,9 @@ internal class CleanupConfirmation(private val files: VaultFiles) {
     }
 }
 
+/** The unsent state of an old account's local history (see AccountCleanupWiring.historyUnsentRead). */
+internal enum class UnsentRead { UNSENT, NONE, UNKNOWN }
+
 /** One store of the old account's data (25.52Y.85 第 3 项 (c)). An adapter's [scan] reports the new account's items too, as kept. */
 internal interface CleanupAdapter {
     fun scan(newAccountKey: String): AccountCleanupOld.Scan
@@ -98,17 +101,39 @@ internal class UnenumeratedStore(private val label: String) : CleanupAdapter {
  * The chat history files of the app's storage directory (see [ChatHistoryFileNames]). A name of the new account's family is kept; another name of
  * the same family belongs to another account and is removed; a name of any other form has no known owner and is never removed.
  */
-internal class HistoryDirCleanup(private val dir: File) : CleanupAdapter {
+internal class HistoryDirCleanup(
+    private val dir: File,
+    /** The unsent state of an account's local history (production: AccountCleanupWiring.historyUnsentRead). Tests default to NONE. */
+    private val hasUnsent: (File) -> UnsentRead = { UnsentRead.NONE },
+    /** The old accounts whose storage may be removed, read from the vault (v183 §203, v182 §202). A name is owned only when it equals one of their names. */
+    private val knownOldEoas: () -> Collection<String>,
+
+) : CleanupAdapter {
     override fun scan(newAccountKey: String): AccountCleanupOld.Scan {
         if (!dir.exists()) return AccountCleanupOld.Scan(emptyList(), complete = true)
         val names = dir.list() ?: return AccountCleanupOld.Scan(emptyList(), complete = false)
         val newEoa = newAccountKey.substringBefore(':').lowercase()
         val newLocal = ChatHistoryFileNames.localName(newEoa)
         val kept = setOf(newLocal, ChatHistoryFileNames.pendingName(newEoa)) + ChatHistoryFileNames.LOCAL_SUFFIXES.map { newLocal.removeSuffix(".sqlite") + it }
-        val items = names.map { name ->
-            AccountCleanupOld.Item(name = "$PREFIX$name", accountKey = ownerOf(name, newAccountKey, kept))
+        // Exact mapping only: a name is an old account's item when it is one of the names recomputed from that old account's address. Any other
+        // name, including one that merely looks like a history file, is kept unattributed (never deleted by its name alone).
+        // SNAP-06: UNSENT is kept and counted; UNKNOWN is kept, not counted, and the scan is incomplete.
+        val reads = knownOldEoas().map { it.lowercase() }.filter { EOA_RE.matches(it) && it != newEoa }.distinct()
+            .associateWith { hasUnsent(File(dir, ChatHistoryFileNames.localName(it))) }
+        val unknown = reads.filterValues { it == UnsentRead.UNKNOWN }.keys
+        val unsent = reads.filterValues { it == UnsentRead.UNSENT }.keys
+        val unknownNames = unknown.flatMap { namesOf(it) }.toSet()
+        val oldOwner = HashMap<String, String>()
+        for (raw in knownOldEoas()) {
+            val e = raw.lowercase()
+            if (e == newEoa || !EOA_RE.matches(e) || e in unsent || e in unknown) continue
+            for (n in namesOf(e)) oldOwner[n] = "$e:default"
         }
-        return AccountCleanupOld.Scan(items, complete = true)
+        // An UNKNOWN library's files are not listed at all: never removed, never counted; the scan is incomplete (clear_incomplete, retryable).
+        val items = names.filter { it !in unknownNames }.map { name ->
+            AccountCleanupOld.Item(name = "$PREFIX$name", accountKey = if (name in kept) newAccountKey else oldOwner[name])
+        }
+        return AccountCleanupOld.Scan(items, complete = unknown.isEmpty())
     }
 
     override fun remove(item: AccountCleanupOld.Item): Boolean {
@@ -119,18 +144,15 @@ internal class HistoryDirCleanup(private val dir: File) : CleanupAdapter {
         return !f.exists()
     }
 
-    private fun ownerOf(name: String, newAccountKey: String, kept: Set<String>): String? = when {
-        name in kept -> newAccountKey
-        name.startsWith(ChatHistoryFileNames.LOCAL_PREFIX) &&
-            ChatHistoryFileNames.LOCAL_SUFFIXES.any { name.endsWith(it) } ->
-            "chat-local-v1:" + ChatHistoryFileNames.localDigestOf(name)
-        name.startsWith(ChatHistoryFileNames.PENDING_PREFIX) && name.endsWith(".bin") ->
-            "history-pending:" + ChatHistoryFileNames.pendingTagOf(name)
-        else -> null
+    /** The names an account's history files carry, recomputed from its address (the same rule as the new account's kept set). */
+    private fun namesOf(eoa: String): Set<String> {
+        val local = ChatHistoryFileNames.localName(eoa)
+        return setOf(local, ChatHistoryFileNames.pendingName(eoa)) + ChatHistoryFileNames.LOCAL_SUFFIXES.map { local.removeSuffix(".sqlite") + it }
     }
 
     private companion object {
         const val PREFIX = "history:"
+        val EOA_RE = Regex("^0x[0-9a-f]{40}$")
     }
 }
 
@@ -144,6 +166,15 @@ internal class AccountCleanupRun(
     private val confirmation: CleanupConfirmation,
     private val adapters: List<CleanupAdapter>,
 ) {
+    companion object {
+        /** One run's time budget in milliseconds (v182 §202). An SDK choice, pending the spec. */
+        const val CLEANUP_BUDGET_MS = 10_000L
+    }
+
+    /** The page's automatic confirmation command (v193): writes the marker only when the read-back passes (see [AutoConfirmation]). */
+    fun onPageConfirm(accountKey: String?, pageEoa: String?, nativeEoa: String?, atMs: Long): AutoConfirmation.Result =
+        AutoConfirmation.onPageConfirm(confirmation, accountKey, pageEoa, nativeEoa, atMs)
+
     fun run(
         payloadFields: Collection<String>,
         accountKey: String?,
@@ -151,19 +182,39 @@ internal class AccountCleanupRun(
         gateNotReady: Boolean,
         newAccountKey: String?,
         newAccountReadable: Boolean,
+        readBack: ReadBackCheck.Verdict = ReadBackCheck.Verdict.PASS,
+        /** Whether the environment's active account is known: unknown is not_ready, nothing deleted. */
+        activeKnown: Boolean = true,
+        /**
+         * The read-back re-read before each old-account removal (ea04 residue, 2026-11-21). A verdict other than PASS stops the run before that removal:
+         * MISMATCH answers account_mismatch, UNREADABLE answers not_ready; nothing further is removed, and the journal keeps the rest for a retry.
+         */
+        rereadBack: (() -> ReadBackCheck.Verdict)? = null,
     ): AccountCleanupOld.Outcome {
         AccountCleanupOld.refuseInput(payloadFields, accountKey, idempotencyKey)?.let { return refused(it) }
-        val key = accountKey?.lowercase() ?: return refused(AccountCleanupOld.BAD_REQUEST)
+        // v191: the wire accountKey is the bare lower-case address; the internal form `eoa:workspace` is compared by its account part.
+        val key = accountKey?.lowercase()?.substringBefore(':') ?: return refused(AccountCleanupOld.BAD_REQUEST)
         val idem = idempotencyKey ?: return refused(AccountCleanupOld.BAD_REQUEST)
         val newKey = newAccountKey?.lowercase()
+        // The gate is checked by the preflight below: a locked or not-ready gate answers not_ready and removes nothing (spec vector CU-06).
+        // The time budget of one run (v182 §202: timeout keeps the rest and answers clear_incomplete). The value is an SDK choice pending the spec.
+        val deadlineNanos = System.nanoTime() + CLEANUP_BUDGET_MS * 1_000_000L
+        // Read-back: both readable and different -> account_mismatch; any unreadable, locked, not ready or timed-out side -> not_ready.
+        // not_available is never a read-back result.
+        if (gateNotReady) return refused(AccountCleanupOld.NOT_READY)
+        // The new account's own store (not a read-back result) keeps not_available (shared vector CU-04).
+        if (newKey == null) return refused(AccountCleanupOld.NOT_READY)
+        if (!activeKnown) return refused(AccountCleanupOld.NOT_READY)
+        if (readBack == ReadBackCheck.Verdict.UNREADABLE) return refused(AccountCleanupOld.NOT_READY)
+        if (readBack == ReadBackCheck.Verdict.MISMATCH) return refused(AccountCleanupOld.ACCOUNT_MISMATCH)
         AccountCleanupOld.preflight(
             gateNotReady = gateNotReady,
             newAccountReadable = newAccountReadable && newKey != null,
             // The confirmation is the native new account's (25.52Y.91 第 4 項 (c)), not the payload's: a payload for another account is account_mismatch.
             nativeConfirmed = newKey != null && confirmation.confirmedFor(newKey),
-            accountKeyMatch = newKey != null && key == newKey,
+            accountKeyMatch = newKey != null && key == newKey.substringBefore(':'),
         )?.let { return refused(it) }
-        if (newKey == null) return refused(AccountCleanupOld.NOT_AVAILABLE)
+        if (newKey == null) return refused(AccountCleanupOld.NOT_READY)
 
         val prior = try {
             journal.read()
@@ -197,13 +248,22 @@ internal class AccountCleanupRun(
             return AccountCleanupOld.Outcome(AccountCleanupOld.CLEAR_INCOMPLETE, emptyList(), emptyList(), cleanupPending = true)
         }
 
+        // Set when a per-removal re-read stops the run; after that nothing more is removed.
+        var abort: String? = null
         val outcome = AccountCleanupOld.execute(
             newAccountKey = newKey,
             items = items,
             done = done,
             remove = { item ->
+                if (abort != null) return@execute false
+                val reread = rereadBack?.invoke()
+                if (reread != null && reread != ReadBackCheck.Verdict.PASS) {
+                    abort = if (reread == ReadBackCheck.Verdict.MISMATCH) AccountCleanupOld.ACCOUNT_MISMATCH else AccountCleanupOld.NOT_READY
+                    return@execute false
+                }
+                // Past the budget, the item is kept and the run answers clear_incomplete (it counts as a failed removal).
                 val adapter = owner[item.name]
-                val gone = adapter != null && try {
+                val gone = System.nanoTime() <= deadlineNanos && adapter != null && try {
                     adapter.remove(item)
                 } catch (_: Exception) {
                     false
@@ -221,6 +281,11 @@ internal class AccountCleanupRun(
             },
             complete = complete,
         )
+        abort?.let { code ->
+            // Stopped by a re-read (v4 EA-09/EA-13): the refusal shape is cleanupPending false and keptUnattributed 0. The journal keeps the removed names
+            // (local only, not in the reply), so a later run with the same idempotencyKey resumes without re-deleting.
+            return AccountCleanupOld.Outcome(code, outcome.deleted, outcome.kept, cleanupPending = false, retainedUnattributed = 0)
+        }
         if (outcome.code != AccountCleanupOld.OK) return outcome
         if (!journal.clear() || !confirmation.consume()) {
             return AccountCleanupOld.Outcome(

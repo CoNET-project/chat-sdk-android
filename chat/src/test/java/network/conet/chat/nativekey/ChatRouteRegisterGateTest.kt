@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The gate of W5 chatRouteRegister (spec 25.28.5; NR-13 to NR-16; PM R2085 segment f, part 2). The gate answers before the payload is read:
+ * The gate of W5 chatRouteRegister (spec 25.28.5; NR-13 to NR-16; segment f, part 2). The gate answers before the payload is read:
  * G0 no_key, G1 not_ready, the passcode lock locked. The SDK registers the name, so it does not answer unknown_command; native_unavailable
  * is the shell's answer and is not produced here. The zeroing of the key and armor bytes is checked by source (the handler needs a Context).
  */
@@ -16,7 +16,7 @@ class ChatRouteRegisterGateTest {
 
     /**
      * NR-13: G0 is no_key, and the payload is not read. Unit-layer coverage: the gate function is called directly, not through the module's
-     * dispatch, so "the payload is not read" is not proven by this test (reviewer 76357584, db617be point 2).
+     * dispatch, so "the payload is not read" is not proven by this test ( point 2).
      */
     @Test
     fun g0AnswersNoKeyWithoutReadingThePayload() {

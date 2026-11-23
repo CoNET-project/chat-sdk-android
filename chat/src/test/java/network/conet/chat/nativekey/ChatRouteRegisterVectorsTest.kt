@@ -8,7 +8,7 @@ import org.junit.Test
 import java.security.MessageDigest
 
 /**
- * W5 chatRouteRegister against chat-route-register-vectors.v1.json (spec 25.28.3 to 25.28.5; PM R2085 segment f). PV-1 to PV-4 are checked
+ * W5 chatRouteRegister against chat-route-register-vectors.v1.json (spec 25.28.3 to 25.28.5; segment f). PV-1 to PV-4 are checked
  * byte for byte: the message, the backup, both hashes and the EIP-191 signature. The request-shape negatives NR-01 to NR-12 are checked at
  * the core (NR-13 to NR-16 are gate answers and are tested with the bridge).
  */

@@ -450,7 +450,7 @@ object BeamioSiCipherPost {
             }.orEmpty()
             code to text
         } catch (e: Exception) {
-            // R540 diagnostic: the cause is logged by class and message only (no body, no key). Status 0 means no HTTP answer.
+            // diagnostic: the cause is logged by class and message only (no body, no key). Status 0 means no HTTP answer.
             Log.w(TAG, "http post error ${e.javaClass.simpleName}: ${e.message?.take(160).orEmpty()}")
             0 to ""
         } finally {

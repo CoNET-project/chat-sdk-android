@@ -1,0 +1,288 @@
+{
+  "meta": {
+    "file": "mnemonic-preread-vectors.v1.json",
+    "status": "n/a",
+    "generator": "gen-mnemonic-preread-vectors.mjs",
+    "spec": "第 60 项（修正第 59(2) 项）",
+    "note": "助记词与地址为合成测试值。Android SDK 的预读不带 seq，属于需随规格跟进的实现差异。"
+  },
+  "cases": [
+    {
+      "id": "NP-01",
+      "title": "正例：受信，seq 7 大于最高序号 5，原生 valid：ok，回传 state、eoa、phrase",
+      "group": "positive",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "7",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": true,
+          "result": {
+            "state": "valid",
+            "eoa": "0x1111111111111111111111111111111111111111",
+            "phrase": "SYNTHETIC-TEST-PHRASE-NOT-A-WALLET"
+          }
+        }
+      ]
+    },
+    {
+      "id": "NP-02",
+      "title": "正例：受信，seq 5 等于最高序号 5（相等可接受），原生 valid：ok，回传 phrase",
+      "group": "positive",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "5",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": true,
+          "result": {
+            "state": "valid",
+            "eoa": "0x1111111111111111111111111111111111111111",
+            "phrase": "SYNTHETIC-TEST-PHRASE-NOT-A-WALLET"
+          }
+        }
+      ]
+    },
+    {
+      "id": "NP-03",
+      "title": "正例：受信，原生 absent：ok，只带 state，不含 phrase",
+      "group": "positive",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "6",
+          "state": "absent"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": true,
+          "result": {
+            "state": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "NP-04",
+      "title": "正例：受信，原生 unknown：ok，只带 state，不含 phrase",
+      "group": "positive",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "6",
+          "state": "unknown"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": true,
+          "result": {
+            "state": "unknown"
+          }
+        }
+      ]
+    },
+    {
+      "id": "NP-05",
+      "title": "正例：预读只比较不记录：先 seq 9 预读，再 seq 6 预读仍为 ok（最高序号仍为 5）",
+      "group": "positive",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "9",
+          "state": "valid"
+        },
+        {
+          "trusted": true,
+          "seqText": "6",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": true,
+          "result": {
+            "state": "valid",
+            "eoa": "0x1111111111111111111111111111111111111111",
+            "phrase": "SYNTHETIC-TEST-PHRASE-NOT-A-WALLET"
+          }
+        },
+        {
+          "ok": true,
+          "result": {
+            "state": "valid",
+            "eoa": "0x1111111111111111111111111111111111111111",
+            "phrase": "SYNTHETIC-TEST-PHRASE-NOT-A-WALLET"
+          }
+        }
+      ]
+    },
+    {
+      "id": "NP-06",
+      "title": "负例：序号过期：seq 4 小于最高序号 5，原生 valid：stale_seq，不回传 phrase",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "4",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "stale_seq"
+        }
+      ]
+    },
+    {
+      "id": "NP-07",
+      "title": "负例：序号过期且原生 absent：stale_seq（过期先于状态判定）",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "4",
+          "state": "absent"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "stale_seq"
+        }
+      ]
+    },
+    {
+      "id": "NP-08",
+      "title": "负例：缺 seq，原生 valid：bad_request，不回传 phrase",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "bad_request"
+        }
+      ]
+    },
+    {
+      "id": "NP-09",
+      "title": "负例：缺 seq，原生 absent：bad_request（不因状态而放行）",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "state": "absent"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "bad_request"
+        }
+      ]
+    },
+    {
+      "id": "NP-10",
+      "title": "负例：seq 为 1.0（非整数字面）：bad_request，不回传 phrase",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "1.0",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "bad_request"
+        }
+      ]
+    },
+    {
+      "id": "NP-11",
+      "title": "负例：seq 为 2^53（超出范围）：bad_request，不回传 phrase",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": true,
+          "seqText": "9007199254740992",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "bad_request"
+        }
+      ]
+    },
+    {
+      "id": "NP-12",
+      "title": "负例：不受信（无 trustedOrigin），seq 合法，原生 valid：untrusted_source，不读，不含 phrase",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": false,
+          "seqText": "7",
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "untrusted_source"
+        }
+      ]
+    },
+    {
+      "id": "NP-13",
+      "title": "负例：不受信且缺 seq：untrusted_source（先于格式检查）",
+      "group": "negative",
+      "steps": [
+        {
+          "trusted": false,
+          "state": "valid"
+        }
+      ],
+      "highest": 5,
+      "expect": [
+        {
+          "ok": false,
+          "error": "untrusted_source"
+        }
+      ]
+    }
+  ],
+  "selfCheck": {
+    "cases": 13,
+    "result": "pass"
+  }
+}

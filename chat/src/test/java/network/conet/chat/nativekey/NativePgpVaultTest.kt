@@ -109,7 +109,7 @@ class NativePgpVaultTest {
         // The next readback sees other bytes once, so the new record is rolled back to the previous one.
         var armed = true
         wrap.openOverride = { plain -> if (armed) { armed = false; ByteArray(32) { 1 } } else plain }
-        // The overwrite is explicit (the replacement path): put refuses an existing record unless overwrite is set (project ruling 2026-11-16).
+        // The overwrite is explicit (the replacement path): put refuses an existing record unless overwrite is set.
         assertEquals(NativePgpVault.Put.READBACK_FAILED, vault.put(eoa, key("ecc-nopass").getString("privateArmored"), "", overwrite = true))
         assertTrue(vault.state() is NativePgpVault.State.Ready)
         assertTrue(vault.decryptInbound(decryptCase("D-1").getString("armor")).ok)
@@ -117,7 +117,7 @@ class NativePgpVaultTest {
 
     @Test
     fun aRecordWithoutItsMarkerIsKeptAndReportedLocked() {
-        // Rewritten 2026-11-16 (project ruling: a read never deletes user data). The earlier assertion removed the record on read.
+        // Rewritten 2026-11-16 (a read never deletes user data). The earlier assertion removed the record on read.
         val (vault, _, files) = fresh()
         assertEquals(NativePgpVault.Put.OK, putEccWithPassphrase(vault))
         files.delete(NativePgpVault.markName(SYN_EOA))
@@ -205,7 +205,7 @@ class NativePgpVaultTest {
         }
     }
 
-    /** Project ruling 2026-11-16 (keep the user's data): an automatic write goes into an empty slot only; an existing record is refused and kept. */
+    /**  (keep the user's data): an automatic write goes into an empty slot only; an existing record is refused and kept. */
     @Test
     fun putRefusesAnExistingRecordAndKeepsIt() {
         val (vault, _, files) = fresh()

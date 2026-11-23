@@ -4,11 +4,11 @@ import network.conet.chat.BuildConfig
 import org.json.JSONObject
 
 /**
- * The SDK side of the wallet answers (spec §25.52Y.38 第 3 项; §25.52Y.42 第 5 项, r3nu; PM R1866, R1870).
+ * The SDK side of the wallet answers (spec §25.52Y.38 第 3 项; §25.52Y.42 第 5 项, r3nu).
  *
  * `walletCredential`:
  *  - an account with a stored recovery phrase answers the phrase (kind: mnemonic; no key field);
- *  - a key-only account (a legacy device, or one whose page copy was cleared) answers `unavailable` (W-L5, PM R1895). No private key is
+ *  - a key-only account (a legacy device, or one whose page copy was cleared) answers `unavailable` (W-L5). No private key is
  *    returned on any path;
  *  - a phrase account whose phrase cannot be read answers `unavailable`, never the key.
  *
@@ -42,7 +42,7 @@ object WalletCredential {
                     JSONObject().put("eoa", state.eoa).put("credentialKind", KIND_MNEMONIC)
                         .put("mnemonic", read.phrase),
                 )
-            // W-L5 (spec 25.52Y.42 第 8 项 (8e), PM R1895): a key-only account answers unavailable. No key is returned on any path.
+            // W-L5 (spec 25.52Y.42 第 8 项 (8e)): a key-only account answers unavailable. No key is returned on any path.
             is NativeWalletVault.MnemonicRead.Missing -> Answer.Refused(UNAVAILABLE)
             is NativeWalletVault.MnemonicRead.Unavailable -> Answer.Refused(UNAVAILABLE)
         }
@@ -64,7 +64,7 @@ object WalletCredential {
 }
 
 /**
- * The window-channel answer of `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项; PM R1907). It is registered on the window
+ * The window-channel answer of `walletEoaAddress` (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项). It is registered on the window
  * channel only, behind the same boundary as shellRecord: the source and the main frame are checked first, and a refused source is answered
  * origin_refused without the vault being read. The chat channel does not carry this name (its table is unchanged).
  */
@@ -79,6 +79,8 @@ internal object WalletEoaAddressBridge {
     internal fun answer(
         originAllowed: Boolean,
         body: org.json.JSONObject,
+        /** The account the two-state store names (store-primary rule): an answer, or null when the store holds none and the vault decides. */
+        store: (() -> WalletCredential.Answer?)? = null,
         current: () -> Pair<NativeWalletVault, NoKeyGate.Gate>,
     ): org.json.JSONObject {
         if (!originAllowed) return originRefused(body)
@@ -87,6 +89,20 @@ internal object WalletEoaAddressBridge {
         if (!ShellRecordPolicy.reqIdValid(rawId)) return fail(echo, "bad_request")
         if (body.optString("type", "") != NAME) return fail(echo, "unknown_command")
         if (ShellRecordPolicy.keysOf(body).any { it != "type" && it != "reqId" }) return fail(echo, "bad_request")
+        // The store first (store-primary rule, 2026-11-22). A store that cannot be answered is unknown: not_ready, never an exception.
+        if (store != null) {
+            val fromStore = try {
+                store()
+            } catch (_: Exception) {
+                return fail(echo, "not_ready")
+            }
+            if (fromStore != null) {
+                return when (fromStore) {
+                    is WalletCredential.Answer.Ok -> org.json.JSONObject().put("type", "ack").put("reqId", echo).put("ok", true).put("result", fromStore.result)
+                    is WalletCredential.Answer.Refused -> fail(echo, fromStore.code)
+                }
+            }
+        }
         // An unreadable vault is unknown: not_ready, one ack for this reqId (25.52Y.84, Y.104 第 3 条), never an exception out of the bridge.
         val (vault, gate) = try {
             current()
@@ -110,7 +126,7 @@ internal object WalletEoaAddressBridge {
 }
 
 /**
- * The window-channel `walletCredential` (spec 25.52Y.38 第 2 项 (e), 第 3 项, 第 4 项, 第 6 项 (b); 25.52Y.44; PM R2042, R2048).
+ * The window-channel `walletCredential` (spec 25.52Y.38 第 2 项 (e), 第 3 项, 第 4 项, 第 6 项 (b); 25.52Y.44).
  *
  * Order: the request shape (reqId); the SDK's own declaration (the bit is declared only in a QA build) answers `not_trusted` before anything
  * is read; a key-named field is `key_over_bridge_refused` (names only); the shape of the request; then the gate, the state, and the answer.

@@ -71,7 +71,7 @@ class AccountCleanupOldTest {
     @Test
     fun cu04NewAccountUnreadableRemovesNothing() {
         val r = call(readable = false)
-        assertEquals(AccountCleanupOld.NOT_AVAILABLE, r.code)
+        assertEquals(AccountCleanupOld.NOT_READY, r.code)
         assertTrue(r.deleted.isEmpty())
     }
 

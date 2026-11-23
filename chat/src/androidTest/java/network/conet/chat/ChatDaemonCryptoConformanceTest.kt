@@ -52,7 +52,7 @@ class ChatDaemonCryptoConformanceTest {
 
     /**
      * EIP-191 and the wallet address run in native code (nativekey: Eip191Signer, WalletAddress); the WebView host no
-     * longer signs (§35, e69b6c2). The host's `verifyMessage` (public-key recovery) is still checked here.
+     * longer signs (§35). The host's `verifyMessage` (public-key recovery) is still checked here.
      */
     @Test
     fun eip191SignAndRecover() {
@@ -98,12 +98,12 @@ class ChatDaemonCryptoConformanceTest {
 
     @Test
     fun moduleAnswersHelloAndUnknownCommands() {
-        val acks = java.util.concurrent.ConcurrentHashMap<Int, JSONObject>()
+        val acks = java.util.concurrent.ConcurrentHashMap<Long, JSONObject>()
         val latch = CountDownLatch(2)
         val emit: (JSONObject) -> Unit = { payload ->
             val event = payload.optJSONObject("event")
             if (event?.optString("type") == "ack") {
-                acks[event.getInt("reqId")] = event
+                acks[event.getLong("reqId")] = event
                 latch.countDown()
             }
         }
@@ -111,10 +111,10 @@ class ChatDaemonCryptoConformanceTest {
         BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "notACommand").put("reqId", 42), emit)
         BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "notACommand").put("reqId", -1), emit)
         assertTrue(latch.await(10, TimeUnit.SECONDS))
-        val hello = acks.getValue(41)
+        val hello = acks.getValue(41L)
         assertTrue(hello.getBoolean("ok"))
         assertTrue(jsonEquals(hello.getJSONObject("result"), BeamioConetChatProtocol.helloResult()))
-        val unknown = acks.getValue(42)
+        val unknown = acks.getValue(42L)
         assertEquals(false, unknown.getBoolean("ok"))
         assertEquals("unknown_command", unknown.getString("error"))
     }
@@ -125,13 +125,13 @@ class ChatDaemonCryptoConformanceTest {
      */
     @Test
     fun unknownNamesAreUnknownCommandBeforeTheGateInG0() {
-        val acks = java.util.concurrent.ConcurrentHashMap<Int, JSONObject>()
+        val acks = java.util.concurrent.ConcurrentHashMap<Long, JSONObject>()
         val names = listOf("notACommand", "signMessage", "pgpDecrypt", "removeEOAPrivateKey", "pgpSign")
         val latch = CountDownLatch(names.size + 1)
         val emit: (JSONObject) -> Unit = { payload ->
             val event = payload.optJSONObject("event")
             if (event?.optString("type") == "ack") {
-                acks[event.getInt("reqId")] = event
+                acks[event.getLong("reqId")] = event
                 latch.countDown()
             }
         }
@@ -142,11 +142,11 @@ class ChatDaemonCryptoConformanceTest {
         BeamioConetChatModule.handleCommand(context, JSONObject().put("type", "walletStatus").put("reqId", 200), emit)
         assertTrue(latch.await(10, TimeUnit.SECONDS))
         names.forEachIndexed { i, name ->
-            val ack = acks.getValue(100 + i)
+            val ack = acks.getValue(100L + i)
             assertEquals("$name ok", false, ack.getBoolean("ok"))
             assertEquals("$name answer", "unknown_command", ack.getString("error"))
         }
-        val status = acks.getValue(200).getJSONObject("result").getString("status")
+        val status = acks.getValue(200L).getJSONObject("result").getString("status")
         assertEquals("precondition: a fresh install is G0 (no key)", "no_key", status)
     }
 
@@ -215,7 +215,7 @@ class ChatDaemonCryptoConformanceTest {
     }
 
     /**
-     * 25.52AT.3, BT.1, BT.2 (r3ds, R707): busy. A command is in flight: the chain transport of pgpRestoreEvaluate is blocked in this test target,
+     * 25.52AT.3, BT.1, BT.2 (r3ds): busy. A command is in flight: the chain transport of pgpRestoreEvaluate is blocked in this test target,
      * so the worker stays inside the transport. While it is in flight, a name outside the table is answered unknown_command, once, before the gate.
      * The block is released afterwards and the transport is restored. The state is G2: the test sets a native record for a synthetic test key,
      * and marks the session ready (internal NativeSessionState.markReady). Only the test target sets these; production code is unchanged.
@@ -226,7 +226,7 @@ class ChatDaemonCryptoConformanceTest {
         val eoa = requireNotNull(WalletAddress.fromPrivateKey(key)).lowercase()
         val imported = NativeWallet.vault(context).importKey(eoa, key.copyOf())
         assertTrue("a synthetic test record for the test account: ${imported.code}", imported == NativeWalletVault.Import.OK)
-        NativeSessionState.markReady()
+        NativeSessionState.markReady(eoa)
         val entered = CountDownLatch(1)
         val released = CountDownLatch(1)
         val blocking = AddressPgpRead.Rpc { _, _ ->
@@ -279,7 +279,7 @@ class ChatDaemonCryptoConformanceTest {
     }
 
     /**
-     * 25.52CB.2 (r3eb, R725): locked, through the real vault store. The marker of the test record is overwritten with a value that does not match,
+     * 25.52CB.2 (r3eb): locked, through the real vault store. The marker of the test record is overwritten with a value that does not match,
      * which is the fault of a damaged store. No product hook is used. In G2 (a ready session) the families C1, C2, C3, C5, W7 and N0 answer
      * `locked`, once, before their parameters are read. N0 answers once when unlocked, and C5 is not no_key in G2.
      */
@@ -290,7 +290,7 @@ class ChatDaemonCryptoConformanceTest {
         val vault = NativeWallet.vault(context)
         val imported = vault.importKey(eoa, key.copyOf())
         assertTrue("a synthetic test record for the test account: ${imported.code}", imported == NativeWalletVault.Import.OK)
-        NativeSessionState.markReady()
+        NativeSessionState.markReady(eoa)
         val acks = CopyOnWriteArrayList<JSONObject>()
         val emit: (JSONObject) -> Unit = { payload ->
             payload.optJSONObject("event")?.let { event -> if (event.optString("type") == "ack") acks += event }

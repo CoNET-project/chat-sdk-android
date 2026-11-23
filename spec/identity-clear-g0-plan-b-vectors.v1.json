@@ -1,0 +1,333 @@
+{
+  "file": "identity-clear-g0-plan-b-vectors.v1.json",
+  "schema": "identity-clear-g0-plan-b-vectors.v1",
+  "status": "final-pending-review",
+  "generator": "none (written by hand, 2026-11-22; not derived from a script)",
+  "basis": [
+    "n/a",
+    "PROTOCOL-g0-plan-b-cold-start-redo-2026-11-22.md",
+    "n/a",
+    "n/a",
+    "gate-state-vectors.v2.json G0-CLR-PENDING / G0-CLR-NOPENDING (unchanged)"
+  ],
+  "harnessRules": [
+    "phase：coldStart = 进程冷启动、首条命令之前的自动收尾；manualClear = 用户发 clearIdentity。",
+    "state.marker：{kind:owned, eoa:X} = clear_pending 读取成功且绑定账户 X；{kind:unknown} = 读不出或无归属；{kind:noAccount} = 清除开始时无账户；{kind:absent} = 无标记。X、Y、Z 是三个不同的测试账户（公开测试值，非真实钱包）。",
+    "state.currentAccount：当前账户（指针或签名者）；null = G0。",
+    "state.otherAccountEntries：设备上存在 X 之外账户 Z 的钱包或聊天条目（页面副本、钱包条目、聊天库或收件箱之一）。",
+    "state.readFailure：none，或 walletEnumeration、chatEnumeration、otherAccountProbe 之一，表示该次读取失败（不是'空'）。读失败一律按未知，不得当作'无他户条目'。",
+    "state.xRemaining：X 的清除尚有剩余条目（清除被中断在最后两步之间或更早）。",
+    "expect.deleted：本次实际删除的类别；[] 表示不删。'X.remaining' = 只能精确归属 X 的剩余清除条目，不含已发布副本、walletKey、助记词集合、他户条目。",
+    "expect.writes：本次是否写入任何东西（含标记）。false 时所有字节不变。",
+    "expect.marker：执行后的 clear_pending：kept、cleared、absent（本来就没有）。",
+    "expect.outcome（coldStart）：finished 或 untouched；expect.answer（manualClear）：对页面的应答码（信封 error 或 ok）。",
+    "expect.c3Rerun：续做时是否重跑恢复源检查 C.3；GB-06 为 false（PY.8 第 2 项）。Android 续做若重跑 (1a)-(1c) 更严，也允许，但结果只能比 expect 更保守（拒绝而不是多删）。",
+    "P3 用例（GB-P3a、GB-P3b）：unregister_refused 带 reason:key_only 为信封 ok:false，reason 在顶层。"
+  ],
+  "cases": [
+    {
+      "id": "GB-01",
+      "title": "G0（无当前账户）加 Owned X：用户手动 clearIdentity 不续做，答 clear_incomplete，不删不写，标记保留",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "answer": "clear_incomplete",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-02",
+      "title": "冷启动加 Owned X、无他户条目、各项读取全部成功：自动收尾，只删能归属 X 的剩余条目，撤标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "finished",
+        "deleted": [
+          "X.remaining"
+        ],
+        "writes": true,
+        "marker": "cleared",
+        "otherAccountsUntouched": true
+      }
+    },
+    {
+      "id": "GB-03",
+      "title": "冷启动加 Owned X、设备上有他户（Z）的钱包或聊天条目：不删不写，保留标记，下次再判",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": true,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept",
+        "otherAccountsUntouched": true
+      }
+    },
+    {
+      "id": "GB-04a",
+      "title": "冷启动加 Owned X、无他户条目，但钱包条目枚举读取失败：不删不写，保留标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "walletEnumeration",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-04b",
+      "title": "冷启动加 Owned X、无他户条目，但聊天或收件箱条目读取失败：不删不写，保留标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "chatEnumeration",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-04c",
+      "title": "冷启动加 Owned X，标记本身读取成功，但他户判定所需的任一读取失败：不推定无他户，不删不写，保留标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "otherAccountProbe",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-05a",
+      "title": "冷启动加 Unknown 标记（读不出或无归属）：不删不写，保留标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "unknown"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-05b",
+      "title": "G0 加 Unknown 标记：手动 clearIdentity 答 clear_incomplete，不删不写，保留标记",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "unknown"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "answer": "clear_incomplete",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-06",
+      "title": "当前账户 = X 加 Owned X：手动 clearIdentity 按既有路径续做，不重跑 C.3，完成后答 ok，撤标记（后半、第 6 条）",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": "X",
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "answer": "ok",
+        "deleted": [
+          "X.remaining"
+        ],
+        "writes": true,
+        "marker": "cleared",
+        "c3Rerun": false
+      }
+    },
+    {
+      "id": "GB-07a",
+      "title": "冷启动加 NoAccount 标记、无他户条目、读取全部成功：沿用既有规则收尾",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "noAccount"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "finished",
+        "deleted": [
+          "X.remaining"
+        ],
+        "writes": true,
+        "marker": "cleared",
+        "otherAccountsUntouched": true
+      }
+    },
+    {
+      "id": "GB-07b",
+      "title": "冷启动加 NoAccount 标记、有他户条目：同样受'可安全执行'约束，不删不写，保留标记",
+      "phase": "coldStart",
+      "state": {
+        "marker": {
+          "kind": "noAccount"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": true,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "outcome": "untouched",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept"
+      }
+    },
+    {
+      "id": "GB-08",
+      "title": "当前账户 = Y（Y ≠ X）加 Owned X：先跑 Y 自己的全部检查；通过也只答 clear_incomplete，X 与 Y 的数据、指针、标记字节都不变（第 1 条，保留）",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "owned",
+          "eoa": "X"
+        },
+        "currentAccount": "Y",
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true
+      },
+      "expect": {
+        "answer": "clear_incomplete",
+        "deleted": [],
+        "writes": false,
+        "marker": "kept",
+        "afterYChecksPass": true
+      }
+    },
+    {
+      "id": "GB-P3a",
+      "title": "P3：清除完成（标记已撤）后，PWA 重新下发，当前账户有保留的已发布副本（只有私钥一类）：再次 clearIdentity 答 unregister_refused，reason 为 key_only，不删任何东西，key-only 清除边界不放宽",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "absent"
+        },
+        "currentAccount": "X",
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true,
+        "publishedCopiesKept": true,
+        "keyOnly": true
+      },
+      "expect": {
+        "answer": "unregister_refused",
+        "reason": "key_only",
+        "deleted": [],
+        "writes": false,
+        "marker": "absent"
+      }
+    },
+    {
+      "id": "GB-P3b",
+      "title": "P3：清除完成后设备回到 G0 且无标记：clearIdentity 在门控处答 no_key，不删不写（gate-state G0-CLR-NOPENDING，不变）",
+      "phase": "manualClear",
+      "state": {
+        "marker": {
+          "kind": "absent"
+        },
+        "currentAccount": null,
+        "otherAccountEntries": false,
+        "readFailure": "none",
+        "xRemaining": true,
+        "publishedCopiesKept": true
+      },
+      "expect": {
+        "answer": "no_key",
+        "deleted": [],
+        "writes": false,
+        "marker": "absent"
+      }
+    }
+  ],
+  "supersedes": "item 3 (G0 resume of the recorded account). Items 1 and 2 stay (GB-08)."
+}

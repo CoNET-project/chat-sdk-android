@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R488: the bound account survives a cold start. The address is persisted beside the pointer (`account_address.v1`), and a cold start restores it
+ * the bound account survives a cold start. The address is persisted beside the pointer (`account_address.v1`), and a cold start restores it
  * before the copy is searched (§25.52T.4, §25.52AD.2). The device has two copies in these cases, one of them the copy of another account, so the
  * copy search finds no single account, and only the persisted address can answer.
  *
@@ -65,7 +65,7 @@ class ColdStartAccountTest {
         val before = DeviceFlagFiles(device)
         before.setAccountPointer()
         assertEquals(2, write(process(before, bound = a1), rev = 1).getInt("rev"))
-        // The write in this process persisted the address (R488).
+        // The write in this process persisted the address .
         assertEquals(a1, DeviceFlagFiles(device).accountAddress())
 
         // The restart: nothing bound in memory. The read and the write still reach the original account.

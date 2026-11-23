@@ -5,7 +5,7 @@ import org.json.JSONObject
 import java.security.SecureRandom
 
 /**
- * The sidecar of the migration vectors, on the test side only (§25.52AL.3; R634, R636).
+ * The sidecar of the migration vectors, on the test side only (§25.52AL.3).
  *
  * The vectors keep their placeholder values (an armor `EOA`, an account `a1`). No key derives those, so a write that checks the form and the
  * derived address (§25.52N.9 Q1) would refuse the placeholders. This harness maps each placeholder to a key that really derives its address. The

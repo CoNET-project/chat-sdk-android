@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * The G1 nodes rule of `init` (spec §25.52Y.29, §25.52Y.32 §4; PM R1841, R1854). Each case is a real JSON payload.
+ * The G1 nodes rule of `init` (spec §25.52Y.29, §25.52Y.32 §4). Each case is a real JSON payload.
  * The stored count is a lambda; it must not be read when the `nodes` key is present.
  */
 class InitNodesGateTest {

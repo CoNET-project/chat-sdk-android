@@ -1,6 +1,6 @@
 {
   "file": "chat-route-decision-vectors.v1.json",
-  "spec": "spec §25.29（能力位缺失）、§25.28.9（定案）、ack 信封（§25.19.2 I-3 与 §25.28.3 更正）、reqId（§25.28.3；r3eq 增 §25.52CO.3、§25.52CQ.1 的整数字面形式）、EOA 口令（§25.28.4）（r3k，2026-11-13）",
+  "spec": "spec §25.29（能力位缺失）、§25.28.9（定案）、ack 信封（§25.19.2 I-3 与 §25.28.3 更正）、reqId（§25.28.3； 增 §25.52CO.3、§25.52CQ.1 的整数字面形式）、EOA 口令（§25.28.4）（2026-11-13）",
   "generator": "gen-chat-route-decision-vectors.mjs",
   "testKeyNote": "全部为合成数据。EOA 由 BIP-39 公开测试助记词派生（abandon×11 about）。备份明文为占位文本，不是 PGP 私钥。禁止用于生产。",
   "eoa": "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
@@ -115,7 +115,7 @@
   ],
   "A_successExampleSource": "chat-route-register-vectors.v1.json PV-1（合成）",
   "B_reqId": {
-    "rule": "字符串 1–64 字节，字符 0x20–0x7E，不 trim；整数 0–(2^53−1)，以 JSON 整数字面形式（无小数部分、无指数部分、无负号）；原样回传；其他类型 bad_request（reqId 为 null）。r3eq（§25.52CO.3、§25.52CQ.1）。r3et：结构化入口（对象 body）按 JS 数值语义（§25.52CT.3）",
+    "rule": "字符串 1–64 字节，字符 0x20–0x7E，不 trim；整数 0–(2^53−1)，以 JSON 整数字面形式（无小数部分、无指数部分、无负号）；原样回传；其他类型 bad_request（reqId 为 null）。（§25.52CO.3、§25.52CQ.1）。：结构化入口（对象 body）按 JS 数值语义（§25.52CT.3）",
     "cases": [
       {
         "id": "B-1",

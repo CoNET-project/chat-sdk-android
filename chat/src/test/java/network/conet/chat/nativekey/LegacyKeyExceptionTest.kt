@@ -27,7 +27,9 @@ class LegacyKeyExceptionTest {
 
     /** Positive control: a pure legacy key (readable record, no phrase, intent, commit or digest) is accepted and nothing changes. */
     @Test
-    fun pureLegacyKeyIsAcceptedAsItIs() {
+    fun pureLegacyKeyIsReadableButIsNotAnAccount() {
+        //  (alignment v2, 2026-11-17): a private key is not an account. The internal state may still read the key record (Ready), but
+        // no external answer treats it as an account: the pre-read answers absent and walletStatus answers no_key (see KeyOnlyWalletStatusTest).
         val (files, wrap) = imported()
         files.map.remove(NativeWalletVault.MARK)
         files.map.remove(NativeWalletVault.COMMIT)
@@ -35,8 +37,10 @@ class LegacyKeyExceptionTest {
 
         val s = NativeWalletVault(wrap, files).state()
 
-        assertTrue("accepted as the account", s is NativeWalletVault.State.Ready)
+        assertTrue("readable key record: $s", s is NativeWalletVault.State.Ready)
         assertEquals(eoa, (s as NativeWalletVault.State.Ready).eoa)
+        // External answer: the pre-read is absent, not an account.
+        assertEquals(MnemonicPreread.Answer.Absent, MnemonicPreread.vaultAnswerOrUnknown(NativeWalletVault(wrap, files)))
         assertEquals("nothing is written or removed", before.keys, files.map.keys)
     }
 
@@ -84,8 +88,8 @@ class LegacyKeyExceptionTest {
 
         val s = NativeWalletVault(wrap, files).state()
 
-        assertTrue("an intent present before the reconcile is not the legacy exception", s is NativeWalletVault.State.Locked)
-        assertEquals("marker_missing", (s as NativeWalletVault.State.Locked).reason)
+        assertTrue("an intent present is not the legacy exception (25.52Y.125: judged, not removed)", s is NativeWalletVault.State.Locked)
+        assertEquals("rollback_pending", (s as NativeWalletVault.State.Locked).reason)
         assertTrue("the record is kept", files.map.containsKey(NativeWalletVault.REC))
         assertFalse("no digest is generated", files.map.containsKey(NativeWalletVault.MARK))
     }

@@ -94,7 +94,9 @@ class ShellRecordFormatTest {
             200,
         )
         // 25.52CK.8 (r3ek): a write whose pre-write read fails is write_failed, once; record_unreadable is for reads.
-        assertEquals("write_failed", write.v().getString("code"))
+        // SRP-04 (option A): the write fault is the envelope {ok:false, error:"write_failed"}.
+        assertEquals(false, write.getBoolean("ok"))
+        assertEquals("write_failed", write.getString("error"))
         assertTrue("the unreadable file is kept", before.contentEquals(files.map[name]!!))
     }
 

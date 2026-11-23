@@ -57,14 +57,25 @@ internal class NativePgpVault(
         READBACK_FAILED("readback_failed"),
     }
 
-    /** The plain record content. Built and dropped inside one operation. */
-    private class Unlocked(val fingerprint: String, val privateArmor: String, val passphrase: String)
+    /**
+     * The plain record content, held as bytes (long-lived key material is a ByteArray and is zeroed). One instance lives for one
+     * operation; [close] zeroes it. Text views exist only for the call that needs a String, and are not kept.
+     */
+    private class Unlocked(val fingerprint: String, val privateArmor: ByteArray, val passphrase: ByteArray) : AutoCloseable {
+        fun armorText(): String = String(privateArmor, Charsets.UTF_8)
+        fun passphraseText(): String = String(passphrase, Charsets.UTF_8)
+        override fun close() {
+            privateArmor.fill(0)
+            passphrase.fill(0)
+        }
+    }
+
 
     private val rec = recName(account, slot)
     private val mark = markName(account, slot)
 
     /**
-     * Reports the state. A read never deletes anything (project ruling 2026-11-16: keep the user's data). A record without its marker is
+     * Reports the state. A read never deletes anything (keep the user's data). A record without its marker is
      * Locked("marker_missing"), an unknown state that retries; it is not treated as absent, so nothing creates a new key over it. A marker
      * without a record is Locked("record_missing") for the same reason. Only a write's own rollback removes records (restore).
      */
@@ -89,7 +100,7 @@ internal class NativePgpVault(
      * nothing is left. The passphrase, if any, is sealed with the key and never leaves the vault.
      */
     /**
-     * Writes the record (project ruling 2026-11-16, keep the user's data). Inside the lock: a record or a marker that already exists is refused
+     * Writes the record (keep the user's data). Inside the lock: a record or a marker that already exists is refused
      * with [Put.EXISTS] and nothing is written, unless [overwrite] is set. Only the user's confirmed replacement and the restore rollback pass
      * [overwrite] = true.
      */
@@ -121,7 +132,11 @@ internal class NativePgpVault(
             return Put.STORE_FAILED
         }
         val back = files.read(rec)?.let { parseRecord(it) }?.let { open(it) }
-        val confirmed = back != null && back.fingerprint == secret.fingerprint && back.privateArmor == privateArmor
+        val confirmed = try {
+            back != null && back.fingerprint == secret.fingerprint && back.armorText() == privateArmor
+        } finally {
+            back?.close()
+        }
         if (!confirmed) {
             restore(prevRec, prevMark)
             return Put.READBACK_FAILED
@@ -142,9 +157,13 @@ internal class NativePgpVault(
     @Synchronized
     fun decryptInbound(armoredMessage: String): NativePgp.Outcome {
         val unlocked = unlock() ?: return refusal()
-        val secret = NativePgp.parseSecret(unlocked.privateArmor)
-            ?: return NativePgp.Outcome.fail("bad_pgp_key")
-        return NativePgp.decryptMessage(secret, unlocked.passphrase, armoredMessage)
+        return try {
+            val secret = NativePgp.parseSecret(unlocked.armorText())
+                ?: return NativePgp.Outcome.fail("bad_pgp_key")
+            NativePgp.decryptMessage(secret, unlocked.passphraseText(), armoredMessage)
+        } finally {
+            unlocked.close()
+        }
     }
 
     /**
@@ -154,9 +173,13 @@ internal class NativePgpVault(
     @Synchronized
     fun decryptInboundLiteral(armoredMessage: String): NativePgp.LiteralResult {
         val unlocked = unlock() ?: return NativePgp.LiteralResult.fail(refusal().code)
-        val secret = NativePgp.parseSecret(unlocked.privateArmor)
-            ?: return NativePgp.LiteralResult.fail("bad_pgp_key")
-        return NativePgp.decryptLiteral(secret, unlocked.passphrase, armoredMessage)
+        return try {
+            val secret = NativePgp.parseSecret(unlocked.armorText())
+                ?: return NativePgp.LiteralResult.fail("bad_pgp_key")
+            NativePgp.decryptLiteral(secret, unlocked.passphraseText(), armoredMessage)
+        } finally {
+            unlocked.close()
+        }
     }
 
     /**
@@ -193,9 +216,13 @@ internal class NativePgpVault(
             return NativePgp.Outcome.fail("message_contains_cr")
         }
         val unlocked = unlock() ?: return refusal()
-        val secret = NativePgp.parseSecret(unlocked.privateArmor)
-            ?: return NativePgp.Outcome.fail("bad_pgp_key")
-        return NativePgp.signDocument(secret, unlocked.passphrase, domainLabel(purposeId), message, sigType)
+        return try {
+            val secret = NativePgp.parseSecret(unlocked.armorText())
+                ?: return NativePgp.Outcome.fail("bad_pgp_key")
+            NativePgp.signDocument(secret, unlocked.passphraseText(), domainLabel(purposeId), message, sigType)
+        } finally {
+            unlocked.close()
+        }
     }
 
     /** Removes this slot's record and marker. Other accounts and the other slot are not touched. True only when both are gone (PY.8 (3)). */
@@ -218,14 +245,39 @@ internal class NativePgpVault(
     @Synchronized
     internal fun identity(): PgpIdentity? {
         val unlocked = unlock() ?: return null
-        val secret = NativePgp.parseSecret(unlocked.privateArmor) ?: return null
-        val sub = NativePgpBackup.subkeyKeyId(secret) ?: return null
-        return PgpIdentity(secret.fingerprint.uppercase(), sub)
+        return try {
+            val secret = NativePgp.parseSecret(unlocked.armorText()) ?: return null
+            val sub = NativePgpBackup.subkeyKeyId(secret) ?: return null
+            PgpIdentity(secret.fingerprint.uppercase(), sub)
+        } finally {
+            unlocked.close()
+        }
     }
 
-    /** The armor of the record in this slot, for native-only moves between slots. Never leaves the native layer. */
+    /**
+     * G1 (review): the three-state identity read of this slot. Absent only when the slot is confirmed empty (no record, no marker); a record
+     * whose key cannot be read or parsed is Unknown (25.52Y.84), never Absent.
+     */
     @Synchronized
-    internal fun armorForMove(): String? = unlock()?.privateArmor
+    internal fun identityRead(): IdentityRead {
+        if (state() is State.NoKey) return IdentityRead.Absent
+        val id = identity() ?: return IdentityRead.Unknown
+        return IdentityRead.Present(id)
+    }
+
+    /**
+     * A copy of the armor of the record in this slot, for native-only moves between slots. The caller owns the copy and zeroes it. Never leaves
+     * the native layer.
+     */
+    @Synchronized
+    internal fun armorForMove(): ByteArray? {
+        val unlocked = unlock() ?: return null
+        return try {
+            unlocked.privateArmor.copyOf()
+        } finally {
+            unlocked.close()
+        }
+    }
 
     /** True for the pending slot. Used to refuse a call that mixes the two slots. */
     fun isPendingSlot(): Boolean = slot == Slot.PENDING
@@ -235,17 +287,21 @@ internal class NativePgpVault(
      * for the caller to store in the active slot, and never leaves the native layer. `null` when no ready pending key exists.
      */
     @Synchronized
-    internal fun pendingArmorForActivation(): String? {
+    internal fun pendingArmorForActivation(): ByteArray? {
         check(slot == Slot.PENDING) { "only the pending slot hands over a key" }
-        return unlock()?.privateArmor
+        return armorForMove()
     }
 
     /** Test seam: the verifier for a signature made by [sign], with the vault key only. */
     @Synchronized
     internal fun verifySignature(purposeId: String, message: ByteArray, armoredSignature: String): Boolean {
         val unlocked = unlock() ?: return false
-        val secret = NativePgp.parseSecret(unlocked.privateArmor) ?: return false
-        return NativePgp.verifyDocument(secret, domainLabel(purposeId), message, armoredSignature)
+        return try {
+            val secret = NativePgp.parseSecret(unlocked.armorText()) ?: return false
+            NativePgp.verifyDocument(secret, domainLabel(purposeId), message, armoredSignature)
+        } finally {
+            unlocked.close()
+        }
     }
 
     private fun refusal(): NativePgp.Outcome {
@@ -284,12 +340,12 @@ internal class NativePgpVault(
     private fun open(p: Parsed): Unlocked? {
         val plain = wrap.open(aad(p.eoa, slot), p.sealed) ?: return null
         return try {
+            // The JSON parse makes transient Strings; the record keeps only the byte forms (the stored format is unchanged).
             val o = JSONObject(String(plain, Charsets.UTF_8))
-            Unlocked(
-                fingerprint = o.optString("fp", ""),
-                privateArmor = o.optString("priv", ""),
-                passphrase = o.optString("pass", ""),
-            ).takeIf { it.fingerprint.isNotEmpty() && it.privateArmor.isNotEmpty() }
+            val fp = o.optString("fp", "")
+            val priv = o.optString("priv", "")
+            if (fp.isEmpty() || priv.isEmpty()) return null
+            Unlocked(fp, priv.toByteArray(Charsets.UTF_8), o.optString("pass", "").toByteArray(Charsets.UTF_8))
         } catch (_: Exception) {
             null
         } finally {

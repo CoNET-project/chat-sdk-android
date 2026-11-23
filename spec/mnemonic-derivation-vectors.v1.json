@@ -1,6 +1,6 @@
 {
   "file": "mnemonic-derivation-vectors.v1.json",
-  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "spec": "spec §25.26（第二十七批，裁定）",
   "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
   "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",

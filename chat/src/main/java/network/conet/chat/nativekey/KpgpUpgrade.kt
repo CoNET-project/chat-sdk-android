@@ -50,7 +50,7 @@ internal object KpgpUpgrade {
             val tW = DiagTiming.now()
             writeOk = k.writeIfAbsent(eoa, PgpMigrationPolicy.WORKSPACE, keyIdOfRecord, publicArmor, record.privateArmor, nowSec) ==
                 AccountPgpKWrite.WRITTEN
-            // origin log (25.52Y.84 request, project ruling): the label, the time and the code only. No key, no keyID.
+            // origin log (25.52Y.84 request): the label, the time and the code only. No key, no keyID.
             DiagTiming.log("kpgp.write:upgradeL", tW, if (writeOk) "ok" else "fail")
         }
         // The chain source is used only when L gives no valid key (§25.52Y.59 第 3 项 (b)). A verified backup is written; nothing is deleted.
@@ -82,7 +82,8 @@ internal object KpgpUpgrade {
         val vault = NativeWallet.pgpFor(app, eoa)
         val record = try {
             val identity = vault.identity()
-            val priv = vault.armorForMove()
+            // LRecord still takes a String (its lifetime is a listed pending item); the byte copy is zeroed here.
+            val priv = vault.armorForMove()?.let { b -> try { String(b, Charsets.UTF_8) } finally { b.fill(0) } }
             if (identity != null && priv != null) LRecord(priv, identity.subkeyKeyId) else null
         } catch (_: Exception) {
             null
@@ -100,7 +101,7 @@ internal object KpgpUpgrade {
 
     /** The chain source for [eoa]: the public record and backup, verified with the account's wallet key. Read-only. */
     private fun chainFromDevice(app: Context, eoa: String): ChainBackupRestore.Result {
-        val chain = AddressPgpChain.read(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
+        val chain = AddressPgpChain.readAgreed(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
         val vault = NativeWallet.vault(app)
         val password: () -> String? = {
             val key = vault.unlock()

@@ -1,0 +1,199 @@
+{
+  "schema": "mnemonic-cipher-format.v3",
+  "status": "TEST FIXTURE (synthetic). Supersedes v2 for NEW records (v2 is PBKDF2/8-12 digit legacy-style; kept). Two states per record: no-passcode (command shapes only) and passcode (envelope below).",
+  "generator": "gen-mnemonic-cipher-format.v3.mjs",
+  "note": "Fixed salt/iv for vectors ONLY. Production: random salt(16)+iv(12) per encryption. Keys/derived outputs never stored with ciphertext.",
+  "syntheticInputs": {
+    "phrase": "fog spot notable regret pizza coffee harvest ensure fog spot notable reflect",
+    "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+    "sixDigitPasscode": "482913",
+    "saltB64": "AAECAwQFBgcICQoLDA0ODw==",
+    "ivB64": "AAECAwQFBgcICQoL",
+    "kdf": "argon2id",
+    "argon2": {
+      "m": 32768,
+      "t": 3,
+      "p": 1,
+      "dkLen": 32
+    },
+    "alg": "AES-256-GCM",
+    "aadTemplate": "beamio-mnemonic-cipher-v3|argon2id-aes256gcm|<eoa lowercase>"
+  },
+  "states": {
+    "noPasscode": {
+      "source": "PWA trusted-bridge sync of validated mnemonic; shell stores per-mnemonic set; current updated after write+readback",
+      "coldStartAnswer": "current mnemonic (plaintext to PWA only via trusted bridge on PWA-IDB-missing request); PWA verifies address, writes IDB, reads back, lands /home silently"
+    },
+    "passcode": {
+      "source": "PWA sends locked record + optional passcode over trusted bridge; SDK decrypts, initializes; shell cold-stores ciphertext; cold start returns current ciphertext only; PWA shows unlock page and decrypts itself"
+    }
+  },
+  "cases": [
+    {
+      "id": "MCF3-01-passcode-correct-decrypts-and-address-matches",
+      "kind": "positive",
+      "state": "passcode",
+      "passcode": "correct",
+      "envelope": {
+        "v": 3,
+        "mode": "passcode",
+        "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0="
+      },
+      "expect": {
+        "code": "ok",
+        "addressMatch": true
+      }
+    },
+    {
+      "id": "MCF3-02-wrong-six-digit-unlock-failed",
+      "kind": "negative",
+      "state": "passcode",
+      "passcode": "wrong",
+      "envelope": {
+        "v": 3,
+        "mode": "passcode",
+        "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0="
+      },
+      "expect": {
+        "code": "unlock_failed",
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-03-tampered-ciphertext-unlock-failed",
+      "kind": "negative",
+      "state": "passcode",
+      "envelope": {
+        "v": 3,
+        "mode": "passcode",
+        "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "dyJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0="
+      },
+      "expect": {
+        "code": "unlock_failed",
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-04-version-not-3-verify-failed-before-decrypt",
+      "kind": "negative",
+      "state": "passcode",
+      "envelope": {
+        "v": 2,
+        "mode": "passcode",
+        "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0="
+      },
+      "expect": {
+        "code": "verify_failed",
+        "decryptAttempted": false,
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-05-address-mismatch-verify-failed",
+      "kind": "negative",
+      "state": "passcode",
+      "envelope": {
+        "v": 3,
+        "mode": "passcode",
+        "eoa": "0x2222222222222222222222222222222222222222",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816SNVFJ919dazVSo6aqSKTno="
+      },
+      "expect": {
+        "code": "verify_failed",
+        "addressMatch": false,
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-06-aad-bound-to-eoa-unlock-failed",
+      "kind": "negative",
+      "state": "passcode",
+      "envelope": {
+        "v": 3,
+        "mode": "passcode",
+        "eoa": "0xd49251e1e9f4d4d5bac808861fa4ce23053c986f",
+        "kdf": "argon2id/m=32768/t=3/p=1/dkLen=32",
+        "salt": "AAECAwQFBgcICQoLDA0ODw==",
+        "iv": "AAECAwQFBgcICQoL",
+        "alg": "AES-256-GCM",
+        "ct": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816SNVFJ919dazVSo6aqSKTno="
+      },
+      "expect": {
+        "code": "unlock_failed",
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-07-non-six-digit-passcode-rejected-at-set",
+      "kind": "negative",
+      "state": "passcode",
+      "passcode": "12345",
+      "expect": {
+        "code": "bad_request",
+        "note": "set/change passcode must be exactly six ASCII digits; not applied at unlock"
+      }
+    },
+    {
+      "id": "MCF3-08-no-passcode-state-no-ciphertext",
+      "kind": "positive",
+      "state": "noPasscode",
+      "expect": {
+        "ciphertext": false,
+        "coldStartReturns": "current_mnemonic_via_trusted_bridge_only_if_pwa_idb_missing"
+      }
+    },
+    {
+      "id": "MCF3-09-confirmed-missing-distinct",
+      "kind": "distinction",
+      "expect": {
+        "code": "confirmed_missing"
+      }
+    },
+    {
+      "id": "MCF3-10-read-error-distinct",
+      "kind": "distinction",
+      "expect": {
+        "code": "read_error",
+        "dataKept": true
+      }
+    },
+    {
+      "id": "MCF3-11-passcode-not-provided-distinct",
+      "kind": "distinction",
+      "state": "passcode",
+      "expect": {
+        "code": "passcode_not_provided",
+        "dataKept": true
+      }
+    }
+  ],
+  "ctFixtures": {
+    "ctOK": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0=",
+    "ctOtherAAD": "diJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816SNVFJ919dazVSo6aqSKTno=",
+    "tampered": "dyJrzOt3Kj4OV+2RgkYviy/MVT7Zv9/sEdeDl58hRg1GChr8OLJv/xs5AEXM9cvzWIZVCHKjDsW1UB8AqBKhqhVUpOImaTLkmq816W0abAHJvt5SzkAnyYQEys0="
+  }
+}

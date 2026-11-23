@@ -11,8 +11,8 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * A4 F2 conditions (R588, the review seat's addendum): the PGP header is checked in canonical form on the write, the read and the import, and
- * the W-class values are type-checked (25.52O.3, iOS f8cf2bc). A residual PGP header fails the read and the import closed. The key-form and
+ * A4 F2 conditions (the review's conditions): the PGP header is checked in canonical form on the write, the read and the import, and
+ * the W-class values are type-checked (25.52O.3, iOS). A residual PGP header fails the read and the import closed. The key-form and
  * derived-address check (25.52N.9 Q1) is not in this file: it conflicts with the synthetic placeholder values of the vectors, and is open.
  */
 class ShellRecordF2Test {
@@ -128,7 +128,7 @@ class ShellRecordF2Test {
         }
     }
 
-    // ---- the W-class type check (25.52O.3, iOS f8cf2bc) ----
+    // ---- the W-class type check (25.52O.3, iOS) ----
 
     private val wrapper: JSONObject = JSONObject()
         .put("ct", "c3ludGhldGlj")

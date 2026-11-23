@@ -75,7 +75,7 @@ class UnknownAnswerTest {
     fun aCreateGateWithAnUnreadableLegacyReportRefuses() {
         val unreadable = CreateGuardInputs(
             key = KeyState.NONE,
-            legacyReport = null,
+            legacyReport = LegacyReportState.READ_FAILED,
             legacyUnreadable = false,
             pointer = false,
             pageCopy = false,
@@ -92,15 +92,16 @@ class UnknownAnswerTest {
      * the bridge (25.52Y.84). The vault is a real vault whose record read throws.
      */
     @Test
-    fun walletEoaAddressIsNotReadyOnAnUnreadableVaultWithOneAck() {
+    fun walletEoaAddressIsUnavailableWithNoAccountWhenTheRecordReadFailsWithOneAck() {
         val files = FailingReads(NativeTestFiles()) { it == NativeWalletVault.REC }
         val vault = NativeWalletVault(NativeTestWrap(), files)
         val body = org.json.JSONObject().put("type", WalletEoaAddressBridge.NAME).put("reqId", "w1")
 
         val ack = WalletEoaAddressBridge.answer(originAllowed = true, body = body) { vault to NoKeyGate.Gate.G2 }
 
+        // Input: the REC read throws; the MNEM read succeeds and is empty (no vault files). : no account, so unavailable.
         assertEquals("w1", ack.getString("reqId"))
         assertFalse(ack.getBoolean("ok"))
-        assertEquals("not_ready", ack.getString("error"))
+        assertEquals("unavailable", ack.getString("error"))
     }
 }

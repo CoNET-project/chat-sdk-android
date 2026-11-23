@@ -24,7 +24,13 @@ internal object ShellReplica {
         outcome: ImportOutcome?,
         pointerSet: Boolean,
         store: SealedPageRecordStore,
+        /**
+         *  (parity, Y.163 第 32 项裁定 A): a page copy is made only for an account that holds a valid phrase. This is read before the key:
+         * an account with no valid phrase (a key-only orphan) is not unlocked, not read and not derived. Returns the valid phrase's account, or null.
+         */
+        validPhraseOf: () -> String?,
     ): Answer {
+        if (validPhraseOf()?.equals(expectedEoa, ignoreCase = true) != true) return Answer.NotApplied
         val key = unlock() ?: return Answer.NotApplied
         return try {
             answer(key, expectedEoa, outcome, pointerSet, store)

@@ -5,13 +5,13 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Data-safety gate of account creation (PM ruling; the refusal is `not_available`, no page). A create must never overwrite a wallet held
+ * Data-safety gate of account creation (the refusal is `not_available`, no page). A create must never overwrite a wallet held
  * elsewhere. Only: no native key, legacy store confirmed `absent`, no pointer, no page copy, no migration pending.
  */
 class AccountCreateGuardTest {
     private fun inputs(
         key: KeyState = KeyState.NONE,
-        legacy: String? = "absent",
+        legacy: LegacyReportState = LegacyReportState.ABSENT,
         legacyUnreadable: Boolean = false,
         pointer: Boolean = false,
         pageCopy: Boolean = false,
@@ -37,9 +37,9 @@ class AccountCreateGuardTest {
     @Test
     fun aPendingMigrationOrAnUnconfirmedLegacyStoreIsMigrating() {
         // No key, but the legacy store is not confirmed empty (found, unreadable, never reported, or the marker is set).
-        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = "found")))
-        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = "unreadable")))
-        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = null)))
+        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = LegacyReportState.FOUND)))
+        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = LegacyReportState.UNREADABLE)))
+        assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacy = LegacyReportState.NOT_REPORTED)))
         assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(legacyUnreadable = true)))
         // A write or migration in progress holds the create back even when the legacy report reads absent.
         assertEquals(AccountCreateGuard.MIGRATING, AccountCreateGuard.denial(inputs(migrating = true)))
@@ -53,7 +53,7 @@ class AccountCreateGuardTest {
 
     @Test
     fun anUnreadableInputIsAClosedDenialNotACreate() {
-        // Any exception while reading the inputs denies the create (review 76706f6d, open-path item).
+        // Any exception while reading the inputs denies the create (open-path item).
         assertEquals(AccountCreateGuard.INPUTS_UNREADABLE, AccountCreateGuard.denialOrClosed { throw IllegalStateException("io") })
         assertNull(AccountCreateGuard.denialOrClosed { inputs() })
     }
@@ -73,7 +73,7 @@ class AccountCreateGuardTest {
 
     @Test
     fun aRefusedCreateNeverOpensThePage() {
-        // The bridge answer is the existing not_available, the host is not called, and no result is sent (PM ruling).
+        // The bridge answer is the existing not_available, the host is not called, and no result is sent.
         var opened = 0
         NativeAccountCreateHost.launcher = { opened++; true }
         val r = NativeOpenRules.accountCreateOpen(

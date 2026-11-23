@@ -1,0 +1,176 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E2-addendum.1.json",
+  "scope": "sdk-overwrite-59e-decided-synthetic",
+  "status": "pending_review",
+  "extends": "E2 (no new base); v3.3-add SO-25, SO-25b; v3.3.1-add SO-25c",
+  "text_basis": "spec-59e-errata-v3.3.1-E2-addendum.1.md (裁定 2026-11-17)",
+  "cases": [
+    {
+      "id": "SO-25d",
+      "title": "窗口中固定名下有非旧内容（垃圾字节）：先改名隔离并审计、保留，再从封存副本写回，最终为旧字节（E2 附加 A1）",
+      "policy": "decided (E2 附加 A1)",
+      "pre": {
+        "files": {
+          "wallet.rec": "GARBAGE_BYTES",
+          "wallet.mnem": "absent",
+          "wallet.mark": "sealed_copy",
+          "wallet.commit": "absent",
+          "isolated_pattern": {
+            "sha256": "OLD_REC.sha256",
+            "present": true,
+            "count": 1
+          }
+        },
+        "audit_rows": 2,
+        "intent_marker": "pending_no_newRecordSha"
+      },
+      "op": {
+        "command": "startup_recovery"
+      },
+      "expect": {
+        "steps": [
+          "rename garbage -> isolated (sha GARBAGE_BYTES)",
+          "audit row per rename",
+          "restore REC/MNEM/MARK/COMMIT from sealed copy by digest",
+          "readback ok per entry"
+        ],
+        "files": {
+          "wallet.rec": "OLD_REC",
+          "isolated_pattern": {
+            "count": 2,
+            "sha256_set": [
+              "OLD_REC.sha256",
+              "GARBAGE_BYTES.sha256"
+            ],
+            "present": true
+          }
+        },
+        "deleted": [],
+        "audit_append": [
+          "rename garbage -> isolated (sha GARBAGE_BYTES)",
+          "restore REC by digest (sha OLD_REC)"
+        ],
+        "intent_marker": "cleared",
+        "isolation_retained": false,
+        "state_after": "ok_original_retryable"
+      },
+      "status": "pending_review",
+      "assert": "垃圾字节保留（隔离名下、有审计）；固定名最终为旧字节；不删除；旧账户在位、可重试。"
+    },
+    {
+      "id": "SO-25e",
+      "title": "隔离改名失败：不覆盖，全部保留，windowFailed / rollback_pending（E2 附加 A2）",
+      "policy": "decided (E2 附加 A2; WK-34(a))",
+      "pre": {
+        "files": {
+          "wallet.rec": "GARBAGE_BYTES",
+          "wallet.mnem": "absent",
+          "wallet.mark": "sealed_copy",
+          "wallet.commit": "absent",
+          "isolated_pattern": {
+            "sha256": "OLD_REC.sha256",
+            "present": true,
+            "count": 1
+          }
+        },
+        "audit_rows": 2,
+        "intent_marker": "pending_no_newRecordSha"
+      },
+      "op": {
+        "command": "startup_recovery",
+        "inject_fault": "rename_garbage_to_isolated_fails"
+      },
+      "expect": {
+        "files": {
+          "wallet.rec": "GARBAGE_BYTES",
+          "isolated_pattern": {
+            "sha256": "OLD_REC.sha256",
+            "present": true,
+            "count": 1
+          },
+          "wallet.mark": "sealed_copy"
+        },
+        "overwritten": false,
+        "deleted": [],
+        "audit_append": [],
+        "no_audit_for_failed_rename": true,
+        "internal_state": "windowFailed",
+        "wire_answer_if_user_path": {
+          "ok": false,
+          "error": "write_failed",
+          "reason": "internal_state"
+        },
+        "intent_marker": "pending_no_newRecordSha",
+        "state_after": "rollback_pending",
+        "auto_retry_per_launch_max": 1
+      },
+      "status": "pending_review",
+      "assert": "改名失败不覆盖；无审计；全部保留；rollback_pending；每次启动最多一次自动续做，只记码。"
+    },
+    {
+      "id": "SO-25f",
+      "title": "改名成功但审计行写失败（裁定 2026-11-17，定稿）",
+      "policy": "decided (E2 附加 .1 A3; 裁定 2026-11-17)",
+      "pre": {
+        "files": {
+          "wallet.rec": "GARBAGE_BYTES",
+          "wallet.mnem": "absent",
+          "wallet.mark": "sealed_copy",
+          "wallet.commit": "absent",
+          "isolated_pattern": {
+            "present": false
+          }
+        },
+        "audit_rows": 2,
+        "intent_marker": "pending_no_newRecordSha"
+      },
+      "op": [
+        {
+          "command": "startup_recovery",
+          "inject_fault": "rename_ok_audit_write_fails"
+        },
+        {
+          "command": "startup_recovery",
+          "inject_fault": "none",
+          "note": "下次启动：补写缺失的审计行（按 sha 匹配，幂等），然后续 A1 步骤 2 起"
+        }
+      ],
+      "expect": {
+        "after_first_launch": {
+          "files": {
+            "wallet.rec": "absent",
+            "isolated_pattern": {
+              "sha256": "GARBAGE_BYTES.sha256",
+              "present": true,
+              "count": 1
+            }
+          },
+          "deleted": [],
+          "rename_not_rolled_back": true,
+          "audit_row_for_isolated": "missing",
+          "state": "rollback_pending"
+        },
+        "after_second_launch": {
+          "audit_row_backfilled": true,
+          "then": "continue SO-25d steps 2-4",
+          "final_wallet_rec": "OLD_REC",
+          "state_after": "ok_original_retryable"
+        },
+        "if_backfill_fails": {
+          "state": "rollback_pending",
+          "files_preserved": true,
+          "retry_by_user": "retryPendingByUser",
+          "auto_retry_per_launch_max": 1,
+          "deleted": [],
+          "rename_rolled_back": false
+        }
+      },
+      "status": "pending_review",
+      "assert": "不回退改名；不删；下次启动按 sha 补写审计（幂等）；补写成功续 SO-25d；补写仍失败 → rollback_pending，全部保留，用户可重试（retryPendingByUser），每次启动最多一次自动续做。"
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true,
+  "supersedes": "spec-59e-synthetic-vectors.v3.3.1-E2-addendum.json (SO-25f status: pending -> decided)",
+  "cases_note": "SO-25f decided by 裁定 2026-11-17 (was proposed in E2 附加)."
+}

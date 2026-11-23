@@ -10,7 +10,7 @@ import java.security.MessageDigest
 
 /**
  * Acceptance group F (spec §25.30.8, registered r3o): every case of `pgp-restore-acceptance-vectors.v1.json` (59 cases,
- * synthetic, sha256 25656c16 pinned to SHA256-CURRENT) run against [PgpRestoreMachine] through [PgpRestoreHarness]. Each step result and
+ * synthetic, sha256 826603a1 pinned to SHA256-CURRENT) run against [PgpRestoreMachine] through [PgpRestoreHarness]. Each step result and
  * the final state must match the vector item by item. The same cases run on a device in `PgpRestoreAcceptanceDeviceTest`.
  */
 class PgpRestoreAcceptanceTest {
@@ -36,7 +36,7 @@ class PgpRestoreAcceptanceTest {
 
     @Test
     fun theVectorFileIsTheHashedCopy() {
-        assertEquals("25656c1656400198e569ffac8f4bc007c01e93097170d1c960ce884df0915365", sha256Hex(raw))
+        assertEquals("826603a16ec6b18a440352563fd94cb987342227d5ce62a4b101a494c82c0c68", sha256Hex(raw))
         assertEquals(59, doc.getJSONArray("cases").length())
     }
 

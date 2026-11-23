@@ -20,7 +20,7 @@ class KeyPathGuardTest {
             assertFalse(src.contains("setLocalSigner"))
             assertFalse(src.contains("clearLocalSigner"))
         }
-        // `hasLocalSigner` is the one alias the PM approved for the application (§38): a @Deprecated delegate to
+        // `hasLocalSigner` is the one alias the owner approved for the application (§38): a @Deprecated delegate to
         // hasNativeSigner, in the broker only. The module never names it.
         assertFalse(module.contains("hasLocalSigner"))
         assertEquals(1, Regex("hasLocalSigner").findAll(broker).count())
@@ -49,10 +49,10 @@ class KeyPathGuardTest {
         assertTrue(module.contains("NativeWalletCommands.walletAddress("))
         assertTrue(module.contains("NativeMessageSigner.sign("))
         // The page-open decision (r3x) is shared with the vector harness: the module calls it, and the rules call the host.
-        assertTrue(module.contains("NativeOpenRules.importOpen("))
+        // r2.3 41(1): nativeImportOpen is no longer a bridge command, so the module does not call importOpen.
+        assertFalse(module.contains("NativeOpenRules.importOpen("))
         assertTrue(module.contains("NativeOpenRules.accountCreateOpen("))
         val rules = File("src/main/java/network/conet/chat/nativekey/NativeOpenRules.kt").readText()
-        assertTrue(rules.contains("NativeImportHost.open(reqId)"))
         assertTrue(rules.contains("NativeAccountCreateHost.open(reqId)"))
         assertTrue(module.contains("\"nativeAccountCreateOpen\" -> nativeAccountCreateOpenCommand(body)"))
         // The old reply codes are gone: no_key and locked are the answers.
@@ -65,7 +65,7 @@ class KeyPathGuardTest {
     fun noKeyGateRunsBeforeAnyDispatch() {
         // T-155: with no native record, the gate answers before a payload is read or a command runs.
         val gate = module.indexOf("NoKeyGate.route(type)")
-        val dispatch = module.indexOf("dispatch(type, body)")
+        val dispatch = module.indexOf("dispatch(context, type, body)")
         assertTrue("gate call missing", gate >= 0)
         assertTrue("gate must come before dispatch", dispatch > gate)
         assertTrue(module.contains("NativeWalletVault.State.NoKey"))
@@ -74,9 +74,10 @@ class KeyPathGuardTest {
     @Test
     fun statusQueriesAnswerFromTheVaultStateInBothCases() {
         // AND-N4, AND-N5: walletStatus and passcodeStatus answer from the vault state, with or without a record.
-        assertTrue(module.contains("NoKeyGate.walletStatusFor(gate, state) {"))
+        assertTrue(module.contains("NoKeyGate.walletStatusFor(statusGate, state, vaultForReason) {"))  // r2.5.17 31(3): the status gate, not the raw gate
         assertTrue(module.contains("BeamioShellRecordImport.flagsOf(context.applicationContext).accountAddress()"))
-        assertTrue(module.contains("NoKeyGate.passcodeStatusFor(gate)"))
+        // 0.2.28 follow-up (2026-11-20): passcodeStatus goes through the adoption guard, which answers from passcodeStatusFor(gate) once settled.
+        assertTrue(module.contains("NoKeyGate.passcodeStatusWhileAdopting("))
     }
 
     @Test
@@ -105,7 +106,7 @@ class KeyPathGuardTest {
         val store = File("src/main/java/network/conet/chat/BeamioChatPgpStore.kt").readText()
         assertFalse(store.contains("putString(KEY_PRIVATE"))
         assertFalse(store.contains("hasUserPrivate"))
-        assertTrue(store.contains("fun clearLegacyPrivateArmor("))
+        assertFalse("C1: clearLegacyPrivateArmor is removed", store.contains("fun clearLegacyPrivateArmor("))
     }
 
     @Test
@@ -121,7 +122,7 @@ class KeyPathGuardTest {
     @Test
     fun inboundDecryptionRunsInTheVaultAndTheWebViewHoldsNoPgpKey() {
         val listen = File("src/main/java/network/conet/chat/BeamioConetChatListenSession.kt").readText()
-        assertTrue(listen.contains("NativeWallet.pgp(app).decryptInbound(armored)"))
+        assertTrue("inbound decrypt goes through the wallet (shipped armor first, then the vault)", listen.contains("NativeWallet.decryptInbound(app, armored)"))
         assertFalse(listen.contains("decryptInboundArmor"))
         val host = File("src/main/java/network/conet/chat/BeamioOpenPgpHost.kt").readText()
         assertFalse("WebView host still decrypts with a private key", host.contains("decryptInboundArmor"))

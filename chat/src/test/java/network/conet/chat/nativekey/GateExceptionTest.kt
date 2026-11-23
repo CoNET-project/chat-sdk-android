@@ -17,7 +17,7 @@ import java.io.File
  * (GX-06, GX-07). A fresh device is `absent` once the reader has finished (GX-03, GX-10a); before that it is `migrating` (GX-05). An unreadable
  * legacy store is `legacy_store_unreadable` (GX-04). G1 is `not_ready` (GX-08), and the origin is checked first (GX-09).
  *
- * GX-10b: the chat-module channel gets no reply on Android (§25.52AB.5, R476). The case therefore checks that the chat channel sends nothing,
+ * GX-10b: the chat-module channel gets no reply on Android (§25.52AB.5). The case therefore checks that the chat channel sends nothing,
  * and that the judgement the window channel gives for the same request is `absent`, which the chat channel would share.
  */
 class GateExceptionTest {
@@ -140,7 +140,7 @@ class GateExceptionTest {
             val answer = NoKeyGate.answerFor("identityPublic", gate)
             return if (answer == expect.getString("error")) emptyList() else listOf("gate $answer != ${expect.getString("error")}")
         }
-        // GX-10b is a recorded deviation from the vector (R476), pinned by gx10bChatChannelDeviatesFromTheVectorByR476. Not compared here.
+        // GX-10b is a recorded deviation from the vector, pinned by gx10bChatChannelDeviatesFromTheVectorByR476. Not compared here.
         if (c.getJSONObject("input").optString("channel") == "chat") return emptyList()
         val judged = judge(c)
         // The vectors name the account a1; the expectation is mapped the same way as the input.
@@ -168,7 +168,11 @@ class GateExceptionTest {
             "unreadable" -> ImportOutcome.LEGACY_UNREADABLE
             else -> null
         }
-        val bridge = ShellRecordBridge(account = { account }, migrating = { false }, outcome = { outcome }, flags = NoDeviceFlags)
+        // §25.52Y.157 (GX-01): under native G0 a read returns the page copy without the three W fields (Y.151 第 2 項).
+        val bridge = ShellRecordBridge(
+            account = { account }, migrating = { false }, outcome = { outcome }, flags = NoDeviceFlags,
+            nativeNoKey = { vault is NativeWalletVault.State.NoKey },
+        )
         val origin = if (input.optString("origin") == "refused") ShellOrigin.OTHER else ShellOrigin.EMBEDDED_PAGE
 
         val req = c.getJSONObject("req")
@@ -180,7 +184,7 @@ class GateExceptionTest {
     }
 
     /**
-     * GX-10b (recorded deviation, R476, §25.52AB.5). The vector expects the chat channel to answer `absent`. The rule says the chat channel never
+     * GX-10b (recorded deviation, §25.52AB.5). The vector expects the chat channel to answer `absent`. The rule says the chat channel never
      * replies, and the implementation follows the rule. This test pins the deviation without editing the vector: the chat channel answers not_supported (AY.1),
      * and the judgement the window channel gives for the same request is the vector's `absent`. The decision belongs to the interface owner.
      */

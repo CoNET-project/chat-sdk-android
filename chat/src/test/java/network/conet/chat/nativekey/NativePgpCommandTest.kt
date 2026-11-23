@@ -118,7 +118,7 @@ class NativePgpCommandTest {
 
     @Test
     fun signedBytesAreTheLabelThenTheMessageWithTextCanonicalisation() {
-        // 25.52CD.3 (R737): the signed stream is the UTF-8 label, then the message (NativePgp.signDocument; verifyDocument in the same order).
+        // 25.52CD.3 : the signed stream is the UTF-8 label, then the message (NativePgp.signDocument; verifyDocument in the same order).
         // Signature type 0x01 is a text signature: the stream is canonical, so a LF in the label is hashed as CRLF.
         val secret = requireNotNull(NativePgp.parseSecret(ecc().getString("privateArmored")))
         val pass = ecc().getString("passphrase")

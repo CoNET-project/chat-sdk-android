@@ -58,7 +58,28 @@ internal class NativeTestFiles : VaultFiles {
     var silentDeleteFailure: String? = null
     var crashAfterWrite: String? = null
 
-    override fun read(name: String): ByteArray? = map[name]?.copyOf()
+    /** Every name read, in order (25.52Y.128 第 4 項: the read path must not open an isolated file). */
+    val reads = ArrayList<String>()
+    /** Names whose rename from-side fails (the rename is refused). */
+    var failRename: ((String) -> Boolean)? = null
+
+    /** Names whose read throws (a storage read fault). The read is not answered as absent. */
+    var failRead: ((String) -> Boolean)? = null
+
+    override fun read(name: String): ByteArray? {
+        reads += name
+        if (failRead?.invoke(name) == true) throw IOException("read failed")
+        return map[name]?.copyOf()
+    }
+
+    override fun names(): List<String> = map.keys.toList()
+
+    override fun rename(from: String, to: String) {
+        if (failRename?.invoke(from) == true) throw IOException("cannot rename")
+        if (map.containsKey(to)) throw IOException("rename target exists")
+        val bytes = map.remove(from) ?: throw IOException("rename source absent")
+        map[to] = bytes
+    }
 
     override fun write(name: String, bytes: ByteArray) {
         if (failWrite == name) throw IOException("disk full")
@@ -71,4 +92,15 @@ internal class NativeTestFiles : VaultFiles {
         if (silentDeleteFailure == name) return
         map.remove(name)
     }
+}
+
+/**
+ * After a write that failed, no fixed name is left and every byte string that the write moved is kept under an isolated name (or is the audit
+ * file). Decision: no stored bytes are deleted by the rollback (standing constraint). The write's own records are kept, not erased.
+ */
+internal fun assertKeptOnlyIsolated(files: NativeTestFiles) {
+    val fixed = setOf(NativeWalletVault.REC, NativeWalletVault.MNEM, NativeWalletVault.MARK, NativeWalletVault.COMMIT, NativeWalletVault.INTENT, NativeWalletVault.PENDING)
+    org.junit.Assert.assertTrue("no fixed name is left: ${files.map.keys}", files.map.keys.none { it in fixed })
+    org.junit.Assert.assertTrue("every remaining name is an isolated copy or the audit: ${files.map.keys}",
+        files.map.keys.all { it.contains(".isolated.") || it == NativeWalletVault.AUDIT })
 }

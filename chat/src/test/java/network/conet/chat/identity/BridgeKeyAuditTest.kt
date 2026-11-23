@@ -24,7 +24,7 @@ import java.io.File
  * already-listed line fails the test. Two groups are listed:
  *  - `allowed`: reads or checks that do not take a value from a bridge payload (stored-record reads, refusal and removal lists, schema lists,
  *    the QA-only redaction).
- *  - `pendingRuling`: writes or checks of W-class values from a bridge payload, which the interface owner has not placed in T-50 (R598/R604).
+ *  - `pendingRuling`: writes or checks of W-class values from a bridge payload, which the interface owner has not placed in T-50 (/).
  *    These are listed so that new ones fail, but they are NOT counted as T-50 passing.
  * Known limit: a name built by concatenation (for example `"priv" + "ateKeyArmor"`) is not matched by the literal scan.
  */
@@ -131,8 +131,14 @@ class BridgeKeyAuditTest {
 
         // Listed reads that take no value from a bridge payload. Each line is the trimmed source line; repeats are counted.
         val allowed: Map<String, List<String>> = mapOf(
-            // chatRouteRegister (spec 25.28.3, PM R2085): the refusal list of the request fields the page may not send. Membership only;
+            // chatRouteRegister (spec 25.28.3): the refusal list of the request fields the page may not send. Membership only;
             // no value is read from the payload.
+            // nativeMnemonicPreread answer from the store (finalized section 5/6, 2026-11-22): the one listed output of the phrase, `mnemonic`,
+            // for a plain current set only. It is an output field of the answer, not a read from a bridge payload.
+            "PrereadStoreAnswer.kt" to listOf(
+                "MnemonicSetStore.Kind.PLAIN -> JSONObject().put(\"code\", \"ok\").put(\"mnemonic\", current.value).put(\"eoa\", current.eoa.lowercase())",
+                "is VaultSource.Ready -> v.phrase()?.let { JSONObject().put(\"code\", \"ok\").put(\"mnemonic\", it).put(\"eoa\", v.eoa.lowercase()) }",
+            ),
             "ChatRouteRegister.kt" to listOf(
                 "\"wallet\", \"message\", \"signature\", \"timestamp\", \"nonce\", \"encrypKeyArmored\", \"privateKeyHex\", \"pgpPrivateArmorSha256\",",
                 "\"pgpPrivateArmored\", \"pgpPrivateKeyArmored\",",
@@ -141,10 +147,23 @@ class BridgeKeyAuditTest {
             // recovery phrase, which is the phrase's output field and its kind name. It is not a read from a bridge payload. The bridge
             // does not register the name until the shell trust gate and capability bit are in place.
             // T-50 d class (25.52Y.70 第 1 项, granted for the registration request body only): the eight-key list of the native HTTP body
-            // POST /api/regiestChatRoute. Not in any bridge payload, ack, event or result (ChatRouteSubmit.kt, commit 1579c15).
+            // POST /api/regiestChatRoute. Not in any bridge payload, ack, event or result (ChatRouteSubmit.kt, commit).
             "ChatRouteSubmit.kt" to listOf(
                 "private val FIELDS = listOf(\"wallet\", \"keyID\", \"publicKeyArmored\", \"encrypKeyArmored\", \"routeKeyID\", \"timestamp\", \"nonce\", \"signature\")",
                 "\"encrypKeyArmored\" to b.encrypKeyArmored,",
+            ),
+            // chatInit phase 1 (draft r2.5.20 第 5 版, 第 1 节): the forbidden-name list of the request and the result. Membership only: names are
+            // compared with the input keys and never read from a payload value; the list is not sent in any answer.
+            "ChatInit.kt" to listOf(
+                "\"privateKeyArmor\", \"userPgpPrivateArmor\", \"pgpPrivateKeyArmored\", \"walletSignature\", \"armored\", \"backupCiphertext\",",
+                "\"mnemonic\", \"passphrase\", \"pin\", \"pgpPassphrase\",",
+            ),
+            // Credential-class membership (r2.5.19 59(1)(c), 25.41.3): the prefix families of the key-shape scan, matched by name only. The
+            // payload's values are never read; the check returns key_over_bridge_refused and echoes nothing.
+            "NativeSyncAck.kt" to listOf(
+                "private val CREDENTIAL_PREFIXES: List<String> = listOf(\"privatekey\", \"mnemonic\", \"pgpprivate\", \"pgppassphrase\")",
+                // The pre-read reply of an ok answer carries the mnemonic ( / vectors v2 292b53de); reviewed in the same commit.
+                "is MnemonicPreread.Answer.Valid -> JSONObject().put(\"code\", \"ok\").put(\"mnemonic\", answer.phrase)",
             ),
             "WalletCredential.kt" to listOf(
                 "const val KIND_MNEMONIC = \"mnemonic\"",
@@ -263,7 +282,7 @@ class BridgeKeyAuditTest {
             ),
         )
 
-        // Listed reads that stay pending the interface owner's ruling: not counted as T-50 passing. The first is the check of another profile's
+        // Listed reads that stay pending the interface owner's : not counted as T-50 passing. The first is the check of another profile's
         // privateKeyArmor (mergeWallet). 25.52AE.1 row 507 requires such a profile to be bad_request naming the path, and not merged; the current
         // behaviour is to be verified before this line can move to category b.
         val pendingRuling: Map<String, List<String>> = mapOf(
@@ -273,7 +292,7 @@ class BridgeKeyAuditTest {
                 // conflict. The presence is tested, the value is never read or echoed. Pending the owner's confirmation of the category.
                 "if (!profile.optString(\"keyID\", \"\").equals(account, ignoreCase = true) && profile.has(\"privateKeyArmor\")) mismatch = true",
                 // accountHoldsEoaKey (25.52P.4) is also called on the merged record at the write check (ShellRecord, after mergeWallet): that record
-                // holds the page payload, so this line is pending like the other payload reads (audit of 00537c5). Its other callers read the
+                // holds the page payload, so this line is pending like the other payload reads (audit of). Its other callers read the
                 // stored record only.
                 "fun accountHoldsEoaKey(record: JSONObject, eoa: String): Boolean = matchingProfiles(record, eoa).any { it.has(\"privateKeyArmor\") }",
             ),

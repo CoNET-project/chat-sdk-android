@@ -1,0 +1,119 @@
+{
+  "schema": "preread-returns-current-record-as-is.v1",
+  "date": "2026-11-23",
+  "basis": "定稿节第 1、5、6 节；",
+  "note": "合成数据。仅覆盖 nativeMnemonicPreread。普通读写错误码（v286、v291）保持现状，不在本向量内。",
+  "cases": [
+    {
+      "id": "PRR-01-plaintext-current-returned-as-is",
+      "state": {
+        "nativeCurrent": "plaintext_mnemonic",
+        "passcode": "none"
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "ok",
+        "mnemonic": "<current 明文，原样返回>"
+      },
+      "noPasscodeRequired": true,
+      "noUnlock": true
+    },
+    {
+      "id": "PRR-02-ciphertext-current-returned-without-passcode",
+      "state": {
+        "nativeCurrent": "v3_ciphertext",
+        "passcode": "not_provided"
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "ok",
+        "cipher": "<current 密文信封，原样返回>"
+      },
+      "noPasscodeRequired": true,
+      "plaintextReturned": false
+    },
+    {
+      "id": "PRR-03-empty-confirmed_missing",
+      "state": {
+        "nativeCurrent": "absent",
+        "sdkInitialized": false
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "confirmed_missing"
+      },
+      "notBridgeFault": true
+    },
+    {
+      "id": "PRR-04-read-failure-is-bridge-fault-not-confirmed-missing",
+      "state": {
+        "nativeCurrent": "read_failure"
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "read_error"
+      },
+      "notConfirmedMissing": true,
+      "dataKept": true
+    },
+    {
+      "id": "PRR-05-no-passcode-no-unlock-no-sdk-init-gate",
+      "state": {
+        "nativeCurrent": "ciphertext",
+        "sdkInitialized": false,
+        "passcode": "none"
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "ok",
+        "cipher": "<current 密文>"
+      },
+      "notPasscodeNotProvided": true
+    },
+    {
+      "id": "PRR-06-contradiction-preread-absent-but-ciphertext-present",
+      "state": {
+        "nativeCurrent": "absent",
+        "otherRecordsShowCiphertext": true
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "confirmed_missing",
+        "contradictionHandling": [
+          "record_redacted_diagnostic",
+          "recheck_current",
+          "preserve_original_data",
+          "no_button_as_repair"
+        ],
+        "dataChanged": false
+      }
+    },
+    {
+      "id": "PRR-07-passcode-state-not-a-preread-answer",
+      "state": {
+        "walletStatusPasscodeNotProvided": true,
+        "nativeCurrent": "ciphertext"
+      },
+      "request": {
+        "type": "nativeMnemonicPreread"
+      },
+      "expect": {
+        "code": "ok",
+        "cipher": "<current 密文>"
+      },
+      "passcodeStateDoesNotOverridePreread": true
+    }
+  ]
+}

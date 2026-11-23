@@ -8,12 +8,12 @@ import org.junit.Test
 import java.io.File
 
 /**
- * DL-10a and DL-10b (spec r3by §25.52AC.4), run from the vector file's `pageRecordDeleteCases` (review r3bz-r3by-r488 §2.2).
+ * DL-10a and DL-10b (spec r3by §25.52AC.4), run from the vector file's `pageRecordDeleteCases`.
  *
  * Two runs of every case:
  *  - As written. The vector puts `chats` at the root and omits `schemaVersion`. The spec does not say what a write without `schemaVersion`
- *    gets (R553 review §2.2). The SDK refuses it with `bad_request` naming `schemaVersion`; that is a recorded deviation, pending the
- *    interface owner's ruling on both this case and the position of `chats` (§25.52Q.3 lists `profiles[*].chats`, and its table lists a root
+ *    gets (review §2.2). The SDK refuses it with `bad_request` naming `schemaVersion`; that is a recorded deviation, pending the
+ *    interface owner's on both this case and the position of `chats` (§25.52Q.3 lists `profiles[*].chats`, and its table lists a root
  *    `chats`).
  *  - Mapped. `chats` is moved under `profiles[0]` and `schemaVersion` 1 is added, the position the whitelist accepts. Under this run the case
  *    must give the vector's own result: `conflict` with the current `currentRev` for a stale copy, `ok` with the next `rev` for a fresh one.

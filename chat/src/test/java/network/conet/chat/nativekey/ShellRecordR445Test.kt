@@ -10,7 +10,7 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * The r3bs and R444 items: an account that is not a canonical EOA is `account_mismatch` and fails closed (not `import_not_done`, which is only
+ * The r3bs and items: an account that is not a canonical EOA is `account_mismatch` and fails closed (not `import_not_done`, which is only
  * for a found legacy record); the write guard holds writes until a read has completed (§25.52W.3); a marker or a pointer without a record
  * holds writes; and the residual PGP public positions the Android reader lists are stripped on read (§25.52V.3).
  */
@@ -32,7 +32,7 @@ class ShellRecordR445Test {
         flags = flags,
     )
 
-    // ---- R444 item 1: an invalid account is account_mismatch, fail closed ----
+    // ---- item 1: an invalid account is account_mismatch, fail closed ----
 
     @Test
     fun anInvalidAccountIsAccountMismatchAndNeverImportNotDone() {
@@ -124,7 +124,7 @@ class ShellRecordR445Test {
         assertFalse("the pointer is not repaired for another account", flags.accountPointer())
     }
 
-    // ---- R444 item 2 (§25.52V.3): the residual PGP public positions the Android reader lists ----
+    // ---- item 2 (§25.52V.3): the residual PGP public positions the Android reader lists ----
 
     @Test
     fun everyResidualPositionTheAndroidReaderListsIsStripped() {

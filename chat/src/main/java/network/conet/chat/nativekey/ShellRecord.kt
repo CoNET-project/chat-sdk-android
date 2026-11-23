@@ -19,7 +19,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * The page-record bridge of the native layer (spec r3bg §25.52G, §25.52H, §25.52I, §25.52J, §25.52K; Android SDK per PM R389).
+ * The page-record bridge of the native layer (spec r3bg §25.52G, §25.52H, §25.52I, §25.52J, §25.52K).
  *
  * The page keeps its wallet copy here. The page's commands are `shellRecordRead` and `shellRecordWrite`. The migration state is a native
  * read-only query (§25.52L.6), not a page command.
@@ -58,7 +58,7 @@ enum class ShellImportCode(val wire: String) {
     IMPORT_FAILED("import_failed"),
     ADDRESS_MISMATCH("address_mismatch"),
 
-    /** An account that is not a canonical EOA: no profile can match it, so nothing is read or written (R444, fail closed). */
+    /** An account that is not a canonical EOA: no profile can match it, so nothing is read or written (fail closed). */
     ACCOUNT_MISMATCH("account_mismatch"),
 }
 
@@ -71,7 +71,7 @@ internal enum class ImportOutcome {
     NOT_DONE,
     DONE,
 
-    /** The account is not a canonical EOA: the legacy store is not read; reads answer account_mismatch, writes wait (R444). */
+    /** The account is not a canonical EOA: the legacy store is not read; reads answer account_mismatch, writes wait . */
     ACCOUNT_MISMATCH,
 }
 
@@ -474,6 +474,17 @@ internal object ShellRecordPolicy {
         record.optJSONObject("beamio")?.let { if (it.length() == 0) record.remove("beamio") }
     }
 
+    /**
+     * The copy a read returns when the native side reports G0 (no_key): the three W fields are removed from a copy (§25.52Y.151 第 6 項,
+     * §25.52Y.150 第 1 項): `profiles[*].privateKeyArmor`, `mnemonicPhrase`, `recoveryWords`. Every other field is kept. The stored record is not
+     * changed (§25.52Y.125).
+     */
+    fun redactWalletForNoKey(record: JSONObject): JSONObject {
+        val copy = JSONObject(record.toString())
+        for (path in WALLET_PATHS) removePath(copy, path.split('.'))
+        return copy
+    }
+
     /** Removes the W fields (§25.52H.2 rule 5, §25.52M.2, §25.52S.4): the account's `privateKeyArmor`, `mnemonicPhrase`, `recoveryWords`. */
     fun removeWallet(record: JSONObject) {
         for (path in WALLET_REMOVAL_PATHS) removePath(record, path.split('.'))
@@ -502,7 +513,7 @@ internal object ShellRecordPolicy {
 
     /**
      * The account's record in `profiles` (§25.52B.6, §25.52L.5): the one whose `keyID` equals the account, compared without case. Several
-     * matches give no slot, and nothing is guessed among profiles. Conditional fallback (PM R424, accepted with this documentation): while
+     * matches give no slot, and nothing is guessed among profiles. Conditional fallback (accepted with this documentation): while
      * no profile of the record carries a `keyID` at all, `profiles[0]` is the account's record, as §25.52B.6 has it "until confirmed". This
      * fallback is for the W placement only. The first-run import always matches by keyID (§25.52K.5). Android measurement must confirm the
      * keyID match before release; see docs/page-record-bridge.md.
@@ -527,7 +538,7 @@ internal object ShellRecordPolicy {
     }
 
     /**
-     * The read judgement of a schema 2 record (§25.52S.3, §25.52U.4, R432): `account_mismatch` when no profile, or more than one, matches the
+     * The read judgement of a schema 2 record (§25.52S.3, §25.52U.4): `account_mismatch` when no profile, or more than one, matches the
      * account (fail closed); `needs_native_recovery` when the matching profile has no `privateKeyArmor`; `null` when the record is usable.
      * A missing `mnemonicPhrase` does not matter (§25.52R.5).
      */
@@ -686,7 +697,7 @@ internal class SealedPageRecordStore(
 /**
  * The page copy's W fields as the unregister removes them (§25.52H.2 rule 5, §25.52J.3). Only the W fields go: the rest of the copy stays,
  * and the revision moves on, so a page that still holds an older copy gets `conflict` on its next write. A copy that cannot be read is
- * kept (project ruling 2026-11-16): it may be recoverable later, so the removal throws IOException and the unregister answers write_failed
+ * kept: it may be recoverable later, so the removal throws IOException and the unregister answers write_failed
  * (not cleared), never ok. Only a readable copy has its W fields removed.
  */
 /** The page copy exists but cannot be read: kept, not erased (25.52Y.84, clear_incomplete). A plain IOException from a write stays write_failed. */
@@ -700,7 +711,7 @@ internal class PageWalletRemoval(private val store: SealedPageRecordStore) : Mig
     }
 
     override fun remove() {
-        // An unreadable copy is kept and the removal fails (project ruling 2026-11-16); the caller reports write_failed, never ok.
+        // An unreadable copy is kept and the removal fails; the caller reports write_failed, never ok.
         val record: JSONObject = try {
             store.read() ?: return
         } catch (e: IOException) {
@@ -727,17 +738,23 @@ internal fun <T> markingMigration(flag: AtomicBoolean, block: () -> T): T {
 }
 
 /**
- * The device-level flags of the page-record bridge (§25.52T.4, §25.52T.5, R436): the account pointer, which says that this device has
+ * The device-level flags of the page-record bridge (§25.52T.4, §25.52T.5): the account pointer, which says that this device has
  * established an account, and the marker of an unreadable legacy store. Both are non-secret and kept apart from the sealed copies.
  */
 internal interface DeviceFlags {
     /** §25.52T.4: set by the first successful native write (the import or the native creation). Read and write never clear it. */
     fun accountPointer(): Boolean
 
+    /**
+     * The shell's legacy-store report (PY.15): `found`, `absent`, `unreadable`, or null when none was reported. A read failure throws (the bridge
+     * answers record_unreadable, never absent). The default is no report. The value comes from LegacyStoreReport.readReport.
+     */
+    fun legacyReport(): LegacyReportState = LegacyReportState.NOT_REPORTED
+
     fun setAccountPointer()
 
     /**
-     * The account this device has bound, kept across a cold start (R488): the lower-case EOA, a public value. Null when the address is missing or
+     * The account this device has bound, kept across a cold start : the lower-case EOA, a public value. Null when the address is missing or
      * malformed; the bridge then finds the account from the copy (§25.52AD.2).
      */
     fun accountAddress(): String?
@@ -773,7 +790,7 @@ internal object NoDeviceFlags : DeviceFlags {
  * The flags as one file each in the no-backup directory. A flag that cannot be read counts as set: the pointer then fails closed to
  * `account_record_missing`, and the marker to `legacy_store_unreadable`. The files hold one byte and no key material.
  */
-internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
+internal class DeviceFlagFiles(private val files: VaultFiles, private val report: () -> LegacyReportState = { LegacyReportState.NOT_REPORTED }) : DeviceFlags {
     override fun accountPointer(): Boolean = flag(POINTER)
 
     override fun setAccountPointer() = files.write(POINTER, byteArrayOf(1))
@@ -784,7 +801,36 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
         null
     }
 
-    override fun setAccountAddress(eoa: String) = files.write(ADDRESS, eoa.lowercase().toByteArray(Charsets.UTF_8))
+    /**
+     * The unique exit of the account pointer (r3c): any change of the account (another account, from empty, or to empty) ends the voice
+     * temporary keys (account_switch). The same account written again keeps them. An unreadable previous value is
+     * treated as a change (fail closed). A lock never reaches this exit.
+     */
+    override fun setAccountAddress(eoa: String) {
+        val previous: String? = try {
+            accountAddressStrict()
+        } catch (_: Exception) {
+            UNREADABLE_PREVIOUS
+        }
+        files.write(ADDRESS, eoa.lowercase().toByteArray(Charsets.UTF_8))
+        if (previous == null || !previous.equals(eoa, ignoreCase = true)) {
+            VoiceChannelKeys.clear()
+            AccountPointerEvents.notifyChanged()
+        }
+    }
+
+    /**
+     * The account address the flag names, for the overwrite guard: null when the flag is missing; throws when it cannot be read or does not
+     * hold an address (unknown, so the caller refuses; never treated as missing).
+     */
+    fun accountAddressStrict(): String? {
+        val raw = files.read(ADDRESS) ?: return null
+        val text = raw.toString(Charsets.UTF_8)
+        check(ShellRecordAccounts.isAddress(text)) { "account_address.v1 is not an address" }
+        return text
+    }
+
+    override fun legacyReport(): LegacyReportState = report()
 
     override fun legacyUnreadable(): Boolean = flag(LEGACY)
 
@@ -800,6 +846,8 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
 
     companion object {
         const val POINTER = "account_pointer.v1"
+        /** Marks a previous account value that could not be read: treated as a change, so the voice keys are cleared. */
+        private const val UNREADABLE_PREVIOUS = "\u0000unreadable"
         const val ADDRESS = "account_address.v1"
         const val LEGACY = "legacy_store_unreadable.v1"
     }
@@ -811,7 +859,8 @@ internal class DeviceFlagFiles(private val files: VaultFiles) : DeviceFlags {
  */
 internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode): ShellImportCode = try {
     when (code) {
-        ShellImportCode.LEGACY_UNREADABLE -> if (!flags.accountPointer()) flags.setLegacyUnreadable()
+        // E9.11.33 r2-amend6 §5.6: an import that finds the store unreadable writes no marker (the report answers the reads).
+        ShellImportCode.LEGACY_UNREADABLE -> Unit
         ShellImportCode.ABSENT -> flags.clearLegacyUnreadable()
         ShellImportCode.IMPORT_OK -> {
             flags.setAccountPointer()
@@ -828,7 +877,7 @@ internal fun applyImportMarker(flags: DeviceFlags, code: ShellImportCode): Shell
 
 /**
  * Clears the legacy marker on a read path. A clear that does not take effect is answered `record_unreadable` (the read-path sub code the
- * spec defines, retryable as unknown: coordinator ruling 2026-11-16); the marker stays and the next read retries. Null when the clear took effect.
+ * spec defines, retryable as unknown); the marker stays and the next read retries. Null when the clear took effect.
  */
 internal fun clearLegacyCode(flags: DeviceFlags): String? = try {
     flags.clearLegacyUnreadable()
@@ -916,6 +965,12 @@ internal sealed class ShellRecordAccount {
         val eoa: String,
         val nativeKeyPresent: Boolean = false,
         val pointedKeyPresent: Boolean = false,
+        /**
+         *  (owner 2026-11-22, option 1): true only when the account has a valid phrase (a mnemonic account). A key-only account (private key
+         * or address, no phrase) is not counted by the page write guard. Defaults to [nativeKeyPresent]: the resolver already reads a key-only vault
+         * account as no key, so every account it builds with a held key has a valid phrase.
+         */
+        val mnemonicHeld: Boolean = nativeKeyPresent,
     ) : ShellRecordAccount()
 
     /** No wallet and no imported account. Nothing can be read or held for it yet. */
@@ -928,8 +983,8 @@ internal sealed class ShellRecordAccount {
     object NeedsRecovery : ShellRecordAccount()
 
     /**
-     * Two or more native keys and no pointer (R1533 第 3 条, N 第 2 项): the account is not chosen automatically. A read answers not_ready; a
-     * write answers migrating (R1539: a write has no not_ready).
+     * Two or more native keys and no pointer (N 第 2 项): the account is not chosen automatically. A read answers not_ready; a
+     * write answers migrating (a write has no not_ready).
      */
     object Ambiguous : ShellRecordAccount()
 
@@ -952,6 +1007,11 @@ internal class ShellImportFlow(
     private val addressOf: (String) -> String?,
     private val pgpStep: (String, LegacyPgpSource?) -> Unit,
     private val outcome: AtomicReference<ImportOutcome?>,
+    /**
+     * The account this device holds a valid phrase for (Y.163 第 32 项裁定 A): a legacy record is copied only for that account.
+     * Production passes the vault's valid-phrase account. The default is for tests that model a valid-phrase account and must not be used in production.
+     */
+    private val validPhraseOf: (String) -> String? = { eoa -> eoa },
 ) {
     fun run(eoa: String, wallet: LegacyWalletRecord, pgp: LegacyPgpSource?): ShellImportCode {
         var pgpConsumed = false
@@ -969,7 +1029,7 @@ internal class ShellImportFlow(
 
     private fun importWallet(eoa: String, wallet: LegacyWalletRecord): ShellImportCode {
         if (!PgpMigrationPolicy.EOA_RE.matches(eoa)) {
-            // R444: the legacy store is not read for an account that cannot match any profile. This is account_mismatch, not import_not_done.
+            // the legacy store is not read for an account that cannot match any profile. This is account_mismatch, not import_not_done.
             outcome.set(ImportOutcome.ACCOUNT_MISMATCH)
             return ShellImportCode.ACCOUNT_MISMATCH
         }
@@ -993,7 +1053,17 @@ internal class ShellImportFlow(
                 outcome.set(ImportOutcome.LEGACY_UNREADABLE)
                 ShellImportCode.LEGACY_UNREADABLE
             }
-            is LegacyWalletRecord.Found -> importFound(eoa, store, wallet.record)
+            is LegacyWalletRecord.Found -> {
+                // Gate: an account with no valid phrase is not parsed, not derived and not written. It is absent: creation may
+                // continue and only appends (the legacy record is left untouched).
+                if (validPhraseOf(eoa)?.equals(eoa, ignoreCase = true) != true) {
+                    wallet.record.fill(0)
+                    outcome.set(ImportOutcome.ABSENT)
+                    ShellImportCode.ABSENT
+                } else {
+                    importFound(eoa, store, wallet.record)
+                }
+            }
         }
     }
 
@@ -1006,13 +1076,14 @@ internal class ShellImportFlow(
             bytes.fill(0)
         }
         if (json == null) {
-            outcome.set(ImportOutcome.LEGACY_UNREADABLE)
-            return ShellImportCode.LEGACY_UNREADABLE
+            // E9.11.33 r2-amend6 §5.6 (D1): a parse failure of a found record is NOT_DONE (import_not_done), not unreadable.
+            outcome.set(ImportOutcome.NOT_DONE)
+            return ShellImportCode.IMPORT_FAILED
         }
         // PGP never enters the page copy, even if the reader let a field through (§25.52I.2).
         ShellRecordPolicy.stripPgpForRead(json)
         // F2 condition 1: a PGP header that survives the strip, at any path, fails the import closed. This is an SDK rule, pending the interface
-        // owner's ruling; the import is not done, so the legacy store is left untouched.
+        // owner's ; the import is not done, so the legacy store is left untouched.
         if (ShellRecordPolicy.hasPgpHeader(json)) {
             outcome.set(ImportOutcome.NOT_DONE)
             return ShellImportCode.IMPORT_FAILED
@@ -1032,7 +1103,7 @@ internal class ShellImportFlow(
         val profile = if (index >= 0) profiles?.optJSONObject(index) else null
         // §25.52N.6, §25.52R.5 (暂定): a matching profile without its privateKeyArmor is import_failed; a key that derives another address
         // is address_mismatch (§25.52K.5).
-        // §25.52BB.3 (r3cz, R673): the legacy key is normalized first (Q1 read rule) and the stored form is "0x" plus 64 lower-case hex digits. A
+        // §25.52BB.3 (r3cz): the legacy key is normalized first (Q1 read rule) and the stored form is "0x" plus 64 lower-case hex digits. A
         // key that cannot be normalized is import_failed. After normalization, a key that derives another address is address_mismatch. The
         // normalized key is what the write check sees, and what is stored.
         val armor = profile?.optString("privateKeyArmor", "").orEmpty()
@@ -1067,8 +1138,9 @@ internal class ShellImportFlow(
  * The codes that the ack refuses at the envelope level (§25.52T.2, §25.52AD.4): the request is not processed, so the ack has `ok: false` and an
  * `error`. `not_ready` is the G1 answer of the gate (§25.26.4c), given before the payload is read.
  */
-// unknown_command (25.52AU.1, BU.1, R709): an unknown shellRecord* name on the window channel is an envelope-level answer, with no result.
-private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready", "unknown_command")
+// unknown_command (25.52AU.1, BU.1): an unknown shellRecord* name on the window channel is an envelope-level answer, with no result.
+// SRP-04 (option A): a write fault is the envelope {ok:false, error:"write_failed"}, nothing is written.
+private val ENVELOPE_CODES = setOf("origin_refused", "too_large", "not_ready", "unknown_command", "write_failed")
 
 /**
  * The ack envelope of a page-record answer (§25.28.3, §25.52T.2): `{type: "ack", reqId, ok: true, result: {code, ...}}` for every answer
@@ -1084,7 +1156,12 @@ internal fun shellAck(
 ): JSONObject {
     val out = JSONObject().put("type", "ack").put("reqId", reqId)
     val envelopeRefusal = envelope
-    if (envelopeRefusal) return out.put("ok", false).put("error", code)
+    if (envelopeRefusal) {
+        val env = out.put("ok", false).put("error", code)
+        // SRP-04 (interface PROTOCOL-srp04-write-failed-reason-and-android-correction): a write failure may carry its reason at the top level.
+        if (code == "write_failed") fields.firstOrNull { it.first == "reason" }?.second?.let { env.put("reason", it) }
+        return env
+    }
     val result = JSONObject().put("code", code)
     for ((k, v) in fields) result.put(k, v ?: JSONObject.NULL)
     return out.put("ok", true).put("result", result)
@@ -1103,14 +1180,23 @@ internal class ShellRecordBridge(
     /** The creation mode and the explicit choice of the creation flow (§25.52Y.54 PY.18(b)). Off unless the creation flow sets them. */
     private val creationMode: () -> Boolean = { false },
     private val explicitChoice: () -> Boolean = { false },
-    /** The vault and the gate for walletEoaAddress (PM R1921). Null means the name is not served by this bridge. */
+    /** The vault and the gate for walletEoaAddress. Null means the name is not served by this bridge. */
     private val walletEoaAddress: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
-    /** The vault and the gate for walletCredential (PM R2048). Null means the name is not served by this bridge. */
+    /** The address the two-state store names for walletEoaAddress (store-primary rule, 2026-11-22), or null when the store holds none. */
+    private val walletStoreAddress: (() -> WalletCredential.Answer?)? = null,
+    /** The vault and the gate for walletCredential. Null means the name is not served by this bridge. */
     private val walletCredential: (() -> Pair<NativeWalletVault, NoKeyGate.Gate>)? = null,
     /** The SDK's own declaration of wallet.credential.v1 (spec 25.52Y.38 第 2 项 (e)): true only in a QA build. */
     private val walletCredentialDeclared: Boolean = WalletCredentialBridge.sdkDeclares(),
     /** The replica from the readable keystore key (r3rv, KR-01), given the account. Null in tests that do not model the keystore. */
     private val replica: ((String) -> Unit)? = null,
+    /** True when the native side reports G0 (no_key): a read then returns the page copy without its W fields (§25.52Y.151 第 6 項). */
+    private val nativeNoKey: () -> Boolean = { false },
+    /**
+     * The current set of the two-state store (v286). A v3 current set is a passcode-protected account, which the shell
+     * cannot read or write without the passcode: the answer is not_ready with passcode_not_provided (ShellPasscodeAnswer). Default: none.
+     */
+    private val passcodeCurrent: () -> MnemonicSetStore.Current = { MnemonicSetStore.Current.Absent },
 ) {
     /**
      * [nativeWrite] is true only for the native account creation or recovery (§25.52H.2, rule 4). It lets a write replace the W fields.
@@ -1127,12 +1213,12 @@ internal class ShellRecordBridge(
         if (!idOk) return reply("bad_request", emptyList())
 
         // walletEoaAddress (spec 25.52Y.42 第 5 项 (c)): the origin is already checked above (EMBEDDED_PAGE, the main frame at the boundary).
-        // It returns the address only (PM R1907, R1912). Served here so the shell's window call reaches it (PM R1921).
+        // It returns the address only. Served here so the shell's window call reaches it.
         if (type == WalletEoaAddressBridge.NAME) {
             val current = walletEoaAddress ?: return reply("unknown_command", emptyList())
-            return WalletEoaAddressBridge.answer(originAllowed = true, body = body, current = current)
+            return WalletEoaAddressBridge.answer(originAllowed = true, body = body, current = current, store = walletStoreAddress)
         }
-        // walletCredential (spec 25.52Y.38, 25.52Y.44; PM R2048): the SDK's declaration is checked inside (not_trusted, before any read).
+        // walletCredential (spec 25.52Y.38, 25.52Y.44): the SDK's declaration is checked inside (not_trusted, before any read).
         if (type == WalletCredentialBridge.NAME) {
             val current = walletCredential ?: return reply("unknown_command", emptyList())
             return WalletCredentialBridge.answer(walletCredentialDeclared, body, current)
@@ -1147,7 +1233,16 @@ internal class ShellRecordBridge(
         // §25.52AD.4 step 2: the gate answers before the payload is read. G1 is not_ready (§25.26.4c).
         val acc = account()
         if (acc is ShellRecordAccount.NotReady) return reply("not_ready", emptyList())
-        // R1533 第 3 条 (AK-55): two native keys and no pointer; the account is not chosen, and the read answers not_ready as a result code.
+        // v286: a passcode-protected account answers not_ready with passcode_not_provided; nothing is read or written.
+        val pwState = passcodeCurrent()
+        if (ShellPasscodeAnswer.isPasscodeAccount(pwState)) {
+            return if (type == "shellRecordRead") ShellPasscodeAnswer.readAck(echo) else ShellPasscodeAnswer.writeAck(echo)
+        }
+        // An undetermined store state is unreadable (SRP v2 SRP-05): the ordinary path does not run, and nothing is taken for absent.
+        if (ShellPasscodeAnswer.isUnknownState(pwState)) {
+            return if (type == "shellRecordRead") ShellPasscodeAnswer.readUnknownAck(echo) else ShellPasscodeAnswer.writeUnknownAck(echo)
+        }
+        // (AK-55): two native keys and no pointer; the account is not chosen, and the read answers not_ready as a result code.
         if (acc is ShellRecordAccount.Ambiguous && type == "shellRecordRead") return shellAck(echo, "not_ready", emptyList(), envelope = false)
         val extra = ShellRecordPolicy.keysOf(body).filter { it !in allowed }
         // spec 25.52Y.41 第 6 项: a read that names a key-shaped field is refused as key material, with the names only and no value. Other
@@ -1203,13 +1298,14 @@ internal class ShellRecordBridge(
                 }
                 ShellRecordPolicy.stripPgpForRead(current)
                 // §25.52I.2: PGP fields never reach the page. A PGP header that survives the strip, at any path, fails the read closed
-                // (F2 condition 2). The error is an SDK choice pending the interface owner's ruling; the device flags are not touched.
+                // (F2 condition 2). The error is an SDK choice pending the interface owner's ; the device flags are not touched.
                 if (ShellRecordPolicy.hasPgpHeader(current)) return reply("error", listOf("sub" to "record_unreadable"))
                 // A flag that does not take effect is not silently repaired: the read answers the mapped code (25.52Y.84), and the next read retries.
                 repairFlags(current, acc.eoa, valid = judgement == null)?.let { return reply("error", listOf("sub" to it)) }
+                val page = if (nativeNoKey()) ShellRecordPolicy.redactWalletForNoKey(current) else current
                 val out = reply(
                     "ok",
-                    listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to current),
+                    listOf("rev" to rev, "schemaVersion" to ShellRecordPolicy.RESPONSE_SCHEMA, "record" to page),
                 )
                 if (out.toString().toByteArray(Charsets.UTF_8).size > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
                 judgement?.let { sub -> return reply("error", listOf("sub" to sub)) }
@@ -1224,12 +1320,12 @@ internal class ShellRecordBridge(
         try {
             if (valid) clearLegacyCode(flags)?.let { return it }
             if (!flags.accountPointer() && ShellRecordPolicy.matchingProfiles(record, eoa).isNotEmpty()) flags.setAccountPointer()
-            // R488: a readable record that holds the account's key persists the address, which the cold start restores.
+            // a readable record that holds the account's key persists the address, which the cold start restores.
             if (valid && ShellRecordPolicy.accountHoldsEoaKey(record, eoa) && flags.accountAddress() != eoa.lowercase()) {
                 flags.setAccountAddress(eoa)
             }
         } catch (_: IOException) {
-            // A flag write that does not take effect on a read path: record_unreadable (retryable), not a write code (coordinator ruling 2026-11-16).
+            // A flag write that does not take effect on a read path: record_unreadable (retryable), not a write code.
             // The next read repairs it.
             return "record_unreadable"
         }
@@ -1240,27 +1336,45 @@ internal class ShellRecordBridge(
      * No native record (§25.52T.3, §25.52T.6). The pointer comes first: a device that has established an account never answers absent.
      * `absent` needs the legacy store confirmed absent, which also clears the marker. An unreadable legacy store sets the marker.
      */
+    private fun absentAnswer(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
+        // The absence is not confirmed while the marker stays: a clear that does not take effect answers record_unreadable (retryable).
+        clearLegacyCode(flags)?.let { return reply("error", listOf("sub" to it)) }
+        // r3rv (KR-01): a readable keystore key with no copy is replicated from that key; the read still answers absent.
+        if (acc is ShellRecordAccount.Ready && acc.nativeKeyPresent) replica?.invoke(acc.eoa)
+        return reply("absent", emptyList())
+    }
+
+    /** KR-05 (KR v2.1): a readable native key is held, the pointer is empty and the legacy store is unreadable (the device marker is set). */
+    private fun kr05(acc: ShellRecordAccount): Boolean =
+        acc is ShellRecordAccount.Ready && acc.nativeKeyPresent && !acc.pointedKeyPresent && flags.legacyUnreadable()
+
     private fun noRecord(acc: ShellRecordAccount, reply: (String, ShellReplyFields) -> JSONObject): JSONObject {
         if (flags.accountPointer()) {
-            // R1520b 第 2 项, AK-60: the pointer's account key is present and only its page copy is missing: migrating (the copy is rebuilt).
-            // With no key for the pointer's account the pointer is fail-closed (AK-08, AK-54, KR-07).
-            val pointedKey = acc is ShellRecordAccount.Ready && acc.pointedKeyPresent
-            return if (pointedKey) reply("migrating", emptyList()) else reply("error", listOf("sub" to "account_record_missing"))
+            // r2.5.11 57(1), 57(4)(d) (RM-01): with the pointer set and no record, the answer is account_record_missing, whether or not the native key
+            // is held. `migrating` applies only when the pointer is empty (§25.52U.6), so the pointed-key branch (AK-60) no longer answers migrating.
+            return reply("error", listOf("sub" to "account_record_missing"))
         }
-        // §25.52U.6 (r3rz): an unreadable or unread legacy store answers migrating, never error(legacy_store_unreadable).
+        // E9.11.33 r2-amend6 §5.3 (no native copy, no pointer). The report of this start decides first; the import outcome only refines FOUND.
+        // unreadable -> error legacy_store_unreadable (nothing written, nothing cleared); a failed read -> error record_unreadable, never absent.
+        val report = flags.legacyReport()
+        if (report == LegacyReportState.UNREADABLE) return reply("error", listOf("sub" to "legacy_store_unreadable"))
+        if (report == LegacyReportState.READ_FAILED) return reply("error", listOf("sub" to "record_unreadable"))
+        if (report == LegacyReportState.ABSENT) return absentAnswer(acc, reply) // LEG-1, B-6: a reported absent wins over the outcome
+        if (report == LegacyReportState.FOUND) {
+            // B-5, LEG-2, and every import failure (parse, write, address_mismatch, import_failed) answer import_not_done. A DONE import with no copy
+            // here fails closed as migrating.
+            return when (outcome()) {
+                ImportOutcome.DONE -> reply("migrating", emptyList())
+                else -> reply("error", listOf("sub" to "import_not_done"))
+            }
+        }
+        // NOT_REPORTED: the outcome of this start decides (the create/import path). No marker is written by a read (§5.6).
         return when (outcome()) {
-            null -> reply("migrating", emptyList())
-            ImportOutcome.ABSENT -> {
-                // The absence is not confirmed while the marker stays: a clear that does not take effect answers record_unreadable (retryable).
-                clearLegacyCode(flags)?.let { return reply("error", listOf("sub" to it)) }
-                // r3rv (KR-01): a readable keystore key with no copy is replicated from that key; the read still answers absent.
-                if (acc is ShellRecordAccount.Ready && acc.nativeKeyPresent) replica?.invoke(acc.eoa)
-                reply("absent", emptyList())
-            }
-            ImportOutcome.LEGACY_UNREADABLE -> {
-                flags.setLegacyUnreadable()
-                reply("migrating", emptyList())
-            }
+            null -> reply("migrating", emptyList())                    // LEG-4 (no report, no import)
+            ImportOutcome.ABSENT -> absentAnswer(acc, reply)
+            // KR-05 ( 第 1 项; KR v2.1, spec v231): an unreadable legacy store is the error legacy_store_unreadable, as the PWA's native_unreadable class.
+            ImportOutcome.LEGACY_UNREADABLE ->
+                if (kr05(acc)) reply("error", listOf("sub" to "legacy_store_unreadable")) else reply("migrating", emptyList())
             // §25.52Y.56: NOT_DONE is the only source of import_not_done; DONE (found cleared, no record here) fails closed as migrating.
             ImportOutcome.NOT_DONE -> reply("error", listOf("sub" to "import_not_done"))
             // §25.52Y.57: DONE with no pointer and no record is migrating (fail closed). Never absent (guidance), never import_not_done (NOT_DONE only).
@@ -1276,7 +1390,9 @@ internal class ShellRecordBridge(
         acc: ShellRecordAccount,
         reply: (String, ShellReplyFields) -> JSONObject,
     ): JSONObject {
-        if (requestBytes > ShellRecordPolicy.MAX_BYTES) return reply("too_large", emptyList())
+        // v171 §191.2 (AK-14, TR-03): a request over the limit is bad_request (envelope level, no names). too_large is only for a reply over the
+        // limit (TR-19, the read-back above).
+        if (requestBytes > ShellRecordPolicy.MAX_BYTES) return reply("bad_request", emptyList())
         val record = body.optJSONObject("record") ?: return reply("bad_request", emptyList())
         val rev = record.opt("rev")
         if (rev !is Int) return reply("bad_request", emptyList())
@@ -1287,7 +1403,9 @@ internal class ShellRecordBridge(
         }
 
         // §25.52Y.10 (r3lm; AK-39): the write guards (migrating, device marker) come before the storage lock, so they are checked before the read.
-        if (migrating() || flags.legacyUnreadable()) return reply("migrating", emptyList())
+        if (migrating()) return reply("migrating", emptyList())
+        // KR-05 write (KR v2.1): the marker of an unreadable legacy store with a readable key held answers legacy_store_unreadable (nothing written).
+        if (flags.legacyUnreadable()) return reply(if (kr05(acc)) "legacy_store_unreadable" else "migrating", emptyList())
         // 25.52CH.1 (r3eg): a locked store on a write is write_failed, once.
         if (acc is ShellRecordAccount.Locked) return reply("write_failed", emptyList())
         val ready = acc as? ShellRecordAccount.Ready
@@ -1304,7 +1422,7 @@ internal class ShellRecordBridge(
         }
 
         // §25.52O.5 step 3: W fields need schema 2, and a stored copy with W fields takes only schema 2 writes (§25.52F.5, §25.52L.4).
-        // r3lo, AK-30 (ruling 2026-11-15): the revision check comes before the W-field and schema checks, so a stale rev is conflict (currentRev).
+        // r3lo, AK-30: the revision check comes before the W-field and schema checks, so a stale rev is conflict (currentRev).
         // A missing or non-integer schemaVersion stays bad_request below (DL-10a), so the early check applies only to an integer schemaVersion.
         val schema = record.opt("schemaVersion")
         if (current != null && schema is Int && rev != ((current.opt("rev") as? Int) ?: 0)) {
@@ -1314,8 +1432,8 @@ internal class ShellRecordBridge(
         if (storedWallet.isNotEmpty() && (schema !is Int || schema < ShellRecordPolicy.WALLET_SCHEMA_MIN)) {
             return reply("wallet_copy_not_approved", listOf("names" to JSONArray(storedWallet)))
         }
-        // A missing or non-integer schemaVersion is refused as bad_request naming the path. The spec does not say what this case gets (R553
-        // review §2.2): this is the SDK's rule, pending the interface owner's ruling.
+        // A missing or non-integer schemaVersion is refused as bad_request naming the path. The spec does not say what this case gets (
+        // review §2.2): this is the SDK's rule, pending the interface owner's .
         if (schema !is Int) return reply("bad_request", listOf("names" to JSONArray(listOf("schemaVersion"))))
         val wallet = ShellRecordPolicy.walletIn(record)
         if (wallet.isNotEmpty() && schema < ShellRecordPolicy.WALLET_SCHEMA_MIN) {
@@ -1335,21 +1453,22 @@ internal class ShellRecordBridge(
         // Step 6: migrating. Step 7: the revision. The first write carries rev 0 (§25.52E.3).
         if (migrating()) return reply("migrating", emptyList())
         // §25.52AA, AK-28: a device marker holds the write back, with or without a record (the record is not yet read as valid).
-        if (flags.legacyUnreadable()) return reply("migrating", emptyList())
+        if (flags.legacyUnreadable()) return reply(if (kr05(acc)) "legacy_store_unreadable" else "migrating", emptyList())
         if (current == null) {
-            // AK-41 (enumeration failed) and AK-58 (two native keys, no pointer): a write answers migrating, never not_ready (R1539).
+            // AK-41 (enumeration failed) and AK-58 (two native keys, no pointer): a write answers migrating, never not_ready .
             if (acc is ShellRecordAccount.Unreadable || acc is ShellRecordAccount.Ambiguous || acc is ShellRecordAccount.NeedsRecovery) {
                 return reply("migrating", emptyList())
             }
-            // §25.52W.3, AK-23 to AK-25, AK-27, R445: with no native record, a write waits for a completed read. A pointer, a marker, or any
+            // §25.52W.3, AK-23 to AK-25, AK-27: with no native record, a write waits for a completed read. A pointer, a marker, or any
             // outcome other than a confirmed absence answers migrating; the first write goes ahead only after the legacy store is confirmed
             // absent. Never a new wallet on a failure. A content refusal above has already answered, so the guard only stops valid writes.
             if (flags.accountPointer() || flags.legacyUnreadable()) return reply("migrating", emptyList())
-            // §25.52Y (R1519 2), AK-37: a native key with no page copy, no pointer and no creation transaction is a residual key: migrating.
-            // The creation transaction (AK-42) is the explicit creation flow, which the caller sets through creationMode and explicitChoice.
-            if (ready?.nativeKeyPresent == true && !(creationMode() && explicitChoice())) return reply("migrating", emptyList())
+            // §25.52Y (2), AK-37 (owner 2026-11-22, option 1): a mnemonic account with no page copy, no pointer and no creation transaction is a
+            // residual key: migrating. A key-only account (private key or address only) is not counted here. An unreadable phrase record never reaches this
+            // branch as Ready: it is NeedsRecovery/Unreadable above (fail closed). The creation transaction (AK-42) is the explicit creation flow.
+            if (ready?.mnemonicHeld == true && !(creationMode() && explicitChoice())) return reply("migrating", emptyList())
             when (outcome()) {
-                // AK-10 (ruling 2026-11-15): no account and no record with the legacy store confirmed empty: migrating, not ok or no_key.
+                // AK-10: no account and no record with the legacy store confirmed empty: migrating, not ok or no_key.
                 ImportOutcome.ABSENT -> if (store == null) return reply("migrating", emptyList())
                 null, ImportOutcome.LEGACY_UNREADABLE, ImportOutcome.NOT_DONE, ImportOutcome.DONE, ImportOutcome.ACCOUNT_MISMATCH ->
                     return reply("migrating", emptyList())
@@ -1390,7 +1509,7 @@ internal class ShellRecordBridge(
         try {
             target.write(toStore)
         } catch (_: IOException) {
-            return reply("write_failed", emptyList())
+            return reply("write_failed", listOf("reason" to "storage_write"))
         }
         // §25.52T.4: the first successful native write establishes the account pointer. The record is already stored, so a failure here
         // only leaves the pointer unset.
@@ -1455,7 +1574,7 @@ internal class CreationTxnWindow(private val nowMs: () -> Long = { System.curren
  * flag, the bound account and the page copies are passed in, so the decision can be tested without a device.
  *  - A vault with a record (Ready or Locked): G1 (this session not initialised) is [ShellRecordAccount.NotReady] when [sessionGate] holds;
  *    otherwise the record's account, or Locked.
- *  - No vault record (G0): the account bound by this process's import, else the persisted address (R488), else the held copy ([heldCopy]),
+ *  - No vault record (G0): the account bound by this process's import, else the persisted address, else the held copy ([heldCopy]),
  *    else Unknown.
  */
 internal object ShellRecordAccounts {
@@ -1467,10 +1586,19 @@ internal object ShellRecordAccounts {
 
     /**
      * [keys] is the native key list (the EOA addresses held by the native key store); null means the vault's own state. The pointer
-     * (`bound`) comes first (R1533 第 1 项): a pointer whose key is held is that account; a pointer whose key is absent is fail-closed.
-     * With no pointer, exactly one held key is the account and two or more are [ShellRecordAccount.Ambiguous] (R1533 第 3 条). With no key
+     * (`bound`) comes first : a pointer whose key is held is that account; a pointer whose key is absent is fail-closed.
+     * With no pointer, exactly one held key is the account and two or more are [ShellRecordAccount.Ambiguous] . With no key
      * the page copy decides (§25.52AD.2, §25.52Y.56); an enumeration failure is [ShellRecordAccount.Unreadable] (AK-40).
      */
+    /**
+     * Whether the session counts as ready for the vault's account (2026-11-22): the vault must be Ready, and the native session
+     * must be ready for that same account. A Locked or unreadable vault has no Ready account, so it is not ready here.
+     */
+    internal fun sessionReadyFor(vault: NativeWalletVault.State, store: MnemonicSetStore.Current, readyEoa: String?): Boolean {
+        val account = NativeSource.accountOf(NativeSource.decide(vault, store, readyEoa)) ?: return false
+        return readyEoa != null && readyEoa.equals(account, ignoreCase = true)
+    }
+
     fun resolve(
         vault: NativeWalletVault.State,
         sessionReady: Boolean,
@@ -1480,19 +1608,53 @@ internal object ShellRecordAccounts {
         storeOf: (String) -> SealedPageRecordStore,
         persisted: () -> String? = { null },
         keys: List<String>? = null,
+        keyOnly: Boolean = false,
+        // 2026-11-22: the record account is the effective source's account, the same as the signature and the gate.
+        // Store: the store's EOA (its own copy only; a missing copy is answered as none, never filled from another account). Blocked: not ready,
+        // nothing read or written. Vault (or none): the vault rules below.
+        source: NativeSource.Source? = null,
+        // AK-37/AK-65 : false marks the held native key as a private key with no valid phrase (a key-only account). The page write guard then does not
+        // count it ([ShellRecordAccount.Ready.mnemonicHeld]). Production keeps the default; the vector driver sets it from ctx.nativeKey / ctx.nativeMnemonic.
+        phraseHeld: Boolean = true,
     ): ShellRecordAccount {
-        val held = (keys ?: (vault as? NativeWalletVault.State.Ready)?.let { listOf(it.eoa) } ?: emptyList())
+        val account = resolveAccount(vault, sessionReady, sessionGate, bound, copyNames, storeOf, persisted, keys, keyOnly, source)
+        return if (!phraseHeld && account is ShellRecordAccount.Ready) {
+            ShellRecordAccount.Ready(account.store, account.eoa, account.nativeKeyPresent, account.pointedKeyPresent, mnemonicHeld = false)
+        } else account
+    }
+
+    private fun resolveAccount(
+        vault: NativeWalletVault.State,
+        sessionReady: Boolean,
+        sessionGate: Boolean,
+        bound: String?,
+        copyNames: () -> List<String>,
+        storeOf: (String) -> SealedPageRecordStore,
+        persisted: () -> String?,
+        keys: List<String>?,
+        keyOnly: Boolean,
+        source: NativeSource.Source?,
+    ): ShellRecordAccount {
+        if (source is NativeSource.Source.Blocked) return ShellRecordAccount.NotReady
+        if (source is NativeSource.Source.Store) {
+            if (sessionGate && !sessionReady) return ShellRecordAccount.NotReady
+            return ShellRecordAccount.Ready(storeOf(source.eoa), source.eoa, nativeKeyPresent = true)
+        }
+        // The startup classification : a key-only account is not an account. It is read as no key: it is not held, and it is not the account.
+        val effective = if (keyOnly && vault is NativeWalletVault.State.Ready) NativeWalletVault.State.NoKey else vault
+        val heldAll = (keys ?: (vault as? NativeWalletVault.State.Ready)?.let { listOf(it.eoa) } ?: emptyList())
             .map { it.lowercase() }.distinct()
-        return when (vault) {
+        val held = if (keyOnly && vault is NativeWalletVault.State.Ready) heldAll.filter { it != vault.eoa.lowercase() } else heldAll
+        return when (effective) {
             is NativeWalletVault.State.Ready, is NativeWalletVault.State.Locked -> when {
                 sessionGate && !sessionReady -> ShellRecordAccount.NotReady
-                // r3rv (KR-02): a key that is held but unreadable (the vault reason `unreadable`) is needs_native_recovery, with no pointer account.
-            vault is NativeWalletVault.State.Locked && vault.reason == "unreadable" && bound == null -> ShellRecordAccount.NeedsRecovery
-            vault is NativeWalletVault.State.Locked && bound == null -> ShellRecordAccount.Locked
+                // r3rv (KR-02): a key that is held but unreadable (the effective reason `unreadable`) is needs_native_recovery, with no pointer account.
+            effective is NativeWalletVault.State.Locked && effective.reason == "unreadable" && bound == null -> ShellRecordAccount.NeedsRecovery
+            effective is NativeWalletVault.State.Locked && bound == null -> ShellRecordAccount.Locked
                 else -> byKeys(held, bound, storeOf) ?: ShellRecordAccount.Locked
             }
             is NativeWalletVault.State.NoKey -> byKeys(held, bound, storeOf) ?: run {
-                // R488: the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
+                // the bound account survives a cold start. It is restored from the persisted address before the copy is searched.
                 val restored = persisted()?.takeIf { isAddress(it) }
                 if (restored != null) {
                     ShellRecordAccount.Ready(storeOf(restored), restored)
@@ -1637,23 +1799,31 @@ object BeamioShellRecordImport {
         pgp: LegacyPgpSource?,
     ): ShellImportCode {
         val app = context.applicationContext
+        // after an identity clear the kept wallet copy is not adopted automatically (answered as absent, no copy).
+        if (ClearFlagFiles(pageRecordFiles(app)).identityCleared()) {
+            if (wallet is LegacyWalletRecord.Found) wallet.record.fill(0)
+            return ShellImportCode.ABSENT
+        }
         val flow = ShellImportFlow(
             storeFor = { e -> storeFor(app, e) },
             addressOf = { armor -> addressOfPrivateKey(armor) },
             pgpStep = { e, src -> BeamioPgpMigrationImport.run(app, e, source = src) },
             outcome = ShellRecordState.outcome,
+            // Only an account with a valid phrase gets a copy: the vault's valid-phrase account, read without the key.
+            validPhraseOf = { NativeWallet.vault(app).liveValidAccount() },
         )
         // A flag that does not take effect turns the import into import_failed (applyImportMarker), never a success.
         val code = applyImportMarker(flagsOf(app), flow.run(eoa, wallet, pgp))
         if (code == ShellImportCode.IMPORT_OK || code == ShellImportCode.EXISTS) {
             ShellRecordState.bound.set(eoa)
-            // R488: the binding survives a cold start, so the shell does not have to bind again on every start.
+            // the binding survives a cold start, so the shell does not have to bind again on every start.
             runCatching { flagsOf(app).setAccountAddress(eoa) }
         }
         return code
     }
 
     private fun bridge(context: Context, sessionGate: Boolean = true, creationTxn: Boolean = false): ShellRecordBridge = ShellRecordBridge(
+        passcodeCurrent = { MnemonicSetStore(File(context.applicationContext.noBackupFilesDir, MnemonicSetStore.DIRECTORY)).current() },
         account = { val tAcc = DiagTiming.now(); accountOf(context, sessionGate).also { DiagTiming.log("accountOf", tAcc) } },
         migrating = { ShellRecordState.migrationPending.get() },
         outcome = { ShellRecordState.outcome.get() },
@@ -1662,7 +1832,14 @@ object BeamioShellRecordImport {
         explicitChoice = { creationTxn || ShellRecordState.creationTxn.get() },
         replica = { eoa -> runCatching { replicaFromKeystore(context, eoa) } },
         walletEoaAddress = walletCurrent(context),
+        walletStoreAddress = {
+            StoreAccountView.eoaAddress(
+                MnemonicSetStore(File(context.applicationContext.noBackupFilesDir, MnemonicSetStore.DIRECTORY)).current(),
+                NativeSessionState.readyEoa(),
+            )
+        },
         walletCredential = walletCurrent(context),
+        nativeNoKey = { NativeWallet.vault(context.applicationContext).snapshotState() is NativeWalletVault.State.NoKey },
     )
 
     /**
@@ -1677,6 +1854,8 @@ object BeamioShellRecordImport {
             outcome = ImportOutcome.ABSENT,
             pointerSet = flagsOf(app).accountPointer(),
             store = storeFor(app, eoa),
+            // only an account with a valid phrase gets a copy; the phrase is read here, the key is not.
+            validPhraseOf = { NativeWallet.vault(app).liveValidAccount() },
         )
         // The created line names the writer (ShellReplicaAudit): first six characters of the EOA only.
         if (answer is ShellReplica.Answer.Ok) ShellReplicaAudit.created(eoa)
@@ -1685,11 +1864,12 @@ object BeamioShellRecordImport {
     /** The vault and the gate of the account on this device (shared by walletEoaAddress and walletCredential). */
     private fun walletCurrent(context: Context): () -> Pair<NativeWalletVault, NoKeyGate.Gate> = {
         val vault = NativeWallet.vault(context)
-        vault to NoKeyGate.gateOf(vault.state(), NativeSessionState.isReady())
+        vault to vault.state().let { st -> NoKeyGate.gateOf(st, NativeSessionState.isReady(), keyOnly = vault.keyOnlyLive()) }
     }
 
     /** The device-level flags, in the same no-backup directory as the page copies (§25.52T). */
-    internal fun flagsOf(app: Context): DeviceFlags = DeviceFlagFiles(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")))
+    internal fun flagsOf(app: Context): DeviceFlags =
+        DeviceFlagFiles(AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1"))) { LegacyStoreReport.readReport(app) }
 
     private fun accountOf(context: Context, sessionGate: Boolean): ShellRecordAccount {
         val app = context.applicationContext
@@ -1702,14 +1882,20 @@ object BeamioShellRecordImport {
             // Not determined yet (25.52Y.70 第 4 项, §25.52CS.2): not_ready once, never record_unreadable (the shell's unreadable screen).
             return ShellRecordAccount.NotReady
         }
+        // 2026-11-22 (store-primary): one effective source decides the account of the session gate, the signature, and the record layer.
+        val storeCurrent = MnemonicSetStore(File(app.noBackupFilesDir, MnemonicSetStore.DIRECTORY)).current()
+        val source = NativeSource.decide(known, storeCurrent, NativeSessionState.readyEoa())
         return ShellRecordAccounts.resolve(
             vault = known,
-            sessionReady = NativeSessionState.isReady(),
+            //  / 2026-11-22: the session is ready for the effective source's account (the same account the signature uses).
+            sessionReady = ShellRecordAccounts.sessionReadyFor(known, storeCurrent, NativeSessionState.readyEoa()),
+            source = source,
             sessionGate = sessionGate,
             bound = ShellRecordState.bound.get(),
             copyNames = { AndroidVaultFiles(File(app.noBackupFilesDir, "page_record_v1")).names() },
             storeOf = { eoa -> storeFor(app, eoa) },
             persisted = { flagsOf(app).accountAddress() },
+            keyOnly = vault.snapshotKeyOnly(),
         )
     }
 
@@ -1726,4 +1912,28 @@ object BeamioShellRecordImport {
 
     /** The EOA address of a private-key string (`0x` plus 64 hex digits), lower case, or `null`. The key bytes are zero-filled after use. */
     private fun addressOfPrivateKey(armor: String): String? = ShellRecordPolicy.addressOfArmor(armor)
+}
+
+/**
+ * Hook for the account change at the pointer's unique exit (an account switch ends the incoming-call listen and the
+ * voice keys; a lock does not). The module installs the listener once; the exit only notifies.
+ */
+internal object AccountPointerEvents {
+    @Volatile
+    var onChange: (() -> Unit)? = null
+
+    /** The class name of the last failure of the listener (no message, no key material); null when the last notification succeeded. */
+    @Volatile
+    var lastFailure: String? = null
+        private set
+
+    fun notifyChanged() {
+        try {
+            onChange?.invoke()
+            lastFailure = null
+        } catch (e: Exception) {
+            // A failed listener stop is not silent: the class name is kept for the caller to log (no message, no secret).
+            lastFailure = e.javaClass.simpleName
+        }
+    }
 }

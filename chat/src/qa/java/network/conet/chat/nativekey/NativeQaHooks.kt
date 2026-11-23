@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
  * page calls them.
  *
  * - [dropEoaKeyOfAccount]: its one effect makes the state "the record has no EOA private key" (needs_native_recovery, AK-20) for the account.
- * - [runCommand] (R591, device evidence for A5): runs a fixed list of native commands through the same [BeamioConetChatModule.handleCommand]
+ * - [runCommand] (device evidence for A5): runs a fixed list of native commands through the same [BeamioConetChatModule.handleCommand]
  *   the bridge uses, without the WebView, and declares no capability. It refuses key names at any depth, removes key names from every reply,
  *   and logs only the command name and the outcome.
  */

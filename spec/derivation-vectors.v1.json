@@ -1,7 +1,7 @@
 {
   "file": "derivation-vectors.v1.json",
-  "purpose": "派生细则向量（spec r3v §25.43）：C1 historySign、W3/W4 协议密钥、C5 deriveSubkeys、W7 ephemeralSign。两端共用。公开测试密钥与合成值。",
-  "spec": "v1.1-r3v §25.43（测试 T-233 至 T-236）",
+  "purpose": "派生细则向量（spec §25.43）：C1 historySign、W3/W4 协议密钥、C5 deriveSubkeys、W7 ephemeralSign。两端共用。公开测试密钥与合成值。",
+  "spec": "v1.1- §25.43（测试 T-233 至 T-236）",
   "generator": "gen-derivation-vectors.mjs",
   "authoritative": {
     "sdk": "vendor/conet-chat-sdk/dist/local/keys.js、dist/voice-v3.js（PWA SilentPassUI-v2 工作树，编译产物）",
@@ -160,7 +160,7 @@
     {
       "id": "D-11",
       "group": "W4",
-      "title": "W4 批次：64 个 (seq, prevCid) 全部派生，按输入顺序输出；前两把与 D-04、D-05 一致（r3cb，§25.43.5）",
+      "title": "W4 批次：64 个 (seq, prevCid) 全部派生，按输入顺序输出；前两把与 D-04、D-05 一致（§25.43.5）",
       "testIds": [
         "T-373"
       ],
@@ -495,7 +495,7 @@
     {
       "id": "D-12",
       "group": "W4",
-      "title": "W4 批次：65 个 (seq, prevCid) 整批拒绝 batch_too_large，不截断，不派生任何密钥（r3cb）",
+      "title": "W4 批次：65 个 (seq, prevCid) 整批拒绝 batch_too_large，不截断，不派生任何密钥",
       "testIds": [
         "T-374"
       ],
@@ -509,7 +509,7 @@
     {
       "id": "D-13",
       "group": "W4",
-      "title": "W4 批次：0 个 (seq, prevCid) 为 bad_batch，不派生任何密钥（r3cb）",
+      "title": "W4 批次：0 个 (seq, prevCid) 为 bad_batch，不派生任何密钥",
       "testIds": [
         "T-375"
       ],

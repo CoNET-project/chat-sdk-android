@@ -1,0 +1,14 @@
+{
+  "source": "項目方 2026-11-18: 新增一条带新覆盖标记的同场景向量。原共享文件 spec-59e-synthetic-vectors.v3.3.1-E9.1.2-add.json 不改（E912-02 仍为旧兼容期望 valid）。",
+  "generation": "标记经真实覆盖路径生成（NativeWalletVault.syncPhrase -> replaceWithIsolation，在写入新记录后崩溃），带 overwrite=true，列出 REC 与 MNEM 隔离副本。【手工改写披露】崩溃之后，隔离的 MNEM 副本被手工改写为损坏信封（认证失败、密钥存在），并手工加入一份另一隔离名的 A 有效助记词副本；这两步不经写入路径。标记本身未被手写。",
+  "cases": [
+    {
+      "id": "E912-02-OW",
+      "title": "覆盖中途崩溃的未结清覆盖：列出的 MNEM 副本确定性损坏，另一位置有 A 的有效助记词；期望 unknown（覆盖未结清，不得答 valid）",
+      "kind": "positive",
+      "expect": {
+        "classification": "unknown"
+      }
+    }
+  ]
+}

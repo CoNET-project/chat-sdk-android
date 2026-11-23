@@ -14,8 +14,12 @@ internal object PgpRestoreBridge {
 
     private fun stateOf(ui: PgpRestoreUi): String = if (ui.state == "blocked") "undetermined" else ui.state
 
-    /** The `pgpRestoreEvaluate` result: `{state, failureClass, code, offerEntry, uiKey}` (§25.35.2). Writes nothing. */
-    fun evaluate(machine: PgpRestoreMachine, devId: String = DEVICE): JSONObject {
+    /**
+     * The `pgpRestoreEvaluate` result: `{state, failureClass, code, offerEntry, uiKey, legacy, chain}` (§25.35.2; §13 for legacy and chain).
+     * `legacy` (ABSENT | PRESENT | UNREADABLE | unknown) and `chain` (unregistered | registered | unknown) come from the caller (FirstIdentityRule);
+     * anything not supplied is unknown (fail closed). Writes nothing.
+     */
+    fun evaluate(machine: PgpRestoreMachine, devId: String = DEVICE, legacy: String = "unknown", chain: String = "unknown"): JSONObject {
         machine.evaluate(devId)
         val ui = machine.devices.getValue(devId).ui
         return JSONObject()
@@ -24,6 +28,8 @@ internal object PgpRestoreBridge {
             .put("code", ui.code ?: JSONObject.NULL)
             .put("offerEntry", ui.offerEntry)
             .put("uiKey", ui.uiKey() ?: JSONObject.NULL)
+            .put("legacy", legacy)
+            .put("chain", chain)
     }
 
     /**
@@ -47,19 +53,24 @@ internal object PgpRestoreBridge {
 
     /** The production machine for [eoa]: the chain read from AddressPGP, the wallet's key, and the account's PGP vault. */
     /**
-     * The chain transport of the restore (Android's counterpart of the iOS chain transport, R707, 25.52BT.1). The production value is the HTTP
+     * The chain transport of the restore (Android's counterpart of the iOS chain transport, 25.52BT.1). The production value is the HTTP
      * RPC. A test target may replace it to keep a command in flight; production code never sets it.
      */
     internal var chainRpc: (RegistryEndpoint) -> AddressPgpRead.Rpc = { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
 
-    fun productionMachine(context: Context, eoa: String): PgpRestoreMachine {
+    /** The chain read of one restore request: the primary endpoint only (single-RPC caliber, no second endpoint). */
+    fun productionChain(eoa: String): AddressPgpChain = AddressPgpChain.readSingle(eoa, rpcFor = chainRpc)
+
+    fun productionMachine(context: Context, eoa: String, chain: AddressPgpChain = productionChain(eoa)): PgpRestoreMachine {
         val vault = NativeWallet.vault(context)
+        // The absence rule is the chain's own confirmation (single read; a registration check is made again at the confirmation).
         return PgpRestoreMachine(
-            chain = AddressPgpChain.read(eoa, rpcFor = chainRpc),
+            chain = chain,
             wallet = VaultPgpWallet(vault),
             keys = RefusedKeys,
             ivFor = { throw IllegalStateException("key generation is not available in this build") },
             devices = mapOf(DEVICE to NativeWallet.pgpRestoreDevice(context, eoa, DEVICE)),
+            absence = RegisteringAbsenceRule { writeBlock -> chain.confirmedAbsentAfter(writeBlock) },
         )
     }
 

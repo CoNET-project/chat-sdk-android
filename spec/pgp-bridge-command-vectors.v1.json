@@ -1,7 +1,7 @@
 {
   "file": "pgp-bridge-command-vectors.v1.json",
-  "purpose": "原生桥命令向量（spec r3q）：A 组为 §25.34 的 pgpDecryptInbound（通话 offer 的原生 PGP 解密）；C 组为 §25.35 的 P-IMP-PGP 桥接命令，结果映射到 pgp-restore-acceptance-vectors.v1.json。合成数据，只用于测试。",
-  "spec": "v1.1-r3q §25.34、§25.35（测试 T-210 至 T-215）",
+  "purpose": "原生桥命令向量（spec）：A 组为 §25.34 的 pgpDecryptInbound（通话 offer 的原生 PGP 解密）；C 组为 §25.35 的 P-IMP-PGP 桥接命令，结果映射到 pgp-restore-acceptance-vectors.v1.json。合成数据，只用于测试。",
+  "spec": "v1.1- §25.34、§25.35（测试 T-210 至 T-215）",
   "generator": "gen-pgp-bridge-command-vectors.mjs",
   "comparison": "组比对（A 组与 C 组，本文件全部用例）：ack 与结果事件的键集合须与 expect 完全相等。expect 中的每个键须出现且值相等；expect 未列出的键不得出现（不得多出字段）。比对器须逐键比较两侧的键集合，不得只比对 expect 列出的键。缺失或多出字段均判失败。见 §25.52EC.2。",
   "sourceVectors": [
@@ -38,7 +38,7 @@
   },
   "limits": {
     "armoredMessageMaxBytes": 65536,
-    "note": "接口负责人定的默认上限，待 PM 确认（§25.34.2）"
+    "note": "接口负责人定的默认上限，待确认（§25.34.2）"
   },
   "errorCodes": {
     "commandAck": [

@@ -43,7 +43,7 @@ class PgpPurposeVectorsTest {
     fun vectorFileIsTheR3iVersionAndNoPurposeIsRegistered() {
         assertEquals(
             "vector file must be the r3i copy in SHA256-CURRENT",
-            "c55610e0b0596d79d8bb03ae88fa9ba10809f12d65f5a4e593de1acf579a4ef1",
+            "7f83d6d785b87f5c8162b90ce23f287ccdba1b8ac2bc041aea8b03146c0ffa95",
             sha256Hex(raw),
         )
         assertEquals(0, vectors.getJSONArray("registeredPurposes").length())

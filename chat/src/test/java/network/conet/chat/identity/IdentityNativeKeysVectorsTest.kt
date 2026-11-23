@@ -11,7 +11,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 24, sha256 7aa7b4db…).
+ * identity.native-keys.v1 against `spec/identity-native-keys-vectors.v1.json` (batch 24, sha256 88208134…).
  * Synthetic material only. Checks the placement rules, canonical form N (NFKD, S removed, Mn/Me/Cf removed),
  * the key-name whitelist, eoa canonical form, PGP armor value rules, I-4 (case-insensitive names,
  * "PRIVATEKEYBLOCK" at any depth, 64-hex with 0x or 0X outside the exact path `payload.nodes`), the ready
@@ -37,7 +37,7 @@ class IdentityNativeKeysVectorsTest {
     @Test
     fun vectorFileIsTheCurrentBatchCopy() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("7aa7b4dbd93d0d42b594ab18f1d70e85a7d4b9dbba484bd7d6aba4e3851864b9", sha)
+        assertEquals("8820813496e715125e3690e19a5d9f9610bad7125f9377cf8fcdb33b850733b2", sha)
     }
 
     @Test

@@ -12,7 +12,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The platform file store (rc2.2-qa, review of eaab00f). A removal that does not take effect must be reported: it throws, and [exists] tells
+ * The platform file store (rc2.2-qa). A removal that does not take effect must be reported: it throws, and [exists] tells
  * the truth. Runs only in a temporary directory.
  */
 class AndroidVaultFilesDeleteTest {

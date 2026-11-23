@@ -1,0 +1,323 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E7-add.json",
+  "scope": "account-credential-valid-mnemonic-59e-synthetic",
+  "status": "pending_review",
+  "text_basis": "spec-59e-errata-v3.3.1-E7.md (E7-7 added by 裁定 2026-11-17; 决定 2026-11-17)",
+  "note": "Synthetic data only. Not pinned; not in spec.md. Rule a and rule b not approved.",
+  "cases": [
+    {
+      "id": "P-01",
+      "kind": "positive",
+      "title": "只有钱包、无有效助记词；原生 absent → onboarding；不删旧记录",
+      "pre": {
+        "pwa_idb": "wallet_record_only_no_mnemonic",
+        "native": "absent"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "route": "onboarding",
+        "deleted": [],
+        "idb_retained": true,
+        "native_retained": true
+      },
+      "status": "pending_review",
+      "assert": "进入 onboarding，不删。"
+    },
+    {
+      "id": "P-02",
+      "kind": "positive",
+      "title": "只有钱包、无有效助记词；原生 valid → 接回已有钱包",
+      "pre": {
+        "pwa_idb": "wallet_record_only_no_mnemonic",
+        "native": "valid_mnemonic",
+        "native_eoa": "0xaaaa000000000000000000000000000000000001"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true
+      },
+      "expect": {
+        "route": "reattach_existing_wallet",
+        "onboarding": false,
+        "phrase_returned_per_E6": true
+      },
+      "status": "pending_review",
+      "assert": "接回，不进入 onboarding。"
+    },
+    {
+      "id": "P-03",
+      "kind": "negative",
+      "title": "只有钱包、无有效助记词；原生 unknown 或超时 → 保留、可重试、不进入 onboarding",
+      "pre": {
+        "pwa_idb": "wallet_record_only_no_mnemonic",
+        "native": "timeout_or_unknown"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": [],
+        "written": false
+      },
+      "status": "pending_review",
+      "assert": "未知时不进入 onboarding，不误写。"
+    },
+    {
+      "id": "P-04",
+      "kind": "positive",
+      "title": "原生钥匙串只剩私钥（别名存在、枚举与读取成功、无助记词）→ 明确没有有效助记词 → onboarding；旧记录保留",
+      "pre": {
+        "native": "private_key_only",
+        "alias_present": true,
+        "enumeration_ok": true,
+        "reads_ok": true,
+        "mnemonic_positions_all_read_empty": true
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_judgement": "explicit_no_valid_mnemonic",
+        "route": "onboarding",
+        "deleted": [],
+        "native_retained": true
+      },
+      "status": "pending_review",
+      "assert": "E7-3 N1–N4 成立。"
+    },
+    {
+      "id": "P-05",
+      "kind": "negative",
+      "title": "原生只剩私钥，但枚举失败 → 未知，保留、可重试，不进入 onboarding",
+      "pre": {
+        "native": "private_key_only",
+        "enumeration_ok": false
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_judgement": "unknown",
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "枚举失败不是明确没有。"
+    },
+    {
+      "id": "P-06",
+      "kind": "negative",
+      "title": "PWA 读取结果未知 → PWA 不发起预读，不进入 onboarding",
+      "pre": {
+        "pwa_idb": "unknown",
+        "native": "valid_mnemonic"
+      },
+      "op": {
+        "command": "none_issued_by_pwa"
+      },
+      "expect": {
+        "nativeMnemonicPreread_sent": false,
+        "onboarding": false
+      },
+      "status": "pending_review",
+      "assert": "沿 E6 NE-03。"
+    },
+    {
+      "id": "P-07",
+      "kind": "positive",
+      "title": "旧 IDB 只有地址或私钥记录、无助记词；原生 absent → onboarding；旧 IDB 与原生全部保留",
+      "pre": {
+        "pwa_idb": "address_or_private_key_only",
+        "native": "absent"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "route": "onboarding",
+        "deleted": [],
+        "idb_retained": true,
+        "native_retained": true,
+        "isolated_copies_retained": true
+      },
+      "status": "pending_review",
+      "assert": "不删任何旧记录。"
+    },
+    {
+      "id": "P-08",
+      "kind": "positive",
+      "title": "onboarding 后新账户建立：原生写入沿用既有规格（新槽，不覆盖旧文件）；旧记录仍保留",
+      "pre": {
+        "pwa_idb": "wallet_record_only_no_mnemonic",
+        "native": "absent"
+      },
+      "op": {
+        "command": "onboarding_create_new_account"
+      },
+      "expect": {
+        "native_write": "per_existing_spec_new_slot",
+        "old_files_overwritten": false,
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "沿 §59 与 WK 既有规格。"
+    },
+    {
+      "id": "P-09",
+      "kind": "positive",
+      "title": "助记词项损坏：读取成功、BIP-39 校验失败（确定性，重读两次相同）→ absent，进入 onboarding；原项保留，且写新账户时被隔离封存",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "bip39_checksum": "fail",
+        "reread_1": "same_fail",
+        "reread_2": "same_fail"
+      },
+      "op": [
+        {
+          "command": "startup_resolve"
+        },
+        {
+          "command": "onboarding_create_new_account",
+          "note": "写入前须先隔离封存原项"
+        }
+      ],
+      "expect": {
+        "native_answer": "absent",
+        "route": "onboarding",
+        "original_item_retained_until_write": true,
+        "before_new_write": {
+          "isolate_and_seal": true,
+          "direct_overwrite": false
+        },
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "absent 进入 onboarding；原项不删；新账户写入前先隔离封存原项，不直接覆盖。"
+    },
+    {
+      "id": "P-10",
+      "kind": "positive",
+      "title": "助记词项词表不符（非 BIP-39 词表）且确定性 → absent，进入 onboarding，原项保留",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "wordlist": "mismatch",
+        "reread_1": "same_fail",
+        "reread_2": "same_fail"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "absent",
+        "route": "onboarding",
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "词表不符是确定性失败。"
+    },
+    {
+      "id": "P-11",
+      "kind": "positive",
+      "title": "助记词项长度不合且确定性 → absent，进入 onboarding，原项保留",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "word_count": "invalid",
+        "reread_1": "same_fail",
+        "reread_2": "same_fail"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "absent",
+        "route": "onboarding",
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "长度不合是确定性失败。"
+    },
+    {
+      "id": "P-12",
+      "kind": "negative",
+      "title": "读取异常 → unknown，保留，不进入 onboarding（即使其后重读可能成功之前不判 absent）",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "exception"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": [],
+        "written": false
+      },
+      "status": "pending_review",
+      "assert": "读取异常不是确定性失败，按 unknown。"
+    },
+    {
+      "id": "P-13",
+      "kind": "negative",
+      "title": "校验失败但两次重读结果不同（非确定性）→ unknown，不进入 onboarding",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "bip39_checksum": "fail",
+        "reread_1": "fail",
+        "reread_2": "ok_valid"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "重读不一致不构成确定性，按 unknown。"
+    },
+    {
+      "id": "P-14",
+      "kind": "negative",
+      "title": "标记未结算、锁定、快照未知 → unknown（即使助记词项校验失败）",
+      "policy": "裁定 2026-11-17 (E7-7)",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "bip39_checksum": "fail",
+        "marker": "unsettled_or_locked_or_snapshot_unknown"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": []
+      },
+      "status": "pending_review",
+      "assert": "这些情形不是读取成功的确定性结论，按 unknown。"
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true,
+  "supersedes_note": "P-01..P-08 unchanged; P-09..P-14 added under E7-7."
+}

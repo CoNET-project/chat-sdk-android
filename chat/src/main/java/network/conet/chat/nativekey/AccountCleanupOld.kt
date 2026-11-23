@@ -69,7 +69,7 @@ internal object AccountCleanupOld {
      */
     fun preflight(gateNotReady: Boolean, newAccountReadable: Boolean, nativeConfirmed: Boolean, accountKeyMatch: Boolean): String? = when {
         gateNotReady -> NOT_READY
-        !newAccountReadable -> NOT_AVAILABLE
+        !newAccountReadable -> NOT_READY
         !nativeConfirmed -> NOT_CONFIRMED
         !accountKeyMatch -> ACCOUNT_MISMATCH
         else -> null

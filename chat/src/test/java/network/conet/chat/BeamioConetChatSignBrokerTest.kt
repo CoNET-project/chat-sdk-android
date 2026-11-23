@@ -14,25 +14,25 @@ import java.io.File
 class BeamioConetChatSignBrokerTest {
 
     @Test
-    fun eip191WithoutANativeKeyFailsWithNoKeyAtOnce() {
+    fun eip191WithoutANativeKeyFailsNotReadyAtOnce() {
         BeamioConetChatSignBroker.clearNativeSigner()
         var result: Result<String>? = null
         BeamioConetChatSignBroker.requestEip191("hello") { result = it }
         val r = result
         assertTrue("the completion must run at once, not wait for a page answer", r != null)
         assertTrue("signing must fail", r!!.isFailure)
-        assertEquals("no_key", r.exceptionOrNull()?.message)
+        assertEquals("not_ready", r.exceptionOrNull()?.message)
     }
 
     @Test
-    fun eip712WithoutANativeKeyFailsWithNoKeyAtOnce() {
+    fun eip712WithoutANativeKeyFailsNotReadyAtOnce() {
         BeamioConetChatSignBroker.clearNativeSigner()
         var result: Result<String>? = null
         BeamioConetChatSignBroker.requestEip712(JSONObject().put("primaryType", "Probe")) { result = it }
         val r = result
         assertTrue("the completion must run at once, not wait for a page answer", r != null)
         assertTrue("signing must fail", r!!.isFailure)
-        assertEquals("no_key", r.exceptionOrNull()?.message)
+        assertEquals("not_ready", r.exceptionOrNull()?.message)
     }
 
     @Test

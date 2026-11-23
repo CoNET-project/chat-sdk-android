@@ -1,0 +1,131 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E9.1.2-add.json",
+  "scope": "marked-entry-read-failure-classification-synthetic",
+  "status": "pending_review",
+  "extends": "spec-59e-errata-v3.3.1-E9.1.2.md (E9.1-1, E9.3.1-2)",
+  "decision_source": "裁定 2026-11-17 (两端同一裁定)",
+  "principle": "被标记（pending）条目：只忽略确定性失败（项不存在、格式不合法、钥库可用且 AEAD 认证失败并经两次相同读取确认）；临时失败（I/O 异常、钥库不可用、设备锁定或首次解锁前、密钥缺失而记录存在）一律 unknown。",
+  "fixtures_note": "Synthetic only. Entry names are synthetic. 'marked' means named by the pending marker as an unfinished write.",
+  "cases": [
+    {
+      "id": "E912-01",
+      "title": "被标记条目在设备锁定 / 钥库不可用时读取失败（临时失败）；其余位置读取成功为空 → unknown，保留，可重试，不进入 onboarding",
+      "policy": "decided",
+      "pre": {
+        "marker": {
+          "phase": "pending",
+          "items": [
+            "MNEM_MARKED"
+          ]
+        },
+        "MNEM_MARKED": {
+          "read": "failed",
+          "failure_class": "temporary",
+          "cause": "device_locked_or_keystore_unavailable"
+        },
+        "other_mnemonic_locations": "read_ok_empty"
+      },
+      "op": {
+        "command": "startup_classify"
+      },
+      "expect": {
+        "classification": "unknown",
+        "answer": "retain_and_retry",
+        "onboarding_entered": false,
+        "deleted": []
+      }
+    },
+    {
+      "id": "E912-02",
+      "title": "被标记条目确定性损坏（钥库可用，AEAD 认证失败，两次读取结果相同）；其余位置有有效助记词 → 忽略该条目，由其他位置决定 → valid",
+      "policy": "decided",
+      "pre": {
+        "marker": {
+          "phase": "pending",
+          "items": [
+            "MNEM_MARKED"
+          ]
+        },
+        "MNEM_MARKED": {
+          "read": "failed",
+          "failure_class": "deterministic",
+          "cause": "aead_auth_failed",
+          "reread_same": true,
+          "keystore_ok": true
+        },
+        "other_mnemonic_locations": {
+          "valid_mnemonic": true,
+          "eoa_matches_keyID": true
+        }
+      },
+      "op": {
+        "command": "startup_classify"
+      },
+      "expect": {
+        "classification": "valid",
+        "marked_entry_ignored": true,
+        "deleted": []
+      }
+    },
+    {
+      "id": "E912-03",
+      "title": "被标记条目确定性损坏（同 E912-02）；其余位置读取成功为空 → 忽略，判没有账户，onboarding，数据保留",
+      "policy": "decided",
+      "pre": {
+        "marker": {
+          "phase": "pending",
+          "items": [
+            "MNEM_MARKED"
+          ]
+        },
+        "MNEM_MARKED": {
+          "read": "failed",
+          "failure_class": "deterministic",
+          "cause": "aead_auth_failed",
+          "reread_same": true,
+          "keystore_ok": true
+        },
+        "other_mnemonic_locations": "read_ok_empty"
+      },
+      "op": {
+        "command": "startup_classify"
+      },
+      "expect": {
+        "classification": "confirmed_no_valid_mnemonic",
+        "answer": "onboarding",
+        "marked_entry_ignored": true,
+        "deleted": []
+      }
+    },
+    {
+      "id": "E912-04",
+      "title": "被标记条目读取失败：密钥缺失而记录存在（临时失败）→ unknown，保留，可重试",
+      "policy": "decided",
+      "pre": {
+        "marker": {
+          "phase": "pending",
+          "items": [
+            "MNEM_MARKED"
+          ]
+        },
+        "MNEM_MARKED": {
+          "read": "failed",
+          "failure_class": "temporary",
+          "cause": "key_missing_record_present"
+        },
+        "other_mnemonic_locations": "read_ok_empty"
+      },
+      "op": {
+        "command": "startup_classify"
+      },
+      "expect": {
+        "classification": "unknown",
+        "answer": "retain_and_retry",
+        "onboarding_entered": false,
+        "deleted": []
+      }
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

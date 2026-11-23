@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The nodes rule of the G1 identity-only `init` (spec §25.52Y.29, §25.52Y.32; PM R1841, R1854).
+ * The nodes rule of the G1 identity-only `init` (spec §25.52Y.29, §25.52Y.32).
  *
  * - `nodes` key missing: the stored roster on this device is used and `ready` follows; with none stored, `nodes_unavailable`.
  * - `nodes` is an empty array `[]`: `nodes_unavailable`, with no fallback to the stored roster, and no `ready`.

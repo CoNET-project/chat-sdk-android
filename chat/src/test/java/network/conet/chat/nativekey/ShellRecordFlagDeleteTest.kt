@@ -81,7 +81,7 @@ class ShellRecordFlagDeleteTest {
      */
     @Test
     fun aFailedLegacyClearIsRecordUnreadableOnTheReadPath() {
-        // Read-path sub codes only (coordinator ruling 2026-11-16): record_unreadable is retryable, never clear_incomplete or write_failed.
+        // Read-path sub codes only: record_unreadable is retryable, never clear_incomplete or write_failed.
         assertEquals("record_unreadable", clearLegacyCode(FakeFlags(failClear = true)))
         assertNull(clearLegacyCode(FakeFlags()))
     }

@@ -2,7 +2,6 @@ package network.conet.chat.nativekey
 
 import network.conet.chat.ConetChatCryptoUtil
 import org.json.JSONObject
-import java.math.BigInteger
 
 /**
  * Native wallet commands that answer from the vault, and the native import flow (spec 25.25).
@@ -47,83 +46,8 @@ object NativeWalletCommands {
 }
 
 /**
- * The host shows the native import page when the PWA sends `nativeImportOpen`. The page belongs to the
- * app shell. Until the shell sets [launcher], the command is answered `not_supported` (spec r3x, N-06).
- */
-object NativeImportHost {
-    @Volatile
-    var launcher: (() -> Boolean)? = null
-
-    /** Set by the module, so the results go out through the chat module event envelope (§25.52X.4). */
-    @Volatile
-    internal var events: ((JSONObject) -> Unit)? = null
-
-    @Volatile
-    private var pageReqId: Any? = null
-
-    /**
-     * `nativeImportOpen`: opens the shell's page for [reqId]. `true` when the page is open. A launcher that throws counts as refused.
-     * The page's result follows as `nativeImportResult` for this reqId (see [finish]).
-     */
-    internal fun open(reqId: Any): Boolean {
-        pageReqId = reqId
-        val opened = try {
-            launcher?.invoke() == true
-        } catch (_: Exception) {
-            false
-        }
-        if (!opened) pageReqId = null
-        return opened
-    }
-
-    /**
-     * One submission's result, for the open page (§25.52X.4). Every submission sends exactly one `nativeImportResult`. `eoa` is carried only
-     * by `ok` and `already_exists`, and only when the address was derived and persisted (the vault gives it only then). `ok`,
-     * `already_exists` and `cancelled` end the page; any other result keeps it open for a retry. Nothing is sent when no page is open.
-     */
-    internal fun finish(result: NativeImport.Result) {
-        val id = pageReqId ?: return
-        val payload = JSONObject()
-            .put("type", "nativeImportResult")
-            .put("reqId", id)
-            .put("code", eventCode(result.code))
-        if (result.code == NativeImport.Code.OK || result.code == NativeImport.Code.ALREADY_EXISTS) {
-            result.eoa?.let { payload.put("eoa", it) }
-        }
-        events?.invoke(payload)
-        if (result.code in TERMINAL) pageReqId = null
-    }
-
-    private val TERMINAL = setOf(NativeImport.Code.OK, NativeImport.Code.ALREADY_EXISTS, NativeImport.Code.CANCELLED)
-
-    /**
-     * The wire `code` of `nativeImportResult`, exactly the five codes of 25.52Y.95 第 2 条 (mapping: 25.52Y.97 第 2 条). The internal codes are
-     * not on the wire. `invalid_format`, `invalid_key` and `invalid_mnemonic` (input not valid, nothing written) are `bad_request`;
-     * `address_mismatch`, `write_failed`, `readback_failed` and `rollback_pending` are `import_failed`. `ok`, `already_exists` and `cancelled`
-     * keep their names. A `rollback_pending` is never `ok` and never `already_exists`.
-     */
-    internal fun eventCode(code: NativeImport.Code): String = when (code) {
-        NativeImport.Code.OK -> "ok"
-        NativeImport.Code.ALREADY_EXISTS -> "already_exists"
-        NativeImport.Code.CANCELLED -> "cancelled"
-        NativeImport.Code.INVALID_FORMAT,
-        NativeImport.Code.INVALID_KEY,
-        NativeImport.Code.INVALID_MNEMONIC,
-        -> "bad_request"
-        NativeImport.Code.ADDRESS_MISMATCH,
-        NativeImport.Code.WRITE_FAILED,
-        NativeImport.Code.READBACK_FAILED,
-        NativeImport.Code.ROLLBACK_PENDING,
-        -> "import_failed"
-    }
-
-    /** The `reqId` of the open import page, if any. */
-    internal fun currentReqId(): Any? = pageReqId
-}
-
-/**
- * Import typed in the native page: a secp256k1 private key (spec 25.25.2) or a BIP-39 phrase (spec 25.26.3).
- * Both end in the same vault write, readback and rollback (25.25.3).
+ * Result codes of the native import (spec 25.25.2, 25.26.3). The page that typed them is removed (r2.3 41); the codes stay for the
+ * internal import and its page-result mapping.
  */
 object NativeImport {
     enum class Code(val wire: String) {
@@ -137,48 +61,18 @@ object NativeImport {
         READBACK_FAILED("readback_failed"),
         ROLLBACK_PENDING("rollback_pending"),
         CANCELLED("cancelled"),
-    }
-
-    class Result(val code: Code, val eoa: String? = null)
-
-    private val N: BigInteger = org.bouncycastle.asn1.sec.SECNamedCurves.getByName("secp256k1").n
-    private val ASCII_WHITESPACE = charArrayOf(' ', '\t', '\n', '\r', '\u000B', '\u000C')
-
-    /**
-     * @param raw the text in the input box. Leading and trailing ASCII whitespace is removed; the rest must be
-     *   64 hex digits, with an optional `0x` or `0X` prefix.
-     * @param expectedEoa the account the import was started for, when there is one. A derived address that
-     *   differs is refused.
-     * @param cancelled the user backed out: nothing is written and no message is shown.
-     */
-    fun submit(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result =
-        submitInput(raw, expectedEoa, vault, cancelled).also { NativeImportHost.finish(it) }
-
-    private fun submitInput(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean): Result {
-        if (cancelled) return Result(Code.CANCELLED)
-        val trimmed = raw.trim { it in ASCII_WHITESPACE }
-        val hex = if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) trimmed.substring(2) else trimmed
-        if (hex.length != 64 || !hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-            return Result(Code.INVALID_FORMAT)
-        }
-        val key = ByteArray(32) { i -> hex.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
-        try {
-            val k = BigInteger(1, key)
-            if (k.signum() <= 0 || k >= N) return Result(Code.INVALID_KEY)
-            val eoa = WalletAddress.fromPrivateKey(key) ?: return Result(Code.INVALID_KEY)
-            return importDerived(eoa, key, expectedEoa, vault)
-        } finally {
-            key.fill(0)
-        }
+        /** Not decided: the wrap is unconfirmed (25.52Y.136 第 7 項). Retryable; the answer carries notReadyReason unreadable. */
+        NOT_READY("not_ready"),
     }
 
     /**
+     * Recovery-path import (spec r2.3 41(3)): only the two recovery paths call this, after they decrypt. No page or bridge command reaches it.
      * Mnemonic mode (spec 25.26.3). The phrase is checked and derived in memory (25.26.1). Only the derived 32-byte
      * key reaches the vault; the phrase is not stored, logged or returned. An invalid phrase is `invalid_mnemonic`
      * and writes nothing. After validation, the expected-address, write and readback rules are the key mode's.
      */
-    fun submitMnemonic(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean = false): Result =
-        submitPhrase(raw, expectedEoa, vault, cancelled).also { NativeImportHost.finish(it) }
+    internal fun importRecoveryPhrase(raw: String, expectedEoa: String?, vault: NativeWalletVault): Result =
+        submitPhrase(raw, expectedEoa, vault, cancelled = false)
 
     private fun submitPhrase(raw: String, expectedEoa: String?, vault: NativeWalletVault, cancelled: Boolean): Result {
         if (cancelled) return Result(Code.CANCELLED)
@@ -206,13 +100,23 @@ object NativeImport {
         val imported = if (phrase == null) vault.importKey(eoa, key) else vault.importMnemonicKey(eoa, key, phrase)
         return when (imported) {
             NativeWalletVault.Import.OK -> Result(Code.OK, eoa)
+            NativeWalletVault.Import.OK_CLEANUP_PENDING -> Result(Code.OK, eoa, cleanupPending = true)
             NativeWalletVault.Import.ALREADY_PRESENT, NativeWalletVault.Import.RECORD_EXISTS ->
                 Result(Code.ALREADY_EXISTS, vault.publicEoaIfReadable())
             NativeWalletVault.Import.ADDRESS_MISMATCH -> Result(Code.ADDRESS_MISMATCH)
+            // wrap_key_missing (25.52Y.124): nothing was written; reported as a failed write until a wire code is defined.
             NativeWalletVault.Import.STORE_FAILED -> Result(Code.WRITE_FAILED)
+            // Not decided: nothing was written; not_ready with notReadyReason unreadable (25.52Y.136 第 7 項).
+            NativeWalletVault.Import.WRAP_KEY_MISSING -> Result(Code.NOT_READY)
             NativeWalletVault.Import.READBACK_FAILED -> Result(Code.READBACK_FAILED)
+            // Only the sync path (requireOpenable) produces it: a failed write on this path.
+            NativeWalletVault.Import.OLD_COPY_UNVERIFIED -> Result(Code.WRITE_FAILED)
+            // v2 §三: the sync path only; a failed write (the old names are restored).
+            NativeWalletVault.Import.SEALING_FAILED -> Result(Code.WRITE_FAILED)
             NativeWalletVault.Import.ROLLBACK_PENDING -> Result(Code.ROLLBACK_PENDING)
             NativeWalletVault.Import.BAD_KEY, NativeWalletVault.Import.BAD_EOA -> Result(Code.INVALID_KEY)
         }
     }
+
+    class Result(val code: Code, val eoa: String? = null, val cleanupPending: Boolean = false)
 }

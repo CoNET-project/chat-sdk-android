@@ -1,6 +1,6 @@
 {
   "file": "chat-route-register-vectors.v1.json",
-  "spec": "spec §25.28（r3j，项目方裁定 2026-11-13）",
+  "spec": "spec §25.28（裁定 2026-11-13）",
   "generator": "gen-chat-route-register-vectors.mjs",
   "testKeyNote": "全部为合成数据。EOA 与 PGP 密钥取自 pgp-backup-compat-vectors.v1.json（公开测试助记词派生；合成 curve25519，口令为空）。禁止用于生产。",
   "sourceVectors": {

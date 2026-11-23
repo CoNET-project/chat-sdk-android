@@ -167,9 +167,14 @@ internal object NativeDerivationCommands {
         }
         val text = NativeDerivation.voiceListenText(sid, wk, relayKeyId, seconds) ?: return Outcome.fail(BAD_REQUEST)
         val tk = VoiceChannelKeys.lookup(sid) ?: return Outcome.fail(UNKNOWN_CHANNEL)
-        val signature = NativeDerivation.voiceListenSignature(tk, text) ?: return Outcome.fail(BAD_REQUEST)
-        val temp = WalletAddress.fromPrivateKey(tk)?.lowercase() ?: return Outcome.fail(BAD_REQUEST)
-        return Outcome.ok(JSONObject().put("temp", temp).put("tempSig", signature))
+        // The copy of T is zeroed on every path once the signature is made (2026-11-21).
+        try {
+            val signature = NativeDerivation.voiceListenSignature(tk, text) ?: return Outcome.fail(BAD_REQUEST)
+            val temp = WalletAddress.fromPrivateKey(tk)?.lowercase() ?: return Outcome.fail(BAD_REQUEST)
+            return Outcome.ok(JSONObject().put("temp", temp).put("tempSig", signature))
+        } finally {
+            tk.fill(0)
+        }
     }
 }
 
@@ -178,19 +183,51 @@ internal object NativeDerivationCommands {
  * ends (X-15). Nothing registers a key yet: the channel-creation command that generates T is not in the spec (see the receipt).
  */
 internal object VoiceChannelKeys {
-    private val keys = HashMap<String, ByteArray>()
+    /**
+     * The longest a temporary key is kept, even when the call never ends cleanly (2026-11-21, to confirm: six hours). An entry older than this is
+     * zeroed and removed when the store is next touched. A clock that has gone back before the registration is treated as expired (fail closed).
+     */
+    const val MAX_AGE_MS = 6L * 60 * 60 * 1000
+
+    private class Entry(val key: ByteArray, val registeredAtMs: Long)
+
+    private val keys = HashMap<String, Entry>()
 
     @Synchronized
-    fun register(sid: String, temporaryKey: ByteArray) {
-        keys.put(sid, temporaryKey.copyOf())?.fill(0)
+    fun register(sid: String, temporaryKey: ByteArray, nowMs: Long = System.currentTimeMillis()) {
+        sweep(nowMs)
+        keys.put(sid, Entry(temporaryKey.copyOf(), nowMs))?.key?.fill(0)
+    }
+
+    /** A copy of the key of [sid], or null when there is none or it has expired. The caller zeroes the copy. */
+    @Synchronized
+    fun lookup(sid: String, nowMs: Long = System.currentTimeMillis()): ByteArray? {
+        sweep(nowMs)
+        return keys[sid]?.key?.copyOf()
+    }
+
+    /** Removes and zeroes the temporary key of [sid] when the call ends. Idempotent; nothing else is touched. */
+    @Synchronized
+    fun forget(sid: String) {
+        keys.remove(sid)?.key?.fill(0)
     }
 
     @Synchronized
-    fun lookup(sid: String): ByteArray? = keys[sid]?.copyOf()
-
-    @Synchronized
     fun clear() {
-        for (k in keys.values) k.fill(0)
+        for (e in keys.values) e.key.fill(0)
         keys.clear()
+    }
+
+    /** Zeroes and removes every entry that has expired, or whose registration is later than [nowMs] (clock rollback). */
+    private fun sweep(nowMs: Long) {
+        val it = keys.entries.iterator()
+        while (it.hasNext()) {
+            val e = it.next().value
+            val age = nowMs - e.registeredAtMs
+            if (age < 0 || age > MAX_AGE_MS) {
+                e.key.fill(0)
+                it.remove()
+            }
+        }
     }
 }

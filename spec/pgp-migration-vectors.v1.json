@@ -5,20 +5,20 @@
       "AK-18 不种原生钥（§25.52Y.110 与本次裁定）：ctx.eoa 仅作标识，不种钥。原生钥只由 ctx.keys（AK-56）或 ctx.nativeKey === true（AK-60）种入。",
       "AK-56 符号名映射（§25.52Y.110 第 1 条）：a1、a2 映射为固定派生的测试专用 EOA 私钥（公开测试值，非真实钱包，两把不同）；占位 \"EOA\" 替换为 a1 的规范 W 形式；派生校验（derivationMismatch）不放宽。"
     ],
-    "spec": "interface/spec.md §25.52X.2（r3kf；本文件的 newUser、本地三态与 init 向量以 §25.52X.2 为准）。其余批次的 spec 注见各组向量的 meta；§25.52H 为旧注（r3bb），不再作为本文件的依据。",
-    "status": "final-pending-PM-gates",
-    "generator": "gen-pgp-migration-vectors.mjs（r3bz）",
+    "spec": "interface/spec.md §25.52X.2（本文件的 newUser、本地三态与 init 向量以 §25.52X.2 为准）。其余批次的 spec 注见各组向量的 meta；§25.52H 为旧注，不再作为本文件的依据。",
+    "status": "final-pending--gates",
+    "generator": "gen-pgp-migration-vectors.mjs",
     "scope": "旧 PGP 私钥迁移（U5）。来源为 SDK 账户记录 L（只读）；目标为 N（每账户一条）；成功标记 M。只含状态与应答；不含密钥材料、armor、指纹全文、nonce 或签名输出。",
     "invariants": [
       "keygenCalls = 0：任何结果路径都不生成新 PGP 密钥（失败不自动换钥）",
       "bridgeKeyFields = 0：请求与事件都不含密钥字段；迁移入口不接收私钥参数",
       "每个请求最多一个结果事件（中断的运行不产生事件）",
       "L 在任何路径都不被删除、覆盖或修改（本版不清理 L）",
-      "已有 N 且指纹 != F0：不覆盖、不删除，报 fingerprint_mismatch（failed）；N 指纹 == F0：幂等，不重写（r3at）",
+      "已有 N 且指纹 != F0：不覆盖、不删除，报 fingerprint_mismatch（failed）；N 指纹 == F0：幂等，不重写",
       "已核验的 N（有 M）不被覆盖；与 L 不符时报 fingerprint_mismatch",
       "verify_unavailable 时不写入 N 或 M",
-      "未在链上登记（读取为空）报 fingerprint_mismatch；读取失败报 chain_unavailable（r3av）",
-      "注销：恢复源不满足时 unregister_refused 且不删除；通过后先删 M 后删 N，L 永不删除（r3av）"
+      "未在链上登记（读取为空）报 fingerprint_mismatch；读取失败报 chain_unavailable",
+      "注销：恢复源不满足时 unregister_refused 且不删除；通过后先删 M 后删 N，L 永不删除"
     ],
     "fp": "fp 为合成指纹标签（A、B），不是真实指纹",
     "gates": {
@@ -581,7 +581,7 @@
     },
     {
       "id": "M-31",
-      "title": "未核验的 N 与 L 不符（指纹 != F0）：不覆盖，不删除，fingerprint_mismatch（r3at）",
+      "title": "未核验的 N 与 L 不符（指纹 != F0）：不覆盖，不删除，fingerprint_mismatch",
       "group": "T-254",
       "given": {
         "gate": "G2",
@@ -620,7 +620,7 @@
     },
     {
       "id": "M-32",
-      "title": "未核验的 N 与 L 同指纹（F0）：幂等，不重写 N，继续核验并写 M（r3at）",
+      "title": "未核验的 N 与 L 同指纹（F0）：幂等，不重写 N，继续核验并写 M",
       "group": "T-255",
       "given": {
         "gate": "G2",
@@ -1441,7 +1441,7 @@
     },
     {
       "id": "M-33",
-      "title": "链上未登记（读取为空）：fingerprint_mismatch，L 保留，不写 N（r3av）",
+      "title": "链上未登记（读取为空）：fingerprint_mismatch，L 保留，不写 N",
       "group": "T-269",
       "given": {
         "gate": "G2",
@@ -1480,7 +1480,7 @@
     },
     {
       "id": "M-34",
-      "title": "无 L，未标记的 N，链上未登记：fingerprint_mismatch，N 保留（r3av）",
+      "title": "无 L，未标记的 N，链上未登记：fingerprint_mismatch，N 保留",
       "group": "T-269",
       "given": {
         "gate": "G2",
@@ -1985,7 +1985,7 @@
     },
     {
       "id": "TR-12",
-      "title": "读回携带 W 字段（EOA 私钥、助记词），PGP 字段一律剥离（r3bc，R393）",
+      "title": "读回携带 W 字段（EOA 私钥、助记词），PGP 字段一律剥离",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -2039,7 +2039,7 @@
     },
     {
       "id": "TR-13",
-      "title": "无页面记录，旧存储已确认不存在，指针为空：absent（r3bq：须先确认旧存储）",
+      "title": "无页面记录，旧存储已确认不存在，指针为空：absent（：须先确认旧存储）",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -2052,7 +2052,7 @@
     },
     {
       "id": "TR-15",
-      "title": "写入含 PGP 公开字段（不在白名单）：bad_request，只记路径名（r3bh，D10）",
+      "title": "写入含 PGP 公开字段（不在白名单）：bad_request，只记路径名（D10）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2089,7 +2089,7 @@
     },
     {
       "id": "TR-16",
-      "title": "容器子树中的私钥形态键（profiles[*].data）：key_shaped_content（r3bh，D13）",
+      "title": "容器子树中的私钥形态键（profiles[*].data）：key_shaped_content（D13）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2122,7 +2122,7 @@
     },
     {
       "id": "TR-17",
-      "title": "容器子树中的 mnemonic 键：key_shaped_content（r3bh，D13）",
+      "title": "容器子树中的 mnemonic 键：key_shaped_content（D13）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2155,7 +2155,7 @@
     },
     {
       "id": "TR-18",
-      "title": "精确路径：chatManager 下的非白名单键：bad_request（r3bh，D13）",
+      "title": "精确路径：chatManager 下的非白名单键：bad_request（D13）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2189,7 +2189,7 @@
     },
     {
       "id": "TR-19",
-      "title": "读回应答超过 2 MB（信封计入）：too_large（r3bh，D14）",
+      "title": "读回应答超过 2 MB（信封计入）：too_large（D14）",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -2208,7 +2208,7 @@
     },
     {
       "id": "TR-20",
-      "title": "真实字段形态（Android 实测 0.52.932 清单，不含 PGP）：ok，rev 递增（r3bj，R422）",
+      "title": "真实字段形态（Android 实测 0.52.932 清单，不含 PGP）：ok，rev 递增",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2288,7 +2288,7 @@
     },
     {
       "id": "TR-21",
-      "title": "顶层 mnemonic（旧名，非精确 W 路径）：key_shaped_content，只记路径名（r3bj）",
+      "title": "顶层 mnemonic（旧名，非精确 W 路径）：key_shaped_content，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2320,7 +2320,7 @@
     },
     {
       "id": "TR-22",
-      "title": "walletVault.mnemonic（已移出白名单）：key_shaped_content，只记路径名（r3bj）",
+      "title": "walletVault.mnemonic（已移出白名单）：key_shaped_content，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2353,7 +2353,7 @@
     },
     {
       "id": "TR-23",
-      "title": "beamio 下的 PGP 公开字段（beamio 不在白名单）：bad_request，只记路径名（r3bj）",
+      "title": "beamio 下的 PGP 公开字段（beamio 不在白名单）：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2381,7 +2381,7 @@
     },
     {
       "id": "TR-24",
-      "title": "真实结构写入（PWA 类型清单，不含 PGP、不含 keyObj）：ok（r3bk，R427）",
+      "title": "真实结构写入（PWA 类型清单，不含 PGP、不含 keyObj）：ok",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2465,7 +2465,7 @@
     },
     {
       "id": "TR-25",
-      "title": "privateKeyArmorWrap（设备封装，不是批准的 W 路径）：key_shaped_content，只记路径名（r3bk）",
+      "title": "privateKeyArmorWrap（设备封装，不是批准的 W 路径）：key_shaped_content，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2500,7 +2500,7 @@
     },
     {
       "id": "TR-26",
-      "title": "keyObj.privateKeyObj（私钥对象）：key_shaped_content，只记路径名（r3bk）",
+      "title": "keyObj.privateKeyObj（私钥对象）：key_shaped_content，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2536,7 +2536,7 @@
     },
     {
       "id": "TR-27",
-      "title": "keyObj.publicKeyObj（keyObj 不在白名单）：bad_request，只记路径名（r3bk）",
+      "title": "keyObj.publicKeyObj（keyObj 不在白名单）：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2571,7 +2571,7 @@
     },
     {
       "id": "TR-28",
-      "title": "encryptedString（恢复备份，不在白名单）：bad_request，只记路径名（r3bk）",
+      "title": "encryptedString（恢复备份，不在白名单）：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2597,7 +2597,7 @@
     },
     {
       "id": "TR-29",
-      "title": "duplicatePassword（旧版秘密字段，非 W）：key_shaped_content，只记路径名（r3bk，r3bl 改用此名）",
+      "title": "duplicatePassword（旧版秘密字段，非 W）：key_shaped_content，只记路径名（改用此名）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2623,7 +2623,7 @@
     },
     {
       "id": "TR-30",
-      "title": "多个非白名单字段：整条拒绝，names 列全部路径（按 UTF-8 字节序），不静默丢弃（r3bk，R427 第 3 点）",
+      "title": "多个非白名单字段：整条拒绝，names 列全部路径（按 UTF-8 字节序），不静默丢弃",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2658,7 +2658,7 @@
     },
     {
       "id": "TR-31",
-      "title": "读回：schemaVersion 2 且无 privateKeyArmor：error（needs_native_recovery），页面不进页面口令恢复、不新建钱包（r3bl，R428；r3bo，R430）",
+      "title": "读回：schemaVersion 2 且无 privateKeyArmor：error（needs_native_recovery），页面不进页面口令恢复、不新建钱包",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -2685,7 +2685,7 @@
     },
     {
       "id": "TR-32",
-      "title": "读回：PGP 公开字段（beamio 下）读回时删除，其余保留（r3bl，R428）",
+      "title": "读回：PGP 公开字段（beamio 下）读回时删除，其余保留",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -2731,7 +2731,7 @@
     },
     {
       "id": "TR-33",
-      "title": "recoveryWords 为 W（schemaVersion 2，档案持有 privateKeyArmor）：ok，原生保存（r3bl，R428）",
+      "title": "recoveryWords 为 W（schemaVersion 2，档案持有 privateKeyArmor）：ok，原生保存",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2775,7 +2775,7 @@
     },
     {
       "id": "TR-34",
-      "title": "recoveryWords 在 schemaVersion 1 中：wallet_copy_not_approved，存储不变（r3bl，R428）",
+      "title": "recoveryWords 在 schemaVersion 1 中：wallet_copy_not_approved，存储不变",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2801,7 +2801,7 @@
     },
     {
       "id": "TR-35",
-      "title": "schemaVersion 2 且合并后无 privateKeyArmor：wallet_fields_missing，存储不变（r3bl，R428）",
+      "title": "schemaVersion 2 且合并后无 privateKeyArmor：wallet_fields_missing，存储不变",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2833,7 +2833,7 @@
     },
     {
       "id": "TR-36",
-      "title": "recoveryWords 与原生已存值不同：conflict（w_differs），存储不变（r3bl，R428）",
+      "title": "recoveryWords 与原生已存值不同：conflict（w_differs），存储不变",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2892,7 +2892,7 @@
     },
     {
       "id": "TR-37",
-      "title": "chats 子树中的 chatData.publicArmored（PGP 公开）：bad_request，只记路径名（r3bm）",
+      "title": "chats 子树中的 chatData.publicArmored（PGP 公开）：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2930,7 +2930,7 @@
     },
     {
       "id": "TR-38",
-      "title": "chats 子树中的 routePgpKeyID 与 routersArmoreds（PGP 公开）：bad_request，路径名按 UTF-8 字节序（r3bm）",
+      "title": "chats 子树中的 routePgpKeyID 与 routersArmoreds（PGP 公开）：bad_request，路径名按 UTF-8 字节序",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -2969,7 +2969,7 @@
     },
     {
       "id": "TR-39",
-      "title": "读回：chats 子树中的 PGP 公开字段读回时删除，其余保留（r3bm）",
+      "title": "读回：chats 子树中的 PGP 公开字段读回时删除，其余保留",
       "kind": "read",
       "ctx": {
         "origin": "allowed"
@@ -3019,7 +3019,7 @@
     },
     {
       "id": "TR-40",
-      "title": "passcode（整体不在白名单，清单仅列顶层 passcode）：bad_request，路径名按 UTF-8 字节序（r3bp，撤销 r3bm 的 passcode.status）",
+      "title": "passcode（整体不在白名单，清单仅列顶层 passcode）：bad_request，路径名按 UTF-8 字节序（撤销的 passcode.status）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3049,7 +3049,7 @@
     },
     {
       "id": "TR-41",
-      "title": "duplicateMnemonicPhrase（助记词副本，非 W）：key_shaped_content，只记路径名（r3bm）",
+      "title": "duplicateMnemonicPhrase（助记词副本，非 W）：key_shaped_content，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3075,7 +3075,7 @@
     },
     {
       "id": "TR-42",
-      "title": "fragmentClass 与 search（明文，暂定容器）：ok（r3bm）",
+      "title": "fragmentClass 与 search（明文，暂定容器）：ok",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3116,7 +3116,7 @@
     },
     {
       "id": "TR-43",
-      "title": "beamio.pgpPublicKeyID（PGP 公开）：bad_request，只记路径名（r3bm）",
+      "title": "beamio.pgpPublicKeyID（PGP 公开）：bad_request，只记路径名",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3145,7 +3145,7 @@
     },
     {
       "id": "TR-44",
-      "title": "原生已存 beamio PGP 公开字段：页面整份写入不携带则不保留（非 W 字段整份替换），mnemonicPhrase 省略保留（r3bn，集成 a）",
+      "title": "原生已存 beamio PGP 公开字段：页面整份写入不携带则不保留（非 W 字段整份替换），mnemonicPhrase 省略保留（集成 a）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3211,7 +3211,7 @@
     },
     {
       "id": "TR-45",
-      "title": "recoveryWords 省略：原生保留（W，省略保留）（r3bn，集成 1）",
+      "title": "recoveryWords 省略：原生保留（W，省略保留）（集成 1）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3266,7 +3266,7 @@
     },
     {
       "id": "TR-46",
-      "title": "recoveryWords 不同值：页面写入 conflict（TR-36）；仅原生建号或恢复可替换（本例为原生写入，接受）（r3bn，集成 1）",
+      "title": "recoveryWords 不同值：页面写入 conflict（TR-36）；仅原生建号或恢复可替换（本例为原生写入，接受）（集成 1）",
       "kind": "write",
       "ctx": {
         "origin": "allowed",
@@ -3323,7 +3323,7 @@
     },
     {
       "id": "TR-47",
-      "title": "r3cj（AJ.4，R634 第 2 条）：读回时记录残留 PGP 私钥头（未剥离路径）：error（record_unreadable），不返回记录，存储不变",
+      "title": "（AJ.4）：读回时记录残留 PGP 私钥头（未剥离路径）：error（record_unreadable），不返回记录，存储不变",
       "kind": "read",
       "ctx": {
         "origin": "allowed",
@@ -3648,7 +3648,7 @@
     },
     {
       "id": "RD-08",
-      "title": "读回 error（needs_native_recovery）：停在 unavailable，给出原生恢复入口；不进页面口令恢复，不新建钱包（r3bo，R430）",
+      "title": "读回 error（needs_native_recovery）：停在 unavailable，给出原生恢复入口；不进页面口令恢复，不新建钱包",
       "resp": {
         "code": "error",
         "sub": "needs_native_recovery"
@@ -3659,7 +3659,7 @@
     },
     {
       "id": "RD-09",
-      "title": "读回 error（import_not_done）：失败关闭，不进引导，稍后重试（r3bq，R439 第 1 条）",
+      "title": "读回 error（import_not_done）：失败关闭，不进引导，稍后重试",
       "resp": {
         "code": "error",
         "sub": "import_not_done"
@@ -3670,7 +3670,7 @@
     },
     {
       "id": "RD-10",
-      "title": "读回 migrating（r3rz 前为 legacy_store_unreadable 读取码）：失败关闭，不进引导，稍后重试（r3bq，U.6）",
+      "title": "读回 migrating（ 前为 legacy_store_unreadable 读取码）：失败关闭，不进引导，稍后重试（U.6）",
       "resp": {
         "code": "migrating"
       },
@@ -3680,7 +3680,7 @@
     },
     {
       "id": "RD-11",
-      "title": "读回 error（account_mismatch）：失败关闭，不进引导，不新建钱包（r3bq，R439 第 2 条）",
+      "title": "读回 error（account_mismatch）：失败关闭，不进引导，不新建钱包",
       "resp": {
         "code": "error",
         "sub": "account_mismatch"
@@ -3691,7 +3691,7 @@
     },
     {
       "id": "RD-12",
-      "title": "读回 error（account_record_missing）：失败关闭，不进引导，不新建钱包（r3bq）",
+      "title": "读回 error（account_record_missing）：失败关闭，不进引导，不新建钱包",
       "resp": {
         "code": "error",
         "sub": "account_record_missing"
@@ -3791,7 +3791,7 @@
     },
     {
       "id": "PW-04",
-      "title": "写入前：记录含 PGP 公开字段（不在页面副本内）：页面拒绝发送（r3bh，D10）",
+      "title": "写入前：记录含 PGP 公开字段（不在页面副本内）：页面拒绝发送（D10）",
       "record": {
         "profiles": [
           {
@@ -3816,7 +3816,7 @@
     },
     {
       "id": "PW-05",
-      "title": "写入前：beamio 下的 PGP 公开字段与 chats 子树中的 PGP 公开字段：页面拒绝发送，报路径名（r3bm）",
+      "title": "写入前：beamio 下的 PGP 公开字段与 chats 子树中的 PGP 公开字段：页面拒绝发送，报路径名",
       "record": {
         "beamio": {
           "accountName": "n",
@@ -3965,7 +3965,7 @@
     },
     {
       "id": "WM-03",
-      "title": "首次写入携带 W 字段（privateKeyArmor 与 mnemonicPhrase；原生尚无）：接受（r3bl：privateKeyArmor 为持有的必需字段）",
+      "title": "首次写入携带 W 字段（privateKeyArmor 与 mnemonicPhrase；原生尚无）：接受（：privateKeyArmor 为持有的必需字段）",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4259,7 +4259,7 @@
     },
     {
       "id": "WM-08",
-      "title": "D6（r3ch，R628 恢复 r3bh）：W 字段所在档案的 keyID 与账户不匹配：conflict（w_account_unmatched），原生为主，页面值不写入、不回显",
+      "title": "D6（恢复）：W 字段所在档案的 keyID 与账户不匹配：conflict（w_account_unmatched），原生为主，页面值不写入、不回显",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4319,7 +4319,7 @@
     },
     {
       "id": "WM-09",
-      "title": "r3ch（R628）：首次写入（原生尚无 W），另一档案 keyID 与账户不匹配而携带 privateKeyArmor：conflict（w_account_unmatched），整条不写入",
+      "title": "首次写入（原生尚无 W），另一档案 keyID 与账户不匹配而携带 privateKeyArmor：conflict（w_account_unmatched），整条不写入",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4380,7 +4380,7 @@
     },
     {
       "id": "WM-10",
-      "title": "r3cf（AF.3 第 1 条）：mnemonicPhrase 为对象（包装形式 {ct, eoa, iv, kdf, mode, salt, v}）：bad_request，names 为 mnemonicPhrase，存储不变",
+      "title": "（AF.3 第 1 条）：mnemonicPhrase 为对象（包装形式 {ct, eoa, iv, kdf, mode, salt, v}）：bad_request，names 为 mnemonicPhrase，存储不变",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4448,7 +4448,7 @@
     },
     {
       "id": "WM-11",
-      "title": "r3cf（AF.3 第 1 条）：首次写入，profiles[*].privateKeyArmor 为数组（keyID 匹配）：bad_request，names 为 profiles[*].privateKeyArmor，不写入",
+      "title": "（AF.3 第 1 条）：首次写入，profiles[*].privateKeyArmor 为数组（keyID 匹配）：bad_request，names 为 profiles[*].privateKeyArmor，不写入",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4482,7 +4482,7 @@
     },
     {
       "id": "WM-12",
-      "title": "r3cf（AF.3 第 2 条）：privateKeyArmorWrap 下为包装形式对象（{v, mode, eoa, kdf, salt, iv, ct}）：key_shaped_content，只记路径名",
+      "title": "（AF.3 第 2 条）：privateKeyArmorWrap 下为包装形式对象（{v, mode, eoa, kdf, salt, iv, ct}）：key_shaped_content，只记路径名",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -4521,7 +4521,7 @@
     },
     {
       "id": "WM-13",
-      "title": "r3cf（AF.3 第 3 条，判定顺序）：同一写入中 privateKeyArmorWrap（键形态）与 mnemonicPhrase 对象并存：先键形态，返回 key_shaped_content，names 只列 privateKeyArmorWrap",
+      "title": "（AF.3 第 3 条，判定顺序）：同一写入中 privateKeyArmorWrap（键形态）与 mnemonicPhrase 对象并存：先键形态，返回 key_shaped_content，names 只列 privateKeyArmorWrap",
       "ctx": {
         "origin": "allowed",
         "eoa": "a1"
@@ -5125,7 +5125,7 @@
     },
     {
       "id": "IM-09",
-      "title": "首次导入：旧记录残留 beamio.pgpPublicKeyArmor、beamio.pgpPublicKeyID：导入时剥离，其余 beamio 字段保留（r3bo，R430）",
+      "title": "首次导入：旧记录残留 beamio.pgpPublicKeyArmor、beamio.pgpPublicKeyID：导入时剥离，其余 beamio 字段保留",
       "init": {
         "store": null,
         "legacy": {
@@ -5197,7 +5197,7 @@
     },
     {
       "id": "IM-10",
-      "title": "r3cj（AJ.4，R634 第 2 条）：首次导入时旧记录残留 PGP 私钥头（未剥离路径）：import_failed（outcome not_done，读回 import_not_done），旧存储保留，不写入",
+      "title": "（AJ.4）：首次导入时旧记录残留 PGP 私钥头（未剥离路径）：import_failed（outcome not_done，读回 import_not_done），旧存储保留，不写入",
       "init": {
         "store": null,
         "legacy": {
@@ -5233,7 +5233,7 @@
     },
     {
       "id": "IM-11",
-      "title": "r3lh（iOS 用例 6）：原生记录已存在，旧存储确认为空：importCode exists（不是 absent），原生记录不变，读回 ok",
+      "title": "（iOS 用例 6）：原生记录已存在，旧存储确认为空：importCode exists（不是 absent），原生记录不变，读回 ok",
       "init": {
         "store": {
           "rev": 1,
@@ -5308,7 +5308,7 @@
   "ackCases": [
     {
       "id": "AK-01",
-      "title": "读回 ok：ack 信封，数据在 result 中（r3bp，R431 第 1 条）",
+      "title": "读回 ok：ack 信封，数据在 result 中",
       "kind": "read",
       "reqId": "r1",
       "ctx": {
@@ -5350,7 +5350,7 @@
     },
     {
       "id": "AK-02",
-      "title": "全新安装：旧存储确认不存在，指针为空：absent（唯一条件，r3bp，R431 第 2 条）",
+      "title": "全新安装：旧存储确认不存在，指针为空：absent（唯一条件）",
       "kind": "read",
       "reqId": "r2",
       "ctx": {
@@ -5370,7 +5370,7 @@
     },
     {
       "id": "AK-03",
-      "title": "全新安装：旧存储确认为空，指针为空：absent（r3bp）",
+      "title": "全新安装：旧存储确认为空，指针为空：absent",
       "kind": "read",
       "reqId": "r3",
       "ctx": {
@@ -5390,7 +5390,7 @@
     },
     {
       "id": "AK-04",
-      "title": "旧存储读不到，指针为空：migrating（r3rz，U.6），不得 absent，设备标记置位（r3bp，R431 第 3 条）",
+      "title": "旧存储读不到，指针为空：migrating（U.6），不得 absent，设备标记置位",
       "kind": "read",
       "reqId": "r4",
       "ctx": {
@@ -5410,7 +5410,7 @@
     },
     {
       "id": "AK-05",
-      "title": "标记存在，之后旧存储确认不存在：absent，标记清除（r3bp）",
+      "title": "标记存在，之后旧存储确认不存在：absent，标记清除",
       "kind": "read",
       "reqId": "r5",
       "ctx": {
@@ -5431,7 +5431,7 @@
     },
     {
       "id": "AK-06",
-      "title": "标记存在，旧存储仍读不到：error，不得 absent（r3bp）",
+      "title": "标记存在，旧存储仍读不到：error，不得 absent",
       "kind": "read",
       "reqId": "r6",
       "ctx": {
@@ -5452,7 +5452,7 @@
     },
     {
       "id": "AK-07",
-      "title": "标记存在，未重新读取旧存储：error，不得 absent（r3bp）",
+      "title": "标记存在，未重新读取旧存储：error，不得 absent",
       "kind": "read",
       "reqId": "r7",
       "ctx": {
@@ -5472,7 +5472,7 @@
     },
     {
       "id": "AK-08",
-      "title": "指针存在而记录缺失，旧存储确认不存在：error（account_record_missing），不得 absent（r3bp）",
+      "title": "指针存在而记录缺失，旧存储确认不存在：error（account_record_missing），不得 absent",
       "kind": "read",
       "reqId": "r8",
       "ctx": {
@@ -5493,7 +5493,7 @@
     },
     {
       "id": "AK-09",
-      "title": "旧记录存在但导入未完成：error（import_not_done），不得 absent（r3bp）",
+      "title": "旧记录存在但导入未完成：error（import_not_done），不得 absent",
       "kind": "read",
       "reqId": "r9",
       "ctx": {
@@ -5514,7 +5514,7 @@
     },
     {
       "id": "AK-10",
-      "title": "无钥（N）且无记录，旧存储确认为空，指针为空：写入 migrating（R1520b 第 9 项统一；R1532 第 2 项；r3mg；原 ok 作废）",
+      "title": "无钥（N）且无记录，旧存储确认为空，指针为空：写入 migrating（统一；原 ok 作废）",
       "kind": "write",
       "reqId": "w1",
       "ctx": {
@@ -5541,7 +5541,7 @@
     },
     {
       "id": "AK-11",
-      "title": "写入 rev 不一致：ack 结果 conflict，含 currentRev（r3bp）",
+      "title": "写入 rev 不一致：ack 结果 conflict，含 currentRev",
       "kind": "write",
       "reqId": "w2",
       "ctx": {
@@ -5575,7 +5575,7 @@
     },
     {
       "id": "AK-12",
-      "title": "写入内容拒绝（W 在 schemaVersion 1）：ack 结果含路径名（r3bp）",
+      "title": "写入内容拒绝（W 在 schemaVersion 1）：ack 结果含路径名",
       "kind": "write",
       "reqId": "w3",
       "ctx": {
@@ -5609,7 +5609,7 @@
     },
     {
       "id": "AK-13",
-      "title": "reqId 缺失（信封级）：ok:false，reqId 为 null，error 为 bad_request（r3bp）",
+      "title": "reqId 缺失（信封级）：ok:false，reqId 为 null，error 为 bad_request",
       "kind": "write",
       "reqId": "x13",
       "ctx": {
@@ -5632,7 +5632,7 @@
     },
     {
       "id": "AK-14",
-      "title": "超过 2 MB（信封级）：ok:false，error 为 too_large（r3bp）",
+      "title": "超过 2 MB（信封级）：ok:false，error 为 too_large",
       "kind": "write",
       "reqId": "w4",
       "ctx": {
@@ -5657,7 +5657,7 @@
     },
     {
       "id": "AK-15",
-      "title": "标记存在且无记录（旧存储未确认不存在）：写入拒绝为 migrating，不首次写入（r3bp）",
+      "title": "标记存在且无记录（旧存储未确认不存在）：写入拒绝为 migrating，不首次写入",
       "kind": "write",
       "reqId": "w5",
       "ctx": {
@@ -5684,7 +5684,7 @@
     },
     {
       "id": "AK-16",
-      "title": "来源拒绝（信封级）：ok:false，error 为 origin_refused（r3bp）",
+      "title": "来源拒绝（信封级）：ok:false，error 为 origin_refused",
       "kind": "read",
       "reqId": "r16",
       "ctx": {
@@ -5700,7 +5700,7 @@
     },
     {
       "id": "AK-17",
-      "title": "记录存在、设备标记存在（旧存储不可读）：以记录为准，返回 ok（r3bq，R439 第 3 条）",
+      "title": "记录存在、设备标记存在（旧存储不可读）：以记录为准，返回 ok",
       "kind": "read",
       "reqId": "r17",
       "ctx": {
@@ -5747,7 +5747,7 @@
     },
     {
       "id": "AK-18",
-      "title": "未读取旧存储、指针为空、无标记、无记录：migrating，不进引导，稍后重试（r3bq，R439 第 1 条）",
+      "title": "未读取旧存储、指针为空、无标记、无记录：migrating，不进引导，稍后重试",
       "kind": "read",
       "reqId": "r18",
       "ctx": {
@@ -5766,7 +5766,7 @@
     },
     {
       "id": "AK-19",
-      "title": "记录存在但无与账户 EOA 匹配的档案：error（account_mismatch），不新建钱包（r3bq，R439 第 2 条）",
+      "title": "记录存在但无与账户 EOA 匹配的档案：error（account_mismatch），不新建钱包",
       "kind": "read",
       "reqId": "r19",
       "ctx": {
@@ -5798,7 +5798,7 @@
     },
     {
       "id": "AK-20",
-      "title": "记录存在，匹配档案缺 privateKeyArmor：error（needs_native_recovery）（r3bq，R432、R439 第 2 条）",
+      "title": "记录存在，匹配档案缺 privateKeyArmor：error（needs_native_recovery）",
       "kind": "read",
       "reqId": "r20",
       "ctx": {
@@ -5830,7 +5830,7 @@
     },
     {
       "id": "AK-21",
-      "title": "每次读回均剥离残留 PGP 公开字段（chatManager.pgpKey.*、beamio.pgpPublicKeyArmor/ID）；存储不改写（r3br，R441 第 2 条）",
+      "title": "每次读回均剥离残留 PGP 公开字段（chatManager.pgpKey.*、beamio.pgpPublicKeyArmor/ID）；存储不改写",
       "kind": "read",
       "reqId": "r21",
       "ctx": {
@@ -5888,7 +5888,7 @@
     },
     {
       "id": "AK-22",
-      "title": "原生创建写入亦不得携带 PGP 公开字段：页面记录不含 PGP，原生写入同样 bad_request（r3br，R441 第 1 条）",
+      "title": "原生创建写入亦不得携带 PGP 公开字段：页面记录不含 PGP，原生写入同样 bad_request",
       "kind": "write",
       "reqId": "w22",
       "ctx": {
@@ -5933,7 +5933,7 @@
     },
     {
       "id": "AK-23",
-      "title": "未完成读取（旧存储未读取）、原生记录为空：写入一律拒绝为 migrating（r3bs，R442 第 3 条）",
+      "title": "未完成读取（旧存储未读取）、原生记录为空：写入一律拒绝为 migrating",
       "kind": "write",
       "reqId": "w23",
       "ctx": {
@@ -5959,7 +5959,7 @@
     },
     {
       "id": "AK-24",
-      "title": "旧记录已找到、导入未完成：写入拒绝为 migrating，不覆盖旧数据（r3bs）",
+      "title": "旧记录已找到、导入未完成：写入拒绝为 migrating，不覆盖旧数据",
       "kind": "write",
       "reqId": "w24",
       "ctx": {
@@ -5986,7 +5986,7 @@
     },
     {
       "id": "AK-25",
-      "title": "旧存储不可读：写入拒绝为 migrating（r3bs）",
+      "title": "旧存储不可读：写入拒绝为 migrating",
       "kind": "write",
       "reqId": "w25",
       "ctx": {
@@ -6013,7 +6013,7 @@
     },
     {
       "id": "AK-26",
-      "title": "原生记录存在（读取已为 ok）：写入按 rev 正常处理（r3bs）",
+      "title": "原生记录存在（读取已为 ok）：写入按 rev 正常处理",
       "kind": "write",
       "reqId": "w26",
       "ctx": {
@@ -6052,7 +6052,7 @@
     },
     {
       "id": "AK-27",
-      "title": "指针存在而记录为空：写入拒绝为 migrating，不新建记录（r3bs）",
+      "title": "指针存在而记录为空：写入拒绝为 migrating，不新建记录",
       "kind": "write",
       "reqId": "w27",
       "ctx": {
@@ -6080,7 +6080,7 @@
     },
     {
       "id": "AK-28",
-      "title": "设备标记存在且原生记录存在：写入一律拒绝为 migrating（r3bu，R447 第 1 项，已定）",
+      "title": "设备标记存在且原生记录存在：写入一律拒绝为 migrating（已定）",
       "kind": "write",
       "reqId": "w28",
       "ctx": {
@@ -6118,7 +6118,7 @@
     },
     {
       "id": "AK-29",
-      "title": "账户 a1（有钥匙）的页面副本不含 a1 档案（A：他账户记录不可见，§25.52U.4）；旧存储确认为空：error（account_mismatch），不答 absent（iOS 用例 1；规格 §25.52U.4）。iOS 原期望 account_record_missing，与规格不符，待 PM 裁定",
+      "title": "账户 a1（有钥匙）的页面副本不含 a1 档案（A：他账户记录不可见，§25.52U.4）；旧存储确认为空：error（account_mismatch），不答 absent（iOS 用例 1；规格 §25.52U.4）。iOS 原期望 account_record_missing，与规格不符，待裁定",
       "kind": "read",
       "reqId": "r29",
       "ctx": {
@@ -6152,7 +6152,7 @@
     },
     {
       "id": "AK-30",
-      "title": "同 AK-29 的记录（无匹配档案）；指针为空；旧存储确认为空：写入按 rev 处理，返回 conflict（currentRev 1），不返回 migrating（iOS 用例 2 的写入部分；规格 §25.52W 表“原生记录存在，无匹配档案：按 rev 处理”）。iOS 原期望写入门闸关闭，与规格不符；PM 已裁定（总PM：conflict，currentRev 1，依据 r3lo：rev 校验先于 W 字段与 schema 校验）",
+      "title": "同 AK-29 的记录（无匹配档案）；指针为空；旧存储确认为空：写入按 rev 处理，返回 conflict（currentRev 1），不返回 migrating（iOS 用例 2 的写入部分；规格 §25.52W 表“原生记录存在，无匹配档案：按 rev 处理”）。iOS 原期望写入门闸关闭，与规格不符； 已裁定（：conflict，currentRev 1，依据：rev 校验先于 W 字段与 schema 校验）",
       "kind": "write",
       "reqId": "w30",
       "ctx": {
@@ -6193,7 +6193,7 @@
     },
     {
       "id": "AK-31",
-      "title": "指针为空；原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储确认为空：ok（记录优先，§25.52U.5；读到记录时指针修复置位）。iOS 原期望 account_record_missing，与规格不符，待 PM 裁定（iOS 用例 2 的读取部分，若记录为匹配账户）",
+      "title": "指针为空；原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储确认为空：ok（记录优先，§25.52U.5；读到记录时指针修复置位）。iOS 原期望 account_record_missing，与规格不符，待裁定（iOS 用例 2 的读取部分，若记录为匹配账户）",
       "kind": "read",
       "reqId": "r31",
       "ctx": {
@@ -6237,7 +6237,7 @@
     },
     {
       "id": "AK-33",
-      "title": "原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储未读取（legacy 未读）：ok，不答 migrating（记录优先；§25.52U.3 的 migrating 只用于无记录）。iOS 原期望 migrating，与规格不符，待 PM 裁定（iOS 用例 4）",
+      "title": "原生记录存在且与账户 EOA 匹配、档案有 privateKeyArmor；旧存储未读取（legacy 未读）：ok，不答 migrating（记录优先；§25.52U.3 的 migrating 只用于无记录）。iOS 原期望 migrating，与规格不符，待裁定（iOS 用例 4）",
       "kind": "read",
       "reqId": "r33",
       "ctx": {
@@ -6280,7 +6280,7 @@
     },
     {
       "id": "AK-34",
-      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（r3mh，R1539 第 (a) 项；原 account_mismatch 作废）",
+      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（第 (a) 项；原 account_mismatch 作废）",
       "kind": "read",
       "reqId": "r34",
       "ctx": {
@@ -6324,7 +6324,7 @@
     },
     {
       "id": "AK-35",
-      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（r3mh，R1539 第 (a) 项；原 account_mismatch 作废）",
+      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内有 EOA 私钥（b2）：副本内的钥计为原生钥，账户为 b2，ok（第 (a) 项；原 account_mismatch 作废）",
       "kind": "read",
       "reqId": "r35",
       "ctx": {
@@ -6368,7 +6368,7 @@
     },
     {
       "id": "AK-36",
-      "title": "设备标记存在、页面副本缺失、旧存储尚未读取（未确认）：写入一律 migrating（Y.2；与钥是否存在无关；钥存在的变体同样 migrating，按 B；对照 AK-10；r3me）",
+      "title": "设备标记存在、页面副本缺失、旧存储尚未读取（未确认）：写入一律 migrating（Y.2；与钥是否存在无关；钥存在的变体同样 migrating，按 B；对照 AK-10）",
       "kind": "write",
       "reqId": "w36",
       "ctx": {
@@ -6396,7 +6396,7 @@
     },
     {
       "id": "AK-37",
-      "title": "残留钥匙：页面副本缺失、原生钥匙存在、旧存储确认为空、指针为空，且不属于建号事务：写入 migrating（B；R1519 2；建号事务见 AK-42；r3md）",
+      "title": "残留钥匙：页面副本缺失、原生钥匙存在、旧存储确认为空、指针为空，且不属于建号事务：写入 migrating（B； 2；建号事务见 AK-42）",
       "kind": "write",
       "reqId": "w37",
       "ctx": {
@@ -6425,7 +6425,7 @@
     },
     {
       "id": "AK-38",
-      "title": "存储被锁、设备标记不存在、rev 相符、页面副本存在：write_failed，恰好一次（CH.1；W.3 次序：守卫、rev 之后；r3ls）",
+      "title": "存储被锁、设备标记不存在、rev 相符、页面副本存在：write_failed，恰好一次（CH.1；W.3 次序：守卫、rev 之后）",
       "kind": "write",
       "reqId": "w38",
       "ctx": {
@@ -6458,7 +6458,7 @@
     },
     {
       "id": "AK-39",
-      "title": "设备标记存在且存储被锁、页面副本存在、rev 相符：migrating（守卫先于存储锁定，r3lm；r3ls）",
+      "title": "设备标记存在且存储被锁、页面副本存在、rev 相符：migrating（守卫先于存储锁定）",
       "kind": "write",
       "reqId": "w39",
       "ctx": {
@@ -6492,7 +6492,7 @@
     },
     {
       "id": "AK-40",
-      "title": "账户未知，页面副本枚举失败（不完整或失败），旧存储确认为空，指针为空：读取答 error/record_unreadable，不答 absent，不答 account_mismatch（r3lz；CH.1）",
+      "title": "账户未知，页面副本枚举失败（不完整或失败），旧存储确认为空，指针为空：读取答 error/record_unreadable，不答 absent，不答 account_mismatch（CH.1）",
       "kind": "read",
       "reqId": "r40",
       "ctx": {
@@ -6514,7 +6514,7 @@
     },
     {
       "id": "AK-41",
-      "title": "账户未知，页面副本枚举失败，旧存储确认为空，指针为空：写入拒绝，返回 migrating（未完成读取；r3lz；与 r3lw 第 4 条同一读法）",
+      "title": "账户未知，页面副本枚举失败，旧存储确认为空，指针为空：写入拒绝，返回 migrating（未完成读取；与第 4 条同一读法）",
       "kind": "write",
       "reqId": "w41",
       "ctx": {
@@ -6542,7 +6542,7 @@
     },
     {
       "id": "AK-42",
-      "title": "建号事务：钥匙由本事务生成（账户 a1），钥匙生成前已取得 absent，旧存储确认为空，指针为空，页面副本缺失：首次页面副本写入放行，按 rev 落盘（r3md，R1519 3）",
+      "title": "建号事务：钥匙由本事务生成（账户 a1），钥匙生成前已取得 absent，旧存储确认为空，指针为空，页面副本缺失：首次页面副本写入放行，按 rev 落盘",
       "kind": "write",
       "reqId": "w42",
       "ctx": {
@@ -6574,7 +6574,7 @@
     },
     {
       "id": "AK-43",
-      "title": "PY.18(b)，第二账户建号本版不支持：第二个账户、指针已置位、建号事务内写入：写入答 migrating，不写入、不切换指针、不删钥、不改现有副本（r3rz 总PM 确认 (b)；原“首次写入放行”期望作废）",
+      "title": "PY.18(b)，第二账户建号本版不支持：第二个账户、指针已置位、建号事务内写入：写入答 migrating，不写入、不切换指针、不删钥、不改现有副本（ 确认 (b)；原“首次写入放行”期望作废）",
       "kind": "write",
       "reqId": "w43",
       "ctx": {
@@ -6605,7 +6605,7 @@
     },
     {
       "id": "AK-44",
-      "title": "第二个账户：指针已置位，事务外（无建号事务），钥存在而页面副本缺失：migrating（W.3 第 3 条与 B；r3me）",
+      "title": "第二个账户：指针已置位，事务外（无建号事务），钥存在而页面副本缺失：migrating（W.3 第 3 条与 B）",
       "kind": "write",
       "reqId": "w44",
       "ctx": {
@@ -6634,7 +6634,7 @@
     },
     {
       "id": "AK-46",
-      "title": "存储被锁、页面副本存在、rev 不符：write_failed（锁定先于 rev 判定，R1520b 6；r3me）",
+      "title": "存储被锁、页面副本存在、rev 不符：write_failed（锁定先于 rev 判定， 6）",
       "kind": "write",
       "reqId": "w46",
       "ctx": {
@@ -6667,7 +6667,7 @@
     },
     {
       "id": "AK-47",
-      "title": "建号事务无明确用户选择（creationTxn 为真，explicitChoice 为假）：写入 migrating；不进入建号模式（R1525 第 1 项）",
+      "title": "建号事务无明确用户选择（creationTxn 为真，explicitChoice 为假）：写入 migrating；不进入建号模式",
       "kind": "write",
       "reqId": "w47",
       "ctx": {
@@ -6698,7 +6698,7 @@
     },
     {
       "id": "AK-48",
-      "title": "PY.18(b)，第二账户建号本版不支持：建号模式（用户明确选择）但指针指向 a1（非空）：读取答 migrating，不进入建号，不删钥，不改现有副本（r3rz 总PM 裁定；原“absent”期望作废；R1525 第 3 项 A 的 absent 仅适用于指针为空）",
+      "title": "PY.18(b)，第二账户建号本版不支持：建号模式（用户明确选择）但指针指向 a1（非空）：读取答 migrating，不进入建号，不删钥，不改现有副本（ 裁定；原“absent”期望作废； A 的 absent 仅适用于指针为空）",
       "kind": "read",
       "reqId": "r48",
       "ctx": {
@@ -6736,7 +6736,7 @@
     },
     {
       "id": "AK-49",
-      "title": "建号模式：旧存储读不到：migrating（r3rz，U.6），不答 absent（未确定即不建号，R1520b 第 4 项）",
+      "title": "建号模式：旧存储读不到：migrating（U.6），不答 absent（未确定即不建号）",
       "kind": "read",
       "reqId": "r49",
       "ctx": {
@@ -6774,7 +6774,7 @@
     },
     {
       "id": "AK-50",
-      "title": "建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent（R1525 第 3 项）。判定依据：legacyFound 的 import_not_done 先于 PY.18(b) 的通用拒绝（总PM 确认 (a)，与 creationModeReadAnswer 顺序一致）",
+      "title": "建号模式：旧记录已找到、导入未完成：import_not_done，不答 absent。判定依据：legacyFound 的 import_not_done 先于 PY.18(b) 的通用拒绝（确认 (a)，与 creationModeReadAnswer 顺序一致）",
       "kind": "read",
       "reqId": "r50",
       "ctx": {
@@ -6801,7 +6801,7 @@
     },
     {
       "id": "AK-51",
-      "title": "无明确用户选择：creationMode 不生效，按既有规则读取指针账户 a1 的记录，答 ok（R1525 第 1 项）",
+      "title": "无明确用户选择：creationMode 不生效，按既有规则读取指针账户 a1 的记录，答 ok",
       "kind": "read",
       "reqId": "r51",
       "ctx": {
@@ -6850,7 +6850,7 @@
     },
     {
       "id": "AK-52",
-      "title": "建号完成（指针已切换到 a2，a2 记录存在；a1 的记录不在本存储视图中）：读取 a2 答 ok（R1525 第 2 项、第 3 项后段）",
+      "title": "建号完成（指针已切换到 a2，a2 记录存在；a1 的记录不在本存储视图中）：读取 a2 答 ok（后段）",
       "kind": "read",
       "reqId": "r52",
       "ctx": {
@@ -6898,7 +6898,7 @@
     },
     {
       "id": "AK-53",
-      "title": "建号中断（指针保持旧值 a1，残留 a2 钥，a2 页面副本缺失）：读取答 a1 的记录 ok；残留钥不改变账户（R1525 第 2 项；R1533 两钥加指针）",
+      "title": "建号中断（指针保持旧值 a1，残留 a2 钥，a2 页面副本缺失）：读取答 a1 的记录 ok；残留钥不改变账户（两钥加指针）",
       "kind": "read",
       "reqId": "r53",
       "ctx": {
@@ -6946,7 +6946,7 @@
     },
     {
       "id": "AK-54",
-      "title": "指针指向 a2 而 a2 的钥缺失（指针不得指向无页面副本的账户之外的情形，失败关闭）：error account_record_missing（R1533 第 2 条；T.6）",
+      "title": "指针指向 a2 而 a2 的钥缺失（指针不得指向无页面副本的账户之外的情形，失败关闭）：error account_record_missing（T.6）",
       "kind": "read",
       "reqId": "r54",
       "ctx": {
@@ -6971,7 +6971,7 @@
     },
     {
       "id": "AK-55",
-      "title": "指针为空、两把钥：读取 not_ready，不自动选择（R1533 第 3 条；N 第 2 项）",
+      "title": "指针为空、两把钥：读取 not_ready，不自动选择（N 第 2 项）",
       "kind": "read",
       "reqId": "r55",
       "ctx": {
@@ -6995,7 +6995,7 @@
     },
     {
       "id": "AK-56",
-      "title": "指针已指向 a1、两把钥、a1 记录存在：写入按 rev 落盘，答 ok（R1533 第 1 条）",
+      "title": "指针已指向 a1、两把钥、a1 记录存在：写入按 rev 落盘，答 ok",
       "kind": "write",
       "reqId": "w56",
       "ctx": {
@@ -7045,7 +7045,7 @@
     },
     {
       "id": "AK-57",
-      "title": "指针指向 a2 而 a2 的钥缺失：写入 migrating（失败关闭；R1533 第 2 条）",
+      "title": "指针指向 a2 而 a2 的钥缺失：写入 migrating（失败关闭）",
       "kind": "write",
       "reqId": "w57",
       "ctx": {
@@ -7075,7 +7075,7 @@
     },
     {
       "id": "AK-58",
-      "title": "指针为空、两把钥：写入 migrating（不自动选择；R1533 第 3 条）",
+      "title": "指针为空、两把钥：写入 migrating（不自动选择）",
       "kind": "write",
       "reqId": "w58",
       "ctx": {
@@ -7105,7 +7105,7 @@
     },
     {
       "id": "AK-59",
-      "title": "建号模式、钥生成之前（待建账户，尚无钥）：写入 migrating；写入须在钥生成之后（R1520b 第 4 项）",
+      "title": "建号模式、钥生成之前（待建账户，尚无钥）：写入 migrating；写入须在钥生成之后",
       "kind": "write",
       "reqId": "w59",
       "ctx": {
@@ -7138,7 +7138,7 @@
     },
     {
       "id": "AK-60",
-      "title": "指针指向 a2，a2 钥存在而页面副本缺失：读取 migrating，不答 absent（B；R1520b 第 2 项）",
+      "title": "指针指向 a2，a2 钥存在而页面副本缺失：读取 error account_record_missing，不答 absent、不答 migrating（：第 57(1) 项取代 25.52Y.110(b) 的读路径 migrating；U.6 第 1 行）",
       "kind": "read",
       "reqId": "r60",
       "ctx": {
@@ -7158,13 +7158,14 @@
         "reqId": "r60",
         "ok": true,
         "result": {
-          "code": "migrating"
+          "code": "error",
+          "sub": "account_record_missing"
         }
       }
     },
     {
       "id": "AK-61",
-      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内无 EOA 私钥：无账户，error account_mismatch，不答 absent（原 AK-34 的意义，r3mh）",
+      "title": "无原生钥；指针为空；旧存储确认为空；壳存储的副本内无 EOA 私钥：无账户，error account_mismatch，不答 absent（原 AK-34 的意义）",
       "kind": "read",
       "reqId": "r61",
       "ctx": {
@@ -7198,7 +7199,7 @@
     },
     {
       "id": "AK-62",
-      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内无 EOA 私钥：error account_mismatch，不答 account_record_missing（原 AK-35 的意义，r3mh）",
+      "title": "无原生钥；指针已置位；旧存储确认不存在；壳存储的副本内无 EOA 私钥：error account_mismatch，不答 account_record_missing（原 AK-35 的意义）",
       "kind": "read",
       "reqId": "r62",
       "ctx": {
@@ -7232,7 +7233,7 @@
     },
     {
       "id": "AK-63",
-      "title": "建号事务（有明确选择、钥生成前已取得 absent）但设备标记存在：写入 migrating；同会话建号被拒绝，直到下次启动或读取器重读（R1520b 第 4 项；Y.13 第 6 项；r3mh）",
+      "title": "建号事务（有明确选择、钥生成前已取得 absent）但设备标记存在：写入 migrating；同会话建号被拒绝，直到下次启动或读取器重读（Y.13 第 6 项）",
       "kind": "write",
       "reqId": "w63",
       "ctx": {
@@ -7264,7 +7265,7 @@
     },
     {
       "id": "CL-01",
-      "title": "清除身份完成后（钥与页面副本已清除，指针已清除）：读取为 absent（clean 状态；R1545 第 (a) 项）",
+      "title": "清除身份完成后（钥与页面副本已清除，指针已清除）：读取为 absent（clean 状态； 第 (a) 项）",
       "kind": "read",
       "reqId": "r_cl1",
       "ctx": {
@@ -7339,7 +7340,7 @@
     },
     {
       "id": "CL-02",
-      "title": "清除身份中断（钥与页面副本已清除，指针仍置位，清除阻塞仍在）：读取为 account_record_missing（失败关闭）；重做完成后指针已清除，读取为 absent（R1545 第 (a) 项，第 (b) 项的重做）",
+      "title": "清除身份中断（钥与页面副本已清除，指针仍置位，清除阻塞仍在）：读取为 account_record_missing（失败关闭）；重做完成后指针已清除，读取为 absent（ 第 (a) 项，第 (b) 项的重做）",
       "steps": [
         {
           "ctx": {
@@ -7373,7 +7374,7 @@
   "nativeCreateCases": [
     {
       "id": "NC-01",
-      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，无 SDK 记录：create，进入第一屏（r3bv，R454；r3jw 改注册表范围）",
+      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，无 SDK 记录：create，进入第一屏（改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7391,7 +7392,7 @@
     },
     {
       "id": "NC-02",
-      "title": "G0，account 为 BeamioTag，现行注册表返回有效非零地址：already_bound，打开 nativeRecoveryOpen，不生成 EOA（r3bv；r3jw 改注册表范围）",
+      "title": "G0，account 为 BeamioTag，现行注册表返回有效非零地址：already_bound，打开 nativeRecoveryOpen，不生成 EOA（改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7409,7 +7410,7 @@
     },
     {
       "id": "NC-03",
-      "title": "G0，account 为 EOA，SDK 既有记录存在：already_bound，不生成 EOA（r3bv）",
+      "title": "G0，account 为 EOA，SDK 既有记录存在：already_bound，不生成 EOA",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7427,7 +7428,7 @@
     },
     {
       "id": "NC-04",
-      "title": "G0，绑定查询失败：lookup_unavailable，不生成 EOA，页面稍后重试（r3bv，失败关闭）",
+      "title": "G0，绑定查询失败：lookup_unavailable，不生成 EOA，页面稍后重试（失败关闭）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7445,7 +7446,7 @@
     },
     {
       "id": "NC-05",
-      "title": "G1（设备已有钥）：not_available，门控不变，与绑定无关（r3bv）",
+      "title": "G1（设备已有钥）：not_available，门控不变，与绑定无关",
       "input": {
         "gate": "G1",
         "hasAccount": true,
@@ -7461,7 +7462,7 @@
     },
     {
       "id": "NC-06",
-      "title": "G2（已锁定）：not_available，门控不变；已绑定也不改变门控（r3bv）",
+      "title": "G2（已锁定）：not_available，门控不变；已绑定也不改变门控",
       "input": {
         "gate": "G2",
         "hasAccount": true,
@@ -7477,7 +7478,7 @@
     },
     {
       "id": "NC-07",
-      "title": "G0，缺少 account：bad_request（account 必填，无法确认绑定，不生成 EOA）（r3bv）",
+      "title": "G0，缺少 account：bad_request（account 必填，无法确认绑定，不生成 EOA）",
       "input": {
         "gate": "G0",
         "hasAccount": false,
@@ -7492,7 +7493,7 @@
     },
     {
       "id": "NC-08",
-      "title": "G0，account 为格式错误的 EOA：bad_request（r3bv）",
+      "title": "G0，account 为格式错误的 EOA：bad_request",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7508,7 +7509,7 @@
     },
     {
       "id": "NC-09",
-      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，但 SDK 既有记录存在（防御性）：already_bound（r3bv；r3jw 改注册表范围）",
+      "title": "G0，account 为 BeamioTag，现行注册表确认无记录，但 SDK 既有记录存在（防御性）：already_bound（改注册表范围）",
       "input": {
         "gate": "G0",
         "hasAccount": true,
@@ -7574,7 +7575,7 @@
     },
     {
       "id": "BL-02",
-      "title": "EOA：getAccount 明确 revert 且完整错误数据恰为 0xfaba8ebe（无参 AccountNotFound），无 SDK 记录：明确无记录，create（R1455 选项 B）",
+      "title": "EOA：getAccount 明确 revert 且完整错误数据恰为 0xfaba8ebe（无参 AccountNotFound），无 SDK 记录：明确无记录，create（ 选项 B）",
       "ctx": {
         "path": "creation",
         "queryKind": "eoa",
@@ -7698,7 +7699,7 @@
     },
     {
       "id": "BL-05",
-      "title": "EOA：精确 AccountNotFound，但钱包私钥记录存在（R1199）：already_bound（正向来源优先）",
+      "title": "EOA：精确 AccountNotFound，但钱包私钥记录存在：already_bound（正向来源优先）",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -8457,7 +8458,7 @@
     },
     {
       "id": "BL-24",
-      "title": "EOA：eth_call 原始错误数据恰为 0xfaba8ebe（本地夹具 F-06 同源，按原始数据判定，r3kc）：明确无记录，create",
+      "title": "EOA：eth_call 原始错误数据恰为 0xfaba8ebe（本地夹具 F-06 同源，按原始数据判定）：明确无记录，create",
       "ctx": {
         "path": "creation",
         "queryKind": "eoa",
@@ -8786,7 +8787,7 @@
     },
     {
       "id": "BL-32",
-      "title": "BeamioTag：RPC 错误，设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（G1、G2 已在查询前被门控，本输入在创建路径不可达）",
+      "title": "BeamioTag：RPC 错误，设备有钱包私钥记录：tag 路径不以设备记录为正向来源，lookup_unavailable（G1、G2 已在查询前被门控，本输入在创建路径不可达）",
       "ctx": {
         "path": "lookup",
         "queryKind": "tag",
@@ -8866,7 +8867,7 @@
     },
     {
       "id": "BL-34",
-      "title": "BeamioTag：单次读取超时（合计 9 秒，未超上限），设备有钱包私钥记录：tag 路径不以设备记录为正向来源（R1483），lookup_unavailable（本输入在创建路径不可达）",
+      "title": "BeamioTag：单次读取超时（合计 9 秒，未超上限），设备有钱包私钥记录：tag 路径不以设备记录为正向来源，lookup_unavailable（本输入在创建路径不可达）",
       "ctx": {
         "path": "lookup",
         "queryKind": "tag",
@@ -8948,7 +8949,7 @@
     },
     {
       "id": "BL-36",
-      "title": "EOA：revert 选择器相同但带参数（0xfaba8ebe 加 32 字节零字）：不是明确无记录，lookup_unavailable（R1455）",
+      "title": "EOA：revert 选择器相同但带参数（0xfaba8ebe 加 32 字节零字）：不是明确无记录，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -8987,7 +8988,7 @@
     },
     {
       "id": "BL-37",
-      "title": "EOA：revert 错误数据为空：不是明确无记录，lookup_unavailable（R1455）",
+      "title": "EOA：revert 错误数据为空：不是明确无记录，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9026,7 +9027,7 @@
     },
     {
       "id": "BL-38",
-      "title": "EOA：成功返回但 exists 为假、账户名为空（不可验证，非 AccountNotFound revert）：lookup_unavailable，不判无绑定（R1455）",
+      "title": "EOA：成功返回但 exists 为假、账户名为空（不可验证，非 AccountNotFound revert）：lookup_unavailable，不判无绑定",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9065,7 +9066,7 @@
     },
     {
       "id": "BL-39",
-      "title": "BeamioTag：revert 错误数据恰为 0xfaba8ebe：tag 路径不适用 getAccount 的无记录规则，lookup_unavailable（R1455）",
+      "title": "BeamioTag：revert 错误数据恰为 0xfaba8ebe：tag 路径不适用 getAccount 的无记录规则，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "tag",
@@ -9104,7 +9105,7 @@
     },
     {
       "id": "BL-40",
-      "title": "EOA：原始错误数据 0xfaba8ebe（小写，无参）：明确无记录，create（r3kc）",
+      "title": "EOA：原始错误数据 0xfaba8ebe（小写，无参）：明确无记录，create",
       "ctx": {
         "path": "creation",
         "queryKind": "eoa",
@@ -9150,7 +9151,7 @@
     },
     {
       "id": "BL-41",
-      "title": "EOA：原始错误数据 0xFABA8EBE（大写，无参）：小写化后精确匹配，明确无记录，create（r3kc，F2）",
+      "title": "EOA：原始错误数据 0xFABA8EBE（大写，无参）：小写化后精确匹配，明确无记录，create（F2）",
       "ctx": {
         "path": "creation",
         "queryKind": "eoa",
@@ -9196,7 +9197,7 @@
     },
     {
       "id": "BL-42",
-      "title": "EOA：原始错误数据为 0xfaba8ebe 加 32 字节零字（选择器相同但带参数）：lookup_unavailable，不进入创建（r3kc）",
+      "title": "EOA：原始错误数据为 0xfaba8ebe 加 32 字节零字（选择器相同但带参数）：lookup_unavailable，不进入创建",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9235,7 +9236,7 @@
     },
     {
       "id": "BL-43",
-      "title": "EOA：原始错误数据为 0x（空字节）：lookup_unavailable，不进入创建（r3kc）",
+      "title": "EOA：原始错误数据为 0x（空字节）：lookup_unavailable，不进入创建",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9274,7 +9275,7 @@
     },
     {
       "id": "BL-44",
-      "title": "EOA：原始错误数据缺失（空字符串）：lookup_unavailable，不进入创建（r3kc）",
+      "title": "EOA：原始错误数据缺失（空字符串）：lookup_unavailable，不进入创建",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9313,7 +9314,7 @@
     },
     {
       "id": "BL-45",
-      "title": "EOA：原始错误数据为 Error(string) 0x08c379a0 加字符串编码：其它选择器，lookup_unavailable（r3kc）",
+      "title": "EOA：原始错误数据为 Error(string) 0x08c379a0 加字符串编码：其它选择器，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9352,7 +9353,7 @@
     },
     {
       "id": "BL-46",
-      "title": "EOA：原始错误数据为 0xfaba8eb（7 位十六进制，截断选择器）：lookup_unavailable（r3kc）",
+      "title": "EOA：原始错误数据为 0xfaba8eb（7 位十六进制，截断选择器）：lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9391,7 +9392,7 @@
     },
     {
       "id": "BL-47",
-      "title": "EOA：原始错误数据为 0xfaba8ebf（末位不同）：其它选择器，lookup_unavailable（r3kc）",
+      "title": "EOA：原始错误数据为 0xfaba8ebf（末位不同）：其它选择器，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9430,7 +9431,7 @@
     },
     {
       "id": "BL-48",
-      "title": "EOA：原始错误数据为 0xfaba8ebe00（选择器加一个字节）：带参数，lookup_unavailable（r3kc）",
+      "title": "EOA：原始错误数据为 0xfaba8ebe00（选择器加一个字节）：带参数，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -9469,7 +9470,7 @@
     },
     {
       "id": "BL-49",
-      "title": "BeamioTag：原始错误数据恰为 0xfaba8ebe：tag 路径不适用，lookup_unavailable（r3kc）",
+      "title": "BeamioTag：原始错误数据恰为 0xfaba8ebe：tag 路径不适用，lookup_unavailable",
       "ctx": {
         "path": "lookup",
         "queryKind": "tag",
@@ -9508,7 +9509,7 @@
     },
     {
       "id": "BL-50",
-      "title": "r3kj（F-3）：创建路径 G0，设备存在 K 而无钱包私钥，tag 路径零地址：lookup_unavailable（fail-closed，待 PM 裁定）",
+      "title": "（F-3）：创建路径 G0，设备存在 K 而无钱包私钥，tag 路径零地址：lookup_unavailable（fail-closed，待裁定）",
       "ctx": {
         "path": "creation_G0",
         "queryKind": "tag",
@@ -9548,7 +9549,7 @@
     },
     {
       "id": "BL-51",
-      "title": "r3kj（F-3）：创建路径 G0，设备存在 K，tag 路径有效非零地址：already_bound（注册表正向优先）",
+      "title": "（F-3）：创建路径 G0，设备存在 K，tag 路径有效非零地址：already_bound（注册表正向优先）",
       "ctx": {
         "path": "creation_G0",
         "queryKind": "tag",
@@ -9588,7 +9589,7 @@
     },
     {
       "id": "BL-52",
-      "title": "r3kk（审阅席 c71ae9b F-3）：tag 路径注册表 RPC 失败，设备可读（K 与钱包私钥记录存在）：lookup_unavailable，设备状态不改变结果（HH.2 固定读法）",
+      "title": "（ c71ae9b F-3）：tag 路径注册表 RPC 失败，设备可读（K 与钱包私钥记录存在）：lookup_unavailable，设备状态不改变结果（HH.2 固定读法）",
       "ctx": {
         "path": "lookup",
         "queryKind": "tag",
@@ -9629,7 +9630,7 @@
     },
     {
       "id": "BL-53",
-      "title": "r3rz（§25.52Z.3 第 7 项）：tag 路径，注册表零地址，仅非 ACTIVE 槽位有 K，创建路径 G0：kPresent 计入，lookup_unavailable（失败关闭），不进入创建，不作正向来源",
+      "title": "（§25.52Z.3 第 7 项）：tag 路径，注册表零地址，仅非 ACTIVE 槽位有 K，创建路径 G0：kPresent 计入，lookup_unavailable（失败关闭），不进入创建，不作正向来源",
       "ctx": {
         "path": "creation_G0",
         "queryKind": "tag",
@@ -9670,7 +9671,7 @@
     },
     {
       "id": "BL-54",
-      "title": "r3rz（§25.52Z.3 第 7 项）：EOA 路径，精确无记录，仅非 ACTIVE 槽位有该账户的 K：已绑定（同一账户记录），打开 nativeRecoveryOpen",
+      "title": "（§25.52Z.3 第 7 项）：EOA 路径，精确无记录，仅非 ACTIVE 槽位有该账户的 K：已绑定（同一账户记录），打开 nativeRecoveryOpen",
       "ctx": {
         "path": "lookup",
         "queryKind": "eoa",
@@ -11243,13 +11244,13 @@
     },
     {
       "id": "TS-06",
-      "title": "no_key 且 kPresent 为真，读取成功：confirmed_none（kPresent 不阻挡 onboarding，Y.107）",
+      "title": "no_key 且 kPresent 为真，读取成功：unknown（不判无账户，仅原生恢复入口；Y.155）",
       "input": {
         "ws": "no_key",
         "kPresent": true,
         "snapshotUnknown": false
       },
-      "expect": "confirmed_none"
+      "expect": "unknown"
     }
   ],
   "onboardingCompatCases": [
@@ -11869,7 +11870,7 @@
   "newUserCases": [
     {
       "id": "NU-01",
-      "title": "G1（not_ready）且持久化 eoa 存在：existing_local（不 regenerate，R1484；EOA 路径不参与）",
+      "title": "G1（not_ready）且持久化 eoa 存在：existing_local（不 regenerate，；EOA 路径不参与）",
       "input": {
         "identity": {
           "type": "ack",
@@ -11966,7 +11967,7 @@
     },
     {
       "id": "NU-05",
-      "title": "确认无本地身份，tag 路径 revert 恰为 0xfaba8ebe：tag 路径不适用无记录规则，unavailable（R1455）",
+      "title": "确认无本地身份，tag 路径 revert 恰为 0xfaba8ebe：tag 路径不适用无记录规则，unavailable",
       "input": {
         "identity": {
           "type": "ack",
@@ -12041,7 +12042,7 @@
     },
     {
       "id": "NU-08",
-      "title": "R1472 第 1 项：no_key 且 kPresent 为真，tag 路径零地址：unavailable，不查注册表",
+      "title": "no_key 且 kPresent 为真，tag 路径零地址：unavailable，不查注册表",
       "input": {
         "identity": {
           "type": "ack",
@@ -12064,7 +12065,7 @@
     },
     {
       "id": "NU-09",
-      "title": "R1472 第 1 项：no_key 且 kPresent 为真，tag 路径非零地址：unavailable（不得判为既有账户）",
+      "title": "no_key 且 kPresent 为真，tag 路径非零地址：unavailable（不得判为既有账户）",
       "input": {
         "identity": {
           "type": "ack",
@@ -12087,7 +12088,7 @@
     },
     {
       "id": "NU-10",
-      "title": "R1475 (a)：no_key 且 kPresent 假，持久化 eoa 存在：unavailable，不查注册表",
+      "title": "(a)：no_key 且 kPresent 假，持久化 eoa 存在：unavailable，不查注册表",
       "input": {
         "identity": {
           "type": "ack",
@@ -12110,7 +12111,7 @@
     },
     {
       "id": "NU-11",
-      "title": "R1475 (b)：G1 且持久化 eoa 存在，EOA 路径精确无记录：existing_local（登记结果不改变分支）",
+      "title": "(b)：G1 且持久化 eoa 存在，EOA 路径精确无记录：existing_local（登记结果不改变分支）",
       "input": {
         "identity": {
           "type": "ack",
@@ -12132,7 +12133,7 @@
     },
     {
       "id": "NU-12",
-      "title": "R1475 (b)：G1 且持久化 eoa 存在，EOA 路径 RPC 错误：existing_local",
+      "title": "(b)：G1 且持久化 eoa 存在，EOA 路径 RPC 错误：existing_local",
       "input": {
         "identity": {
           "type": "ack",
@@ -12176,7 +12177,7 @@
     },
     {
       "id": "NU-14",
-      "title": "R1473：G1 且无持久化 eoa（残留）：guide_recovery，不 newUser，不 RegenerateUser，不覆盖",
+      "title": "G1 且无持久化 eoa（残留）：guide_recovery，不 newUser，不 RegenerateUser，不覆盖",
       "input": {
         "identity": {
           "type": "ack",
@@ -12198,7 +12199,7 @@
     },
     {
       "id": "NU-15",
-      "title": "R1484：本地不可读（bad_request），持久化 eoa 存在，EOA 路径有效非空：unavailable（不可判定，不 regenerate，不写入）",
+      "title": "本地不可读（bad_request），持久化 eoa 存在，EOA 路径有效非空：unavailable（不可判定，不 regenerate，不写入）",
       "input": {
         "identity": {
           "type": "ack",
@@ -12268,7 +12269,7 @@
     },
     {
       "id": "NU-18",
-      "title": "R1473：G1 且无持久化 eoa，注册表精确无记录：guide_recovery（不走 newUser）",
+      "title": "G1 且无持久化 eoa，注册表精确无记录：guide_recovery（不走 newUser）",
       "input": {
         "identity": {
           "type": "ack",
@@ -12357,7 +12358,7 @@
     },
     {
       "id": "NU-22",
-      "title": "R1484：no_key（kPresent 假）且持久化 eoa 存在，EOA 路径有效非空：unavailable（原 regenerate 已撤销；regenerate 仅在确认无本地身份后考虑）",
+      "title": "no_key（kPresent 假）且持久化 eoa 存在，EOA 路径有效非空：unavailable（原 regenerate 已撤销；regenerate 仅在确认无本地身份后考虑）",
       "input": {
         "identity": {
           "type": "ack",
@@ -12380,7 +12381,7 @@
     },
     {
       "id": "NU-23",
-      "title": "R1475 (a)：no_key（kPresent 假）且持久化 eoa 存在，EOA 路径精确无记录：unavailable，不走 newUser",
+      "title": "(a)：no_key（kPresent 假）且持久化 eoa 存在，EOA 路径精确无记录：unavailable，不走 newUser",
       "input": {
         "identity": {
           "type": "ack",
@@ -12439,7 +12440,7 @@
     },
     {
       "id": "NU-26",
-      "title": "R1481 O-A：no_key 缺少 kPresent，无持久化 eoa，tag 路径零地址：unavailable，不得落入 tag 路径",
+      "title": "O-A：no_key 缺少 kPresent，无持久化 eoa，tag 路径零地址：unavailable，不得落入 tag 路径",
       "input": {
         "identity": {
           "type": "ack",
@@ -12461,7 +12462,7 @@
     },
     {
       "id": "NU-27",
-      "title": "R1481 O-A：no_key 的 kPresent 为字符串，无持久化 eoa，tag 路径非零地址：unavailable",
+      "title": "O-A：no_key 的 kPresent 为字符串，无持久化 eoa，tag 路径非零地址：unavailable",
       "input": {
         "identity": {
           "type": "ack",
@@ -12520,7 +12521,7 @@
     },
     {
       "id": "LS-03",
-      "title": "no_key 缺少 kPresent：不可读（fail-closed，r3kf）",
+      "title": "no_key 缺少 kPresent：不可读（fail-closed）",
       "input": {
         "resp": {
           "type": "ack",
@@ -12535,7 +12536,7 @@
     },
     {
       "id": "LS-04",
-      "title": "no_key 的 kPresent 为字符串 \"true\"：不可读（非布尔，r3kf）",
+      "title": "no_key 的 kPresent 为字符串 \"true\"：不可读（非布尔）",
       "input": {
         "resp": {
           "type": "ack",
@@ -12673,7 +12674,7 @@
     },
     {
       "id": "LS-13",
-      "title": "r3ki（F-3）：G1 not_ready 附加 kPresent（非必须字段）：仍为有钥（positive），附加字段不改变结果",
+      "title": "（F-3）：G1 not_ready 附加 kPresent（非必须字段）：仍为有钥（positive），附加字段不改变结果",
       "input": {
         "resp": {
           "type": "ack",
@@ -12689,7 +12690,7 @@
     },
     {
       "id": "LS-14",
-      "title": "r3ki（F-3）：G2 结果 ok 附加 kPresent：仍为有钥（positive），kPresent 不改变结果",
+      "title": "（F-3）：G2 结果 ok 附加 kPresent：仍为有钥（positive），kPresent 不改变结果",
       "input": {
         "resp": {
           "type": "ack",
@@ -12983,7 +12984,7 @@
     },
     {
       "id": "RS-07",
-      "title": "r3kj（F-6）：链上为有效空结果，备份存在且可用：present（已有数据，不重建）",
+      "title": "（F-6）：链上为有效空结果，备份存在且可用：present（已有数据，不重建）",
       "input": {
         "chainRead": "ok_empty",
         "backup": "present"
@@ -12992,7 +12993,7 @@
     },
     {
       "id": "RS-08",
-      "title": "r3kj（F-6）：链上为有效空结果，备份存在但不可解码：present（备份已有，不重建，需用户处理）",
+      "title": "（F-6）：链上为有效空结果，备份存在但不可解码：present（备份已有，不重建，需用户处理）",
       "input": {
         "chainRead": "ok_empty",
         "backup": "undecodable"
@@ -13143,7 +13144,7 @@
     },
     {
       "id": "RB-06",
-      "title": "r3kk（G-A）：确认缺失，登记确认失败（未提交，或回执与链上读取确认未登记）：unavailable_retry，回滚本次新生成的本地材料（链上无记录），不覆盖、不删除既有记录",
+      "title": "（G-A）：确认缺失，登记确认失败（未提交，或回执与链上读取确认未登记）：unavailable_retry，回滚本次新生成的本地材料（链上无记录），不覆盖、不删除既有记录",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13171,7 +13172,7 @@
     },
     {
       "id": "RB-07",
-      "title": "r3kj（F-1）：登记成功后，公布路由（步骤 4）失败：retry_idempotent，不回滚本地新钥（链上已有该公钥，回滚会留下无私钥登记），幂等重试步骤 3、4",
+      "title": "（F-1）：登记成功后，公布路由（步骤 4）失败：retry_idempotent，不回滚本地新钥（链上已有该公钥，回滚会留下无私钥登记），幂等重试步骤 3、4",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13227,7 +13228,7 @@
     },
     {
       "id": "RB-09",
-      "title": "r3kj（F-1）：登记成功后 mailbox 步骤（步骤 3）失败：retry_idempotent，保留本地新钥，不回滚",
+      "title": "（F-1）：登记成功后 mailbox 步骤（步骤 3）失败：retry_idempotent，保留本地新钥，不回滚",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13255,7 +13256,7 @@
     },
     {
       "id": "RB-10",
-      "title": "r3kk（G-A）：登记结果未知（交易已提交，回执丢失或超时）；重试前读链：链上无该公钥记录：retry_idempotent，不回滚，保留本地新钥，用同一新钥重新提交登记",
+      "title": "（G-A）：登记结果未知（交易已提交，回执丢失或超时）；重试前读链：链上无该公钥记录：retry_idempotent，不回滚，保留本地新钥，用同一新钥重新提交登记",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13284,7 +13285,7 @@
     },
     {
       "id": "RB-11",
-      "title": "r3kk（G-A）、r3kl（L-1）：登记结果未知；重试前读链：链上已有本次新公钥：视为登记成功，继续步骤 3、4（动作 resume_steps_3_4，不重新生成，不回滚）",
+      "title": "（G-A）、（L-1）：登记结果未知；重试前读链：链上已有本次新公钥：视为登记成功，继续步骤 3、4（动作 resume_steps_3_4，不重新生成，不回滚）",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13313,7 +13314,7 @@
     },
     {
       "id": "RB-12",
-      "title": "r3kk（G-A）：登记结果未知；重试前读链：链上为其它公钥（已有数据）：no_rebuild，不覆盖，本地新钥不使用、不删除，待人工处理",
+      "title": "（G-A）：登记结果未知；重试前读链：链上为其它公钥（已有数据）：no_rebuild，不覆盖，本地新钥不使用、不删除，待人工处理",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13342,7 +13343,7 @@
     },
     {
       "id": "RB-13",
-      "title": "r3kk（G-A）：登记确认成功后备份写入失败：retry_idempotent，不回滚，保留本地新钥，重试备份写入",
+      "title": "（G-A）：登记确认成功后备份写入失败：retry_idempotent，不回滚，保留本地新钥，重试备份写入",
       "input": {
         "restore": {
           "chainRead": "ok_empty",
@@ -13373,7 +13374,7 @@
   "refreshCases": [
     {
       "id": "RF-01",
-      "title": "发送前：每次都拉取（r3kj，F-2）；路由未变则用当前路由",
+      "title": "发送前：每次都拉取（F-2）；路由未变则用当前路由",
       "input": {
         "trigger": "pre_send",
         "cacheAgeMin": 2,
@@ -13488,7 +13489,7 @@
   "backoffCases": [
     {
       "id": "RF-08",
-      "title": "r3kj（F-7）：拉取失败后第 1 次退避：30 秒",
+      "title": "（F-7）：拉取失败后第 1 次退避：30 秒",
       "input": {
         "attempt": 1
       },
@@ -13496,7 +13497,7 @@
     },
     {
       "id": "RF-09",
-      "title": "r3kj（F-7）：第 2 次退避：2 分钟（120 秒）",
+      "title": "（F-7）：第 2 次退避：2 分钟（120 秒）",
       "input": {
         "attempt": 2
       },
@@ -13504,7 +13505,7 @@
     },
     {
       "id": "RF-10",
-      "title": "r3kj（F-7）：第 3 次退避：10 分钟（600 秒）",
+      "title": "（F-7）：第 3 次退避：10 分钟（600 秒）",
       "input": {
         "attempt": 3
       },
@@ -13512,7 +13513,7 @@
     },
     {
       "id": "RF-11",
-      "title": "r3kj（F-7）：第 5 次退避保持上限 10 分钟（600 秒）",
+      "title": "（F-7）：第 5 次退避保持上限 10 分钟（600 秒）",
       "input": {
         "attempt": 5
       },
@@ -13522,7 +13523,7 @@
   "transportCases": [
     {
       "id": "TP-01",
-      "title": "Android，已注入 window.BeamioShellRecord，来源允许：window（r3bw，R460）",
+      "title": "Android，已注入 window.BeamioShellRecord，来源允许：window",
       "input": {
         "platform": "android",
         "windowInjected": true,
@@ -13536,7 +13537,7 @@
     },
     {
       "id": "TP-02",
-      "title": "Android，已注入，来源不允许：origin_refused，不回退（r3bw）",
+      "title": "Android，已注入，来源不允许：origin_refused，不回退",
       "input": {
         "platform": "android",
         "windowInjected": true,
@@ -13550,7 +13551,7 @@
     },
     {
       "id": "TP-03",
-      "title": "Android，未注入，聊天模块通道存在：not_supported，Android 不接受聊天通道（r3bw）",
+      "title": "Android，未注入，聊天模块通道存在：not_supported，Android 不接受聊天通道",
       "input": {
         "platform": "android",
         "windowInjected": false,
@@ -13564,7 +13565,7 @@
     },
     {
       "id": "TP-04",
-      "title": "iOS，已注入，来源允许：window（注入时优先）（r3bw）",
+      "title": "iOS，已注入，来源允许：window（注入时优先）",
       "input": {
         "platform": "ios",
         "windowInjected": true,
@@ -13578,7 +13579,7 @@
     },
     {
       "id": "TP-05",
-      "title": "iOS，已注入，来源不允许：origin_refused，不回退到聊天通道（r3bw）",
+      "title": "iOS，已注入，来源不允许：origin_refused，不回退到聊天通道",
       "input": {
         "platform": "ios",
         "windowInjected": true,
@@ -13592,7 +13593,7 @@
     },
     {
       "id": "TP-06",
-      "title": "iOS，未注入，聊天模块通道，来源允许：chat（回退，r3bw）",
+      "title": "iOS，未注入，聊天模块通道，来源允许：chat（回退）",
       "input": {
         "platform": "ios",
         "windowInjected": false,
@@ -13606,7 +13607,7 @@
     },
     {
       "id": "TP-07",
-      "title": "iOS，未注入，聊天模块通道，来源不允许：origin_refused（同一来源校验，r3bw）",
+      "title": "iOS，未注入，聊天模块通道，来源不允许：origin_refused（同一来源校验）",
       "input": {
         "platform": "ios",
         "windowInjected": false,
@@ -13620,7 +13621,7 @@
     },
     {
       "id": "TP-08",
-      "title": "浏览器（非壳）：无通道，none，不走 shellRecord（r3bw）",
+      "title": "浏览器（非壳）：无通道，none，不走 shellRecord",
       "input": {
         "platform": "browser",
         "windowInjected": false,
@@ -13634,7 +13635,7 @@
     },
     {
       "id": "TP-09",
-      "title": "Android，未注入，无聊天通道：not_supported（r3bw）",
+      "title": "Android，未注入，无聊天通道：not_supported",
       "input": {
         "platform": "android",
         "windowInjected": false,
@@ -13648,7 +13649,7 @@
     },
     {
       "id": "TP-10",
-      "title": "iOS，未注入，无聊天通道：none（r3bw）",
+      "title": "iOS，未注入，无聊天通道：none",
       "input": {
         "platform": "ios",
         "windowInjected": false,
@@ -13664,7 +13665,7 @@
   "sdkAcceptCases": [
     {
       "id": "SA-01",
-      "title": "Android SDK 接受 window 入口（r3bw）",
+      "title": "Android SDK 接受 window 入口",
       "input": {
         "platform": "android",
         "channel": "window"
@@ -13673,7 +13674,7 @@
     },
     {
       "id": "SA-02",
-      "title": "Android SDK 不接受聊天模块入口（r3bw）",
+      "title": "Android SDK 不接受聊天模块入口",
       "input": {
         "platform": "android",
         "channel": "chat"
@@ -13682,7 +13683,7 @@
     },
     {
       "id": "SA-03",
-      "title": "iOS SDK 接受 window 入口（r3bw）",
+      "title": "iOS SDK 接受 window 入口",
       "input": {
         "platform": "ios",
         "channel": "window"
@@ -13691,7 +13692,7 @@
     },
     {
       "id": "SA-04",
-      "title": "iOS SDK 接受聊天模块入口，并执行同一来源校验（r3bw）",
+      "title": "iOS SDK 接受聊天模块入口，并执行同一来源校验",
       "input": {
         "platform": "ios",
         "channel": "chat"
@@ -13702,7 +13703,7 @@
   "qaHookCases": [
     {
       "id": "HK-01",
-      "title": "QA 构建：测试钩子存在，用于造出记录缺私钥状态（r3bw，R460）",
+      "title": "QA 构建：测试钩子存在，用于造出记录缺私钥状态",
       "input": {
         "build": "qa"
       },
@@ -13712,7 +13713,7 @@
     },
     {
       "id": "HK-02",
-      "title": "生产构建：测试钩子不存在（r3bw，R460）",
+      "title": "生产构建：测试钩子不存在",
       "input": {
         "build": "production"
       },
@@ -13722,7 +13723,7 @@
     },
     {
       "id": "HK-03",
-      "title": "测试钩子不经任何桥暴露（window、聊天模块、页面桥），QA 构建亦然（r3bw）",
+      "title": "测试钩子不经任何桥暴露（window、聊天模块、页面桥），QA 构建亦然",
       "input": {
         "build": "qa",
         "channel": "window"
@@ -13735,7 +13736,7 @@
   "replyCases": [
     {
       "id": "RP-01",
-      "title": "回复经注入对象的 onmessage 到达，reqId 匹配，ack 信封 ok:true：resolve（r3bx，R471）",
+      "title": "回复经注入对象的 onmessage 到达，reqId 匹配，ack 信封 ok:true：resolve",
       "events": [
         {
           "t": 0,
@@ -13769,7 +13770,7 @@
     },
     {
       "id": "RP-02",
-      "title": "回复的 reqId 未知：忽略（r3bx）",
+      "title": "回复的 reqId 未知：忽略",
       "events": [
         {
           "t": 0,
@@ -13798,7 +13799,7 @@
     },
     {
       "id": "RP-03",
-      "title": "重复回复：首个生效，之后忽略（r3bx）",
+      "title": "重复回复：首个生效，之后忽略",
       "events": [
         {
           "t": 0,
@@ -13849,7 +13850,7 @@
     },
     {
       "id": "RP-04",
-      "title": "超时 10 秒无回复：reject timeout；超时后的迟到回复忽略（r3bx）",
+      "title": "超时 10 秒无回复：reject timeout；超时后的迟到回复忽略",
       "events": [
         {
           "t": 0,
@@ -13888,7 +13889,7 @@
     },
     {
       "id": "RP-05",
-      "title": "回复不是 ack 信封（如旧的 shellRecordResult 事件）：忽略（r3bx）",
+      "title": "回复不是 ack 信封（如旧的 shellRecordResult 事件）：忽略",
       "events": [
         {
           "t": 0,
@@ -13914,7 +13915,7 @@
     },
     {
       "id": "RP-06",
-      "title": "ack 信封 ok:false：reject，error 为原生代码（如 origin_refused）（r3bx）",
+      "title": "ack 信封 ok:false：reject，error 为原生代码（如 origin_refused）",
       "events": [
         {
           "t": 0,
@@ -13942,7 +13943,7 @@
     },
     {
       "id": "RP-07",
-      "title": "畸形回复（ok:true 缺 result）：忽略，待定的请求仍可被后续有效回复完成（r3bx）",
+      "title": "畸形回复（ok:true 缺 result）：忽略，待定的请求仍可被后续有效回复完成",
       "events": [
         {
           "t": 0,
@@ -13989,14 +13990,14 @@
     },
     {
       "id": "RP-08a",
-      "title": "写入超时后、未完成读取：不得再次写入（blocked）（r3bx，§25.52AB.4）",
+      "title": "写入超时后、未完成读取：不得再次写入（blocked）（§25.52AB.4）",
       "expect": "blocked",
       "kind": "mayWrite",
       "readCompletedSinceTimeout": false
     },
     {
       "id": "RP-08b",
-      "title": "写入超时后，已完成读取（ok 或 absent）：允许写入（allowed）（r3bx）",
+      "title": "写入超时后，已完成读取（ok 或 absent）：允许写入（allowed）",
       "expect": "allowed",
       "kind": "mayWrite",
       "readCompletedSinceTimeout": true
@@ -14005,7 +14006,7 @@
   "originBoundaryCases": [
     {
       "id": "OR-01",
-      "title": "原生边界：来源不允许：不处理，回复 origin_refused，恰好一次（r3ei，§25.52CJ.3；取代 r3bx 的不回复）",
+      "title": "原生边界：来源不允许：不处理，回复 origin_refused，恰好一次（§25.52CJ.3；取代的不回复）",
       "input": {
         "allowed": false,
         "reqIdValid": true
@@ -14023,7 +14024,7 @@
     },
     {
       "id": "OR-02",
-      "title": "原生边界：来源允许，reqId 有效：处理，恰好一次回复（r3bx）",
+      "title": "原生边界：来源允许，reqId 有效：处理，恰好一次回复",
       "input": {
         "allowed": true,
         "reqIdValid": true
@@ -14036,7 +14037,7 @@
     },
     {
       "id": "OR-03",
-      "title": "原生边界：来源允许，reqId 无效：bad_request，reqId 为 null，恰好一次回复（r3bx）",
+      "title": "原生边界：来源允许，reqId 无效：bad_request，reqId 为 null，恰好一次回复",
       "input": {
         "allowed": true,
         "reqIdValid": false
@@ -14056,7 +14057,7 @@
   "nativeDeleteCases": [
     {
       "id": "DL-01",
-      "title": "消息删除：只删被选中的一条（墓碑 state=1），同会话其它消息与其它会话不变（r3by，§25.52AC.2）",
+      "title": "消息删除：只删被选中的一条（墓碑 state=1），同会话其它消息与其它会话不变（§25.52AC.2）",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "d1",
@@ -14120,7 +14121,7 @@
     },
     {
       "id": "DL-02",
-      "title": "消息删除：消息不存在：ok，deleted:false，不改动（幂等）（r3by）",
+      "title": "消息删除：消息不存在：ok，deleted:false，不改动（幂等）",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "d2",
@@ -14184,7 +14185,7 @@
     },
     {
       "id": "DL-03",
-      "title": "消息删除：已是墓碑：ok，deleted:false（幂等）（r3by）",
+      "title": "消息删除：已是墓碑：ok，deleted:false（幂等）",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "d3",
@@ -14228,7 +14229,7 @@
     },
     {
       "id": "DL-04",
-      "title": "会话删除：只删被选中的会话；其它会话及其中新增的消息保留（r3by，§25.52AC.3）",
+      "title": "会话删除：只删被选中的会话；其它会话及其中新增的消息保留（§25.52AC.3）",
       "cmd": {
         "type": "historyDeleteConversation",
         "reqId": "d4",
@@ -14284,7 +14285,7 @@
     },
     {
       "id": "DL-05",
-      "title": "会话删除：会话不存在：ok，deleted:false（幂等）（r3by）",
+      "title": "会话删除：会话不存在：ok，deleted:false（幂等）",
       "cmd": {
         "type": "historyDeleteConversation",
         "reqId": "d5",
@@ -14347,7 +14348,7 @@
     },
     {
       "id": "DL-06",
-      "title": "消息删除：convKey 不合法：bad_request，报路径名 convKey（内容级）（r3by）",
+      "title": "消息删除：convKey 不合法：bad_request，报路径名 convKey（内容级）",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "d6",
@@ -14413,7 +14414,7 @@
     },
     {
       "id": "DL-07",
-      "title": "消息删除：messageId 为空：bad_request，报路径名 messageId（r3by）",
+      "title": "消息删除：messageId 为空：bad_request，报路径名 messageId",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "d7",
@@ -14479,7 +14480,7 @@
     },
     {
       "id": "DL-08",
-      "title": "reqId 不合法（信封级）：ok:false，reqId 为 null，error 为 bad_request（r3by）",
+      "title": "reqId 不合法（信封级）：ok:false，reqId 为 null，error 为 bad_request",
       "cmd": {
         "type": "historyDeleteMessage",
         "reqId": "",
@@ -14540,7 +14541,7 @@
     },
     {
       "id": "DL-09",
-      "title": "会话删除：convKey 不合法：bad_request，报路径名 convKey（r3by）",
+      "title": "会话删除：convKey 不合法：bad_request，报路径名 convKey",
       "cmd": {
         "type": "historyDeleteConversation",
         "reqId": "d9",
@@ -14607,7 +14608,7 @@
   "pageRecordDeleteCases": [
     {
       "id": "DL-10a",
-      "title": "页面记录会话条目删除：写入 rev 与当前不符（陈旧副本）：conflict，不覆盖（r3by，§25.52AC.4）",
+      "title": "页面记录会话条目删除：写入 rev 与当前不符（陈旧副本）：conflict，不覆盖（§25.52AC.4）",
       "rec": {
         "rev": 3,
         "chats": [
@@ -14643,7 +14644,7 @@
     },
     {
       "id": "DL-10b",
-      "title": "页面记录会话条目删除：从新鲜读回（rev 相符）构造：ok，rev 加一，仅删该会话条目（r3by）",
+      "title": "页面记录会话条目删除：从新鲜读回（rev 相符）构造：ok，rev 加一，仅删该会话条目",
       "rec": {
         "rev": 3,
         "chats": [
@@ -14677,7 +14678,7 @@
   "gateExceptionCases": [
     {
       "id": "GX-01",
-      "title": "升级用户：G0 下已有导入副本（W 已加密保存）：shellRecordRead 按记录正常返回 ok（r3bz，R480 第 1 条）",
+      "title": "升级用户：G0 下已有导入副本：shellRecordRead 返回 ok，剥离 privateKeyArmor、mnemonicPhrase、recoveryWords，其余字段照返（Y.157 = Y.151 第 2 项，Y.153 批准；取代的携带）",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14714,18 +14715,16 @@
             "schemaVersion": 2,
             "profiles": [
               {
-                "keyID": "a1",
-                "privateKeyArmor": "EOA"
+                "keyID": "a1"
               }
-            ],
-            "mnemonicPhrase": "M"
+            ]
           }
         }
       }
     },
     {
       "id": "GX-02",
-      "title": "升级用户：G0 下已有导入副本：shellRecordWrite 按 rev 正常写入，返回 ok 与新 rev（r3bz，R480 第 1 条）",
+      "title": "升级用户：G0 下已有导入副本：shellRecordWrite 按 rev 正常写入，返回 ok 与新 rev",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14773,7 +14772,7 @@
     },
     {
       "id": "GX-03",
-      "title": "全新设备：G0 无副本，旧存储确认不存在，指针为空：absent（r3bz，R480 第 2 条）",
+      "title": "全新设备：G0 无副本，旧存储确认不存在，指针为空：absent",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14799,7 +14798,7 @@
     },
     {
       "id": "GX-04",
-      "title": "G0 无副本，旧存储读不到，指针为空：migrating（r3rz，U.6），不返回 no_key 或 absent（r3bz，R480 第 3 条）",
+      "title": "G0 无副本，旧存储读不到，指针为空：migrating（U.6），不返回 no_key 或 absent",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14825,7 +14824,7 @@
     },
     {
       "id": "GX-05",
-      "title": "G0 无副本，读取器尚未完成读取：migrating（窗口通道与聊天通道一致，不得以 absent 应答）（r3bz，R480 第 4 条）",
+      "title": "G0 无副本，读取器尚未完成读取：migrating（窗口通道与聊天通道一致，不得以 absent 应答）",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14850,7 +14849,7 @@
     },
     {
       "id": "GX-06",
-      "title": "G0 无副本，其它原生命令：no_key（§25.26.4c 不变，r3bz）",
+      "title": "G0 无副本，其它原生命令：no_key（§25.26.4c 不变）",
       "input": {
         "gate": "G0",
         "copy": false
@@ -14864,7 +14863,7 @@
     },
     {
       "id": "GX-07",
-      "title": "G0 有副本，其它原生命令：仍为 no_key（例外只适用于 shellRecord，r3bz，R480 第 5 条）",
+      "title": "G0 有副本，其它原生命令：仍为 no_key（例外只适用于 shellRecord）",
       "input": {
         "gate": "G0",
         "copy": true
@@ -14878,7 +14877,7 @@
     },
     {
       "id": "GX-08",
-      "title": "G1（已有原生钥记录，未 init）：shellRecordRead 仍为 not_ready（r3bz）",
+      "title": "G1（已有原生钥记录，未 init）：shellRecordRead 仍为 not_ready",
       "input": {
         "origin": "allowed",
         "gate": "G1",
@@ -14912,7 +14911,7 @@
     },
     {
       "id": "GX-09",
-      "title": "来源不符：先于一切判定，origin_refused，不处理（即使 G0 有副本）（r3bz，R480 第 3 条）",
+      "title": "来源不符：先于一切判定，origin_refused，不处理（即使 G0 有副本）",
       "input": {
         "origin": "refused",
         "gate": "G0",
@@ -14946,7 +14945,7 @@
     },
     {
       "id": "GX-10a",
-      "title": "窗口通道：全新设备，读取完成后 absent，判定与聊天通道相同（r3bz，R480 第 4 条）",
+      "title": "窗口通道：全新设备，读取完成后 absent，判定与聊天通道相同",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -14973,7 +14972,7 @@
     },
     {
       "id": "GX-10b",
-      "title": "聊天通道：全新设备，读取完成后 absent，判定与窗口通道相同（r3bz，R480 第 4 条）",
+      "title": "聊天通道：全新设备，读取完成后 absent，判定与窗口通道相同",
       "input": {
         "origin": "allowed",
         "gate": "G0",
@@ -15495,7 +15494,7 @@
     },
     {
       "id": "E-09",
-      "title": "标记存在，用户点“建立新账户”并确认：建号被拒绝（create_refused），不进入建号模式（R1520b 第 4 项）",
+      "title": "标记存在，用户点“建立新账户”并确认：建号被拒绝（create_refused），不进入建号模式",
       "input": {
         "state": "residual",
         "marker": true,
@@ -15510,7 +15509,7 @@
     },
     {
       "id": "E-10",
-      "title": "清除身份完成后（clean 状态），无用户选择：仅显示入口页，不建号（R1545；Y.18）",
+      "title": "清除身份完成后（clean 状态），无用户选择：仅显示入口页，不建号（Y.18）",
       "input": {
         "state": "clean"
       },
@@ -15522,7 +15521,7 @@
     },
     {
       "id": "E-11",
-      "title": "清除身份中断（指针仍置位、无钥）：残留状态，恢复为默认主入口；清除在重做中完成（R1545；Y.18）",
+      "title": "清除身份中断（指针仍置位、无钥）：残留状态，恢复为默认主入口；清除在重做中完成（Y.18）",
       "input": {
         "state": "residual",
         "pointerSet": true
@@ -15537,7 +15536,7 @@
   "legacyReaderCases": [
     {
       "id": "LR-01",
-      "title": "目录不存在：absent（唯一条件之一，R1554）",
+      "title": "目录不存在：absent（唯一条件之一）",
       "input": {
         "dirExists": false
       },
@@ -15548,7 +15547,7 @@
     },
     {
       "id": "LR-02",
-      "title": "目录可读且无任何条目（确认为空）：absent（R1554）",
+      "title": "目录可读且无任何条目（确认为空）：absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15583,7 +15582,7 @@
     },
     {
       "id": "LR-04",
-      "title": "文件存在但不可读：unreadable，不得 absent（R1554）",
+      "title": "文件存在但不可读：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15604,7 +15603,7 @@
     },
     {
       "id": "LR-05",
-      "title": "CRC 校验失败：unreadable，不得 absent（R1554）",
+      "title": "CRC 校验失败：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15625,7 +15624,7 @@
     },
     {
       "id": "LR-06",
-      "title": "文件截断：unreadable，不得 absent（R1554）",
+      "title": "文件截断：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15646,7 +15645,7 @@
     },
     {
       "id": "LR-07",
-      "title": "有效记录为 0（文件存在，内容无有效记录）：unreadable，不得 absent（R1554）",
+      "title": "有效记录为 0（文件存在，内容无有效记录）：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15667,7 +15666,7 @@
     },
     {
       "id": "LR-08",
-      "title": "列目录失败（目录存在但不能列出）：unreadable，不得 absent（R1554）",
+      "title": "列目录失败（目录存在但不能列出）：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": false
@@ -15679,7 +15678,7 @@
     },
     {
       "id": "LR-09",
-      "title": "一个有效文件加一个 CRC 失败的文件：unreadable（任一文件不可读即整体不可读，不得 found，不得 absent）（R1554）",
+      "title": "一个有效文件加一个 CRC 失败的文件：unreadable（任一文件不可读即整体不可读，不得 found，不得 absent）",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15707,7 +15706,7 @@
     },
     {
       "id": "LR-10",
-      "title": "零字节文件（无有效记录）：unreadable，不得 absent（R1554）",
+      "title": "零字节文件（无有效记录）：unreadable，不得 absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15727,7 +15726,7 @@
     },
     {
       "id": "LR-12",
-      "title": "可读、可核验的旧存储，只含其他文档（无钱包记录）：absent（确认为空，即无旧钱包；R1558）",
+      "title": "可读、可核验的旧存储，只含其他文档（无钱包记录）：absent（确认为空，即无旧钱包）",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15749,7 +15748,7 @@
     },
     {
       "id": "LR-15",
-      "title": "只含其他文档（生产形态：无法区分钱包记录与其他文档）：found，读取为 import_not_done，不覆盖钱包，不判为无账户（R1733 B8 保守口径）",
+      "title": "只含其他文档（生产形态：无法区分钱包记录与其他文档）：found，读取为 import_not_done，不覆盖钱包，不判为无账户（ 保守口径）",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15771,7 +15770,7 @@
     },
     {
       "id": "LR-13",
-      "title": "可读、可核验的旧存储，钱包 init 记录已删除（两个文件，均无钱包记录）：absent（R1558）",
+      "title": "可读、可核验的旧存储，钱包 init 记录已删除（两个文件，均无钱包记录）：absent",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15801,7 +15800,7 @@
     },
     {
       "id": "LR-16",
-      "title": "钱包 init 记录已删除（生产形态：无法区分）：found，读取为 import_not_done，不覆盖钱包（R1733 B8）",
+      "title": "钱包 init 记录已删除（生产形态：无法区分）：found，读取为 import_not_done，不覆盖钱包",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15830,7 +15829,7 @@
     },
     {
       "id": "LR-14",
-      "title": "只含其他文档的旧存储，但另一文件 CRC 失败：unreadable（损坏优先；R1558）",
+      "title": "只含其他文档的旧存储，但另一文件 CRC 失败：unreadable（损坏优先）",
       "input": {
         "dirExists": true,
         "listOk": true,
@@ -15858,7 +15857,7 @@
     },
     {
       "id": "LR-11",
-      "title": "Plan N 导入读取器：CRC 失败时同样为 unreadable，导入不开始，不得按 absent 处理（R1554，同一判定）",
+      "title": "Plan N 导入读取器：CRC 失败时同样为 unreadable，导入不开始，不得按 absent 处理（同一判定）",
       "input": {
         "dirExists": true,
         "listOk": true,

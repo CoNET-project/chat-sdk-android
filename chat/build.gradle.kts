@@ -4,7 +4,10 @@ plugins {
 }
 
 group = "network.conet"
-version = "0.2.23"
+// A QA-only artifact may carry a suffix (-PchatArtifactSuffix=qa-diag): its coordinates and VERSION_NAME then differ from the formal version.
+// Without the property the version is the formal one, unchanged.
+val chatArtifactSuffix: String? = project.findProperty("chatArtifactSuffix")?.toString()?.takeIf { it.isNotBlank() }
+version = if (chatArtifactSuffix == null) "0.2.28" else "0.2.28-$chatArtifactSuffix"
 
 android {
     namespace = "network.conet.chat"
@@ -19,24 +22,24 @@ android {
 
     defaultConfig {
         minSdk = 24
-        // QA switch (R559): -PchatDisableHistoryWrites=true builds a candidate whose history writes nothing (no fragment, index or
+        // QA switch : -PchatDisableHistoryWrites=true builds a candidate whose history writes nothing (no fragment, index or
         // pointer upload). Without the property the value is true, as before: production behaviour does not change.
-        // Only the value "true" switches writes off: -PchatDisableHistoryWrites=false (or any other value) keeps them on (R565 review).
+        // Only the value "true" switches writes off: -PchatDisableHistoryWrites=false (or any other value) keeps them on (review).
         buildConfigField(
             "boolean",
             "HISTORY_WRITES",
             (project.findProperty("chatDisableHistoryWrites")?.toString() != "true").toString(),
         )
-        // QA-only capability (spec 25.52Y.44, PM R2042): the SDK declares wallet.credential.v1 only in a QA candidate built with
+        // QA-only capability (spec 25.52Y.44): the SDK declares wallet.credential.v1 only in a QA candidate built with
         // -PchatWalletCredentialQa=true. Without the property the bit is not declared (production unchanged).
         buildConfigField(
             "boolean",
             "WALLET_CREDENTIAL_QA",
             (project.findProperty("chatWalletCredentialQa")?.toString() == "true").toString(),
         )
-        // identity.native-keys.v1 is declared by every build (project owner decision, 2026-11-16). It has no BuildConfig switch: the former
+        // identity.native-keys.v1 is declared by every build (2026-11-16). It has no BuildConfig switch: the former
         // QA-only property chatNativeKeysQa no longer changes hello.
-        // The artifact version as a build constant (spec 25.52Y.45, PM R2054): the SDK reports it as hello.sdkVersion; a test compares them.
+        // The artifact version as a build constant (spec 25.52Y.45): the SDK reports it as hello.sdkVersion; a test compares them.
         buildConfigField("String", "VERSION_NAME", "\"${project.version}\"")
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

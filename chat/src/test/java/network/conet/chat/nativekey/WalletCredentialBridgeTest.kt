@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * walletCredential on the window channel (spec 25.52Y.38 第 2、3、4、6 项; 25.52Y.44; PM R2042, R2048). The SDK's own declaration is checked
+ * walletCredential on the window channel (spec 25.52Y.38 第 2、3、4、6 项; 25.52Y.44). The SDK's own declaration is checked
  * first; a build that does not declare wallet.credential.v1 answers not_trusted without reading the vault. The phrase is answered with a
  * hardware-wrapped blob that unseals only for its account. A key-only account is unavailable (W-L5). No eoaPrivateKey, no PGP.
  */

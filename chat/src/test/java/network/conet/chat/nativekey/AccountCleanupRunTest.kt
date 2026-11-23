@@ -55,7 +55,7 @@ class AccountCleanupRunTest {
     private fun snapshot(): Map<String, String> = history.listFiles().orEmpty().associate { it.name to it.readText() }
 
     private fun runWith(
-        adapters: List<CleanupAdapter> = listOf(HistoryDirCleanup(history)),
+        adapters: List<CleanupAdapter> = listOf(HistoryDirCleanup(history) { listOf(oldEoa, oldEoa2) }),
         fields: List<String> = listOf("accountKey", "idempotencyKey"),
         accountKey: String? = newKey,
         idem: String? = "idem-1",
@@ -129,7 +129,7 @@ class AccountCleanupRunTest {
 
         val out = runWith(readable = false)
 
-        assertEquals(AccountCleanupOld.NOT_AVAILABLE, out.code)
+        assertEquals(AccountCleanupOld.NOT_READY, out.code)
         assertEquals(before, snapshot())
     }
 
@@ -165,7 +165,7 @@ class AccountCleanupRunTest {
         setUp()
         confirmation.record(newKey, 1L)
         val stuck = ChatHistoryFileNames.localName(oldEoa2)
-        val adapters = listOf(FailingRemoval(HistoryDirCleanup(history)) { it.name.endsWith(stuck) })
+        val adapters = listOf(FailingRemoval(HistoryDirCleanup(history) { listOf(oldEoa, oldEoa2) }) { it.name.endsWith(stuck) })
 
         val out = runWith(adapters = adapters)
 
@@ -183,7 +183,7 @@ class AccountCleanupRunTest {
         setUp()
         confirmation.record(newKey, 1L)
         val stuck = ChatHistoryFileNames.localName(oldEoa2)
-        runWith(adapters = listOf(FailingRemoval(HistoryDirCleanup(history)) { it.name.endsWith(stuck) }))
+        runWith(adapters = listOf(FailingRemoval(HistoryDirCleanup(history) { listOf(oldEoa, oldEoa2) }) { it.name.endsWith(stuck) }))
         val remainingBefore = snapshot()
 
         val out = runWith(idem = "idem-1")
@@ -236,7 +236,7 @@ class AccountCleanupRunTest {
         setUp()
         confirmation.record(newKey, 1L)
 
-        val out = runWith(adapters = listOf(HistoryDirCleanup(history), UnenumeratedStore("page copies")))
+        val out = runWith(adapters = listOf(HistoryDirCleanup(history) { listOf(oldEoa, oldEoa2) }, UnenumeratedStore("page copies")))
 
         assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
         assertTrue(out.cleanupPending)
@@ -277,5 +277,48 @@ class AccountCleanupRunTest {
         assertEquals(ChatHistoryFileNames.localName(oldEoa), ChatHistoryFileNames.localName(oldEoa.uppercase().replaceFirst("0X", "0x")))
         assertEquals(ChatHistoryFileNames.pendingName(oldEoa), ChatHistoryFileNames.pendingName(oldEoa.uppercase().replaceFirst("0X", "0x")))
         assertFalse(ChatHistoryFileNames.localName(oldEoa) == ChatHistoryFileNames.localName(newEoa))
+    }
+
+    /** Exact mapping (v182 §202): a history file that merely looks like one of ours, but is not a name of a known old account, is kept and counted. */
+    @Test
+    fun unknownHistoryNamesAreKeptUnattributedAndNeverDeletedByTheirName() {
+        setUp()
+        confirmation.record(newKey, 1L)
+        File(history, "chat-local-v1-AAAAAAAAAAAAAAAAAAAAAA.sqlite").writeText("unknown")
+        File(history, "history-pending-0000000000000000.bin").writeText("unknown")
+        val before = snapshot()
+
+        val out = runWith()
+
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertEquals("the two unattributed files are kept and counted", 2, out.retainedUnattributed)
+        assertEquals("unknown", File(history, "chat-local-v1-AAAAAAAAAAAAAAAAAAAAAA.sqlite").readText())
+        assertEquals("unknown", File(history, "history-pending-0000000000000000.bin").readText())
+        for (name in newFiles()) assertEquals("$name is kept unchanged", before[name], File(history, name).readText())
+    }
+
+    /** Owner unknown (no known old account, e.g. the vault is unreadable): nothing is owned, so nothing is deleted. */
+    @Test
+    fun withNoKnownOldAccountNothingIsDeleted() {
+        setUp()
+        confirmation.record(newKey, 1L)
+        val before = snapshot()
+
+        val out = runWith(adapters = listOf(HistoryDirCleanup(history) { emptyList() }))
+
+        assertEquals(AccountCleanupOld.OK, out.code)
+        assertEquals(before, snapshot())
+    }
+
+    /** Skipped cleanup (no native confirmation): every file, old and new, stays. */
+    @Test
+    fun withoutConfirmationEverythingStaysWhenTheCleanupIsSkipped() {
+        setUp()
+        val before = snapshot()
+
+        val out = runWith()
+
+        assertEquals(AccountCleanupOld.NOT_CONFIRMED, out.code)
+        assertEquals(before, snapshot())
     }
 }

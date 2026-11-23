@@ -67,7 +67,7 @@ class NativeMnemonicStoreTest {
         val files = NativeTestFiles()
         val other = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art"
         assertEquals(Import.BAD_KEY, vault(NativeTestWrap(), files).importMnemonicKey(eoa, keyOf(phrase), other))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     /** A failed phrase-record write rolls the whole import back: no record, no phrase, no marker. */
@@ -76,7 +76,7 @@ class NativeMnemonicStoreTest {
         val files = NativeTestFiles().apply { failWrite = NativeWalletVault.MNEM }
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
         assertTrue(v.state() is State.NoKey)
     }
 
@@ -86,7 +86,7 @@ class NativeMnemonicStoreTest {
         val files = NativeTestFiles().apply { failWrite = NativeWalletVault.MARK }
         val v = vault(NativeTestWrap(), files)
         assertEquals(Import.STORE_FAILED, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     /** A readback that does not confirm the key removes everything the call wrote. */
@@ -96,7 +96,7 @@ class NativeMnemonicStoreTest {
         val wrap = NativeTestWrap().apply { openOverride = { ByteArray(32) { 7 } } }
         val v = vault(wrap, files)
         assertEquals(Import.READBACK_FAILED, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     /** A phrase record that is replaced after the import breaks the marker: the vault is locked and the phrase is unavailable. */
@@ -117,6 +117,8 @@ class NativeMnemonicStoreTest {
 
     /** A phrase record with no key record and no intent is existing data: it is kept and the account is locked (spec §25.52Y.42 第 4 項 (d)). */
     @Test
+    //  (owner, with WK-26a): a phrase record that reads but has no clear EOA and no phrase is readable-but-invalid, so it counts
+    // as no phrase (record_missing). It is not a read failure; the bytes are kept. The unknown rule covers records that cannot be read or opened.
     fun orphanPhraseRecordWithoutIntentIsKept() {
         val files = NativeTestFiles()
         files.map[NativeWalletVault.MNEM] = "{\"record\":1}".toByteArray(Charsets.UTF_8)
@@ -132,7 +134,7 @@ class NativeMnemonicStoreTest {
         val v = vault(NativeTestWrap(), files)
         v.importMnemonicKey(eoa, keyOf(phrase), phrase)
         v.forget()
-        assertTrue(files.map.isEmpty())
+        assertKeptOnlyIsolated(files)
     }
 
     /** walletCredential: G1 and G2 with a stored phrase answer the mnemonic; G0 is no_key. */
@@ -187,7 +189,7 @@ class NativeMnemonicStoreTest {
     }
 
     /**
-     * Upgrade keeps the wallet (PM R1865; spec 25.52Y.40 第 5 项 U-A1, U-A2): the files written before this change (a key record and its
+     * Upgrade keeps the wallet (spec 25.52Y.40 第 5 项 U-A1, U-A2): the files written before this change (a key record and its
      * marker) are read by the new code byte for byte unchanged, the address is the same, and no phrase is generated.
      */
     @Test
@@ -224,7 +226,7 @@ class NativeMnemonicStoreTest {
         for ((name, bytes) in before) assertArrayEquals("$name changed on restart", bytes, files.map[name])
     }
 
-    /** W-L5 (spec 25.52Y.42 第 8 项 (8e), PM R1895): a key-only account answers walletCredential unavailable; no key and no {eoa}. */
+    /** W-L5 (spec 25.52Y.42 第 8 项 (8e)): a key-only account answers walletCredential unavailable; no key and no {eoa}. */
     @Test
     fun keyOnlyAccountWalletCredentialIsUnavailableAndGivesNoKey() {
         val v = vault(NativeTestWrap(), NativeTestFiles())
@@ -262,7 +264,7 @@ class NativeMnemonicStoreTest {
     }
 
     /**
-     * U-A17 (PM R1878): a key record with no marker and no intent is a wallet from before the marker rule. It is usable as it is:
+     * U-A17: a key record with no marker and no intent is a wallet from before the marker rule. It is usable as it is:
      * the record opens and its address matches. Nothing is deleted or written, and the file bytes do not change.
      */
     @Test
@@ -305,8 +307,11 @@ class NativeMnemonicStoreTest {
         assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
         val v = vault(wrap, files)
         assertEquals(eoa, (v.state() as State.Ready).eoa)
-        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        // 25.52Y.125: a read never removes the leftover intent; the next write operation does.
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
         assertTrue(v.mnemonicOf() is MnemonicRead.Stored)
+        assertEquals(Import.ALREADY_PRESENT, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
+        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
         // 2026-11-16 (plan 1): a committed record and a leftover intent keep the record; only the intent goes (the record is never rolled back).
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
         assertTrue(files.map.containsKey(NativeWalletVault.MNEM))
@@ -321,14 +326,17 @@ class NativeMnemonicStoreTest {
         files.crashAfterWrite = null
         assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
         val v = vault(wrap, files)
-        assertTrue(v.state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.REC))
-        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
+        // 25.52Y.125: the read judges the unfinished import unknown and removes nothing.
+        assertTrue(v.state() is State.Locked)
+        assertTrue(files.map.containsKey(NativeWalletVault.REC))
+        assertTrue(files.map.containsKey(NativeWalletVault.INTENT))
+        // The next write operation rolls the import back, then writes.
         assertEquals(Import.OK, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
+        assertTrue(files.map.containsKey(NativeWalletVault.AUDIT))
     }
 
     /**
-     * Native create (PM R1872, spec 25.52Y.42 第 2 (b) 项, r3nz 第 2 项): the account is made from the phrase its entropy spells. The phrase
+     * Native create (spec 25.52Y.42 第 2 (b) 项, r3nz 第 2 项): the account is made from the phrase its entropy spells. The phrase
      * derives the account's EOA m/44'/60'/0'/0/0 (so the stored phrase restores the key); the phrase is sealed; the result holds only the address.
      */
     @Test
@@ -401,7 +409,7 @@ class NativeMnemonicStoreTest {
 
     /**
      * T-IU6 (r3nz): an existing key record with no marker, no intent and no commit is usable, and nothing is changed. The intent-pending
-     * case above locks the whole vault (one account per vault), so this case is checked on its own; a combined case needs a ruling.
+     * case above locks the whole vault (one account per vault), so this case is checked on its own; a combined case is not covered here.
      */
     @Test
     fun existingUnmarkedKeyRecordIsUsableWithNoIntentAndNoCommit() {
@@ -425,7 +433,7 @@ class NativeMnemonicStoreTest {
     fun aFailedRollbackReportsRollbackPendingAndRetriesOnTheNextStart() {
         val files = NativeTestFiles().apply {
             failWrite = NativeWalletVault.MNEM
-            failDelete = NativeWalletVault.REC
+            failRename = { it == NativeWalletVault.REC }  // the kept move of the record is what can fail now (no deletion)
         }
         val wrap = NativeTestWrap()
         val v = vault(wrap, files)
@@ -437,11 +445,10 @@ class NativeMnemonicStoreTest {
         assertEquals(Import.RECORD_EXISTS, v.importMnemonicKey(eoa, keyOf(phrase), phrase))
         // The removal works now; the next start rolls back.
         files.failWrite = null
-        files.failDelete = null
+        files.failRename = null
         val next = vault(wrap, files)
-        assertTrue(next.state() is State.NoKey)
-        assertFalse(files.map.containsKey(NativeWalletVault.INTENT))
-        assertFalse(files.map.containsKey(NativeWalletVault.REC))
+        // 25.52Y.125: a read stays unknown; the next write operation finishes the rollback, then writes.
+        assertTrue(next.state() is State.Locked)
         assertEquals(Import.OK, next.importMnemonicKey(eoa, keyOf(phrase), phrase))
     }
 }

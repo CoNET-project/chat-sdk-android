@@ -1,0 +1,72 @@
+{
+  "vectorSet": "accountCleanupOld",
+  "version": "v3",
+  "supersedes": "VECTOR-accountCleanupOld-v2-2026-11-21.json 的 BR2-05、BR2-06 pending 形状（其余条目沿用 v2）",
+  "shape": "accountCleanupAck：所有结果为 {type:'ack', reqId, ok:<bool>, error?:<码>, result:{cleanupPending:<bool>, keptUnattributed:<整数>}}；ok:true 时无 error；ok:false 时含 error（闭集）；result 在所有结果中都存在（拒绝时 cleanupPending:false，keptUnattributed:0）。",
+  "closedErrorCodes": [
+    "not_ready",
+    "account_mismatch",
+    "not_confirmed",
+    "clear_incomplete",
+    "bad_request",
+    "confirmation_not_native",
+    "key_over_bridge_refused",
+    "not_available"
+  ],
+  "source": "Android SDK AccountCleanupWiring.kt:47–56（ 及其后）",
+  "cases": [
+    {
+      "id": "BR3-05-gate-not_ready",
+      "state": {
+        "gate": "locked"
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true
+    },
+    {
+      "id": "BR3-06-item-clear_incomplete",
+      "state": {
+        "gate": "passed",
+        "deletionItemRead": "failed"
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "clear_incomplete",
+        "result": {
+          "cleanupPending": true,
+          "keptUnattributed": "<integer>"
+        }
+      }
+    },
+    {
+      "id": "BR3-07-success",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "deletionComplete": true
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": "<integer>"
+        }
+      },
+      "note": "ok 时无 error 字段。"
+    }
+  ],
+  "status": "新文件（v3）；v2 原件不改；现以 Android 实际形状为准"
+}

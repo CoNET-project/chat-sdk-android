@@ -18,6 +18,8 @@ object BeamioConetChatCallSignal {
         val sessionId: String,
         /** `voice_call_reject_v1` only: `busy` when `reason == "busy"`, else `declined`. */
         val rejectReason: String? = null,
+        /** The signal object exactly as found (its own fields, for example `callerSignature` and `from`), as compact JSON. Null only when not known. */
+        val signalJson: String? = null,
     )
 
     val KINDS: Map<String, String> = mapOf(
@@ -80,7 +82,7 @@ object BeamioConetChatCallSignal {
                     } else {
                         null
                     }
-                    return Signal(kind, type, callId, sessionId, rejectReason)
+                    return Signal(kind, type, callId, sessionId, rejectReason, signalJson = value.toString())
                 }
                 (value.opt("text") as? String)?.let { walk(it, depth + 1)?.let { hit -> return hit } }
                 val keys = value.keys()

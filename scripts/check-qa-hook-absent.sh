@@ -5,12 +5,20 @@
 # scanned) or a POM. Matching is case-sensitive and case-insensitive; the case-insensitive count includes the case-sensitive one.
 # Only the counts and the paths of hits are printed, never matched bytes.
 # Exit 0: no identifier hit (the release gate passes). Exit 1: at least one hit. Exit 2: misuse.
-# On a QA build the same script is the positive control: every identifier must hit at least once there (25.52AP.2).
-# Usage: scripts/check-qa-hook-absent.sh <artifact>
+# Positive control (25.52AP.2), run on a QA build: `--positive` checks that each POSITIVE_IDENTIFIERS entry hits at least once, which proves the scan sees
+# QA code. Only identifiers that a QA build really contains are listed there. removeEOAPrivateKey (AN.5) is never in the SDK, so it is only in the
+# exclusion scan, where its absence is the expected result.
+# Usage: scripts/check-qa-hook-absent.sh [--positive] <artifact>
 set -eu
 IDENTIFIERS="NativeQaHooks dropEoaKeyOfAccount dropEoaKey runCommand runWith ALLOWED_COMMANDS swapWebEmit removeEOAPrivateKey"
+POSITIVE_IDENTIFIERS="NativeQaHooks VaultDiagnostic dropEoaKeyOfAccount runWith swapWebEmit"
+mode=scan
+if [ "${1:-}" = "--positive" ]; then
+  mode=positive
+  shift
+fi
 if [ "$#" -ne 1 ]; then
-  echo "usage: $0 <artifact>" >&2
+  echo "usage: $0 [--positive] <artifact>" >&2
   exit 2
 fi
 artifact="$1"
@@ -42,6 +50,23 @@ echo "scanner sha256 $(shasum -a 256 "$0" | cut -c1-64)"
 echo "artifact $(basename "$artifact") sha256 $(shasum -a 256 "$artifact" | cut -c1-64)"
 echo "files scanned $(find "$root" -type f | wc -l | tr -d ' ')"
 failed=0
+if [ "$mode" = positive ]; then
+  for ident in $POSITIVE_IDENTIFIERS; do
+    names=$(find "$root" -iname "*${ident}*" | wc -l | tr -d ' ')
+    content_i=$(grep -rhoai -e "$ident" "$root" 2>/dev/null | wc -l | tr -d ' ')
+    echo "positive $ident names $names contents-insensitive $content_i"
+    if [ "$names" -eq 0 ] && [ "$content_i" -eq 0 ]; then
+      failed=1
+      echo "  no hit: $ident"
+    fi
+  done
+  if [ "$failed" -ne 0 ]; then
+    echo "FAIL: positive control, a QA-only identifier has no hit in $(basename "$artifact")"
+    exit 1
+  fi
+  echo "PASS: positive control, every QA-only identifier hits in $(basename "$artifact")"
+  exit 0
+fi
 for ident in $IDENTIFIERS; do
   names=$(find "$root" -iname "*${ident}*" | wc -l | tr -d ' ')
   content=$(grep -rhoa -e "$ident" "$root" 2>/dev/null | wc -l | tr -d ' ')

@@ -1,0 +1,222 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E7.1-add.json",
+  "scope": "account-credential-valid-mnemonic-59e-synthetic",
+  "status": "pending_review",
+  "text_basis": "spec-59e-errata-v3.3.1-E7.1.md (E7.1-1, E7.1-2 and E7.1-5; 裁定 2026-11-17)",
+  "note": "Synthetic data only. Not pinned; not in spec.md.",
+  "cases": [
+    {
+      "id": "E71-01",
+      "kind": "positive",
+      "title": "助记词项读成功、BIP-39 校验失败且重读两次相同（N4+N5）→ absent，进入 onboarding；原项保留；新账户写入前先隔离封存",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "ok",
+        "bip39": "fail",
+        "reread_1": "same_fail",
+        "reread_2": "same_fail",
+        "pwa_mnemonic": "absent"
+      },
+      "op": [
+        {
+          "command": "startup_resolve"
+        },
+        {
+          "command": "onboarding_create_new_account"
+        }
+      ],
+      "expect": {
+        "native_answer": "absent",
+        "route": "onboarding",
+        "original_item_retained": true,
+        "before_new_write": {
+          "isolate_and_seal_original_item": true,
+          "direct_overwrite": false
+        },
+        "deleted": []
+      },
+      "basis": "E7.1-1; E7-7",
+      "status": "pending_review",
+      "assert": "absent；进入 onboarding；原项不删；写入前隔离封存。"
+    },
+    {
+      "id": "E71-02",
+      "kind": "negative",
+      "title": "读取异常 → unknown，保留，不进入 onboarding；不因其后重读可能成功而判 absent",
+      "pre": {
+        "native": "mnemonic_item_present",
+        "read": "exception",
+        "pwa_mnemonic": "absent"
+      },
+      "op": {
+        "command": "startup_resolve"
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "route": "startup_wait_retryable",
+        "onboarding": false,
+        "deleted": [],
+        "written": false,
+        "absent_not_derived_from_later_reread": true
+      },
+      "basis": "E7.1-2",
+      "status": "pending_review",
+      "assert": "unknown；保留；可重试；不进入 onboarding。"
+    },
+    {
+      "id": "E71-03",
+      "kind": "positive",
+      "title": "一个有效助记词 + 一个损坏项（确定性校验失败），无指针或指针与有效项一致 → valid，回传有效项；损坏项保留不删",
+      "pre": {
+        "native_items": [
+          {
+            "id": "item_a",
+            "read": "ok",
+            "bip39": "valid",
+            "eoa": "0xaaaa000000000000000000000000000000000001"
+          },
+          {
+            "id": "item_b",
+            "read": "ok",
+            "bip39": "fail",
+            "reread_same": true
+          }
+        ],
+        "pointer": "absent_or_consistent_with_item_a",
+        "pwa_mnemonic": "absent"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "seq": 31,
+        "reqId": 31
+      },
+      "expect": {
+        "native_answer": "valid",
+        "returned_item": "item_a",
+        "eoa": "0xaaaa000000000000000000000000000000000001",
+        "corrupt_item_retained": true,
+        "deleted": [],
+        "onboarding": false
+      },
+      "basis": "E7.1-5 第 1、2 项",
+      "status": "pending_review",
+      "assert": "valid，回传有效项 item_a；损坏项 item_b 保留不删，不计为账户。"
+    },
+    {
+      "id": "E71-04",
+      "kind": "negative",
+      "title": "指针指向损坏项（指针与凭据矛盾）→ unknown，保留，可重试",
+      "pre": {
+        "native_items": [
+          {
+            "id": "item_a",
+            "read": "ok",
+            "bip39": "valid",
+            "eoa": "0xaaaa000000000000000000000000000000000001"
+          },
+          {
+            "id": "item_b",
+            "read": "ok",
+            "bip39": "fail",
+            "reread_same": true
+          }
+        ],
+        "pointer": "points_to_item_b_corrupt",
+        "pwa_mnemonic": "absent"
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "seq": 32,
+        "reqId": 32
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "has_phrase_field": false,
+        "deleted": [],
+        "onboarding": false,
+        "retryable": true
+      },
+      "basis": "E7.1-5 第 3 项",
+      "status": "pending_review",
+      "assert": "unknown；不回传；保留；不进入 onboarding。"
+    },
+    {
+      "id": "E71-05",
+      "kind": "boundary",
+      "title": "有效助记词 ≥ 2 个 → 既有多账户规则，不因 E7.1-5 改变",
+      "pre": {
+        "native_items": [
+          {
+            "id": "item_a",
+            "read": "ok",
+            "bip39": "valid",
+            "eoa": "0xaaaa000000000000000000000000000000000001"
+          },
+          {
+            "id": "item_c",
+            "read": "ok",
+            "bip39": "valid",
+            "eoa": "0xcccc000000000000000000000000000000000003"
+          }
+        ]
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "seq": 33,
+        "reqId": 33
+      },
+      "expect": {
+        "governed_by": "既有多账户规则（本条不重定）",
+        "this_rule_changed": false
+      },
+      "basis": "E7.1-5 第 4 项",
+      "status": "pending_review",
+      "assert": "期望沿既有多账户规则，本条不改变。"
+    },
+    {
+      "id": "E71-06",
+      "kind": "negative",
+      "title": "有效项与损坏项并存，但另有一位置读取失败（异常，非校验失败）→ unknown",
+      "pre": {
+        "native_items": [
+          {
+            "id": "item_a",
+            "read": "ok",
+            "bip39": "valid",
+            "eoa": "0xaaaa000000000000000000000000000000000001"
+          },
+          {
+            "id": "item_b",
+            "read": "ok",
+            "bip39": "fail",
+            "reread_same": true
+          },
+          {
+            "id": "item_d",
+            "read": "exception"
+          }
+        ]
+      },
+      "op": {
+        "command": "nativeMnemonicPreread",
+        "trustedOrigin": true,
+        "seq": 34,
+        "reqId": 34
+      },
+      "expect": {
+        "native_answer": "unknown",
+        "has_phrase_field": false,
+        "deleted": [],
+        "onboarding": false
+      },
+      "basis": "E7.1-5 第 5 项（N2、N4 不满足）",
+      "status": "pending_review",
+      "assert": "任一位置读取失败即 unknown，即使其它项可判定。"
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

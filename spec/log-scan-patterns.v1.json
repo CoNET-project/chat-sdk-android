@@ -1,6 +1,6 @@
 {
   "file": "log-scan-patterns.v1.json",
-  "spec": "spec §25.26（r3e，第二十七批，PM 裁定）",
+  "spec": "spec §25.26（第二十七批，裁定）",
   "generator": "gen-mnemonic-nokey-scan-vectors.mjs",
   "testKeyNote": "合成测试私钥，SHA-256(\"chat-local-test-private-key-v1\")，与 §23、§25.23、§25.25 同源；不是真实钱包，禁止用于生产。",
   "mnemonicNote": "助记词只使用 BIP-39 公开测试向量（由 00 熵生成）；不是真实钱包，禁止用于生产。",
@@ -226,12 +226,12 @@
       {
         "name": "interface/protocol/no-key-reject-vectors.v1.json",
         "sha256": "369883a3298604ea0285acad1f0fcb747c9bf994bee595d099d04fbe5fc6cac5",
-        "source": "spec 25.26.4、25.26.6（r3f）"
+        "source": "spec 25.26.4、25.26.6"
       },
       {
         "name": "interface/protocol/gate-state-vectors.v1.json",
         "sha256": "d5b9c948672ec1cde8a04c05f04be18aeaa04c375af81918cbb48a846f7c19a7",
-        "source": "spec 25.26.4c（r3g）"
+        "source": "spec 25.26.4c"
       },
       {
         "name": "interface/ui/passcode-tokens.v1.json",
@@ -241,57 +241,57 @@
       {
         "name": "interface/protocol/pgp-purpose-vectors.v1.json",
         "sha256": "c55610e0b0596d79d8bb03ae88fa9ba10809f12d65f5a4e593de1acf579a4ef1",
-        "source": "spec 25.27.7（r3i）"
+        "source": "spec 25.27.7"
       },
       {
         "name": "interface/protocol/chat-route-register-vectors.v1.json",
         "sha256": "51719937ab141db04694412be9c8d7bcee69db0e1c3a506ada3714d25769f700",
-        "source": "spec 25.28.8（r3j）"
+        "source": "spec 25.28.8"
       },
       {
         "name": "interface/protocol/chat-route-decision-vectors.v1.json",
         "sha256": "9f9b7e8cc8df83d29d896c84d4d75687c9fd803b2cb283155e3dcc9fd9a35c2a",
-        "source": "spec 25.29.7（r3k）"
+        "source": "spec 25.29.7"
       },
       {
         "name": "interface/protocol/negative-tests-v2.json",
         "sha256": "86b836ef90586a665acfe1d935e5b3e10236a4cad07e7f93ef252ef4ef82aaef",
-        "source": "spec §25.52Y.46（r3pg，R2087）"
+        "source": "spec §25.52Y.46"
       },
       {
         "name": "interface/protocol/table-T.v1.json",
         "sha256": "69b98a727dd85587a76b1a7e9d3a2490574abc37809d6ea27b4293affced3cf3",
-        "source": "spec §25.52BY（r3dy）"
+        "source": "spec §25.52BY"
       },
       {
         "name": "interface/protocol/domain-tags-vectors.v1.json",
         "sha256": "0ad596aea11a0c67e42f7ec3d6c17b6af44a9e2a5e3ec7c09dc4da6bdbd30983",
-        "source": "spec §25.27.9（r3ed）"
+        "source": "spec §25.27.9"
       },
       {
         "name": "interface/protocol/beamioshell-channel-vectors.v1.json",
         "sha256": "5004af6d5f63ffaa03ab8bd88c8a3c858a253011dbe370531f70335bbfd3876d",
-        "source": "spec §25.52EF（r3gf）"
+        "source": "spec §25.52EF"
       },
       {
         "name": "interface/protocol/inbound-ack-vectors.v1.json",
         "sha256": "c7382cddccaa5153c81684440b1321b0261ee30c6dc8227437161af72d340811",
-        "source": "spec §25.52EU（r3gu）"
+        "source": "spec §25.52EU"
       },
       {
         "name": "interface/protocol/identity-guard-vectors.v1.json",
         "sha256": "16856fa46d9d766826253432585fea99fef59e94bf92463c656b49f7f547ac3e",
-        "source": "spec §25.52FO（r3ho）"
+        "source": "spec §25.52FO"
       },
       {
         "name": "interface/protocol/voice-ephemeral-register-vectors.v1.json",
         "sha256": "723c2a931f7697851c49a6af5dc6e36442c251f4064dac0a927d868ae9250990",
-        "source": "spec §25.52GK.7、§25.52GL（r3ij、r3ik）"
+        "source": "spec §25.52GK.7、§25.52GL"
       },
       {
         "name": "interface/protocol/mailbox-probe-sign-vectors.v1.json",
         "sha256": "85f5b914af50d8354437dfcfa22ccd7f5c059fb25d6876069fdf67cbf789864d",
-        "source": "spec §25.52GM.8（r3il）"
+        "source": "spec §25.52GM.8"
       },
       {
         "name": "BIP-39 英文词表（2048 词，每行一词加换行）",
@@ -299,9 +299,9 @@
         "source": "spec 25.26.1"
       },
       {
-        "name": "测试目录文件名中的账户标识摘要（shell-record-* 下 <摘要>.bin，R589 审计签字人裁定，R628）",
+        "name": "测试目录文件名中的账户标识摘要（shell-record-* 下 <摘要>.bin， 审计签字人裁定）",
         "sha256": "fceaf6c89021ad554dd855bd11d2cb71f69170a239b19c5cff7d844b071d5c9e",
-        "source": "spec §25.52AJ.3（R628）；仅此一值"
+        "source": "spec §25.52AJ.3；仅此一值"
       }
     ],
     "specRecordCheck": [

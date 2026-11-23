@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * The binding lookup of `nativeAccountCreateOpen` (§25.52Z.3, R1487). Each row is the table's answer: the ack, the result, and whether the page opened.
+ * The binding lookup of `nativeAccountCreateOpen` (§25.52Z.3). Each row is the table's answer: the ack, the result, and whether the page opened.
  * The host is a fake: it records whether it was asked to open.
  */
 class NativeAccountCreateBindingTest {

@@ -89,17 +89,3 @@ object PasscodeKdf {
         }
     }
 }
-
-/** Cooldown after consecutive wrong passcodes (vector `backoff.schedule`): the last row not above the count applies. */
-object PasscodeBackoff {
-    private val SCHEDULE: List<Pair<Int, Int>> = listOf(
-        0 to 0, 1 to 0, 2 to 0, 3 to 0, 4 to 0,
-        5 to 30, 6 to 60, 7 to 300, 8 to 900, 9 to 3600, 12 to 3600,
-    )
-
-    fun cooldownSec(consecutiveFailures: Int): Int =
-        SCHEDULE.last { it.first <= consecutiveFailures }.second
-
-    /** The rows as written in the vector, for the test. */
-    fun schedule(): List<Pair<Int, Int>> = SCHEDULE
-}

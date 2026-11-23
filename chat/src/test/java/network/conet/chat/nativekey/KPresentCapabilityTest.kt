@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Capability identity.kpresent.v1 (spec 25.52X.5, 25.52Y.93). Declared again (rc2.2-qa, coordinator order after 928a296): the import page now
+ * Capability identity.kpresent.v1 (spec 25.52X.5, 25.52Y.93). Declared again (rc2.2-qa, coordinator order after): the import page now
  * carries `eoa` on `already_exists` (`nativeImportResult`, 25.52X.4), so the recovery and import paths both carry it.
  */
 class KPresentCapabilityTest {
@@ -31,8 +31,8 @@ class KPresentCapabilityTest {
     }
 
     /**
-     * Formal hello (project owner decision, 2026-11-16): identity.native-keys.v1 is declared by every build, directly after kPresent. The formal
-     * configuration carries no QA name: wallet.credential.v1 is absent unless the wallet-credential QA switch is set (ruled QA-only).
+     * Formal hello (2026-11-16): identity.native-keys.v1 is declared by every build, directly after kPresent. The formal
+     * configuration carries no QA name: wallet.credential.v1 is absent unless the wallet-credential QA switch is set (QA-only).
      */
     @Test
     fun theFormalHelloDeclaresNativeKeysAndNoQaName() {

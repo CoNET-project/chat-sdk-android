@@ -10,7 +10,7 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * R591: the QA native entry for device evidence (A5). QA build only. The sink stands in for the module, so these run without Android. They
+ * the QA native entry for device evidence (A5). QA build only. The sink stands in for the module, so these run without Android. They
  * check the allowlist, the reqId, the refusal of key names at any depth, the match of the ack, the removal of key names from replies, the
  * timeout, and the restore of the web emit.
  */
@@ -52,7 +52,7 @@ class NativeQaEntryTest {
 
     @Test
     fun theAllowlistIsTheA5SetAndAnythingElseNeverReachesTheModule() {
-        // R591 list plus pgpRestoreEvaluate (read-only: evalRestore with write = false, PgpRestoreMachine.evaluate). Requested by the shell for A5.
+        // list plus pgpRestoreEvaluate (read-only: evalRestore with write = false, PgpRestoreMachine.evaluate). Requested by the shell for A5.
         assertEquals(
             setOf("identityPublic", "walletStatus", "init", "provisionIdentity", "pgpRestore", "pgpRestoreEvaluate"),
             NativeQaHooks.ALLOWED_COMMANDS,

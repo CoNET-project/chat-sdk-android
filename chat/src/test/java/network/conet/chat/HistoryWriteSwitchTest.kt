@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * R559: the QA switch that stops the history writes. With writesEnabled = false, ten entries and several flushes must make no upload and no
+ * the QA switch that stops the history writes. With writesEnabled = false, ten entries and several flushes must make no upload and no
  * pointer submit; the entries stay in the local queue. With writesEnabled = true (the control), the same steps do write, which shows that the
  * setup can write and that the switch is what stops it.
  */
@@ -128,7 +128,7 @@ class HistoryWriteSwitchTest {
 
     @Test
     fun aDisabledFlushReturnsDisabledNotEmpty() {
-        // R565 review: EMPTY means "nothing to write"; a switched-off flush reports DISABLED, so no report reads it as "all written".
+        // review: EMPTY means "nothing to write"; a switched-off flush reports DISABLED, so no report reads it as "all written".
         val net = CountingNet()
         val s = store(Files.createTempDirectory("history-switch-result").toFile(), net, writesEnabled = false)
         prepare(s)

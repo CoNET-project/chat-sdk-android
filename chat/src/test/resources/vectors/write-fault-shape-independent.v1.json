@@ -1,0 +1,235 @@
+{
+  "schema": "write-fault-shape-independent.v1",
+  "date": "2026-11-22",
+  "note": "Shape-independent vectors that do not depend on the pending v286/v291 determination. Synthetic values only; no passcode or phrase. Pending-shape cases are in a separate section and are NOT must-pass.",
+  "mustPass": {
+    "description": "Hold for any write or read fault shape. PWA must not complete, must not treat as confirmed_missing, must not onboard or generate a key; shell must not switch current on a write failure.",
+    "pwaCases": [
+      {
+        "id": "MP-W1",
+        "kind": "write_fault_envelope_write_failed",
+        "reply": {
+          "ok": false,
+          "error": "write_failed",
+          "reason": "internal_state"
+        },
+        "expect": {
+          "completed": false,
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false
+        }
+      },
+      {
+        "id": "MP-W2",
+        "kind": "write_fault_envelope_storage_unreadable",
+        "reply": {
+          "ok": false,
+          "error": "storage_unreadable"
+        },
+        "expect": {
+          "completed": false,
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false
+        }
+      },
+      {
+        "id": "MP-W3",
+        "kind": "write_fault_result_code_write_failed",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "write_failed"
+          }
+        },
+        "expect": {
+          "completed": false,
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false
+        }
+      },
+      {
+        "id": "MP-W4",
+        "kind": "write_fault_result_code_write_failed_with_ok_stored_false",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "ok",
+            "stored": false,
+            "readback": "mismatch",
+            "decrypted": false
+          }
+        },
+        "expect": {
+          "completed": false,
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false
+        }
+      },
+      {
+        "id": "MP-R1",
+        "kind": "read_fault_sub_storage_unreadable",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "error",
+            "sub": "storage_unreadable"
+          }
+        },
+        "expect": {
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false,
+          "retry": true,
+          "dataKept": true
+        }
+      },
+      {
+        "id": "MP-R2",
+        "kind": "read_fault_sub_record_unreadable",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "error",
+            "sub": "record_unreadable"
+          }
+        },
+        "expect": {
+          "confirmedMissing": false,
+          "onboarding": false,
+          "newKey": false,
+          "retry": true,
+          "dataKept": true
+        }
+      }
+    ],
+    "shellCases": [
+      {
+        "id": "MS-W1",
+        "kind": "write_fault_no_switch",
+        "given": {
+          "currentPointer": "SET_A",
+          "sets": {
+            "SET_A": "bytes_A",
+            "SET_B_new": "partial"
+          }
+        },
+        "action": "write_new_set_fails_before_readback",
+        "expect": {
+          "currentPointer": "SET_A",
+          "SET_A_bytesUnchanged": true,
+          "switched": false
+        }
+      },
+      {
+        "id": "MS-W2",
+        "kind": "write_fault_readback_mismatch_no_switch",
+        "given": {
+          "currentPointer": "SET_A",
+          "sets": {
+            "SET_A": "bytes_A"
+          }
+        },
+        "action": "readback_differs",
+        "expect": {
+          "currentPointer": "SET_A",
+          "SET_A_bytesUnchanged": true,
+          "switched": false
+        }
+      },
+      {
+        "id": "MS-R1",
+        "kind": "read_fault_keeps_data",
+        "given": {
+          "currentPointer": "SET_A",
+          "sets": {
+            "SET_A": "bytes_A"
+          }
+        },
+        "action": "read_fails",
+        "expect": {
+          "deleted": false,
+          "written": false,
+          "SET_A_bytesUnchanged": true
+        }
+      }
+    ]
+  },
+  "pendingShape": {
+    "description": "NOT must-pass. Exact code or envelope placement depends on the pending v286/v291 determination. Run for information only; do not count as a pass or fail gate.",
+    "cases": [
+      {
+        "id": "PS-W-v291",
+        "status": "待裁定",
+        "kind": "write_failed_envelope",
+        "reply": {
+          "ok": false,
+          "error": "write_failed",
+          "reason": "internal_state"
+        },
+        "expectClassify": "write_failed",
+        "note": "Shape of v291 and Android pwaWalletSync."
+      },
+      {
+        "id": "PS-W-v286",
+        "status": "待裁定",
+        "kind": "write_failed_envelope_storage_unreadable",
+        "reply": {
+          "ok": false,
+          "error": "storage_unreadable"
+        },
+        "expectClassify": "write_failed",
+        "note": "PWA ERROR_CODES lacks storage_unreadable, so mapSyncReply gives no_answer today."
+      },
+      {
+        "id": "PS-W-iOS",
+        "status": "待裁定",
+        "kind": "write_failed_result_code (SRP-04)",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "write_failed"
+          }
+        },
+        "expectClassify": "write_failed",
+        "note": "Today PWA gives no_answer; expectClassify is what the owner would want if result-level is chosen."
+      },
+      {
+        "id": "PS-R-v286",
+        "status": "待裁定",
+        "kind": "read_fault_sub_storage_unreadable",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "error",
+            "sub": "storage_unreadable"
+          }
+        },
+        "expectClassify": "read_error"
+      },
+      {
+        "id": "PS-R-v291",
+        "status": "待裁定",
+        "kind": "read_fault_sub_record_unreadable (SHAPE-09)",
+        "reply": {
+          "ok": true,
+          "result": {
+            "code": "error",
+            "sub": "record_unreadable"
+          }
+        },
+        "expectClassify": "read_error"
+      }
+    ]
+  },
+  "sourcesPinned": {
+    "v286": "fc7681a2d546e1b1",
+    "v291": "037a5d515d03a6d2",
+    "srpV2": "904fcf2c21ea61cc50ef9a629dd493373b80d0504d728144b6af4292763bfe64",
+    "comparisonPage": "423d15c5955ea944",
+    "addendum": "4b4939f052223fb8"
+  }
+}

@@ -10,7 +10,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The two compatibility shims that the application still calls (PM decision, §38): `requestEip191(text, timeoutMs)` and
+ * The two compatibility shims that the application still calls (§38): `requestEip191(text, timeoutMs)` and
  * `hasLocalSigner()`. Neither takes a key, neither opens a key path, and both delegate to the native methods. The test key
  * is the spec's synthetic test key (`spec/gossip-sign-vectors.v1.json`, not a wallet).
  */
@@ -36,17 +36,17 @@ class BeamioConetChatSignBrokerShimTest {
     }
 
     @Test
-    fun theShimWithoutANativeKeyFailsWithNoKeyAtOnce() {
+    fun theShimWithoutANativeKeyFailsNotReadyAtOnce() {
         BeamioConetChatSignBroker.clearNativeSigner()
         val r = shim(10_000L, "hello")
         assertNotNull("the completion must run at once", r)
         assertTrue(r!!.isFailure)
-        assertEquals("no_key", r.exceptionOrNull()?.message)
+        assertEquals("not_ready", r.exceptionOrNull()?.message)
     }
 
     @Test
     fun theShimSignsTheSameAsTheNativeMethod() {
-        BeamioConetChatSignBroker.setNativeSigner(key)
+        BeamioConetChatSignBroker.setNativeSigner(ConetChatCryptoUtil.hexToBytes(key)!!)
         val viaShim = shim(10_000L, "hello")
         val viaNative = native("hello")
         assertNotNull(viaShim)
@@ -59,7 +59,7 @@ class BeamioConetChatSignBrokerShimTest {
 
     @Test
     fun theTimeoutIsIgnored() {
-        BeamioConetChatSignBroker.setNativeSigner(key)
+        BeamioConetChatSignBroker.setNativeSigner(ConetChatCryptoUtil.hexToBytes(key)!!)
         val expected = native("timeout probe")!!.getOrThrow()
         for (timeout in listOf(0L, 1L, -1L, 10_000L, Long.MAX_VALUE)) {
             val r = shim(timeout, "timeout probe")
@@ -74,7 +74,7 @@ class BeamioConetChatSignBrokerShimTest {
         assertFalse(BeamioConetChatSignBroker.hasLocalSigner())
         assertEquals(BeamioConetChatSignBroker.hasNativeSigner(), BeamioConetChatSignBroker.hasLocalSigner())
 
-        BeamioConetChatSignBroker.setNativeSigner(key)
+        BeamioConetChatSignBroker.setNativeSigner(ConetChatCryptoUtil.hexToBytes(key)!!)
         assertTrue(BeamioConetChatSignBroker.hasLocalSigner())
         assertEquals(BeamioConetChatSignBroker.hasNativeSigner(), BeamioConetChatSignBroker.hasLocalSigner())
 

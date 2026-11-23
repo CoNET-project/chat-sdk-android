@@ -1,0 +1,285 @@
+{
+  "file": "shell-record-shape-and-kr04-write-vectors.v2.json",
+  "schema": "shell-record-shape-and-kr04-write-vectors.v2",
+  "status": "final-pending-review",
+  "generator": "none (written by hand, 2026-11-22)",
+  "basis": [
+    "n/a",
+    "PROTOCOL-kr04-create-write-gloss-2026-11-22.md",
+    "spec.md §25.52T.2",
+    "PROTOCOL-ak22-content-level-bad-request-and-v171-191-2-2026-11-22.md",
+    "item 4"
+  ],
+  "harnessRules": [
+    "ctx 字段同 pgp-migration-vectors.v3.1（origin、legacy、pointer、eoa、nativeKey、creationTxn、explicitChoice）。",
+    "req 是页面原样发出的 body（含顶层字段）；驱动不得补字段。",
+    "内容级 bad_request 按类别判定：白名单外 record 路径、PGP 公开字段、未知顶层字段。信封级 bad_request 只用于 reqId 无效、缺 record、rev 非整数、请求超限（UF-03、UF-04；AK-14、TR-03）。不得按 names 是否存在判断（iOS 内部对缺 record、rev 非整数也带 names）。",
+    "未知 type 为 unknown_command，信封级（UF-05），两端一致。",
+    "UF-01 至 UF-06、KW-01 至 KW-03 全部为确定用例；UF-06 同 UF-01 口径。"
+  ],
+  "cases": [
+    {
+      "id": "UF-01",
+      "title": "读请求带未知顶层字段 foo：内容级 bad_request（ok:true，result.code=bad_request，result.names=[foo]；spec §25.52T.2 字面）。Android 现行即如此，iOS 要改",
+      "kind": "read",
+      "reqId": "u1",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordRead",
+        "reqId": "u1",
+        "foo": 1
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u1",
+        "ok": true,
+        "result": {
+          "code": "bad_request",
+          "names": [
+            "foo"
+          ]
+        }
+      },
+      "note": "取代：未知顶层字段为内容级，不再是信封级。"
+    },
+    {
+      "id": "UF-02",
+      "title": "写请求带未知顶层字段 foo：同 UF-01，内容级 bad_request",
+      "kind": "write",
+      "reqId": "u2",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "u2",
+        "foo": 1,
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u2",
+        "ok": true,
+        "result": {
+          "code": "bad_request",
+          "names": [
+            "foo"
+          ]
+        }
+      }
+    },
+    {
+      "id": "UF-03",
+      "title": "写请求缺 record：bad_request，信封级，两端一致（§25.52T.2）",
+      "kind": "write",
+      "reqId": "u3",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "u3"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u3",
+        "ok": false,
+        "error": "bad_request"
+      },
+      "note": "iOS 内部答复带 names:[record]，但经 ackEnvelope 为信封级且不回显 names。实现 AK-22 的'带 names 放 result'时不能按'有没有 names'判断，否则本例会被误翻成内容级。"
+    },
+    {
+      "id": "UF-04",
+      "title": "写请求 record.rev 不是整数：bad_request，信封级，两端一致（§25.52T.2）",
+      "kind": "write",
+      "reqId": "u4",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "u4",
+        "record": {
+          "rev": "x",
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u4",
+        "ok": false,
+        "error": "bad_request"
+      },
+      "note": "同 UF-03：iOS 内部带 names:[rev]，对外信封级、无 names。"
+    },
+    {
+      "id": "UF-05",
+      "title": "未知 type：unknown_command，信封级，两端一致；不是 bad_request（Android ShellRecord.kt 约 1223 行；iOS 在命令分发处，门控之前）",
+      "kind": "write",
+      "reqId": "u5",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordFoo",
+        "reqId": "u5"
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u5",
+        "ok": false,
+        "error": "unknown_command"
+      },
+      "note": "本对 iOS 只核到分发层 unknown_command（BeamioConetChatModule.swift 约 759 行），没有逐路径跑过。"
+    },
+    {
+      "id": "UF-06",
+      "title": "白名单外的 record 路径（内容级）：ok:true，result.code bad_request，names 列路径（§25.52T.2、D.6）。与 AK-22 同形",
+      "kind": "write",
+      "reqId": "u6",
+      "ctx": {
+        "origin": "allowed",
+        "legacy": "absent",
+        "pointer": false,
+        "eoa": "a1"
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "u6",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1,
+          "zzUnknown": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "u6",
+        "ok": true,
+        "result": {
+          "code": "bad_request",
+          "names": [
+            "zzUnknown"
+          ]
+        }
+      },
+      "note": "验收条件：iOS 的 ackEnvelope 按类别（白名单外路径、PGP 公开字段、未知顶层字段）放 result 之后才验收；按类别判定，不得按 names 是否存在。"
+    },
+    {
+      "id": "KW-01",
+      "title": "KR-04 状态下建号事务内的页面写入：旧记录已找到、指针空、原生钥匙存在：migrating，不写页面副本（keystore-replica v2.1 KR-04 create_write）",
+      "kind": "write",
+      "reqId": "k1",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true,
+        "legacy": "found",
+        "pointer": false,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "k1",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "k1",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      },
+      "note": "验收同时检查：页面副本未写入（store 仍为空）。"
+    },
+    {
+      "id": "KW-02",
+      "title": "KR-04 对照：旧存储读失败（不可读）、其余同 KW-01：migrating，不写",
+      "kind": "write",
+      "reqId": "k2",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true,
+        "legacy": "unreadable",
+        "pointer": false,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "k2",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "k2",
+        "ok": true,
+        "result": {
+          "code": "migrating"
+        }
+      }
+    },
+    {
+      "id": "KW-03",
+      "title": "KR-04 对照：旧存储确认为空（不是旧记录已找到）：建号事务首次写入放行（同 AK-42）",
+      "kind": "write",
+      "reqId": "k3",
+      "ctx": {
+        "origin": "allowed",
+        "eoa": "a1",
+        "nativeKey": true,
+        "legacy": "absent",
+        "pointer": false,
+        "creationTxn": true,
+        "explicitChoice": true
+      },
+      "req": {
+        "type": "shellRecordWrite",
+        "reqId": "k3",
+        "record": {
+          "rev": 0,
+          "schemaVersion": 1
+        }
+      },
+      "expect": {
+        "type": "ack",
+        "reqId": "k3",
+        "ok": true,
+        "result": {
+          "code": "ok",
+          "rev": 1
+        }
+      }
+    }
+  ],
+  "supersedes": "shell-record-shape-and-kr04-write-vectors.v1.json : UF-01 and UF-02 expectation changed to content-level bad_request, altExpect removed ( item 4). All other cases unchanged. v1 unchanged on disk."
+}

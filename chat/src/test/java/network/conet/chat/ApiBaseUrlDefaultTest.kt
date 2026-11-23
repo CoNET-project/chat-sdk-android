@@ -8,7 +8,7 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * The default API base is the beamio.ca host (PM R2043, migration R2030). A value passed by `init` (payload `apiBaseUrl`) overrides the
+ * The default API base is the beamio.ca host (migration). A value passed by `init` (payload `apiBaseUrl`) overrides the
  * default; a blank value keeps it. No other behaviour depends on this change.
  */
 class ApiBaseUrlDefaultTest {
@@ -17,7 +17,7 @@ class ApiBaseUrlDefaultTest {
         assertEquals("https://beamio.ca/api", BeamioConetChatModule.Session().apiBaseUrl)
     }
 
-    /** The init path (PM R2043, R2048): a passed non-blank `apiBaseUrl` wins; a blank or absent one keeps the default. Behaviour, not source. */
+    /** The init path: a passed non-blank `apiBaseUrl` wins; a blank or absent one keeps the default. Behaviour, not source. */
     @Test
     fun aPassedApiBaseUrlOverridesTheDefaultAndABlankOneKeepsIt() {
         val def = "https://beamio.ca/api"

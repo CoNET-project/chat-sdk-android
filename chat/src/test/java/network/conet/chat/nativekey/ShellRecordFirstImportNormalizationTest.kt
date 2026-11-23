@@ -8,7 +8,7 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 25.52BB.3 (r3cz, PM R673): on the first import, a legacy private key is normalized before the write check. The stored form is "0x" plus 64
+ * 25.52BB.3 (r3cz): on the first import, a legacy private key is normalized before the write check. The stored form is "0x" plus 64
  * lower-case hex digits. A key that cannot be normalized is import_failed. After normalization, a key that derives another address is
  * address_mismatch. Nothing is stored unless the import succeeds. The page write path is unchanged (its non-canonical form is still bad_request).
  */

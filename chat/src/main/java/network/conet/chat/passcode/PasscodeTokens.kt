@@ -2,7 +2,7 @@ package network.conet.chat.passcode
 
 /**
  * Passcode overlay design tokens (spec r3b 25.17.10). Values come from `spec/passcode-tokens.v1.json`
- * (sha256 48ac9bad…); `PasscodeTokensTest` checks every constant against that file.
+ * (sha256 9f1644c9…); `PasscodeTokensTest` checks every constant against that file.
  *
  * Colors are ARGB as Long. The JSON uses #RRGGBB or #RRGGBBAA; [parseHexColor] converts it.
  * Lengths are in dp (equal to iOS pt at @1x). No UI code lives here: the overlay itself, FLAG_SECURE

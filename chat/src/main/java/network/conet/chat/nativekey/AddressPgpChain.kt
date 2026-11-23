@@ -4,6 +4,8 @@ import org.bouncycastle.openpgp.PGPPublicKeyRing
 import org.bouncycastle.openpgp.PGPUtil
 import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator
 import java.io.ByteArrayInputStream
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** AddressPGP for the restore (spec §25.36.5): the contract, and its endpoints in the order they are tried. */
 internal class AddressPgpConfig(val contract: String, val endpoints: List<RegistryEndpoint>) {
@@ -50,12 +52,27 @@ internal object PgpPublicIdentity {
  * It has no version counter: AddressPGP does not expose one, and the CAS version belongs to the replacement path, which is not
  * implemented. [write] is therefore refused.
  */
-internal class AddressPgpChain private constructor(
+internal class AddressPgpChain internal constructor(
     private val chainOk: Boolean,
     private val backupOk: Boolean,
     private val record: AddressPgpRead.Record?,
     private val backup: String,
+    private val reread: (() -> PgpRestoreChain)? = null,
+    private val block: Long? = null,
 ) : PgpRestoreChain {
+    /**
+     * Draft 第 3 节 / T-3, the absence confirmation for a registering marker (5B.2, 5B.7): the record is absent on both endpoints at this chain's block,
+     * and that block is later than [writeBlock]. Only a chain from [readAgreed] can say so; any other chain answers false.
+     */
+    fun confirmedAbsentAfter(writeBlock: Long): Boolean {
+        val b = block ?: return false
+        val r = record ?: return false
+        return chainOk && !r.exists && b > writeBlock
+    }
+
+    /** P2 (review 3): the block this record was read at (the snapshot's block). Null when no endpoint answered. */
+    override fun headBlock(): Long? = block
+
     override fun chainReadable(): Boolean = chainOk
 
     /** True when a record was read from an endpoint, even if it does not parse. False when no endpoint answered (§25.52I.7). */
@@ -70,13 +87,59 @@ internal class AddressPgpChain private constructor(
         return if (r.exists) PgpPublicIdentity.parse(r.publicKeyArmored) else null
     }
 
+    /**
+     * G1 (review): a record that exists but does not parse is Unknown, never Absent. A chain that was not read is Unknown too.
+     */
+    override fun identityRead(): IdentityRead {
+        if (!chainOk) return IdentityRead.Unknown
+        val r = record ?: return IdentityRead.Unknown
+        if (!r.exists) return IdentityRead.Absent
+        val parsed = PgpPublicIdentity.parse(r.publicKeyArmored) ?: return IdentityRead.Unknown
+        return IdentityRead.Present(parsed)
+    }
+
     override fun backupText(): String = backup
+
+    /** B-B (review): a new read of the same endpoints for the pre-write re-read and the post-write read-back. */
+    override fun reread(): PgpRestoreChain = reread?.invoke() ?: this
 
     override fun write(identity: PgpIdentity, backupText: String) {
         throw IllegalStateException("registration write is not implemented (pending approval, §25.44)")
     }
 
     companion object {
+        /**
+         * Draft r2.5.20 第 6 版 T-3: the record and the backup are read from the two endpoints A and B at one block N (N is A's block number).
+         * An error on either endpoint, a disagreement on the record or the backup, or fewer than two endpoints is unknown (unreadable), never absence.
+         * Used by the production restore path; [read] keeps its first-answer behaviour for the other callers.
+         */
+        fun readAgreed(
+            eoa: String,
+            config: AddressPgpConfig = AddressPgpConfig.default,
+            rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
+        ): AddressPgpChain {
+            if (config.endpoints.size < 2) return unknownChain()
+            val rpcA = try { rpcFor(config.endpoints[0]) } catch (e: Exception) { return unknownChain() }
+            val rpcB = try { rpcFor(config.endpoints[1]) } catch (e: Exception) { return unknownChain() }
+            val tag = try { rpcA.call("eth_blockNumber", JSONArray()) as? String } catch (e: Exception) { null } ?: return unknownChain()
+            val n = tag.removePrefix("0x").toLongOrNull(16) ?: return unknownChain()
+            // RP-05, RP-08 (rpc-state-vectors): each endpoint must return block N itself, with the same hash; a different block is unknown.
+            val ha = hashAt(rpcA, tag, n) ?: return unknownChain()
+            val hb = hashAt(rpcB, tag, n) ?: return unknownChain()
+            if (ha != hb) return unknownChain()
+            val sa = AddressPgpRead.snapshotAt(rpcA, config.contract, eoa, tag).getOrNull() ?: return unknownChain()
+            val sb = AddressPgpRead.snapshotAt(rpcB, config.contract, eoa, tag).getOrNull() ?: return unknownChain()
+            if (sa.record != sb.record || sa.backupText != sb.backupText) return unknownChain()
+            val parsed = !sa.record.exists || PgpPublicIdentity.parse(sa.record.publicKeyArmored) != null
+            return AddressPgpChain(parsed, backupOk = true, record = sa.record, backup = sa.backupText,
+                reread = { readAgreed(eoa, config, rpcFor) }, block = sa.block)
+        }
+
+        private fun unknownChain(): AddressPgpChain = AddressPgpChain(chainOk = false, backupOk = false, record = null, backup = "")
+
+        /** The hash of block [n] as the endpoint returns it for [tag]; null when the call fails or the endpoint answers another block. */
+        private fun hashAt(rpc: AddressPgpRead.Rpc, tag: String, n: Long): String? = AddressPgpRead.blockHashAt(rpc, tag, n)
+
         /**
          * Reads the record and the backup of [eoa]. A public record that does not parse makes the chain unreadable
          * (§25.30.2 step 2, the parse failure case). When no endpoint answers, both reads are unreadable.
@@ -100,9 +163,37 @@ internal class AddressPgpChain private constructor(
                     continue
                 }
                 val parsed = !snap.record.exists || PgpPublicIdentity.parse(snap.record.publicKeyArmored) != null
-                return AddressPgpChain(parsed, backupOk = true, record = snap.record, backup = snap.backupText)
+                return AddressPgpChain(parsed, backupOk = true, record = snap.record, backup = snap.backupText,
+                    reread = { read(eoa, config, rpcFor) }, block = snap.block)
             }
             return AddressPgpChain(chainOk = false, backupOk = false, record = null, backup = "")
+        }
+
+        /** CoNET L1 (§25.36.5). Any other chain id answered by the endpoint is a read failure. */
+        internal const val CONET_CHAIN_ID = 224422L
+
+        /**
+         * Single-RPC read (frozen protocol §13): the primary endpoint only, with no second endpoint and no block cross-check.
+         * The endpoint must answer the CoNET L1 chain id, and the record must be readable. Any failure, timeout, malformed answer or wrong
+         * chain id is unknown (fail closed). It never falls back to the second endpoint.
+         */
+        fun readSingle(
+            eoa: String,
+            config: AddressPgpConfig = AddressPgpConfig.default,
+            rpcFor: (RegistryEndpoint) -> AddressPgpRead.Rpc,
+        ): AddressPgpChain {
+            val ep = config.endpoints.firstOrNull() ?: return unknownChain()
+            val rpc = try { rpcFor(ep) } catch (e: Exception) { return unknownChain() }
+            val chainId = try {
+                (rpc.call("eth_chainId", JSONArray()) as? String)?.removePrefix("0x")?.toLongOrNull(16)
+            } catch (e: Exception) {
+                null
+            }
+            if (chainId != CONET_CHAIN_ID) return unknownChain()
+            val snap = try { AddressPgpRead.snapshot(rpc, config.contract, eoa).getOrNull() } catch (e: Exception) { null } ?: return unknownChain()
+            val parsed = !snap.record.exists || PgpPublicIdentity.parse(snap.record.publicKeyArmored) != null
+            return AddressPgpChain(parsed, backupOk = true, record = snap.record, backup = snap.backupText,
+                reread = { readSingle(eoa, config, rpcFor) }, block = snap.block)
         }
     }
 }

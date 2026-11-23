@@ -10,7 +10,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * walletEoaAddress on the window channel (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项; PM R1907). The origin and the main frame are
+ * walletEoaAddress on the window channel (spec §25.52Y.42 第 5 项 (c), (d); r3ny 第 9 项). The origin and the main frame are
  * decided first; a request from a source that is not allowed never reaches the vault or the gate. The address is the only result.
  */
 class WalletEoaAddressBridgeTest {
@@ -96,7 +96,7 @@ class WalletEoaAddressBridgeTest {
         assertTrue(WalletEoaAddressBridge.NAME in BridgeCommandTable.WINDOW_CHANNEL)
     }
 
-    /** walletCredential is never on the chat channel; on the window channel it is served only behind the SDK's declaration (PM R2048). */
+    /** walletCredential is never on the chat channel; on the window channel it is served only behind the SDK's declaration. */
     @Test
     fun walletCredentialIsNotOnTheChatChannel() {
         assertFalse(BridgeCommandTable.isRegistered("walletCredential"))
@@ -114,7 +114,7 @@ class WalletEoaAddressBridgeTest {
     }
 
     /**
-     * PM R1921: the shell's window call reaches walletEoaAddress through the bridge that BeamioShellRecordImport.handle delegates to. The
+     * The shell's window call reaches walletEoaAddress through the bridge that BeamioShellRecordImport.handle delegates to. The
      * request from the embedded page returns the address only. (The public entry itself needs an Android Context, which these unit tests cannot
      * build; the delegation is checked by source below.)
      */

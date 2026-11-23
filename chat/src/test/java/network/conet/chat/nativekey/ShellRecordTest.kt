@@ -140,7 +140,7 @@ class ShellRecordTest {
 
     @Test
     fun theWalletSlotFollowsTheAccountKeyNotThePosition() {
-        // §25.52H.3 (R404 #3): the W slot is the profile whose keyID is the account, wherever it sits in the array.
+        // §25.52H.3 (#3): the W slot is the profile whose keyID is the account, wherever it sits in the array.
         val other = "0x4444444444444444444444444444444444444444"
         val stored = JSONObject()
             .put("rev", 1)
@@ -197,7 +197,7 @@ class ShellRecordTest {
 
     @Test
     fun aReadKeepsTheWalletFieldsForThePage() {
-        // §25.52I.2 (R404 #1): a read carries the W fields, and it never carries walletFieldsRedacted.
+        // §25.52I.2 (#1): a read carries the W fields, and it never carries walletFieldsRedacted.
         val resp = readBridge(storedWalletStore()).handle(
             ShellOrigin.EMBEDDED_PAGE,
             JSONObject().put("type", "shellRecordRead").put("reqId", "rw1"),
@@ -212,7 +212,7 @@ class ShellRecordTest {
 
     @Test
     fun aReadDeletesThePgpPublicFieldsAndKeepsTheRouter() {
-        // §25.52I.2 (R404 #2): the read copy loses the PGP public fields; the whitelisted router stays.
+        // §25.52I.2 (#2): the read copy loses the PGP public fields; the whitelisted router stays.
         val store = SealedPageRecordStore(NativeTestWrap(), NativeTestFiles(), "$ACCOUNT:default")
         store.write(
             JSONObject()
@@ -245,7 +245,7 @@ class ShellRecordTest {
 
     @Test
     fun aWritePgpPublicFieldIsBadRequestAndNamesItsPaths() {
-        // §25.52I.3 (R404 #2): the PGP public fields are not whitelisted. A write that carries them is refused with the paths named.
+        // §25.52I.3 (#2): the PGP public fields are not whitelisted. A write that carries them is refused with the paths named.
         val record = JSONObject()
             .put("rev", 1)
             .put("schemaVersion", 2)
@@ -271,7 +271,7 @@ class ShellRecordTest {
 
     @Test
     fun theWhitelistMatchesExactPathsOnly() {
-        // R412 (d): a name that only looks like a whitelisted one is a violation.
+        // (d): a name that only looks like a whitelisted one is a violation.
         val record = JSONObject()
             .put("rev", 0)
             .put("schemaVersion", 2)
@@ -293,7 +293,7 @@ class ShellRecordTest {
 
     @Test
     fun aStoredWalletCopyRefusesOlderOrSchemaLessWrites() {
-        // §25.52F.5, R412 (c): a stored copy that holds W fields takes only schema 2 writes. Schema 1 and a missing schemaVersion are refused,
+        // §25.52F.5 (c): a stored copy that holds W fields takes only schema 2 writes. Schema 1 and a missing schemaVersion are refused,
         // and the refusal names the stored W paths.
         val store = storedWalletStore()
         for (schema in listOf<Any?>(1, null)) {
@@ -357,7 +357,7 @@ class ShellRecordTest {
 
     @Test
     fun theStoreBindsTheAccountKeyAndTheVersionByteAsAad() {
-        // R412 (a): the AAD is the account key in lower case plus one version byte; the file begins with that version byte.
+        // (a): the AAD is the account key in lower case plus one version byte; the file begins with that version byte.
         val wrap = CapturingWrap()
         val files = NativeTestFiles()
         SealedPageRecordStore(wrap, files, "$ACCOUNT:default").write(JSONObject().put("rev", 1).put("schemaVersion", 2))
@@ -444,7 +444,7 @@ class ShellRecordTest {
             JSONObject().put("type", "shellRecordMigrationState").put("reqId", "s1"),
             40,
         )
-        // 25.52AW.1, AU.1, BU.1 (R709): an unknown shellRecord* name on the window channel is the envelope-level answer: ok false, error
+        // 25.52AW.1, AU.1, BU.1 : an unknown shellRecord* name on the window channel is the envelope-level answer: ok false, error
         // unknown_command, no result, the reqId echoed, once. (It was bad_request before r3cu; a result.code form before r3du.)
         assertEquals(false, refused.getBoolean("ok"))
         assertEquals("unknown_command", refused.getString("error"))
@@ -473,13 +473,23 @@ class ShellRecordTest {
 
         assertEquals("migrating", read(null))
         assertEquals("absent", read(ImportOutcome.ABSENT))
+        // E9.11.33 r2-amend6 §5.3: the shell reported the store unreadable: error legacy_store_unreadable (not migrating, not absent), no write.
+        val reportedUnreadable = object : DeviceFlags by NoFlagsForReport(LegacyReportState.UNREADABLE) {}
         val unreadable = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
             outcome = { ImportOutcome.LEGACY_UNREADABLE },
+            flags = reportedUnreadable,
         ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r2"), 40)
-        // §25.52U.6 (r3rz): an unreadable legacy store answers migrating, not error(legacy_store_unreadable).
-        assertEquals("migrating", unreadable.v().getString("code"))
+        assertEquals("error", unreadable.v().getString("code"))
+        assertEquals("legacy_store_unreadable", unreadable.v().getString("sub"))
+        // LEG-4 control: no report and an unreadable outcome answers migrating (a shell defect state), with no marker written.
+        val noReport = ShellRecordBridge(
+            account = { ShellRecordAccount.Unknown },
+            migrating = { false },
+            outcome = { ImportOutcome.LEGACY_UNREADABLE },
+        ).handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordRead").put("reqId", "r2b"), 40)
+        assertEquals("migrating", noReport.v().getString("code"))
         val notDone = ShellRecordBridge(
             account = { ShellRecordAccount.Unknown },
             migrating = { false },
@@ -490,7 +500,7 @@ class ShellRecordTest {
 
     @Test
     fun aLockedStoreOnAWriteIsWriteFailedOnce() {
-        // 25.52CH.1 (r3eg): a write on a locked store is ok:true with write_failed, once, with the reqId as sent.
+        // 25.52CH.1 (r3eg) and SRP-04 (option A): a write on a locked store is the envelope ok:false, error write_failed, once, with the reqId as sent.
         val bridge = ShellRecordBridge(
             account = { ShellRecordAccount.Locked },
             migrating = { false },
@@ -498,8 +508,8 @@ class ShellRecordTest {
         )
         val record = JSONObject().put("rev", 1).put("schemaVersion", 1)
         val write = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordWrite").put("reqId", "w1").put("record", record), 60)
-        assertEquals(true, write.getBoolean("ok"))
-        assertEquals("write_failed", write.getJSONObject("result").getString("code"))
+        assertEquals(false, write.getBoolean("ok"))
+        assertEquals("write_failed", write.getString("error"))
         assertEquals("w1", write.getString("reqId"))
     }
 
@@ -525,8 +535,8 @@ class ShellRecordTest {
         assertEquals("f1", read.getString("reqId"))
         val record = JSONObject().put("rev", 1).put("schemaVersion", 1)
         val write = bridge.handle(ShellOrigin.EMBEDDED_PAGE, JSONObject().put("type", "shellRecordWrite").put("reqId", "f2").put("record", record), 60)
-        assertEquals(true, write.getBoolean("ok"))
-        assertEquals("write_failed", write.getJSONObject("result").getString("code"))
+        assertEquals(false, write.getBoolean("ok"))
+        assertEquals("write_failed", write.getString("error"))
         assertEquals("f2", write.getString("reqId"))
     }
 
@@ -632,4 +642,16 @@ class ShellRecordTest {
     }
 
     private fun JSONArray.toList(): List<String> = (0 until length()).map { getString(it) }
+}
+
+/** A device-flag set that only reports the legacy state (the rest is inert), for the bridge tests. */
+private class NoFlagsForReport(private val state: LegacyReportState) : DeviceFlags {
+    override fun accountPointer(): Boolean = false
+    override fun setAccountPointer() = Unit
+    override fun accountAddress(): String? = null
+    override fun setAccountAddress(eoa: String) = Unit
+    override fun legacyUnreadable(): Boolean = false
+    override fun setLegacyUnreadable() = Unit
+    override fun clearLegacyUnreadable() = Unit
+    override fun legacyReport(): LegacyReportState = state
 }

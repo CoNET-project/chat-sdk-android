@@ -319,13 +319,10 @@ class PgpMigrationTest {
     fun logoutKeepsTheLegacyCopyAndUnregistersFirst() {
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
         assertFalse("logout must not clear the whole PGP store, which holds L", module.contains("BeamioChatPgpStore.clear(ctx)"))
-        assertTrue(module.contains("BeamioChatPgpStore.clearKeepingLegacy(ctx)"))
+        assertFalse("B4: the identity clear no longer calls clearKeepingLegacy", module.contains("clearKeepingLegacy"))
         assertTrue("the recovery check runs before any removal", module.contains("BeamioPgpMigrationImport.clearCheck(ctx, eoa, false)") && module.contains("BeamioPgpMigrationImport.clearCheck(ctx, eoa, true)"))
         val store = File("src/main/java/network/conet/chat/BeamioChatPgpStore.kt").readText()
-        val start = store.indexOf("fun clearKeepingLegacy(")
-        assertTrue("clearKeepingLegacy exists", start >= 0)
-        val body = store.substring(start, store.indexOf("\n    }", start))
-        assertTrue("L is excluded from the removal", body.contains("it != KEY_PRIVATE"))
+        assertFalse("B4: clearKeepingLegacy is removed from the main source", store.contains("fun clearKeepingLegacy("))
     }
 
     @Test

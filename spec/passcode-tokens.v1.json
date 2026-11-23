@@ -1,5 +1,5 @@
 {
-  "spec": "spec v1.1-r3b §25.17.10（第十批采纳）",
+  "spec": "spec v1.1- §25.17.10（第十批采纳）",
   "source": "passcode-unified-ui-spec-2026-11-11.md 第 8 节（PWA 草案），单位与缺失项由接口负责人补全",
   "units": "px 等同于 iOS pt 与 Android dp（@1x）。颜色为 #RRGGBB 或 #RRGGBBAA。",
   "color": {

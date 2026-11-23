@@ -10,7 +10,7 @@ import java.security.MessageDigest
 
 /**
  * Spec §25.26.1 and §25.26.2: the BIP-39 derivation against `spec/mnemonic-derivation-vectors.v1.json`
- * (sha256 ec646d4d…4230), 14 cases, MD-1 to MD-14. Every valid case must give its `eoa`; every invalid case
+ * (sha256 944097ee…4230), 14 cases, MD-1 to MD-14. Every valid case must give its `eoa`; every invalid case
  * must return no key. Only public BIP-39 test vectors are used.
  */
 class MnemonicDerivationVectorsTest {
@@ -22,7 +22,7 @@ class MnemonicDerivationVectorsTest {
 
     @Test
     fun vectorFileIsTheCanonicalOne() {
-        assertEquals("ec646d4d63201059582d93620e0e7ef2bee8bbe44d5822570c2d7ce40d274230", sha256Hex(bytes))
+        assertEquals("944097ee088592bf4ee33e3d894fc6f6987abf3564472881d0db990ab736594e", sha256Hex(bytes))
     }
 
     @Test

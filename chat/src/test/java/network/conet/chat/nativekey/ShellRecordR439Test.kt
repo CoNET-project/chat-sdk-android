@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The r3bq items (spec §25.52U, R439): an unread legacy store answers `migrating`; `needs_native_recovery` is judged against the matching
+ * The r3bq items (spec §25.52U): an unread legacy store answers `migrating`; `needs_native_recovery` is judged against the matching
  * profile, and `account_mismatch` covers a schema 2 record with no matching profile; a readable record wins over the device marker and repairs
  * the empty pointer (§25.52U.5).
  */

@@ -1,6 +1,6 @@
 {
   "file": "pgp-restore-acceptance-vectors.v1.json",
-  "purpose": "P-IMP-PGP 方案 A 验收向量（spec r3n §25.30）。合成数据，只用于本地测试，不得用于生产。",
+  "purpose": "P-IMP-PGP 方案 A 验收向量（spec §25.30）。合成数据，只用于本地测试，不得用于生产。",
   "generator": "gen-pgp-restore-acceptance-vectors.mjs",
   "generatorNote": "参考模拟器（纯本地，无网络、无链访问、无合约调用）。各端实现须与本模拟的 stepResults 与 final 逐项一致。",
   "sourceVector": {
@@ -171,13 +171,13 @@
       "noop"
     ],
     "failureCodes": {
-      "registration_missing": "pgp_registration_missing（有备份无登记；r3o，失败类，待 Android 对齐）",
+      "registration_missing": "pgp_registration_missing（有备份无登记；，失败类，待 Android 对齐）",
       "first_identity": "首次建立（非失败类，无码）",
       "backup_missing": "pgp_backup_missing",
       "decrypt_failed": "pgp_backup_undecryptable（GCM、口令、base64）；pgp_backup_invalid（解开后不是 PGP 私钥 armor）",
       "fingerprint_mismatch": "pgp_fingerprint_mismatch",
       "undetermined": "pgp_source_unavailable（读取失败，不是缺失）",
-      "note": "码名采用 Android 回执 §42 已实现的名称（接口负责人定名，r3n）。\"链上无身份\"为 no_identity_yet，不属于三类失败；Android §42 将其与\"有备份但无登记\"一并归入 pgp_backup_missing，待 PM 确认（矩阵 §8.4）。"
+      "note": "码名采用 Android 回执 §42 已实现的名称（接口负责人定名）。\"链上无身份\"为 no_identity_yet，不属于三类失败；Android §42 将其与\"有备份但无登记\"一并归入 pgp_backup_missing，待确认（矩阵 §8.4）。"
     }
   },
   "copy": {
@@ -187,7 +187,7 @@
         "zh": "初始化失败，你的旧数据丢失",
         "en": "Chat setup failed. Your old data is lost.",
         "enAlternative": "Chat setup failed. Your previous Chat identity could not be restored. Your wallet and assets are not affected.",
-        "note": "项目方原文为中文。英文直译保留\"旧数据丢失\"。备选文案更准确。由项目方裁定（矩阵 §8.2 第 18 项）。"
+        "note": "原文为中文。英文直译保留\"旧数据丢失\"。备选文案更准确。由裁定（矩阵 §8.2 第 18 项）。"
       },
       "chat.restore_failed.entry": {
         "zh": "生成新的聊天身份",
@@ -248,14 +248,14 @@
   },
   "rules": [
     "三类失败（备份缺失、解不开、指纹不符）：禁止自动生成新钥、禁止自动注册、禁止覆盖链上公钥和备份。",
-    "替换（P-IMP-REPLACE，项目方 2026-11-13）：只有用户确认之后才允许覆盖。确认必须是原生确认界面（surface: native），提示须包含 requiredPhrase。没有确认，一律不覆盖、不自动生成或注册。",
+    "替换（P-IMP-REPLACE， 2026-11-13）：只有用户确认之后才允许覆盖。确认必须是原生确认界面（surface: native），提示须包含 requiredPhrase。没有确认，一律不覆盖、不自动生成或注册。",
     "CAS：确认后与写入前，先读链上现状，与失败时界面所见的状态一致才继续；否则中止（cas_conflict）、丢弃待用钥，并重新判定。",
     "确认界面：默认焦点为取消；120 秒无操作视为取消（confirm_timeout）；不提供\"记住选择\"或后台确认。",
     "幂等：同一幂等键的重复确认只生成一次；确认成功后以同一幂等键再次确认，返回 idempotent，不再写链。",
     "读取失败（链上或备份）不等于无记录或备份缺失，只能重试。",
     "钱包地址与链上资产不受 Chat 初始化失败影响（walletWrites 恒为 0）。",
-    "有备份但无登记（状态不一致）：属于失败类，与三类失败走同一路径：不自动生成，不自动注册；用户确认后可替换，按 CAS 规则（r3o，PM 裁定）。",
-    "首次建立（链上无身份且无备份）：不属于失败类。允许生成，但须用户在原生确认界面确认；注册前按 CAS 核对链上确为空，不为空则中止并重新判定（r3o，PM 裁定）。",
+    "有备份但无登记（状态不一致）：属于失败类，与三类失败走同一路径：不自动生成，不自动注册；用户确认后可替换，按 CAS 规则（裁定）。",
+    "首次建立（链上无身份且无备份）：不属于失败类。允许生成，但须用户在原生确认界面确认；注册前按 CAS 核对链上确为空，不为空则中止并重新判定（裁定）。",
     "冷启动只做对账与只读评估，不得生成新钥。",
     "本向量不含真实私钥。P-1、P-2 来自兼容向量；P-3、P-4 为合成测试钥，口令为空。"
   ],
@@ -6891,6 +6891,182 @@
       "Q",
       "N",
       "S"
+    ]
+  },
+  "pgpRestoreEvaluateReply": {
+    "$comment": "口令协议 v1 §13 附加节（单 RPC 口径，2026-11-20）：pgpRestoreEvaluate 答复增加 legacy 与 chain；字段缺失或取值未知一律视为 unknown（失败即关闭）。由 gen-pgp-evaluate-reply.mjs 生成。附加节，不改动各文件原有 cases。",
+    "reply": {
+      "fields": {
+        "state": "既有字段（ui state，如 first_identity）",
+        "legacy": {
+          "enum": [
+            "ABSENT",
+            "PRESENT",
+            "UNREADABLE"
+          ]
+        },
+        "chain": {
+          "enum": [
+            "unregistered",
+            "registered",
+            "unknown"
+          ]
+        }
+      },
+      "missingOrUnknownMeans": "unknown_fail_closed"
+    },
+    "rules": [
+      "首个身份：仅当 state=first_identity 且 legacy=ABSENT 且 chain=unregistered 同时成立，才开放创建入口。",
+      "其余一律身份待恢复：无创建入口，显示“聊天身份待恢复”（键 chat.identity_pending.*，中英两版）。",
+      "legacy=UNREADABLE 或 PRESENT：这台设备只能恢复或迁移，不能创建。",
+      "chain 口径（2026-11-20，单 RPC）：单 RPC 读到已登记 → registered；读取成功且无登记 → unregistered；读取失败、超时或答复畸形 → unknown（失败即关闭）。",
+      "客户端只使用单 RPC，不要求第二个独立端点、不要求同一区块交叉核对。（取代 §13 第 3 条与冻结件 §十三第 3 条的双端点要求。）",
+      "读取不携带任何秘密；页面不发起此类网络请求。"
+    ],
+    "rpcOutcomes": {
+      "registered": "chain=registered",
+      "unregistered": "chain=unregistered（仅当读取成功且无登记）",
+      "timeout": "chain=unknown",
+      "error": "chain=unknown",
+      "malformed": "chain=unknown"
+    },
+    "cases": [
+      {
+        "id": "RE-01",
+        "title": "首个身份：单 RPC 读取成功且无登记",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "chain": "unregistered",
+          "creationEntry": "open",
+          "display": "first_identity"
+        }
+      },
+      {
+        "id": "RE-02",
+        "title": "单 RPC 读到已登记：registered，不开放创建",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "registered"
+        },
+        "expect": {
+          "chain": "registered",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-03",
+        "title": "RPC 超时：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "timeout"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-04",
+        "title": "RPC 读取失败：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "error"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-05",
+        "title": "RPC 答复畸形（无法解析）：unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "rpc": "malformed"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-06",
+        "title": "legacy=PRESENT 不得创建（即使 RPC 无登记）",
+        "input": {
+          "state": "first_identity",
+          "legacy": "PRESENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-07",
+        "title": "legacy=UNREADABLE 不得创建（即使 RPC 无登记）",
+        "input": {
+          "state": "first_identity",
+          "legacy": "UNREADABLE",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-08",
+        "title": "legacy 字段缺失视为 unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "legacy": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-09",
+        "title": "chain 取值不在枚举内（畸形）视为 unknown，关闭",
+        "input": {
+          "state": "first_identity",
+          "legacy": "ABSENT",
+          "chainRaw": "maybe"
+        },
+        "expect": {
+          "chain": "unknown",
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      },
+      {
+        "id": "RE-10",
+        "title": "状态非 first_identity 时即使 legacy=ABSENT 且无登记，也不开放创建",
+        "input": {
+          "state": "ok",
+          "legacy": "ABSENT",
+          "rpc": "unregistered"
+        },
+        "expect": {
+          "creationEntry": "closed",
+          "display": "identity_pending"
+        }
+      }
     ]
   }
 }

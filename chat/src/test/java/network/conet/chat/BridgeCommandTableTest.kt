@@ -3,6 +3,7 @@ package network.conet.chat
 import network.conet.chat.localread.NativeHistoryDelete
 import network.conet.chat.nativekey.NoKeyGate
 import org.json.JSONObject
+import android.content.Context
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,7 +12,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 25.52AR.2 (PM R647) and 25.52AN.5 (r3cl): a name outside the bridge command table is rejected with `command_rejected`, before the gate.
+ * 25.52AR.2 and 25.52AN.5 (r3cl): a name outside the bridge command table is rejected with `command_rejected`, before the gate.
  * The dispatch table in the source is read and compared with [BridgeCommandTable.DISPATCH], name by name, in both directions.
  */
 class BridgeCommandTableTest {
@@ -22,7 +23,7 @@ class BridgeCommandTableTest {
     /** The names of the `when (type)` table in `dispatch`, read from the source (one arrow line per name or name group). */
     private fun dispatchNamesInSource(): Set<String> {
         val lines = source.lines()
-        val start = lines.indexOfFirst { "private fun dispatch(type: String, body: JSONObject)" in it }
+        val start = lines.indexOfFirst { "private fun dispatch(context: Context, type: String, body: JSONObject)" in it }
         require(start >= 0) { "dispatch not found in the source" }
         val whenAt = (start until lines.size).first { "when (type) {" in lines[it] }
         val elseAt = (whenAt until lines.size).first { lines[it].trimStart().startsWith("else ->") }
@@ -118,11 +119,12 @@ class BridgeCommandTableTest {
     }
 
     /**
-     * 25.52BY.1, BW.2 (r3dw, r3dy): the reference table T is protocol/table-T.v1.json (67 names, spec/table-T.v1.json). The audit of the dispatch
-     * table refers to it. Every registered name must be in it.
+     * 25.52BY.1, BW.2 (r3dw, r3dy): the reference table T is protocol/table-T.v3.json (77 names, spec/table-T.v3.json; 2026-11-20 option b, copied
+     * byte-identical from commit). v1 and v2 are not the reference any more. The audit of the dispatch table refers to it. Every registered
+     * name must be in it.
      */
     private fun tableT(): Set<String> {
-        val doc = JSONObject(File("../spec/table-T.v1.json").readText(Charsets.UTF_8))
+        val doc = JSONObject(File("../spec/table-T.v3.json").readText(Charsets.UTF_8))
         val names = doc.getJSONArray("names")
         return (0 until names.length()).map { names.getString(it) }.toSet()
     }
@@ -130,13 +132,17 @@ class BridgeCommandTableTest {
     @Test
     fun everyRegisteredNameIsInTheReferenceTable() {
         val t = tableT()
-        assertEquals(68, t.size) // 25.52Y.95 第 1 条: T1 13 names (accountCleanupOld), total 68
+        // table-T v3 (77 names): v2's 75 plus nativeIdentityCheck and uiLockState (interface v42 §46, v43 §47).
+        assertEquals(77, t.size)
         val exact = BridgeCommandTable.DISPATCH + BridgeCommandTable.DECIDED_BEFORE_DISPATCH + BridgeCommandTable.GATE_STATUS + NoKeyGate.RETIRED
-        // 25.52AW.3, BG.4, BP.1: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); chatRouteRegister (W5, 25.28.3, PM R2085)
+        // 25.52AW.3, BG.4, BP.1: the registered exact names are 43 + 5 + 2 + 3 (pgpSign is not bridged); chatRouteRegister (W5, 25.28.3)
         // makes 54; the page-record names are in T too.
         // 25.52Y.65 第 5 项: pgpUpgradeRetry is in table-T (T1 12, total 67); it is the 55th registered name.
         // 25.52Y.95 第 1 条: accountCleanupOld (T1 13, total 68) is the 56th registered name (Y.100 第 5 项).
-        assertEquals(56, exact.size)
+        // r2.3 41(1): nativeImportOpen was removed from the bridge; r2.4.2 42 adds pwaWalletSync, nativeMnemonicPreread (r2.4.3). 57 names.
+        // 58 registered names before the two new commands; 60 with nativeIdentityCheck and uiLockState (both in table-T v3).
+        assertEquals(62, exact.size)
+        // r2.5.1: table-T is re-pinned (69 names, pwaWalletSync and nativeMnemonicPreread included); no exception.
         val outside = (exact + BridgeCommandTable.CHAT_CHANNEL_SHELL_RECORD).filter { it !in t }
         assertTrue("registered names outside table-T: $outside", outside.isEmpty())
         assertTrue("T1 names are in table-T", t.containsAll(setOf("identityPublic", "historyDeleteMessage", "historyDeleteConversation", "pgpIdentityCreate", "pgpRestore", "pgpRestoreEvaluate", "pgpMigrate")))
@@ -148,7 +154,7 @@ class BridgeCommandTableTest {
         // 25.52BZ.4: the locked check of the gate step is after the name check and before the no_key or not_ready answers and the handlers.
         val name = source.indexOf("BridgeCommandTable.isRegistered(type)")
         val locked = source.indexOf("NoKeyGate.lockedAnswer(type, state)")
-        val gateAnswer = source.indexOf("when (NoKeyGate.answerFor(type, gate))")
+        val gateAnswer = source.indexOf("when (NoKeyGate.answerFor(type, commandGate))")
         assertTrue("the locked check exists", locked > 0)
         assertTrue("the name check comes before the locked check", name in 0 until locked)
         assertTrue("the locked check comes before the no_key and not_ready answers", locked in 0 until gateAnswer)

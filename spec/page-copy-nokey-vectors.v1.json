@@ -1,0 +1,195 @@
+{
+ "file": "page-copy-nokey-vectors.v1.json",
+ "spec": "25.52Y.151（第 1 至 6 项），25.52Y.153（批准记录）",
+ "generator": "gen-page-copy-nokey-vectors.mjs",
+ "note": "Synthetic. No keys. walletEoaAddress mapping and shellRecordRead G0 redaction. Shared by Android, iOS and PWA.",
+ "cases": [
+  {
+   "id": "PNK-01",
+   "title": "walletEoaAddress no_key，walletStatus no_key，kPresent false，无页面副本：确认无，映射 none，进入 onboarding",
+   "rule": "Y.151 第 2、3 项",
+   "input": {
+    "native": "no_key",
+    "walletStatus": "no_key",
+    "kPresent": false,
+    "pageCopyPresent": false
+   },
+   "expect": {
+    "mapping": "none",
+    "pageAction": "onboarding"
+   }
+  },
+  {
+   "id": "PNK-02",
+   "title": "walletEoaAddress no_key，有页面副本：不映射 none，仅显示原生恢复入口，隐藏新建，不自动重试",
+   "rule": "Y.151 第 1、3、4 项",
+   "input": {
+    "native": "no_key",
+    "walletStatus": "no_key",
+    "kPresent": false,
+    "pageCopyPresent": true
+   },
+   "expect": {
+    "mapping": "needs_native_recovery",
+    "pageAction": "native_recovery_entry_only",
+    "newAccountDisabled": true,
+    "autoRetry": false
+   }
+  },
+  {
+   "id": "PNK-03",
+   "title": "walletEoaAddress no_key，kPresent 缺失：不可判无，须恢复（不得 none）",
+   "rule": "Y.151 第 2 项、Y.90",
+   "input": {
+    "native": "no_key",
+    "walletStatus": "no_key",
+    "kPresent": null,
+    "pageCopyPresent": false
+   },
+   "expect": {
+    "mapping": "needs_native_recovery",
+    "pageAction": "retry_unknown"
+   }
+  },
+  {
+   "id": "PNK-04",
+   "title": "walletEoaAddress no_key，kPresent 为真：不可判无",
+   "rule": "Y.151 第 2 项",
+   "input": {
+    "native": "no_key",
+    "walletStatus": "no_key",
+    "kPresent": true,
+    "pageCopyPresent": false
+   },
+   "expect": {
+    "mapping": "needs_native_recovery",
+    "pageAction": "native_recovery_entry_only",
+    "newAccountDisabled": true,
+    "autoRetry": false
+   }
+  },
+  {
+   "id": "PNK-05",
+   "title": "walletEoaAddress 返回地址（原生持钥）：照常使用原生地址",
+   "rule": "Y.151 第 3 项",
+   "input": {
+    "native": "address",
+    "walletStatus": "unlocked",
+    "kPresent": true,
+    "pageCopyPresent": true
+   },
+   "expect": {
+    "mapping": "address_reported",
+    "pageAction": "use_native_address"
+   }
+  },
+  {
+   "id": "PNK-06",
+   "title": "shellRecordRead，原生 G0，页面副本含 W 字段：剥离 privateKeyArmor、mnemonicPhrase、recoveryWords，其余字段返回",
+   "rule": "Y.151 第 2 项、Y.150 第 1 项",
+   "input": {
+    "walletState": "G0",
+    "schemaVersion": 2,
+    "copyFields": [
+     "privateKeyArmor",
+     "mnemonicPhrase",
+     "recoveryWords",
+     "keyID",
+     "workspace"
+    ]
+   },
+   "expect": {
+    "code": "ok",
+    "fieldsReturned": [
+     "keyID",
+     "workspace"
+    ],
+    "redacted": [
+     "privateKeyArmor",
+     "mnemonicPhrase",
+     "recoveryWords"
+    ]
+   }
+  },
+  {
+   "id": "PNK-07",
+   "title": "shellRecordRead，原生 G0，schema2 副本无 privateKeyArmor：答 error，sub needs_native_recovery，不返回字段（25.52U.4；不是 ok）",
+   "rule": "Y.151 第 2 项、§25.52U.4",
+   "input": {
+    "walletState": "G0",
+    "schemaVersion": 2,
+    "copyFields": [
+     "keyID",
+     "workspace"
+    ]
+   },
+   "expect": {
+    "code": "error",
+    "sub": "needs_native_recovery",
+    "fieldsReturned": [],
+    "redacted": []
+   }
+  },
+  {
+   "id": "PNK-10",
+   "title": "shellRecordRead，原生 G0，非 schema2（旧格式）副本只含非 W 字段：不触发 U.4，正常返回字段",
+   "rule": "Y.151 第 2 项、§25.52U.4（schema2 限定）",
+   "input": {
+    "walletState": "G0",
+    "schemaVersion": 1,
+    "copyFields": [
+     "keyID",
+     "workspace"
+    ]
+   },
+   "expect": {
+    "code": "ok",
+    "fieldsReturned": [
+     "keyID",
+     "workspace"
+    ],
+    "redacted": []
+   }
+  },
+  {
+   "id": "PNK-08",
+   "title": "shellRecordRead，原生 G2（持钥）：W 字段按 Y.41 不剥离",
+   "rule": "Y.41 第 4 项（不变）",
+   "input": {
+    "walletState": "G2",
+    "schemaVersion": 2,
+    "copyFields": [
+     "privateKeyArmor",
+     "mnemonicPhrase",
+     "keyID"
+    ]
+   },
+   "expect": {
+    "code": "ok",
+    "fieldsReturned": [
+     "privateKeyArmor",
+     "mnemonicPhrase",
+     "keyID"
+    ],
+    "redacted": []
+   }
+  },
+  {
+   "id": "PNK-09",
+   "title": "shellRecordRead，原生 G1（有记录未 init）：答 not_ready，不返回任何字段（W 字段不泄露）",
+   "rule": "Y.151 第 2 项、§25.52AD.2（G1 下 shellRecord 仍返回 not_ready）",
+   "input": {
+    "walletState": "G1",
+    "schemaVersion": 2,
+    "copyFields": [
+     "privateKeyArmor"
+    ]
+   },
+   "expect": {
+    "code": "not_ready",
+    "fieldsReturned": [],
+    "redacted": []
+   }
+  }
+ ]
+}

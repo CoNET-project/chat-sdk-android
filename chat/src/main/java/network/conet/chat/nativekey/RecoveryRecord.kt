@@ -16,7 +16,7 @@ import javax.crypto.spec.SecretKeySpec
  * The key is Argon2id(password, salt, m, t, p, 32 bytes). The plaintext is the base64 of the BIP-39 phrase. Nothing here
  * logs its input or output.
  *
- * ARGON2-DEP (§25.42.11): the Argon2id provider is the project's decision. [argon2idKey] is the only place that names it.
+ * ARGON2-DEP (§25.42.11): the Argon2id provider is a fixed choice. [argon2idKey] is the only place that names it.
  * It is BouncyCastle, which the build already carries (bcprov 1.87). Its output matches the PWA's @noble/hashes on the
  * synthetic vectors.
  */

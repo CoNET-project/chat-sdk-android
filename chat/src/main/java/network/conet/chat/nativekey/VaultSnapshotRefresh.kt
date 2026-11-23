@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object VaultSnapshotRefresh {
     const val BACKOFF_MS = 30_000L
 
-    /** The backoff after [failures] consecutive failures (project ruling 2026-11-16): 1 s, 2 s, 4 s, …, capped at [BACKOFF_MS]. 0 when none. */
+    /** The backoff after [failures] consecutive failures: 1 s, 2 s, 4 s, …, capped at [BACKOFF_MS]. 0 when none. */
     internal fun backoffMs(failures: Int): Long = when {
         failures <= 0 -> 0L
         failures > 6 -> BACKOFF_MS

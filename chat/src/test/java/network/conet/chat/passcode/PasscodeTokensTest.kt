@@ -9,7 +9,7 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * Checks [PasscodeTokens] against `spec/passcode-tokens.v1.json` (sha256 48ac9bad…, spec r3b 25.17.10).
+ * Checks [PasscodeTokens] against `spec/passcode-tokens.v1.json` (sha256 9f1644c9…, spec r3b 25.17.10).
  * The JSON file is the canonical copy from the PWA integration; the test does not rely on Android.
  */
 class PasscodeTokensTest {
@@ -19,7 +19,7 @@ class PasscodeTokensTest {
     @Test
     fun tokenFileIsTheCanonicalOne() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("48ac9bad09f748c7f965ecb42b332d6b4c5d765cc5940f1c98964a3f2e74f007", sha)
+        assertEquals("9f1644c9829fb233da552ab5ff4bfe6407e7438b4d6925d66eb11c25f370e7e0", sha)
     }
 
     @Test

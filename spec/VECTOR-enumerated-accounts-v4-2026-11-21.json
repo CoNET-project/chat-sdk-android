@@ -1,0 +1,572 @@
+{
+  "vectorSet": "accountCleanupOld-enumerated-accounts",
+  "version": "v4",
+  "date": "2026-11-21",
+  "basis": "v220 第 240 节（旧账户集合＝能精确识别的全部账户地址减新账户）；v222 第 242 节（逐账户复读读回、非枚举来源残留计数、SE 项处理）；v223 第 243 节；",
+  "shape": "accountCleanupAck 与 accountCleanupOld v3 相同：{type:'ack', reqId, ok:<bool>, error?:<闭集码>, result:{cleanupPending:<bool>, keptUnattributed:<整数>}}；result 在所有结果中存在；拒绝时 cleanupPending:false、keptUnattributed:0。不新增字段。",
+  "closedErrorCodes": [
+    "not_ready",
+    "account_mismatch",
+    "not_confirmed",
+    "clear_incomplete",
+    "bad_request",
+    "confirmation_not_native",
+    "key_over_bridge_refused",
+    "not_available"
+  ],
+  "fixtureConvention": "oldEoa/newEoa 为小写 0x+40 hex；名称由 oldEoa 精确重算；sources 列出可枚举的来源；expectedDeleted/expectedKept 为条目名（示意），不读取内容判归属。",
+  "cases": [
+    {
+      "id": "EA-01-multi-old-all-cleared",
+      "description": "设备上两个旧账户，新账户保留；两旧账户的可精确归属条目全部删除",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "oldEoa2",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "mnemonicRecord": [
+            "oldEoa2"
+          ],
+          "passcodeRecord": [
+            "oldEoa1",
+            "oldEoa2"
+          ],
+          "pageCopy": [
+            "oldEoa2"
+          ],
+          "pgp": [
+            "oldEoa1"
+          ],
+          "chatDb": [
+            "oldEoa2"
+          ],
+          "kItem": [
+            "oldEoa1"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的全部精确归属条目",
+        "oldEoa2 的全部精确归属条目"
+      ],
+      "expectedKept": [
+        "newEoa 的钥串、钱包、聊天",
+        "owner_v1.txt",
+        "inbox_v1.json",
+        "call_signals_v1.json"
+      ]
+    },
+    {
+      "id": "EA-02-only-page-copy-pgp-chat-old",
+      "description": "旧账户仅剩页面副本、PGP、聊天库，名称可精确重算，应清除",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [],
+          "mnemonicRecord": [],
+          "passcodeRecord": [],
+          "pageCopy": [
+            "oldEoa1"
+          ],
+          "pgp": [
+            "oldEoa1"
+          ],
+          "chatDb": [
+            "oldEoa1"
+          ],
+          "kItem": []
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的页面副本",
+        "oldEoa1 的 PGP",
+        "oldEoa1 的聊天库"
+      ],
+      "expectedKept": [
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-03-unattributable-kept-counted",
+      "description": "存在名称不能由任何旧地址精确重算的条目（类别：页面副本 pageCopy 名称残缺一条、PGP 名称残缺一条），留存并计入 keptUnattributed",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "pageCopy": {
+            "unattributable": [
+              "stray_page_1"
+            ]
+          },
+          "pgp": {
+            "unattributable": [
+              "stray_pgp_1"
+            ]
+          }
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 2
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的钥串及精确归属条目"
+      ],
+      "expectedKept": [
+        "stray_page_1",
+        "stray_pgp_1"
+      ]
+    },
+    {
+      "id": "EA-04-active-equals-candidate-kept-whole",
+      "description": "【防御分支】活动账户出现在候选旧集合（正常流程不可达）：仅该账户整组保留并计入 keptUnattributed，答 ok，不重试；其他旧账户照常删除（第 2 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "oldEoa1",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "oldEoa2",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "pageCopy": [
+            "oldEoa1"
+          ],
+          "passcodeRecord": [
+            "oldEoa2"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": "<integer>=oldEoa1 整组条目数"
+        }
+      },
+      "expectedKept": [
+        "oldEoa1 整组条目"
+      ],
+      "expectedDeleted": [
+        "oldEoa2 的 passcode.record"
+      ]
+    },
+    {
+      "id": "EA-05-enumeration-source-read-failed-not_ready",
+      "description": "旧账户枚举任一来源读取失败：答 not_ready，不删（第 2 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": null,
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "passcodeRecord": {
+            "readFailed": true
+          }
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true
+    },
+    {
+      "id": "EA-06-replay-same-key-no-redelete",
+      "description": "同 idempotencyKey 重放：不重复删除，结果与首次一致（或 ok 无新删除）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "priorRun": {
+          "idempotencyKey": "k-1",
+          "result": "ok"
+        },
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": []
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true,
+      "expectedKept": [
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-07-active-unknown-not_ready",
+      "description": "活动账户未知（读不出、不可读、锁定）：答 not_ready，不删，不计 keptUnattributed，不设 cleanupPending（第 1 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "unknown",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true
+    },
+    {
+      "id": "EA-08-active-unknown-differs-from-equal",
+      "description": "与 EA-04 区分：活动账户未知不等于活动账户等于候选旧地址；未知时不得计数",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "unknown",
+        "accountsEnumerated": [
+          "oldEoa1"
+        ],
+        "sources": {
+          "pageCopy": [
+            "oldEoa1"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "not_ready",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true
+    },
+    {
+      "id": "EA-09-mismatch-mid-run-stop-no-rollback",
+      "description": "逐账户删除前复读读回；第二个旧账户开始前读回不一致：立即 account_mismatch，停止后续删除，已删项不回滚（v222 第 242.1 节）。原生本地 journal 记录已删条目数与停止点（不进答复字段）；PWA 不写 done、不重发（第 1 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": "changes_before_second_account",
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "oldEoa2",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "pageCopy": [
+            "oldEoa2"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "account_mismatch",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的全部精确归属条目"
+      ],
+      "expectedKept": [
+        "oldEoa2 的全部条目（未开始删除）",
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-10-non-enumerable-residue-counted-not-ok-silent",
+      "description": "某来源按设计不可枚举（非读失败）时，其残留不得静默漏掉而答 ok：残留计入 keptUnattributed（v222 第 242.2 节）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "nonEnumerableSource": {
+            "residueByName": [
+              "oldEoa1_residue_1",
+              "oldEoa1_residue_2"
+            ]
+          }
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 2
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的钥串及精确归属条目"
+      ],
+      "expectedKept": [
+        "oldEoa1_residue_1",
+        "oldEoa1_residue_2",
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-11-se-key-kept-identified-only",
+      "description": "Secure Enclave 密钥（com.beamio.passcode.h.se.<eoa>）本版保留不删，仅用于枚举识别旧地址（v222 第 242.3 节，要求）；SE 项不计入 keptUnattributed（第 2 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "seKey": [
+            "oldEoa1"
+          ],
+          "passcodeRecord": [
+            "oldEoa1"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的 passcode.record"
+      ],
+      "expectedKept": [
+        "SE 密钥 com.beamio.passcode.h.se.oldEoa1",
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-12-readback-mismatch-readable-account_mismatch",
+      "description": "活动账户 ≠ accountKey 且可读但不等：答 account_mismatch，不删、不计、不设 cleanupPending（ 第 1 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": false,
+        "readable": true,
+        "accountKey": "newEoa",
+        "activeAccount": "oldEoa1",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "account_mismatch",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "noDelete": true
+    },
+    {
+      "id": "EA-13-mid-run-active-switch-stop",
+      "description": "删除过程中活动账户切换（删除前复读不一致）：立即 account_mismatch，停止后续删除，已删不回滚（ 第 3 条，三端补用例）。原生本地 journal 记录已删条目数与停止点（不进答复字段）；PWA 不写 done、不重发（第 1 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": "changes_before_second_account",
+        "activeAccount": "newEoa",
+        "activeAccountSwitchedTo": "other",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "oldEoa2",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "pageCopy": [
+            "oldEoa2"
+          ]
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": false,
+        "error": "account_mismatch",
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 0
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的全部精确归属条目"
+      ],
+      "expectedKept": [
+        "oldEoa2 全部条目",
+        "newEoa 全部条目"
+      ]
+    },
+    {
+      "id": "EA-14-iOS-nonenumerable-residue-counted-ok",
+      "description": "iOS 不可枚举残留计数：钱包原始项、口令 H 层、恢复备份标志、钱包凭据块中按账户为键但无法归属的残留计入 keptUnattributed，答 ok，不设 cleanupPending（ 第 4 条）",
+      "state": {
+        "gate": "passed",
+        "readbackMatch": true,
+        "activeAccount": "newEoa",
+        "accountsEnumerated": [
+          "oldEoa1",
+          "newEoa"
+        ],
+        "sources": {
+          "keyVault": [
+            "oldEoa1"
+          ],
+          "walletRawItem": {
+            "unattributable": [
+              "walletRaw_1"
+            ]
+          },
+          "passcodeHLayer": {
+            "unattributable": [
+              "H_1"
+            ]
+          },
+          "recoveryBackupFlag": {
+            "unattributable": [
+              "backup_1"
+            ]
+          },
+          "walletCredentialBlock": {
+            "unattributable": [
+              "cred_1"
+            ]
+          }
+        }
+      },
+      "command": "accountCleanupOld",
+      "expect": {
+        "type": "ack",
+        "ok": true,
+        "result": {
+          "cleanupPending": false,
+          "keptUnattributed": 4
+        }
+      },
+      "expectedDeleted": [
+        "oldEoa1 的钥串及精确归属条目"
+      ],
+      "expectedKept": [
+        "walletRaw_1",
+        "H_1",
+        "backup_1",
+        "cred_1",
+        "newEoa 全部条目"
+      ]
+    }
+  ],
+  "supersedes": "VECTOR-enumerated-accounts-v1、v2、v3（v1–v3 已被本 v4 取代，实现与审查只用 v4）",
+  "final": true
+}

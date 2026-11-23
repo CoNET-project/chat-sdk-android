@@ -579,7 +579,7 @@ internal class PgpMigrationEngine(
     } ?: false
 
     /**
-     * The C.3 check for an account that holds no active pointer (PY.8 第 7 项, r3rf R2170 (a)): any one of L present, P readable natively,
+     * The C.3 check for an account that holds no active pointer (PY.8 第 7 项, r3rf (a)): any one of L present, P readable natively,
      * or a registered chain backup. The same three conditions as [hasRecoverySource]. Unreadable or failed checks count as not met.
      */
     fun orphanSource(): Boolean = runCatching { hasRecoverySource() }.getOrDefault(false)
@@ -756,7 +756,7 @@ internal class BeamioChatPgpLegacy(private val context: Context) : MigrationLega
 /** The production chain source: the AddressPGP record of the account, read only (§25.52I.7). */
 internal class AddressPgpMigrationChain : MigrationChain {
     override fun registered(eoa: String): ChainAnswer {
-        val chain = AddressPgpChain.read(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
+        val chain = AddressPgpChain.readAgreed(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
         if (!chain.chainReadable()) return if (chain.recordKnown()) ChainAnswer.Unparseable else ChainAnswer.Unavailable
         val identity = chain.identity() ?: return ChainAnswer.Absent
         return ChainAnswer.Found(identity.fingerprint.lowercase())
@@ -772,7 +772,7 @@ internal class ProductionRecovery(private val context: Context, private val eoa:
     override fun pReadable(): Boolean = false
 
     override fun chainRegistered(): Boolean {
-        val chain = AddressPgpChain.read(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
+        val chain = AddressPgpChain.readAgreed(eoa) { ep -> AddressPgpRead.HttpRpc(ep.url, ep.timeoutMs) }
         if (!chain.chainReadable() || chain.identity() == null) return false
         val backup = chain.backupText()
         if (backup.isEmpty()) return false
@@ -894,7 +894,7 @@ object BeamioPgpMigrationImport {
         if (!PgpMigrationPolicy.EOA_RE.matches(account)) return null
         if (!PgpMigrationPolicy.WORKSPACE_RE.matches(workspace)) return null
         val app = context.applicationContext
-        val wrap = AndroidKeyWrap()
+        val wrap = NativeWallet.keyWrap(app)
         val files = NativeWallet.migrationFiles(app)
         return PgpMigrationEngine(
             eoa = account,

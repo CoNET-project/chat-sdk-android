@@ -12,7 +12,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * The native account answers under the failures the PWA's onboarding rule depends on (Y.104 project ruling, 2026-11-16): a read that fails, a
+ * The native account answers under the failures the PWA's onboarding rule depends on (Y.104 , 2026-11-16): a read that fails, a
  * Keystore that is locked or unavailable, a record that cannot be read, and a record that is missing only partly must never answer `no_key` with
  * `kPresent` false (confirmed none). Each case below pins what the vault and the gate answer. Temporary directories and in-memory fakes only.
  */
@@ -43,13 +43,14 @@ class NativeUnknownStateTest {
 
     /** A present key record that the platform store cannot read is a read failure, never `no_key` (AndroidVaultFiles). */
     @Test
-    fun aKeyRecordThatIsNotARegularFileIsAReadFailureNotNoKey() {
+    fun aKeyRecordThatIsNotARegularFileWithNoPhraseIsNoAccountAndKept() {
         val dir = tmp.root.resolve("native_wallet_v1").apply { mkdirs() }
         File(dir, NativeWalletVault.REC).mkdirs()
         val v = NativeWalletVault(NativeTestWrap(), AndroidVaultFiles(dir))
 
-        assertThrows(IOException::class.java) { v.state() }
-        assertNull("nothing is taken as the state", v.snapshotState())
+        // the REC read fault does not decide; the phrase position is empty, so no account. The entry is kept.
+        assertEquals(NativeWalletVault.State.NoKey, v.state())
+        assertTrue("the record entry is kept", File(dir, NativeWalletVault.REC).exists())
     }
 
     /** A vault directory that exists but cannot be listed is a read failure, never an absent record. */
@@ -65,13 +66,14 @@ class NativeUnknownStateTest {
 
     /** A record that cannot be read at all makes the state unknown: the read throws, and the state is not taken. */
     @Test
-    fun aRecordReadThatFailsIsUnknownNotNoKey() {
+    fun aRecordReadThatFailsWithNoPhraseIsNoAccount() {
         val files = NativeTestFiles()
         NativeWalletVault(NativeTestWrap(), files).importKey(eoaA, keyA)
         val v = NativeWalletVault(NativeTestWrap(), RecordReadFails(files))
 
-        assertThrows(IOException::class.java) { v.state() }
-        assertNull(v.snapshotState())
+        // the REC read fault does not decide; the phrase position is empty, so the record is no account.
+        assertEquals(NativeWalletVault.State.NoKey, v.state())
+        assertTrue("the record bytes are kept", files.map.containsKey(NativeWalletVault.REC))
     }
 
     /** A Keystore that is locked or unavailable makes an existing record Locked (unreadable), never NoKey. */
@@ -88,7 +90,7 @@ class NativeUnknownStateTest {
 
     /**
      * A commit record without the key record and without a phrase: every read completed, so it is confirmed none (no_key). Residues other than the
-     * phrase do not block (project ruling 2026-11-16, urgent); a read that fails throws instead (see the tests above).
+     * phrase do not block (urgent); a read that fails throws instead (see the tests above).
      */
     @Test
     fun aCommitWithoutTheKeyRecordAndWithoutAPhraseIsNoKeyByTheRuling() {

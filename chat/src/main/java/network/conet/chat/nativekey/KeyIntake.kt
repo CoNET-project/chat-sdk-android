@@ -7,7 +7,7 @@ import org.json.JSONObject
  * value counts. Callers log field names and never values.
  *
  * `init` refuses wallet keys. The PGP armor it still carries is not listed here: `init` writes that armor only into the
- * native PGP record (R7, commit 81fc851; spec 25.22.2), never into the session or back to the page. The field is removed
+ * native PGP record (R7; spec 25.22.2), never into the session or back to the page. The field is removed
  * when P-IMP-PGP is decided (§36-B). `provisionIdentity` refuses every key field.
  */
 object KeyIntake {

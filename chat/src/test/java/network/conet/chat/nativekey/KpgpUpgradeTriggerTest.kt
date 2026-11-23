@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** The trigger of the K_pgp upgrade (PM ruling): only when the keychain is unlocked, and once per process. */
+/** The trigger of the K_pgp upgrade: only when the keychain is unlocked, and once per process. */
 class KpgpUpgradeTriggerTest {
     @Before
     fun reset() = KpgpUpgradeTrigger.resetForTests()

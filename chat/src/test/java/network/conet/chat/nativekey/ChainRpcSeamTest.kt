@@ -6,7 +6,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Busy seam (r3eb CB.1, r3ed CD.1 condition 2; PM R727): `PgpRestoreBridge.chainRpc` is an internal var whose default is the production HTTP
+ * Busy seam (r3eb CB.1, r3ed CD.1 condition 2): `PgpRestoreBridge.chainRpc` is an internal var whose default is the production HTTP
  * transport, and no production source (main or qa) assigns it. A source audit: it fails if a production source assigns the seam, or if the
  * declaration changes. Test sources may assign it: the busy test does, in the test target.
  */

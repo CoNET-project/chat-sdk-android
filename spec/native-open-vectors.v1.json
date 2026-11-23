@@ -1,20 +1,20 @@
 {
   "file": "native-open-vectors.v1.json",
-  "purpose": "原生导入页与恢复页的打开命令（spec r3t §25.41）：正式命令名、无别名、入参、应答码、宿主三态、结果事件的字段边界。合成数据，不含任何凭据或密钥。",
-  "spec": "v1.1-r3t §25.41（测试 T-224 至 T-227）；r3x §25.46.10 新增 N-20 至 N-28（建号入口，测试 T-237 至 T-238）；r3kk §25.46.2 增加 page 字段、同一页面再次打开与绑定结论先于开页（N-31 至 N-38）；r3kl 增加查询未决时的互斥（N-39 至 N-41）；r3la 增加已完成 reqId 集合的保留（N-42）",
+  "purpose": "原生导入页与恢复页的打开命令（spec §25.41）：正式命令名、无别名、入参、应答码、宿主三态、结果事件的字段边界。合成数据，不含任何凭据或密钥。",
+  "spec": "v1.1- §25.41（测试 T-224 至 T-227）； §25.46.10 新增 N-20 至 N-28（建号入口，测试 T-237 至 T-238）； §25.46.2 增加 page 字段、同一页面再次打开与绑定结论先于开页（N-31 至 N-38）； 增加查询未决时的互斥（N-39 至 N-41）； 增加已完成 reqId 集合的保留（N-42）",
   "generator": "gen-native-open-vectors.mjs",
   "names": {
-    "importPage": "nativeImportOpen（私钥或助记词）",
+    "importPage": "nativeImportOpen（ 已移除：unknown_command；原私钥或助记词手输页不再存在）",
     "recoveryPage": "nativeRecoveryOpen（恢复码，路径 A；账号名加密码，路径 B）",
     "accountPage": "nativeAccountCreateOpen（G0 建号，§25.46）",
     "aliases": "无（recoveryCreateOpen 不是其别名，§25.46.2）"
   },
-  "accountGate": "nativeAccountCreateOpen：宿主未注册先判，任何状态为 not_supported；已注册时 G1、G2 为 not_available（不调用宿主）；G0 先做绑定查询（r3ki，查询先于开页），已绑定或查询失败为 ok page none 并经 nativeAccountCreateResult 送结果；确认无绑定时宿主拒绝为 not_available，宿主开页为 ok page opened。不返回 no_key 或 not_ready。",
+  "accountGate": "nativeAccountCreateOpen：宿主未注册先判，任何状态为 not_supported；已注册时 G1、G2 为 not_available（不调用宿主）；G0 先做绑定查询（查询先于开页），已绑定或查询失败为 ok page none 并经 nativeAccountCreateResult 送结果；确认无绑定时宿主拒绝为 not_available，宿主开页为 ok page opened。不返回 no_key 或 not_ready。",
   "accountAckPage": {
     "opened": "本命令已使页面处于第一屏（ok 且 page opened）",
     "none": "本命令未开页（ok 且 page none），结果经 nativeAccountCreateResult 送出"
   },
-  "accountSecondOpen": "页面已开且该页无最终结果：不同 reqId 为 not_available；同一 reqId 为 ok page opened 且不重显；reqId 已有最终结果或页面已关闭后为 not_available；页面关闭后清空记录（r3kk，d2d85f6 F-1）。另一 reqId 的绑定查询未决（含同一 reqId 再次送达）：not_available，不另起查询（r3kl，M-1）。",
+  "accountSecondOpen": "页面已开且该页无最终结果：不同 reqId 为 not_available；同一 reqId 为 ok page opened 且不重显；reqId 已有最终结果或页面已关闭后为 not_available；页面关闭后清空记录（d2d85f6 F-1）。另一 reqId 的绑定查询未决（含同一 reqId 再次送达）：not_available，不另起查询（M-1）。",
   "hostStates": {
     "absent": "宿主未注册：not_supported，不返回 ok",
     "refuse": "宿主已注册但此刻不能打开：not_available",
@@ -42,7 +42,7 @@
     {
       "id": "N-01",
       "group": "A",
-      "title": "导入页：宿主打开页面，ack ok；导入结果不经事件回传",
+      "title": "导入页命令已移除（41(1)）：nativeImportOpen 答 unknown_command，不开页，不读载荷",
       "testIds": [
         "T-224",
         "T-226"
@@ -67,7 +67,8 @@
             "event": {
               "type": "ack",
               "reqId": "N-01",
-              "ok": true
+              "ok": false,
+              "error": "unknown_command"
             }
           }
         }
@@ -163,7 +164,7 @@
     {
       "id": "N-04",
       "group": "A",
-      "title": "别名负例：恢复页宿主已打开时，nativeImportOpen 不得打开恢复页（导入宿主未注册：not_supported）",
+      "title": "别名负例：nativeImportOpen 已移除，不是别名；恢复页宿主已打开时也不得打开恢复页：unknown_command",
       "testIds": [
         "T-224"
       ],
@@ -189,7 +190,7 @@
               "type": "ack",
               "reqId": "N-04",
               "ok": false,
-              "error": "not_supported"
+              "error": "unknown_command"
             }
           }
         }
@@ -198,7 +199,7 @@
     {
       "id": "N-05",
       "group": "B",
-      "title": "导入页：已有钥，宿主不打开（refuse）：not_available",
+      "title": "导入页命令已移除：nativeImportOpen 答 unknown_command，与已有钥无关",
       "testIds": [
         "T-225"
       ],
@@ -223,7 +224,7 @@
               "type": "ack",
               "reqId": "N-05",
               "ok": false,
-              "error": "not_available"
+              "error": "unknown_command"
             }
           }
         }
@@ -232,7 +233,7 @@
     {
       "id": "N-06",
       "group": "B",
-      "title": "导入页：宿主未注册（absent）：not_supported，不返回 ok（修正 iOS 现行静默 ok）",
+      "title": "导入页命令已移除：宿主状态不影响结果，nativeImportOpen 答 unknown_command，不返回 ok",
       "testIds": [
         "T-227"
       ],
@@ -257,7 +258,7 @@
               "type": "ack",
               "reqId": "N-06",
               "ok": false,
-              "error": "not_supported"
+              "error": "unknown_command"
             }
           }
         }
@@ -369,7 +370,7 @@
     {
       "id": "N-10",
       "group": "B",
-      "title": "G0（无钥）下两个命令都不返回 no_key 或 not_ready",
+      "title": "G0（无钥）下：nativeImportOpen 为 unknown_command；nativeRecoveryOpen 不返回 no_key 或 not_ready",
       "testIds": [
         "T-225"
       ],
@@ -401,7 +402,8 @@
             "event": {
               "type": "ack",
               "reqId": "N-10a",
-              "ok": true
+              "ok": false,
+              "error": "unknown_command"
             }
           }
         },
@@ -421,7 +423,7 @@
     {
       "id": "N-11",
       "group": "C",
-      "title": "携带 mode 字段：bad_request（模式由原生页决定，不由 PWA 发送）",
+      "title": "携带 mode 字段的 nativeImportOpen：unknown_command（命令已移除，载荷不读取）",
       "testIds": [
         "T-225"
       ],
@@ -447,7 +449,7 @@
               "type": "ack",
               "reqId": "N-11",
               "ok": false,
-              "error": "bad_request"
+              "error": "unknown_command"
             }
           }
         }
@@ -456,7 +458,7 @@
     {
       "id": "N-12",
       "group": "C",
-      "title": "导入页携带 privateKeyHex：key_over_bridge_refused，不回显值",
+      "title": "携带 privateKeyHex 的 nativeImportOpen：unknown_command，不回显值",
       "testIds": [
         "T-225"
       ],
@@ -482,7 +484,7 @@
               "type": "ack",
               "reqId": "N-12",
               "ok": false,
-              "error": "key_over_bridge_refused"
+              "error": "unknown_command"
             }
           }
         }
@@ -697,7 +699,7 @@
     {
       "id": "N-18",
       "group": "D",
-      "title": "导入页：无结果事件（页面关闭后由 walletStatus 判定）",
+      "title": "导入页命令已移除：无页，无结果事件",
       "testIds": [
         "T-226"
       ],
@@ -721,7 +723,8 @@
             "event": {
               "type": "ack",
               "reqId": "N-18",
-              "ok": true
+              "ok": false,
+              "error": "unknown_command"
             }
           }
         }
@@ -1191,7 +1194,7 @@
     {
       "id": "N-31",
       "group": "E",
-      "title": "r3kk：页面已开时同一 reqId 再次送达：ack ok page opened，不再显示页面",
+      "title": "页面已开时同一 reqId 再次送达：ack ok page opened，不再显示页面",
       "testIds": [
         "T-237"
       ],
@@ -1247,7 +1250,7 @@
     {
       "id": "N-32",
       "group": "E",
-      "title": "r3kk：页面已开时不同 reqId 再次打开：not_available，不另开页，第一页不受影响",
+      "title": "页面已开时不同 reqId 再次打开：not_available，不另开页，第一页不受影响",
       "testIds": [
         "T-237"
       ],
@@ -1303,7 +1306,7 @@
     {
       "id": "N-33",
       "group": "E",
-      "title": "r3kk：页面关闭且无结果：送 cancelled；之后同一 reqId 再次送达：not_available（不重开页）",
+      "title": "页面关闭且无结果：送 cancelled；之后同一 reqId 再次送达：not_available（不重开页）",
       "testIds": [
         "T-239",
         "T-249"
@@ -1354,7 +1357,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-33",
-              "code": "cancelled"
+              "ok": false,
+              "result": {
+                "code": "cancelled"
+              }
             }
           }
         },
@@ -1375,7 +1381,7 @@
     {
       "id": "N-34",
       "group": "E",
-      "title": "r3kk：页面关闭后，新的 reqId 可以打开页面",
+      "title": "页面关闭后，新的 reqId 可以打开页面",
       "testIds": [
         "T-237"
       ],
@@ -1425,7 +1431,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-34a",
-              "code": "cancelled"
+              "ok": false,
+              "result": {
+                "code": "cancelled"
+              }
             }
           }
         },
@@ -1446,7 +1455,7 @@
     {
       "id": "N-35",
       "group": "E",
-      "title": "r3kk：查询结论为已绑定（already_bound）：ack ok page none，不开页，结果 already_bound，不含 eoa",
+      "title": "查询结论为已绑定（already_bound）：ack ok page none，不开页，结果 already_bound，不含 eoa",
       "testIds": [
         "T-237",
         "T-249"
@@ -1486,7 +1495,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-35",
-              "code": "already_bound"
+              "ok": false,
+              "result": {
+                "code": "already_bound"
+              }
             }
           }
         }
@@ -1498,7 +1510,7 @@
     {
       "id": "N-36",
       "group": "E",
-      "title": "r3kk：查询失败（lookup_unavailable）：ack ok page none，不开页，结果 lookup_unavailable，不含 eoa",
+      "title": "查询失败（lookup_unavailable）：ack ok page none，不开页，结果 lookup_unavailable，不含 eoa",
       "testIds": [
         "T-237",
         "T-249"
@@ -1538,7 +1550,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-36",
-              "code": "lookup_unavailable"
+              "ok": false,
+              "result": {
+                "code": "lookup_unavailable"
+              }
             }
           }
         }
@@ -1550,7 +1565,7 @@
     {
       "id": "N-37",
       "group": "E",
-      "title": "r3kk：已绑定时宿主拒绝开页（refuse）：仍 ack ok page none，结果 already_bound（查询结论先于开页，宿主不参与）",
+      "title": "已绑定时宿主拒绝开页（refuse）：仍 ack ok page none，结果 already_bound（查询结论先于开页，宿主不参与）",
       "testIds": [
         "T-237",
         "T-249"
@@ -1590,7 +1605,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-37",
-              "code": "already_bound"
+              "ok": false,
+              "result": {
+                "code": "already_bound"
+              }
             }
           }
         }
@@ -1602,7 +1620,7 @@
     {
       "id": "N-38",
       "group": "E",
-      "title": "r3kk：建号 ok 结束页面；同一 reqId 再次送达：not_available（不重开页，不送结果）",
+      "title": "建号 ok 结束页面；同一 reqId 再次送达：not_available（不重开页，不送结果）",
       "testIds": [
         "T-237",
         "T-249"
@@ -1655,8 +1673,12 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-38",
-              "code": "ok",
-              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+              "ok": true,
+              "result": {
+                "code": "ok",
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "cleanupPending": false
+              }
             }
           }
         },
@@ -1677,7 +1699,7 @@
     {
       "id": "N-39",
       "group": "E",
-      "title": "r3kl（M-1）：另一 reqId 的查询未决时，不同 reqId 应答 not_available；未决的查询随后确认无绑定，开第一屏",
+      "title": "（M-1）：另一 reqId 的查询未决时，不同 reqId 应答 not_available；未决的查询随后确认无绑定，开第一屏",
       "testIds": [
         "T-237"
       ],
@@ -1734,7 +1756,7 @@
     {
       "id": "N-40",
       "group": "E",
-      "title": "r3kl：查询未决中的 reqId 得到已绑定：ack ok page none，结果 already_bound，不含 eoa；之后新的 reqId 可以开页",
+      "title": "查询未决中的 reqId 得到已绑定：ack ok page none，结果 already_bound，不含 eoa；之后新的 reqId 可以开页",
       "testIds": [
         "T-237",
         "T-249"
@@ -1782,7 +1804,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-40a",
-              "code": "already_bound"
+              "ok": false,
+              "result": {
+                "code": "already_bound"
+              }
             }
           }
         },
@@ -1806,7 +1831,7 @@
     {
       "id": "N-41",
       "group": "E",
-      "title": "r3kl：查询未决时同一 reqId 再次送达：not_available，不另起查询，不开页",
+      "title": "查询未决时同一 reqId 再次送达：not_available，不另起查询，不开页",
       "testIds": [
         "T-237"
       ],
@@ -1846,7 +1871,7 @@
     {
       "id": "N-42",
       "group": "E",
-      "title": "r3la（iOS 问询）：已完成的 reqId 集合不随新页打开而清空：较早完成的 reqId 再次送达仍为 not_available（不因另一页的打开而重新获准）",
+      "title": "（iOS 问询）：已完成的 reqId 集合不随新页打开而清空：较早完成的 reqId 再次送达仍为 not_available（不因另一页的打开而重新获准）",
       "testIds": [
         "T-237",
         "T-249"
@@ -1911,8 +1936,12 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-42a",
-              "code": "ok",
-              "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94"
+              "ok": true,
+              "result": {
+                "code": "ok",
+                "eoa": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+                "cleanupPending": false
+              }
             }
           }
         },
@@ -1935,7 +1964,10 @@
             "event": {
               "type": "nativeAccountCreateResult",
               "reqId": "N-42b",
-              "code": "cancelled"
+              "ok": false,
+              "result": {
+                "code": "cancelled"
+              }
             }
           }
         },

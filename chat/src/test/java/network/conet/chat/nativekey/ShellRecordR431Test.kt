@@ -10,7 +10,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The R431 and R436 items on the page-record bridge (spec r3bp): the ack envelope (§25.52T.2), the absence of a fresh install and the account
+ * The and items on the page-record bridge (spec r3bp): the ack envelope (§25.52T.2), the absence of a fresh install and the account
  * pointer (§25.52T.3, §25.52T.4), the device-level marker (§25.52T.5, §25.52T.6), and the canonical JSON of the stored copy (§25.52M.4).
  * The ack vectors (AK-01 to AK-16) run in ShellRecordAckVectorsTest.
  */
@@ -147,15 +147,14 @@ class ShellRecordR431Test {
         val files = NativeTestFiles()
         val flags = DeviceFlagFiles(files)
         assertFalse(flags.accountPointer())
+        // E9.11.33 r2-amend6 §5.6: an unreadable import writes no marker (no setLegacyUnreadable on the import or read path).
         applyImportMarker(flags, ShellImportCode.LEGACY_UNREADABLE)
-        assertTrue(flags.legacyUnreadable())
+        assertFalse("an unreadable import sets no marker", flags.legacyUnreadable())
         applyImportMarker(flags, ShellImportCode.IMPORT_FAILED)
-        assertTrue("a failed import keeps the marker", flags.legacyUnreadable())
+        assertFalse("a failed import sets no marker", flags.legacyUnreadable())
         applyImportMarker(flags, ShellImportCode.IMPORT_OK)
         assertTrue(flags.accountPointer())
         assertFalse("a successful import clears the marker", flags.legacyUnreadable())
-        applyImportMarker(flags, ShellImportCode.LEGACY_UNREADABLE)
-        assertFalse("an unreadable legacy store does not set the marker once the pointer exists", flags.legacyUnreadable())
     }
 
     @Test

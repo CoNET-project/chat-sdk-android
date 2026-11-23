@@ -114,7 +114,7 @@ verified on a device in this build.
   `mnemonicPhrase`, and top-level `recoveryWords`. They are encrypted, never sent by the page, and kept when the page omits them.
 - A different value, `null` included, gives `conflict` with `reason: "w_differs"`. A W field outside the account's record, or a stored one
   the page cannot place, gives `conflict` with `reason: "w_account_unmatched"`. Only native creation or recovery replaces them.
-- Read judgement of a schema 2 copy (§25.52U.4, R432), by the profile whose `keyID` equals the account (case-insensitive, no index fallback):
+- Read judgement of a schema 2 copy (§25.52U.4), by the profile whose `keyID` equals the account (case-insensitive, no index fallback):
   no matching profile, or more than one: `error`, `account_mismatch` (fail closed, no recovery entry); the matching profile has no
   `privateKeyArmor`: `error`, `needs_native_recovery` (the page offers `nativeRecoveryOpen`). A missing `mnemonicPhrase` is allowed.
 - A write that leaves no profile matching the account with a `privateKeyArmor` is refused with `wallet_fields_missing`, and nothing is stored.
@@ -183,14 +183,14 @@ it is `too_large`, checked before the schema-specific answers.
 ## Open points
 
 - `mnemonicPhrase` derivation in the first-run import is not checked by the SDK (no BIP-39 derivation in this build). The vector IM-09 uses a
-  placeholder phrase, so the check is left for PM.
+  placeholder phrase, so the check is left open.
 - The first-run import has no whitelist for legacy fields beyond PGP (`legacy_fields_unknown` is not decided, §25.52N.6).
-- `accountSlot` keeps the conditional profile-0 fallback for records with no keyID (PM R424); Android measurement must confirm the keyID match.
-- Pending PM (r3bq §25.52U.11): the pointer repair on a read (r3bs §25.52W.2 records it as written; the vectors do not cover it).
-- R444: the invalid-account result is `account_mismatch` (the shell's table suggested `migrating`; the PM chose `account_mismatch`).
-- Pending PM (earlier): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only); a marker set
+- `accountSlot` keeps the conditional profile-0 fallback for records with no keyID; Android measurement must confirm the keyID match.
+- Pending (r3bq §25.52U.11): the pointer repair on a read (r3bs §25.52W.2 records it as written; the vectors do not cover it).
+- the invalid-account result is `account_mismatch` (the shell's table suggested `migrating`; the owner chose `account_mismatch`).
+- Pending (earlier): a write with the pointer set and no record answers `account_record_missing` (the spec gives the read only); a marker set
   with a write answers `migrating` (§25.52T.5).
-- The read judgement is strict by keyID (§25.52U.4), while the write placement keeps the conditional profile-0 fallback of R424. A schema 2
+- The read judgement is strict by keyID (§25.52U.4), while the write placement keeps the conditional profile-0 fallback of. A schema 2
   record written with no keyIDs at all would therefore read back as `account_mismatch`; measured records carry keyIDs.
 - The 108-path cap was checked against the measured manifest (page-record-paths-measured, 108 listed paths): all 62 whitelist paths
   (containers included) are among them. The tests do not read that manifest.
@@ -219,7 +219,7 @@ it is `too_large`, checked before the schema-specific answers.
   result through the listener's `JavaScriptReplyProxy.postMessage`. A null result is not sent. No other code path calls it.
 - The chat-module channel (`shellRecordRead` / `shellRecordWrite` / other `shellRecord*` commands sent through `BeamioConetChatModule`) has no
   verified origin on Android. It is not processed and gets no reply, whatever the reqId or type (`shellRecordChatChannelReply` returns
-  `null`; R476, §25.52AB.5). The page must not use it on Android; this is also why `not_supported` is not sent.
+  `null`, §25.52AB.5). The page must not use it on Android; this is also why `not_supported` is not sent.
 - The reply envelope is the ack envelope of §25.52T.2 (`ok:true` with `result`, or `ok:false` with `error`). No `store` or other internal field.
 - The page's reply rules (reqId keys, the 10 s timeout, late and duplicate replies, malformed replies, and the write hold after a timed-out
   write) are the page adapter's. `ShellRecordReplyTest` pins them as a reference against RP-01 to RP-08b.
@@ -229,7 +229,7 @@ it is `too_large`, checked before the schema-specific answers.
 - A held copy (the page record holds the W fields of the account, §25.52AD.2) lets `shellRecordRead` and `shellRecordWrite` run under G0 as
   the account's record. Other native names stay `no_key` under G0; the gate reads the vault only, so a copy changes nothing for them.
 - Under G0, with no import bound in this process, the account is the persisted address (`account_address.v1` in the no-backup
-  directory, R488). The address is written by a successful import, by a successful write, and by the first read that holds the account's
+  directory). The address is written by a successful import, by a successful write, and by the first read that holds the account's
   key, so a cold start restores the binding without the shell binding again. Without a persisted address, the account comes from the single
   copy file `page.v1.<address>.default.rec` (`ShellRecordAccounts.heldCopy`). The file must open with that address. A copy that is present but cannot be opened gives
   `record_unreadable`, never `absent`. Two or more copy files, or a readable copy with no EOA key, give no account.
@@ -237,7 +237,7 @@ it is `too_large`, checked before the schema-specific answers.
   (`writeWalletNative`) is not gated by the session.
 - Order (§25.52AD.4): the origin first; then G1 `not_ready`; then, under G0 without a held copy, the reader's judgement
   (`legacy_store_unreadable`, `absent`, `import_not_done`, or `migrating` while the reader has not finished); then the record rules.
-- The window and chat channels share the judgement. The chat channel gets no reply on Android (R476), so GX-10b checks the chat channel
+- The window and chat channels share the judgement. The chat channel gets no reply on Android, so GX-10b checks the chat channel
   sends nothing and that the window judgement for the same request is `absent`.
 
 ## Native history deletion (§25.52AC, r3by)
@@ -254,11 +254,11 @@ it is `too_large`, checked before the schema-specific answers.
   with the same `rev` (DL-10a, DL-10b). A stale `rev` is `conflict`.
 - The history read rows carry `messageId` (= sendKey), which `historyDeleteMessage` takes (§25.52AC.2). A closed store answers `not_ready`,
   not `busy` (§25.52AC.5).
-- Recorded deviations from the vectors (review r3bz-r3by-r488 §2.1, §2.2). Neither vector is edited; the interface owner decides.
-  - GX-10b: the vector expects the chat channel to answer `absent`; R476 says it never replies, and the code follows R476.
+- Recorded deviations from the vectors. Neither vector is edited; the interface owner decides.
+  - GX-10b: the vector expects the chat channel to answer `absent` says it never replies, and the code follows.
     `gx10bChatChannelDeviatesFromTheVectorByR476` pins this, and checks the window judgement is `absent`.
   - DL-10a and DL-10b as written put `chats` at the root and omit `schemaVersion`; the bridge refuses them with `bad_request`
-    (`schemaVersion`). The spec does not say what a write without `schemaVersion` gets; this is the SDK's rule, pending the ruling. `PageRecordEntryDeleteTest` records that, and also checks the mapped form
+    (`schemaVersion`). The spec does not say what a write without `schemaVersion` gets; this is the SDK's rule, pending. `PageRecordEntryDeleteTest` records that, and also checks the mapped form
     (`chats` under `profiles[0]`) gives the vector's `conflict` and `ok` results. Where message bodies live (the page record's `chats[*].messages` or the native
   store) is open (§25.52AC.7). The DL vectors place `chats` at the root, while the whitelist places it under `profiles[*].chats`
   (§25.52Q.3); the DL-10 tests use the whitelist place.
@@ -276,7 +276,7 @@ it is `too_large`, checked before the schema-specific answers.
 ## Tests
 
 `GateExceptionTest` runs GX-01 to GX-10b (r3bz). `NativeHistoryDeleteTest` runs DL-01 to DL-09 against the real store (JVM SQLite), and
-`PageRecordEntryDeleteTest` runs DL-10a and DL-10b (r3by). `ColdStartAccountTest` runs the cold-start cases (R488): a read and a write after
+`PageRecordEntryDeleteTest` runs DL-10a and DL-10b (r3by). `ColdStartAccountTest` runs the cold-start cases : a read and a write after
 a restart reach the original account, also when two copies exist.
 
 `ShellRecordAckVectorsTest` runs AK-01 to AK-28 (the ack group, §25.52T.8, §25.52U.9, §25.52W.7, §25.52AA.7). `ShellRecordTransportTest`
@@ -284,5 +284,5 @@ runs TP and SA; `ShellRecordReplyTest` runs RP-01 to RP-08b; `ShellRecordBoundar
 that the vectors do not fix (the first-write guard, the marker and pointer repair, the case-insensitive keyID).
 
 `./gradlew :chat:testDebugUnitTest --offline` runs the vectors (`ShellRecordVectorsTest`, `PgpMigrationVectorsTest`), the file-format tests
-(`ShellRecordFormatTest`), the review-item tests (`ShellRecordR424Test`), and the R431 tests (`ShellRecordR431Test`: ack envelope, fresh install,
+(`ShellRecordFormatTest`), the review-item tests (`ShellRecordR424Test`), and the tests (`ShellRecordR431Test`: ack envelope, fresh install,
 device marker, canonical JSON).

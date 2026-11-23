@@ -1,0 +1,187 @@
+{
+  "file": "spec-59e-synthetic-vectors.v3.3.1-E9.10.3-add.json",
+  "scope": "rec-mark-read-failure-with-empty-mnem-no-account-synthetic",
+  "status": "pending_review",
+  "extends": "spec-59e-errata-v3.3.1-E9.10.2.md, spec-59e-errata-v3.3.1-E9.10.3.md",
+  "principle": "原向量输入不明确者一律维持原期望（WK-29、WK-03、WK-04、WK-30、WK-31）。新规则用带明确输入的新用例表达（WK-29a、WK-04a、WK-30a、WK-31a）。不改写原用例的含义。",
+  "cases": [
+    {
+      "id": "WK-29a",
+      "title": "REC 读失败（aead_failed），MNEM 读取成功且为空，无 INTENT → 当前记录判没有账户，REC 字节保留",
+      "policy": "decided (E9.10.2-1)",
+      "input": {
+        "residue": {
+          "stateComputed": true,
+          "readsOk": false,
+          "keystoreOk": true,
+          "failure": "aead_failed",
+          "failedObject": "REC",
+          "rec": true,
+          "mark": true,
+          "commit": false,
+          "intent": false,
+          "mnem": false,
+          "mnemReadResult": "read_ok_empty"
+        },
+        "pwa": {
+          "idbRead": "ok",
+          "idbMnemonic": false
+        }
+      },
+      "expect": {
+        "state": "NoKey",
+        "walletStatus": "no_key",
+        "phraseVerdict": "Absent",
+        "then": "query_third_tier_sealed_copies",
+        "rec_bytes": "retained",
+        "mark_bytes": "retained",
+        "deleted": []
+      }
+    },
+    {
+      "id": "WK-04a",
+      "title": "MARK 与 REC 不一致（marker_mismatch），MNEM 读取成功且为空，无读取故障 → 当前记录判没有账户（半写与旧标记不挡），REC/MARK 字节保留",
+      "policy": "decided (E9.10.3 item 3)",
+      "input": {
+        "residue": {
+          "stateComputed": true,
+          "readsOk": true,
+          "keystoreOk": true,
+          "failure": "marker_mismatch",
+          "failedObject": "MARK_REC_CONSISTENCY",
+          "rec": true,
+          "mark": true,
+          "commit": false,
+          "intent": false,
+          "mnem": false,
+          "mnemReadResult": "read_ok_empty"
+        },
+        "pwa": {
+          "idbRead": "ok",
+          "idbMnemonic": false
+        }
+      },
+      "expect": {
+        "state": "NoKey",
+        "walletStatus": "no_key",
+        "phraseVerdict": "Absent",
+        "then": "query_third_tier_sealed_copies",
+        "rec_bytes": "retained",
+        "mark_bytes": "retained",
+        "deleted": []
+      }
+    },
+    {
+      "id": "WK-30a",
+      "title": "MARK 缺失（REC 存在），MNEM 读取成功且为空，无读取故障 → 当前记录判没有账户，REC 字节保留",
+      "policy": "decided (E9.10.3 item 3)",
+      "input": {
+        "residue": {
+          "stateComputed": true,
+          "readsOk": true,
+          "keystoreOk": true,
+          "failure": "marker_missing",
+          "failedObject": "MARK",
+          "rec": true,
+          "mark": false,
+          "commit": false,
+          "intent": false,
+          "mnem": false,
+          "mnemReadResult": "read_ok_empty"
+        },
+        "pwa": {
+          "idbRead": "ok",
+          "idbMnemonic": false
+        }
+      },
+      "expect": {
+        "state": "NoKey",
+        "walletStatus": "no_key",
+        "phraseVerdict": "Absent",
+        "then": "query_third_tier_sealed_copies",
+        "rec_bytes": "retained",
+        "deleted": []
+      }
+    },
+    {
+      "id": "WK-31a",
+      "title": "REC 缺失（MARK 存在），MNEM 读取成功且为空，无读取故障 → 当前记录判没有账户，MARK 字节保留",
+      "policy": "decided (E9.10.3 item 3)",
+      "input": {
+        "residue": {
+          "stateComputed": true,
+          "readsOk": true,
+          "keystoreOk": true,
+          "failure": "record_missing",
+          "failedObject": "REC",
+          "rec": false,
+          "mark": true,
+          "commit": false,
+          "intent": false,
+          "mnem": false,
+          "mnemReadResult": "read_ok_empty"
+        },
+        "pwa": {
+          "idbRead": "ok",
+          "idbMnemonic": false
+        }
+      },
+      "expect": {
+        "state": "NoKey",
+        "walletStatus": "no_key",
+        "phraseVerdict": "Absent",
+        "then": "query_third_tier_sealed_copies",
+        "mark_bytes": "retained",
+        "deleted": []
+      }
+    },
+    {
+      "id": "WK-04-NOTCONFIRMED",
+      "title": "（原用例语义不变的说明）WK-04 原输入未写明 MNEM 读取结果 → 视为未确认，维持 unknown（原期望）",
+      "policy": "unchanged_original_expectation",
+      "input": "WK-04 原输入（不改）",
+      "expect": "unknown（原期望，不改）"
+    },
+    {
+      "id": "WK-30-NOTCONFIRMED",
+      "title": "（原用例语义不变的说明）WK-30 原输入未写明 MNEM 读取结果 → 视为未确认，维持 unknown（原期望）",
+      "policy": "unchanged_original_expectation",
+      "input": "WK-30 原输入（不改）",
+      "expect": "unknown（原期望，不改）"
+    },
+    {
+      "id": "WK-31-NOTCONFIRMED",
+      "title": "（原用例语义不变的说明）WK-31 原输入未写明 MNEM 读取结果 → 视为未确认，维持 unknown（原期望）",
+      "policy": "unchanged_original_expectation",
+      "input": "WK-31 原输入（不改）",
+      "expect": "unknown（原期望，不改）"
+    },
+    {
+      "id": "WK-29-UNCHANGED",
+      "title": "（原用例不改）WK-29 输入未标明读失败对象，且 stateComputed=false，MNEM 为空未证实 → 维持 unknown",
+      "policy": "unchanged_original_expectation",
+      "input": "WK-29 原输入（不改）",
+      "expect": "unknown（原期望，不改）"
+    },
+    {
+      "id": "WK-03-UNCHANGED",
+      "title": "（原用例不改）WK-03 aead_failed 未标对象：维持 unknown；若对象是 MNEM（解密失败）按裁定为 unknown",
+      "policy": "unchanged_original_expectation",
+      "input": "WK-03 原输入（不改）",
+      "expect": "unknown（原期望，不改）"
+    },
+    {
+      "id": "G1-NK-S1-CORRECTED",
+      "title": "G1-NK-S1（walletStatus 在 G1）前提更正：REC 或 MARK 读失败且 MNEM 读取成功为空 → no_key；MNEM 有效 → 正常账户；MNEM 读失败、钥库不可用或需解锁 → not_ready（原期望）",
+      "policy": "decided (E9.10.2-4)",
+      "input": "G1-NK-S1 原输入（不改），前提以本条声明",
+      "expect": {
+        "if_rec_or_mark_read_failure_and_mnem_read_ok_empty": "no_key",
+        "if_mnem_valid": "normal_account (G2)",
+        "if_mnem_read_failure_or_keystore_unavailable_or_user_unlock": "not_ready/unreadable (原期望)"
+      }
+    }
+  ],
+  "not_pinned": true,
+  "not_in_spec": true
+}

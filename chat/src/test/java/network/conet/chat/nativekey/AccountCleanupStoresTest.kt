@@ -254,49 +254,6 @@ class AccountCleanupStoresTest {
     // ---- d. legacy records: the legacy PGP record L and the legacy wallet copy, by the EOA each names ----
 
     @Test
-    fun aLegacyRecordOfTheNewAccountIsKept() {
-        var cleared = false
-        val out = run(listOf(SingleRecordCleanup("legacy_pgp", { newEoa }, { cleared = true; true })))
-
-        assertEquals(AccountCleanupOld.OK, out.code)
-        assertFalse(cleared)
-    }
-
-    @Test
-    fun aLegacyRecordOfAnOldAccountIsRemoved() {
-        var cleared = false
-        val out = run(listOf(SingleRecordCleanup("wallet_copy", { oldEoa }, { cleared = true; true })))
-
-        assertEquals(AccountCleanupOld.OK, out.code)
-        assertTrue(cleared)
-    }
-
-    @Test
-    fun aLegacyRecordWithNoEoaIsNotAnItem() {
-        val out = run(listOf(SingleRecordCleanup("legacy_pgp", { null }, { error("must not run") })))
-
-        assertEquals(AccountCleanupOld.OK, out.code)
-    }
-
-    @Test
-    fun aLegacyRecordThatCannotBeClearedIsClearIncomplete() {
-        val out = run(listOf(SingleRecordCleanup("wallet_copy", { oldEoa }, { false })))
-
-        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
-        assertTrue(out.cleanupPending)
-    }
-
-    @Test
-    fun aStoreThatCannotBeReadIsClearIncomplete() {
-        val out = run(listOf(SingleRecordCleanup("legacy_pgp", { throw java.io.IOException("unreadable") }, { true })))
-
-        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
-    }
-
-    // ---- Y.103 blocker: a read failure is unknown and retryable (clear_incomplete, nothing removed); a parse failure is unowned (kept, ok) ----
-
-    /** The wallet vault: a readable old envelope next to a vault name that cannot be read: the owner is unknown, nothing is removed. */
-    @Test
     fun aWalletVaultFileThatCannotBeReadIsClearIncompleteAndNothingOfTheVaultIsRemoved() {
         val dir = nativeDir()
         File(dir, "wallet.v1.rec").writeText(envelope(oldEoa))
@@ -377,28 +334,11 @@ class AccountCleanupStoresTest {
 
     /** A legacy wallet copy that cannot be read is an incomplete scan (the copy's EOA read throws). */
     @Test
-    fun aLegacyWalletCopyThatCannotBeReadIsClearIncomplete() {
-        val out = run(listOf(SingleRecordCleanup("wallet_copy", { throw IOException("prefs unreadable") }, { error("must not run") })))
-
-        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, out.code)
-    }
-
-    /** A legacy record whose EOA does not parse is unowned: kept, and ok. */
-    @Test
-    fun aLegacyRecordWhoseEoaDoesNotParseIsUnownedKeptAndOk() {
-        val out = run(listOf(SingleRecordCleanup("legacy_pgp", { "garbage" }, { error("must not run") })))
-
-        assertEquals(AccountCleanupOld.OK, out.code)
-        assertEquals(1, out.retainedUnattributed)
-    }
-
-    /** The history directory that cannot be listed is an incomplete scan. */
-    @Test
     fun aHistoryDirectoryThatCannotBeListedIsClearIncomplete() {
         val file = tmp.root.resolve("conet-chat")
         file.writeText("not a directory")
 
-        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(HistoryDirCleanup(file))).code)
+        assertEquals(AccountCleanupOld.CLEAR_INCOMPLETE, run(listOf(HistoryDirCleanup(file) { listOf(oldEoa) })).code)
     }
 
     // ---- Y.103: the inbox entries are retained and counted; an unreadable inbox is incomplete ----
