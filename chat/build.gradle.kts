@@ -7,7 +7,7 @@ group = "network.conet"
 // A QA-only artifact may carry a suffix (-PchatArtifactSuffix=qa-diag): its coordinates and VERSION_NAME then differ from the formal version.
 // Without the property the version is the formal one, unchanged.
 val chatArtifactSuffix: String? = project.findProperty("chatArtifactSuffix")?.toString()?.takeIf { it.isNotBlank() }
-version = if (chatArtifactSuffix == null) "0.2.28" else "0.2.28-$chatArtifactSuffix"
+version = if (chatArtifactSuffix == null) "0.2.29" else "0.2.29-$chatArtifactSuffix"
 
 android {
     namespace = "network.conet.chat"

@@ -30,6 +30,12 @@ internal class MnemonicSetStore(private val dir: File) {
          */
         const val IDENTITY_CLEARED = "identity_cleared.v1"
 
+        /**
+         * The reason of [Current.Unknown] when a set file is on disk but the `current` pointer is not: a version was written and the pointer move did
+         * not finish. It is not an empty store: it answers unknown (read_error), blocks account creation, and a repeat of the same sync repairs it.
+         */
+        const val POINTER_MISSING = "pointer_missing"
+
         /** Writes [value] to a temp file beside [target], reads it back, and renames it over [target] (the pointer move). */
         internal fun writeVerified(target: File, value: String) {
             val tmp = File(target.parentFile, target.name + ".tmp")
@@ -139,6 +145,24 @@ internal class MnemonicSetStore(private val dir: File) {
         val names = dir.list() ?: return null
         val prefix = "set.${eoa.lowercase()}.v3."
         return names.any { it.startsWith(prefix) && it.endsWith(".v1") }
+    }
+
+    /** Whether any set file (`set.*.v1`, plain or v3, any account) is on disk. null when the directory cannot be read (unknown). Read only. */
+    internal fun hasAnySetFile(): Boolean? {
+        if (!dir.exists()) return false
+        val names = dir.list() ?: return null
+        return names.any { it.startsWith("set.") && it.endsWith(".v1") }
+    }
+
+    /**
+     * Whether a set file is newer than the identity_cleared marker (written after the clear). null when the marker's time or the directory cannot be
+     * read (unknown). Sets retained by the clear are older than the marker. Read only.
+     */
+    private fun setWrittenAfterClear(): Boolean? {
+        val clearedAt = File(dir, IDENTITY_CLEARED).lastModified()
+        if (clearedAt == 0L) return null
+        val files = dir.listFiles() ?: return null
+        return files.any { it.name.startsWith("set.") && it.name.endsWith(".v1") && it.lastModified() > clearedAt }
     }
 
     /** The newest version of [eoa] for [kind] on disk, or 0. */
@@ -271,10 +295,26 @@ internal class MnemonicSetStore(private val dir: File) {
     }
 
     fun current(): Current {
-        // after an identity clear the retained sets are not re-adopted automatically; the store answers as absent.
-        if (identityCleared()) return Current.Absent
+        // After an identity clear the retained sets are not re-adopted automatically; the store answers as absent. The marker is store-wide and is
+        // removed only after a write commits, so a set file written after it (a write whose pointer move did not finish) is not a retained set: it is
+        // unknown, never hidden by the marker. A store that cannot be listed or a marker that cannot be read is unknown too.
+        if (identityCleared()) {
+            return when (setWrittenAfterClear()) {
+                false -> Current.Absent
+                true -> Current.Unknown(POINTER_MISSING)
+                null -> Current.Unknown("store_unreadable")
+            }
+        }
         val ptr = try {
-            if (!currentFile.exists()) return Current.Absent
+            if (!currentFile.exists()) {
+                // A set file with no pointer is a write whose pointer move did not finish, not an empty store (never Absent). A directory that
+                // cannot be listed is unknown too.
+                return when (hasAnySetFile()) {
+                    false -> Current.Absent
+                    true -> Current.Unknown(POINTER_MISSING)
+                    null -> Current.Unknown("store_unreadable")
+                }
+            }
             currentFile.readText(Charsets.UTF_8).trim()
         } catch (_: IOException) {
             return Current.Unknown("pointer_unreadable")

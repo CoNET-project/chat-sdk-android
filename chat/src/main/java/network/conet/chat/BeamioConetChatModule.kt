@@ -1820,7 +1820,8 @@ object BeamioConetChatModule {
             } ?: return writeFailedAck(reqId, NativeSyncAck.STORAGE_WRITE)
             // An unknown state writes nothing (42(3)): a current set that cannot be read is not replaced and the pointer does not move. The same
             // answer as a failed write, and the pre-read is published under this sequence so it is not left stuck.
-            if (storeCurrentOf(ctx) is MnemonicSetStore.Current.Unknown) {
+            // pointer_missing (a set file, no pointer) is the one unknown this sync may go on from: a repeat of the same sync repairs the pointer.
+            if (storeCurrentOf(ctx).let { it is MnemonicSetStore.Current.Unknown && it.reason != MnemonicSetStore.POINTER_MISSING }) {
                 Log.i(TAG, "pwaWalletSync refused: current set unreadable")
                 MnemonicPreread.publishAfterSync(seq, MnemonicPreread.vaultAnswerOrUnknown(vault) { legacyReportOf(ctx) })
                 return writeFailedAck(reqId, NativeSyncAck.INTERNAL_STATE)
@@ -1889,7 +1890,7 @@ object BeamioConetChatModule {
         // An unknown state writes nothing (42(3)): a current set that cannot be read is not replaced, the pointer does not move, and the session is
         // not unlocked from this request.
         val before = storeCurrentOf(ctx)
-        if (before is MnemonicSetStore.Current.Unknown) {
+        if (before is MnemonicSetStore.Current.Unknown && before.reason != MnemonicSetStore.POINTER_MISSING) {
             Log.i(TAG, "pwaWalletSync cipher refused: current set unreadable")
             return writeFailedAck(reqId, NativeSyncAck.INTERNAL_STATE)
         }

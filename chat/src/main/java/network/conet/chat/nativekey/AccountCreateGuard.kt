@@ -1,6 +1,7 @@
 package network.conet.chat.nativekey
 
 import android.content.Context
+import java.io.File
 
 /** The state of the native key (the vault): none, readable, or present but unreadable. */
 internal enum class KeyState { NONE, READABLE, UNREADABLE }
@@ -18,7 +19,15 @@ internal data class CreateGuardInputs(
     val migrating: Boolean,
     /** The identity_cleared state: a kept wallet copy is reported found, and it does not block a create. */
     val identityCleared: Boolean = false,
+    /** What the mnemonic store holds (see [StoreState]). Only an empty store allows a create. */
+    val store: StoreState = StoreState.EMPTY,
 )
+
+/**
+ * The mnemonic store as the create gate sees it: empty (no set, or an identity-cleared store, whose retained sets are not re-adopted), an account
+ * (a current set), or unknown (a set file without its `current` pointer, an invalid pointer, or a store that cannot be read: never an empty store).
+ */
+internal enum class StoreState { EMPTY, ACCOUNT, UNKNOWN }
 
 /**
  * The data-safety gate of account creation (§25.46.5, §25.52W.4, §25.52T.3, §25.52U.6). Creating a new wallet must never
@@ -35,6 +44,12 @@ internal object AccountCreateGuard {
     const val MIGRATING = "migrating"
     const val POINTER_SET = "pointer_set"
     const val REPLICA_PRESENT = "replica_present"
+
+    /** Denial code (SDK log only) when a set version is on disk without its pointer, or the store cannot be read: an older version may still be there. */
+    const val ORPHAN_VERSION = "orphan_version"
+
+    /** Denial code (SDK log only) when the mnemonic store already names an account: a create must not add a second one beside it. */
+    const val STORE_ACCOUNT = "store_account"
 
     /** Denial code when the inputs cannot be read at all (closed fallback). */
     const val INPUTS_UNREADABLE = "inputs_unreadable"
@@ -58,6 +73,8 @@ internal object AccountCreateGuard {
         i.legacyReport != LegacyReportState.ABSENT && !(i.identityCleared && i.legacyReport == LegacyReportState.FOUND) -> MIGRATING
         i.pointer -> POINTER_SET
         i.pageCopy -> REPLICA_PRESENT
+        i.store == StoreState.UNKNOWN -> ORPHAN_VERSION
+        i.store == StoreState.ACCOUNT -> STORE_ACCOUNT
         else -> null
     }
 
@@ -84,7 +101,19 @@ internal object AccountCreateGuard {
         } catch (_: Exception) {
             true
         }
+        // The mnemonic store: a current set (an account) or an unknown store (a set without its pointer, unreadable) blocks a create. A read that
+        // throws counts as unknown (fail closed). An identity_cleared store answers Absent (retained sets are not re-adopted), so it does not block.
+        val store = try {
+            when (MnemonicSetStore(File(context.applicationContext.noBackupFilesDir, MnemonicSetStore.DIRECTORY)).current()) {
+                is MnemonicSetStore.Current.Absent -> StoreState.EMPTY
+                is MnemonicSetStore.Current.Found -> StoreState.ACCOUNT
+                is MnemonicSetStore.Current.Unknown -> StoreState.UNKNOWN
+            }
+        } catch (_: Exception) {
+            StoreState.UNKNOWN
+        }
         return CreateGuardInputs(
+            store = store,
             identityCleared = ClearFlagFiles(files).identityCleared(),
             key = key,
             legacyReport = report,
