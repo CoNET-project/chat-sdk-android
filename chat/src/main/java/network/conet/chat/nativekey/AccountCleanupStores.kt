@@ -303,6 +303,11 @@ internal class WalletVaultCleanup(
     private val dir: File,
     private val vaultMonitor: Any,
     private val activeAccount: () -> String?,
+    /**
+     * Called, inside the monitor, after a removal was attempted (whether it removed the file or not). The vault's snapshot must not outlive the files
+     * it was computed from: this write path used to leave a Ready snapshot for records that are gone. Production passes the vault's invalidation.
+     */
+    private val onRemoved: () -> Unit = {},
     private val ownerOf: (File, String) -> OwnerRead,
 ) : CleanupAdapter {
     private val inner = FileDirCleanup(dir, "wallet", { it in DELETABLE }, ownerOf)
@@ -344,7 +349,11 @@ internal class WalletVaultCleanup(
             if (active == expected.substringBefore(':').lowercase()) return false
             val now = ownerOf(dir, name)
             if (now !is OwnerRead.Known || now.accountKey != expected) return false
-            return inner.remove(AccountCleanupOld.Item(name = "file:wallet:$name", accountKey = expected))
+            try {
+                return inner.remove(AccountCleanupOld.Item(name = "file:wallet:$name", accountKey = expected))
+            } finally {
+                onRemoved()
+            }
         }
     }
 

@@ -46,7 +46,9 @@ internal object MnemonicDerivation {
     /**
      * @return the 32-byte account-0 key, or null when the phrase is invalid. The caller zeroes the result.
      */
-    fun deriveKey(raw: String): ByteArray? {
+    fun deriveKey(raw: String): ByteArray? = VaultPerf.derive { deriveKeyTimed(raw) }
+
+    private fun deriveKeyTimed(raw: String): ByteArray? {
         val text = raw.trim { it in ASCII_WS }.lowercase()
         val words = words(text) ?: return null
         val idx = IntArray(words.size)

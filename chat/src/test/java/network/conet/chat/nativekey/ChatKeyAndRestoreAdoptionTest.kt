@@ -43,7 +43,8 @@ class ChatKeyAndRestoreAdoptionTest {
         val store = File("src/main/java/network/conet/chat/BeamioChatPgpStore.kt").readText(Charsets.UTF_8)
         assertTrue("the web EOA goes to KEY_EOA_WEB while an armor exists", store.contains("editor.putString(KEY_EOA_WEB, secrets.eoa)"))
         val wallet = File("src/main/java/network/conet/chat/nativekey/AndroidNativeWallet.kt").readText(Charsets.UTF_8)
-        assertTrue("the stopped adoption settles as nothing for any owner (2026-11-22)", wallet.contains("2026-11-22: the native PGP vault is an unpublished format"))
+        assertTrue("the adoption does not copy the shipped armor into the vault", wallet.contains("This adoption does not copy the shipped armor into the native PGP vault"))
+        assertTrue("and settles as nothing for any owner", wallet.contains("if (armorRead == null) return MigrationGate.Outcome.UNKNOWN\n        return MigrationGate.Outcome.RESOLVED_NOTHING"))
     }
 
     @Test

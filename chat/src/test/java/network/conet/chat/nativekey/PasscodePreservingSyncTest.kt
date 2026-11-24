@@ -394,10 +394,13 @@ class PasscodePreservingSyncTest {
     @Test
     fun initAnswersNotReadyForAV3OrUnreadableStoreAndNeverNoKeyForThem() {
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText(Charsets.UTF_8)
-        val init = module.substring(module.indexOf("when (StoreAccountView.of(currentStore, NativeSessionState.readyEoa()))"))
+        val init = module.substring(module.indexOf("when (StoreSessionAdoption.initStep(view, plainAdopted, v3KeyHeld))"))
         val block = init.substring(0, init.indexOf("is NativeWalletVault.State.Locked ->"))
-        assertTrue(block.contains("is StoreAccountView.View.V3 ->") && block.contains("notReadyAck(reqId, NoKeyGate.NOT_READY_PASSCODE_REQUIRED)"))
-        assertTrue(block.contains("StoreAccountView.View.Unknown -> notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)"))
+        // The step is chosen by StoreSessionAdoption.initStep; a v3 set that is not unlocked and an unreadable store stay not_ready, never no_key.
+        assertTrue(block.contains("InitStep.NOT_READY_PASSCODE -> notReadyAck(reqId, NoKeyGate.NOT_READY_PASSCODE_REQUIRED)"))
+        assertTrue(block.contains("InitStep.NOT_READY_UNREADABLE -> notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)"))
+        assertEquals(StoreSessionAdoption.InitStep.NOT_READY_PASSCODE, StoreSessionAdoption.initStep(StoreAccountView.View.V3(eoaA, unlocked = false), false, false))
+        assertEquals(StoreSessionAdoption.InitStep.NOT_READY_UNREADABLE, StoreSessionAdoption.initStep(StoreAccountView.View.Unknown, false, false))
     }
 
     // ---- MS-27: the storage state is unknown ----

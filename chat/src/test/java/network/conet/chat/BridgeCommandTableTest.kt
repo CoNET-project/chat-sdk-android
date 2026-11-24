@@ -37,7 +37,9 @@ class BridgeCommandTableTest {
 
     @Test
     fun theDispatchTableInTheSourceIsTheRegisteredSet() {
-        assertEquals(BridgeCommandTable.DISPATCH, dispatchNamesInSource())
+        // accountCreateRegister is answered by the module but not yet in table-T : it is in OUTSIDE_TABLE_T.
+        assertEquals(BridgeCommandTable.DISPATCH + BridgeCommandTable.OUTSIDE_TABLE_T, dispatchNamesInSource())
+        assertEquals(setOf("accountCreateRegister"), BridgeCommandTable.OUTSIDE_TABLE_T)
     }
 
     @Test

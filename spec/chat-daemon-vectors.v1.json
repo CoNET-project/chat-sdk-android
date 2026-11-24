@@ -1,604 +1,610 @@
 {
-	"$comment": "ChatDaemon protocol v1 shared conformance vectors. Source: @conet.project/chat-sdk spec/. Keys are throwaway test keys. Copy, do not edit, in chat-sdk-ios / chat-sdk-android.",
-	"vectorsVersion": 1,
-	"protocolVersion": 1,
-	"keys": {
-		"wallet": {
-			"privateKey": "0x0123456789012345678901234567890123456789012345678901234567890123",
-			"address": "0x14791697260E4c9A71f18484C9f997B308e59325"
-		},
-		"userPgp": {
-			"privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdAQyP5tMPHGXOYkE2qm8zDl5QmEuiO3ycX/jaT\n2eEdwMUAAQCdYeiQ2fsCcIY+pfd0LNO6KaCqsslJsqquEUlShRuKhBDlzTNzeW50\naGV0aWMgVmVjdG9yIFVzZXIgPHZlY3Rvci11c2VyQHZlY3RvcnMuaW52YWxpZD7C\nvwQTFggAcQWCaVW5AAMLCQcJEJLg8OpemOqENRQAAAAAABwAEHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmehu6swA1r/+AiAgTNfog/IAhUIAxYAAgIZAQKbAwIe\nARYhBGs2t66ZoFUqwI6bFJLg8OpemOqEAADpvgD/bZ0uL4lBDkhhlVDaAaBOFO0Z\nYR07P3TnOldk8+m+UjUA/RLgByqfmQSWygqPr4kdDDNiTsPPws8UhUVtwThe6LQH\nx10EaVW5ABIKKwYBBAGXVQEFAQEHQP1W71wcec+DSjr+rXs/qBY5g2RgiPUANbne\nc4kxG9FaAwEKCQAA/3STRA76fr9lJBAvG2HyTrD+7DRX7fPAFSgvPVsWzVCQD5/C\nrgQYFggAYAWCaVW5AAkQkuDw6l6Y6oQ1FAAAAAAAHAAQc2FsdEBub3RhdGlvbnMu\nb3BlbnBncGpzLm9yZy/8+PbFpAj6yNNIKN62jJUCmwwWIQRrNreumaBVKsCOmxSS\n4PDqXpjqhAAAYO8BALYgnnjeoWaPB3XYaNLU4kTihz0G0pYAVODHT6ibCf/HAQDe\nHQrWpftF4Gzhe9JkPbbgsvSsMpYMtM3DUDNkvnxJAg==\n=PvZr\n-----END PGP PRIVATE KEY BLOCK-----",
-			"publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdAQyP5tMPHGXOYkE2qm8zDl5QmEuiO3ycX/jaT\n2eEdwMXNM3N5bnRoZXRpYyBWZWN0b3IgVXNlciA8dmVjdG9yLXVzZXJAdmVjdG9y\ncy5pbnZhbGlkPsK/BBMWCABxBYJpVbkAAwsJBwkQkuDw6l6Y6oQ1FAAAAAAAHAAQ\nc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ6G7qzADWv/4CICBM1+iD8gCFQgD\nFgACAhkBApsDAh4BFiEEaza3rpmgVSrAjpsUkuDw6l6Y6oQAAOm+AP9tnS4viUEO\nSGGVUNoBoE4U7RlhHTs/dOc6V2Tz6b5SNQD9EuAHKp+ZBJbKCo+viR0MM2JOw8/C\nzxSFRW3BOF7otAfOOARpVbkAEgorBgEEAZdVAQUBAQdA/VbvXBx5z4NKOv6tez+o\nFjmDZGCI9QA1ud5ziTEb0VoDAQoJwq4EGBYIAGAFgmlVuQAJEJLg8OpemOqENRQA\nAAAAABwAEHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmcv/Pj2xaQI+sjTSCje\ntoyVApsMFiEEaza3rpmgVSrAjpsUkuDw6l6Y6oQAAGDvAQC2IJ543qFmjwd12GjS\n1OJE4oc9BtKWAFTgx0+omwn/xwEA3h0K1qX7ReBs4XvSZD224LL0rDKWDLTNw1Az\nZL58SQI=\n=VCpO\n-----END PGP PUBLIC KEY BLOCK-----"
-		},
-		"routePgp": {
-			"privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdArspe+om87OBfO/4QGtWOsWDWy+gluEXRuJoB\nd6OtWPsAAP9GZPgratt67eeOJVMdMgWd2bY6fpTpc0ttB5n8w08uUxB0zTVzeW50\naGV0aWMgVmVjdG9yIFJvdXRlIDx2ZWN0b3Itcm91dGVAdmVjdG9ycy5pbnZhbGlk\nPsK/BBMWCABxBYJpVbkAAwsJBwkQQz+SW17deaE1FAAAAAAAHAAQc2FsdEBub3Rh\ndGlvbnMub3BlbnBncGpzLm9yZ0cbdbaJ22w/oeKTYP0PKxQCFQgDFgACAhkBApsD\nAh4BFiEEgA/frxPJ6AYLlmUjQz+SW17deaEAANKWAQCN43rva4LQXEGNuV5OXhRx\nYtzqVskV6BvwQc/FaS7uJAEAu0ERXb2tXrOrtIci+Gb5xcZUdm9sxMWF55/ubHld\nAAfHXQRpVbkAEgorBgEEAZdVAQUBAQdA6HZa77bdZtNLhAwNFFp0wE9u1wJkFHon\nkkWdhtuT/x8DAQoJAAD/WX8u0oXpp0LJF1KMJ/jIZ8LtCJOiPreX1JBJfabknSgS\nK8KuBBgWCABgBYJpVbkACRBDP5JbXt15oTUUAAAAAAAcABBzYWx0QG5vdGF0aW9u\ncy5vcGVucGdwanMub3JnL01W7RbaM2uwA0YbjgJomQKbDBYhBIAP368TyegGC5Zl\nI0M/klte3XmhAAAaDgEA8PtRM3w+JDnzEupHtGTERvMujeoXjHuyOuLm6genioUB\nAJ9eNJ3r6vQvr8/wuAnc1makyIRg1w9tKNx4PLMa6SMI\n=pdQF\n-----END PGP PRIVATE KEY BLOCK-----",
-			"publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdArspe+om87OBfO/4QGtWOsWDWy+gluEXRuJoB\nd6OtWPvNNXN5bnRoZXRpYyBWZWN0b3IgUm91dGUgPHZlY3Rvci1yb3V0ZUB2ZWN0\nb3JzLmludmFsaWQ+wr8EExYIAHEFgmlVuQADCwkHCRBDP5JbXt15oTUUAAAAAAAc\nABBzYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3JnRxt1tonbbD+h4pNg/Q8rFAIV\nCAMWAAICGQECmwMCHgEWIQSAD9+vE8noBguWZSNDP5JbXt15oQAA0pYBAI3jeu9r\ngtBcQY25Xk5eFHFi3OpWyRXoG/BBz8VpLu4kAQC7QRFdva1es6u0hyL4ZvnFxlR2\nb2zExYXnn+5seV0AB844BGlVuQASCisGAQQBl1UBBQEBB0Dodlrvtt1m00uEDA0U\nWnTAT27XAmQUeieSRZ2G25P/HwMBCgnCrgQYFggAYAWCaVW5AAkQQz+SW17deaE1\nFAAAAAAAHAAQc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZy9NVu0W2jNrsANG\nG44CaJkCmwwWIQSAD9+vE8noBguWZSNDP5JbXt15oQAAGg4BAPD7UTN8PiQ58xLq\nR7RkxEbzLo3qF4x7sjri5uoHp4qFAQCfXjSd6+r0L6/P8LgJ3NZmpMiEYNcPbSjc\neDyzGukjCA==\n=aVnW\n-----END PGP PUBLIC KEY BLOCK-----"
-		}
-	},
-	"eip191": [
-		{
-			"message": "hello",
-			"signature": "0x0079d91efaa7ca55074617a2c255a8855bc278a3e0ca1b837f60ce000109ef8540960e193be95e38fb2f5307ca0c20108fcc420ff49e48b9a8cb11d9074deb461b",
-			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
-		},
-		{
-			"message": "{\"command\":\"mailbox_listen\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"instanceId\":\"vec-1\",\"timestamp\":1730419200}",
-			"signature": "0xfe86ffded968abf59de7f17cd93d3f65b4d5e2e4eeba61b4bf1ec90494ad89490ab0a7cfb9f567bae0d559ede2c1ef86fed781acfb1c18acb6854a0546e9f6341c",
-			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
-		},
-		{
-			"message": "héllo 世界 🎉",
-			"signature": "0x33e7ef308273541d7d4171814baa54743c0fbfc353487b125f0c1a9beb7a30ca4d6b7b5b96837a2c8c2790b13ce1d590aa01464f52a9110cbd04ef3b5d1b7f531b",
-			"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
-		}
-	],
-	"envelopes": [
-		{
-			"name": "business",
-			"description": "User-PGP layer of a chat message: base64(UTF-8 JSON { timestamp, text, from, signMessage }); signMessage = EIP-191(text).",
-			"decryptWith": "userPgp",
-			"literal": "base64-json",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
-			"armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae",
-			"expect": {
-				"timestamp": 1730419200123,
-				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
-				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
-				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
-			},
-			"signed": {
-				"textField": "text",
-				"signatureField": "signMessage",
-				"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
-			}
-		},
-		{
-			"name": "routeCommand",
-			"description": "Signed mailbox command: base64(UTF-8 JSON { message, signMessage }) to a route key; message = JSON(command).",
-			"decryptWith": "routePgp",
-			"literal": "base64-json",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4DTPDrTtagPj4SAQdAPxo28sNimIulFSG+8sI/Fu6GZ2BNczeKo87smtt1KSww\nh+spFhpq4zv3QIlBuloVJfCKBU9rtivSSeFJ/FV5qvdEVNQ1bvl8qeasWp4iRTUn\n0ukBfatVjtGAej0nMWS47kr9sqA0f08SfJFFR4cZo6WPGZn+35nh4J9QrP70OZdO\n9iNxsXhrnMBNZs4PSwqSDNdn1zWc07H1czknpvYcDrnk80XmkZMg3XDiotrQJzpS\nmrAQsrE4DzZuYSV/XY57n+iKpSmAvTDJYk51ezRjhJMBU9kilHn/NGdPXXEB0r6B\nJQwYg6hMpO3NkhS5JhgNNYhuwmnMV6HoCnrNSXaLxV/btnu97KXm/1cF/FdLWHjr\nW1SJnYw3tCZYPCPE65riBmZ3Gm3O0PnlIuv1cksxEVKVTZ1Usn43Com1ge9Znsjz\nfUFR116P6sdN/4IX0xKkvSsveyJRkgPiY4tQR9XVga49Rf4KZdR73qramiviYM5r\nvyK4xpCA4Su8vz3udT3sSzoytYCkl5sMnlNDlWILMyJai0uCfQ5qQ1m+2UIgE3Wm\nQEaHOW+85u6NJr/M3/uctXtEou32tl9ACRGh4lLRqM7KR0XOFCEW1XsCaZI1aXUU\nVvrG1r78Ijzviz8prmbtrhRPvQUO3DfD32V9LeWT1aDYKHsI+6QttE3VmTkBMyt/\nojofSmdQdgjdJwgEm7BVlH6ZIInMHSFovagT2rBaHzatef5oh608OMcQgxTiKwkO\nSYvL4GS2U3u3q8dJ5T+NlaAcy9nmeYXBi6rTSfoufbSbayaTsm3o8NkD1lYsQzfD\nuUnCNhmqsCsUmT2R7UHQwSEhzdzN59+Wqg==\n=VB4b\n-----END PGP MESSAGE-----",
-			"armorHash": "0x51646756164acc9a52f727aa5601e2e4a0d60220af7a5edd9f774da7529a76ed",
-			"expect": {
-				"message": "{\"command\":\"gossip_delivery_ack\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"armorHash\":\"0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae\",\"timestamp\":1730419200}",
-				"signMessage": "0x47d0889dd4385129c25aaa0f7b0c3e9afe5c59a5b41b7c0f82703f4e8bbd178342a93a19c44d15b63e0545dac2a9ad5ca3a00e3071b3166ee9a849b3c5d60f931c"
-			},
-			"messageJson": {
-				"command": "gossip_delivery_ack",
-				"walletAddress": "0x14791697260E4c9A71f18484C9f997B308e59325",
-				"armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae",
-				"timestamp": 1730419200
-			},
-			"signed": {
-				"textField": "message",
-				"signatureField": "signMessage",
-				"signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
-			}
-		},
-		{
-			"name": "mailboxWork",
-			"description": "Mailbox work to the recipient mailbox route key: UTF-8 JSON { data: <user-PGP armor>, NoPush: true } (not base64).",
-			"decryptWith": "routePgp",
-			"literal": "json",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4DTPDrTtagPj4SAQdAi2pRpjQI5k0eZIPZrH1deA9DDbzjbNsA0a2+T5bDV08w\n5Fq/QaH4taQxgTsd4YRXVDYF09izcF7Nn9r7SXYsyGqB1xGKzBsDNetN0V4MF159\n0ukB/arF+k5T/lj4/NFqM8q1WQDZHXauesZWFRaS5CTMf/r/oXCfM8ICjazpuu7t\nfAQ4SOWsNFXunMKkTxGOrxqtrsakboo2Agsn/9jaz7LXuFsj2gN3vOpUpGuK1Pmp\nWczyhXM4s1dBWomtdHTICam0C9UnV6pUyUvcggipmTqPZI2DDYSFaRTVG5YUpVgP\nMxjsgOu9DPTKeCyHsnRj1egOiqpkgpjgWCDHAgIM7iebHodoNrcusl8xJOOrnzl3\npjFjmWCLvDtXxWUp4OvjfQTMTvnPvwwFiEaFT6+hxQSgSUsYxhDrZPMYaFhctmee\nz/wsLLF/3JPqU7STWwlzquDh4EpGVg85XTm+jczkR/x8+AigiZl+4rbYGpwJ8O2y\nOL6FPSMApB9pSolLJmUso9diKLqR1dA5hRNvhyygWP1m+rb+NgmH4lITAJA58iYR\nz1xvIGvppTjTyFaQRwKr5McOYG7rqnYHNZ93Eu3WGZjWAKV8A/Ah/5dOZMpvT5Ru\nxgat+cpZ3PN32h01wZ61xoJU/PTByYKAIqLLVrwe8xKa8SvQsJcQu38+5lJLlQPQ\nz58n3Nh3XEN3HkGnGIU0eym5uLRCQy/sI+6d+j0f5mOZKxlM75dWshwN/GDt13h+\nbvLQjKeaWLYhIgLiT6bdVPYoq8IeJeogYEU1zlhZuAsxwsEMoWAyReoxywDU78Ie\nPzBT5Lc69NAtxVAO9kNgov3h3eHFGHQZYCHjzK/Y0gqMPuOiH4q4NlCY0wUMb10U\nn4U0qGSqtqYqrkFL/AxFHeIgDIgOaq2e0GUDh/B7ajoz+hVPqVghQ33Bb2DMvzI8\n7iS56NTFZo81WYlXNTTNelrr9JWdPb0abfxaRITIUgHpfPyzTTAnc1Gff1zlcBcq\nrV6rfLyfvfILCbFoe794AuL4jauYt8dEh0S7gGf5qr4K27u5xUC9/6ZN72hhrpjc\nJgUIz8zsXrSJy2VcwoFIS3iR0ag7Z2AQnUFYQeGVKPnWzr5PSdFTliX08h2tzb5O\ndD78CtoU1viXfaV5EcDRjW+Rx5bpJam1/+qQsK6ERmXlhYPzXqVOkGSEkP4yByNs\n6F7tRAIs73qzI5xBIrvQ+7/PqUclt7TjZLa5Ri1Na+IwQeWZ510a6K/g+un32yMK\nnpxfRQP3q3YbWLrTHjh2J48lunjI9EkcaaNfPcIrnhTvDcPnGyer1VeU+PpW/9GE\nEya5k93/HH6UEV40gqXSsAHxfEQZ6FCybq8YTU8r7Dm0crZNj7206rf24o6VueYk\njm6kmx4sj+7RrAr9Vcs4PA==\n=3HAZ\n-----END PGP MESSAGE-----",
-			"armorHash": "0xa49ee7a83b2f66f670433895f3437a5592b6291a563fcc3dea36c7a0b598d618",
-			"expect": {
-				"data": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
-				"NoPush": true
-			}
-		}
-	],
-	"ackHash": [
-		{
-			"name": "business armor",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
-			"armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae"
-		},
-		{
-			"name": "short armor",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
-			"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16"
-		},
-		{
-			"name": "unicode armor",
-			"armor": "-----BEGIN PGP MESSAGE-----\n\nComment: 世界\n-----END PGP MESSAGE-----",
-			"armorHash": "0x5f9c06a82974d245f42f66e91028bc2a88eefbb71417c839747d955d3e2ce9f6"
-		}
-	],
-	"builders": [
-		{
-			"name": "deliveryAckCommand",
-			"input": {
-				"eoa": "0x14791697260e4c9a71f18484c9f997b308e59325",
-				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
-				"timestamp": 1730419200
-			},
-			"expect": {
-				"command": "gossip_delivery_ack",
-				"walletAddress": "0x14791697260e4c9a71f18484c9f997b308e59325",
-				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
-				"timestamp": 1730419200
-			}
-		},
-		{
-			"name": "deliveryReceipt",
-			"input": {
-				"sendId": "vec-send-1",
-				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
-				"deliveredAt": 1730419200999,
-				"eoa": "0x14791697260e4c9a71f18484c9f997b308e59325"
-			},
-			"expect": {
-				"type": "beamio_chat_delivery_receipt_v1",
-				"sendId": "vec-send-1",
-				"armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
-				"deliveredAt": 1730419200999,
-				"from": "0x14791697260e4c9a71f18484c9f997b308e59325"
-			}
-		},
-		{
-			"name": "pendingRow",
-			"input": {
-				"sendId": "vec-row-1",
-				"text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
-				"createdAt": 1730419201000
-			},
-			"expect": {
-				"sendId": "vec-row-1",
-				"from": "me",
-				"text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
-				"createdAt": 1730419201000
-			}
-		},
-		{
-			"name": "chatEnvelope",
-			"input": {
-				"timestamp": 1730419200123,
-				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
-				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
-				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
-			},
-			"expect": {
-				"timestamp": 1730419200123,
-				"text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
-				"from": "0x14791697260E4c9A71f18484C9f997B308e59325",
-				"signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
-			}
-		},
-		{
-			"name": "mailboxWork",
-			"input": {
-				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
-				"noPush": true
-			},
-			"expect": {
-				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
-				"NoPush": true
-			}
-		},
-		{
-			"name": "mailboxWorkPush",
-			"input": {
-				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
-				"noPush": false
-			},
-			"expect": {
-				"data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----"
-			}
-		}
-	],
-	"callSignal": [
-		{
-			"name": "plain end object",
-			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-end",
-				"sessionId": "s-end"
-			}
-		},
-		{
-			"name": "end in pending row in envelope",
-			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_end_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-end\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-end\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"ended\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-end",
-				"sessionId": "s-end"
-			}
-		},
-		{
-			"name": "base64 envelope",
-			"line": "eyJ0aW1lc3RhbXAiOjEsInRleHQiOiJ7XCJzZW5kSWRcIjpcInBcIixcImZyb21cIjpcIm1lXCIsXCJ0ZXh0XCI6XCJ7XFxcInR5cGVcXFwiOlxcXCJ2b2ljZV9lbmRfdjFcXFwiLFxcXCJjYWxsSWRcXFwiOlxcXCJjLWVuZFxcXCIsXFxcInNlc3Npb25JZFxcXCI6XFxcInMtZW5kXFxcIixcXFwicmVhc29uXFxcIjpcXFwiZW5kZWRcXFwifVwiLFwiY3JlYXRlZEF0XCI6MX0iLCJmcm9tIjoiMHhjbGFpbWVkIiwic2lnbk1lc3NhZ2UiOiIweHNpZyJ9",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-end",
-				"sessionId": "s-end"
-			}
-		},
-		{
-			"name": "base64 text field",
-			"line": "{\"timestamp\":1,\"text\":\"eyJzZW5kSWQiOiJwIiwiZnJvbSI6Im1lIiwidGV4dCI6IntcInR5cGVcIjpcInZvaWNlX2NhbGxfdGltZW91dF92MVwiLFwiY2FsbElkXCI6XCJjLXRpbWVvdXRcIixcInNlc3Npb25JZFwiOlwiXCIsXCJyZWFzb25cIjpcInRpbWVvdXRcIn0iLCJjcmVhdGVkQXQiOjF9\",\"signMessage\":\"0x\"}",
-			"expect": {
-				"kind": "timeout",
-				"type": "voice_call_timeout_v1",
-				"callId": "c-timeout",
-				"sessionId": ""
-			}
-		},
-		{
-			"name": "offer",
-			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_offer_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-offer\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-offer\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xclaimed\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xpeer\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
-			"expect": {
-				"kind": "offer",
-				"type": "voice_call_offer_v1",
-				"callId": "c-offer",
-				"sessionId": "s-offer"
-			}
-		},
-		{
-			"name": "accept",
-			"line": "{\"type\":\"voice_call_accept_v1\",\"callId\":\"c-a\",\"sessionId\":\"s-a\"}",
-			"expect": {
-				"kind": "accept",
-				"type": "voice_call_accept_v1",
-				"callId": "c-a",
-				"sessionId": "s-a"
-			}
-		},
-		{
-			"name": "reject",
-			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-r\",\"sessionId\":\"\"}",
-			"expect": {
-				"kind": "reject",
-				"type": "voice_call_reject_v1",
-				"callId": "c-r",
-				"sessionId": "",
-				"rejectReason": "declined"
-			}
-		},
-		{
-			"name": "reject busy (callee in another call)",
-			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-busy\",\"sessionId\":\"s-busy\",\"reason\":\"busy\"}",
-			"expect": {
-				"kind": "reject",
-				"type": "voice_call_reject_v1",
-				"callId": "c-busy",
-				"sessionId": "s-busy",
-				"rejectReason": "busy"
-			}
-		},
-		{
-			"name": "reject busy in envelope",
-			"line": "{\"timestamp\":1,\"text\":\"{\\\"type\\\":\\\"voice_call_reject_v1\\\",\\\"callId\\\":\\\"c-busy\\\",\\\"sessionId\\\":\\\"s-busy\\\",\\\"reason\\\":\\\"busy\\\"}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
-			"expect": {
-				"kind": "reject",
-				"type": "voice_call_reject_v1",
-				"callId": "c-busy",
-				"sessionId": "s-busy",
-				"rejectReason": "busy"
-			}
-		},
-		{
-			"name": "reject with another reason is declined",
-			"line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-d\",\"sessionId\":\"s-d\",\"reason\":\"BUSY \"}",
-			"expect": {
-				"kind": "reject",
-				"type": "voice_call_reject_v1",
-				"callId": "c-d",
-				"sessionId": "s-d",
-				"rejectReason": "declined"
-			}
-		},
-		{
-			"name": "ringing in envelope",
-			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_ringing_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-ring\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-ring\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xcallee\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xcaller\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
-			"expect": {
-				"kind": "ringing",
-				"type": "voice_call_ringing_v1",
-				"callId": "c-ring",
-				"sessionId": "s-ring"
-			}
-		},
-		{
-			"name": "ids are trimmed",
-			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"  c-trim  \",\"sessionId\":\"\\ts-trim\\n\"}",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-trim",
-				"sessionId": "s-trim"
-			}
-		},
-		{
-			"name": "nested object key",
-			"line": "{\"meta\":{\"signal\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-end",
-				"sessionId": "s-end"
-			}
-		},
-		{
-			"name": "array element",
-			"line": "[{\"type\":\"chat\"},{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}]",
-			"expect": {
-				"kind": "end",
-				"type": "voice_end_v1",
-				"callId": "c-end",
-				"sessionId": "s-end"
-			}
-		},
-		{
-			"name": "no ids",
-			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"\",\"sessionId\":\"\"}",
-			"expect": null
-		},
-		{
-			"name": "numeric ids do not count",
-			"line": "{\"type\":\"voice_end_v1\",\"callId\":42,\"sessionId\":7}",
-			"expect": null
-		},
-		{
-			"name": "other type",
-			"line": "{\"type\":\"voice_frame_v1\",\"callId\":\"c\",\"sessionId\":\"s\"}",
-			"expect": null
-		},
-		{
-			"name": "plain chat text",
-			"line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"text\\\\\\\",\\\\\\\"body\\\\\\\":\\\\\\\"voice_end_v1 is just words here\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
-			"expect": null
-		},
-		{
-			"name": "not json, not base64",
-			"line": "hello there",
-			"expect": null
-		},
-		{
-			"name": "broken json",
-			"line": "{\"type\":\"voice_end_v1\",\"callId\":\"c\"",
-			"expect": null
-		},
-		{
-			"name": "too deep",
-			"line": "{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}}}}}}}}}}}",
-			"expect": null
-		},
-		{
-			"name": "empty",
-			"line": "",
-			"expect": null
-		}
-	],
-	"hello": {
-		"capabilities": [
-			"identity.provision",
-			"signing.local",
-			"lifecycle.daemon",
-			"inbound.deferAck",
-			"inbound.generation.v1",
-			"history.v2",
-			"call.control",
-			"voice.channelV2",
-			"voice.delegated",
-			"group.v1",
-			"presence.query",
-			"mailbox.command",
-			"send.mailboxWrap",
-			"history.local.v1",
-			"history.page.v1",
-			"layout.cache.v1",
-			"identity.kpresent.v1",
-			"identity.native-keys.v1"
-		],
-		"implementations": {
-			"ts-worker": {
-				"protocolVersion": 1,
-				"minProtocolVersion": 1,
-				"capabilities": [
-					"history.v2",
-					"voice.channelV2",
-					"group.v1",
-					"presence.query",
-					"mailbox.command",
-					"send.mailboxWrap",
-					"history.local.v1",
-					"history.page.v1",
-					"layout.cache.v1"
-				]
-			},
-			"ios": {
-				"protocolVersion": 1,
-				"minProtocolVersion": 1,
-				"capabilities": [
-					"identity.provision",
-					"signing.local",
-					"lifecycle.daemon",
-					"inbound.deferAck",
-					"inbound.generation.v1",
-					"history.v2",
-					"call.control",
-					"voice.delegated",
-					"presence.query",
-					"mailbox.command",
-					"send.mailboxWrap",
-					"history.local.v1",
-					"history.page.v1",
-					"layout.cache.v1",
-					"identity.kpresent.v1",
-					"identity.native-keys.v1"
-				]
-			},
-			"android": {
-				"protocolVersion": 1,
-				"minProtocolVersion": 1,
-				"capabilities": [
-					"identity.provision",
-					"signing.local",
-					"lifecycle.daemon",
-					"inbound.deferAck",
-					"history.v2",
-					"call.control",
-					"voice.delegated",
-					"presence.query",
-					"mailbox.command",
-					"send.mailboxWrap",
-					"history.local.v1",
-					"history.page.v1",
-					"layout.cache.v1",
-					"identity.kpresent.v1",
-					"identity.native-keys.v1"
-				]
-			}
-		},
-		"negotiation": [
-			{
-				"name": "no answer (shell older than v1)",
-				"reply": null,
-				"expect": {
-					"status": "legacy",
-					"protocolVersion": 0,
-					"capabilities": []
-				}
-			},
-			{
-				"name": "native v1",
-				"reply": {
-					"protocolVersion": 1,
-					"minProtocolVersion": 1,
-					"sdkVersion": "0.1.8",
-					"implementation": "ios",
-					"capabilities": [
-						"identity.provision",
-						"signing.local",
-						"lifecycle.daemon",
-						"inbound.deferAck",
-						"history.v2",
-						"call.control",
-						"voice.delegated",
-						"presence.query",
-						"mailbox.command",
-						"send.mailboxWrap"
-					]
-				},
-				"expect": {
-					"status": "negotiated",
-					"protocolVersion": 1,
-					"capabilities": [
-						"identity.provision",
-						"signing.local",
-						"lifecycle.daemon",
-						"inbound.deferAck",
-						"history.v2",
-						"call.control",
-						"voice.delegated",
-						"presence.query",
-						"mailbox.command",
-						"send.mailboxWrap"
-					]
-				}
-			},
-			{
-				"name": "unknown capabilities are dropped, order follows the spec",
-				"reply": {
-					"protocolVersion": 1,
-					"sdkVersion": "0.2.6",
-					"implementation": "android",
-					"capabilities": [
-						"future.thing",
-						"mailbox.command",
-						"history.v2",
-						"history.v2"
-					]
-				},
-				"expect": {
-					"status": "negotiated",
-					"protocolVersion": 1,
-					"capabilities": [
-						"history.v2",
-						"mailbox.command"
-					]
-				}
-			},
-			{
-				"name": "newer daemon that still speaks v1",
-				"reply": {
-					"protocolVersion": 3,
-					"minProtocolVersion": 1,
-					"sdkVersion": "9.0.0",
-					"implementation": "ios",
-					"capabilities": [
-						"history.v2",
-						"group.v2"
-					]
-				},
-				"expect": {
-					"status": "negotiated",
-					"protocolVersion": 3,
-					"capabilities": [
-						"history.v2"
-					]
-				}
-			},
-			{
-				"name": "daemon that dropped v1",
-				"reply": {
-					"protocolVersion": 3,
-					"minProtocolVersion": 2,
-					"sdkVersion": "9.0.0",
-					"implementation": "ios",
-					"capabilities": [
-						"history.v2"
-					]
-				},
-				"expect": {
-					"status": "incompatible",
-					"protocolVersion": 3,
-					"capabilities": []
-				}
-			},
-			{
-				"name": "version as a string is malformed",
-				"reply": {
-					"protocolVersion": "1",
-					"sdkVersion": "0.1.8",
-					"implementation": "ios",
-					"capabilities": [
-						"history.v2"
-					]
-				},
-				"expect": {
-					"status": "legacy",
-					"protocolVersion": 0,
-					"capabilities": []
-				}
-			},
-			{
-				"name": "missing capabilities is malformed",
-				"reply": {
-					"protocolVersion": 1,
-					"sdkVersion": "0.1.8",
-					"implementation": "ios"
-				},
-				"expect": {
-					"status": "legacy",
-					"protocolVersion": 0,
-					"capabilities": []
-				}
-			},
-			{
-				"name": "error ack result",
-				"reply": "unknown_command",
-				"expect": {
-					"status": "legacy",
-					"protocolVersion": 0,
-					"capabilities": []
-				}
-			}
-		]
-	}
+ "$comment": "ChatDaemon protocol v1 shared conformance vectors. Source: @conet.project/chat-sdk spec/. Keys are throwaway test keys. Copy, do not edit, in chat-sdk-ios / chat-sdk-android. | pub1 (2026-11-24): based on registered da2f86b6; appends receipt.delivery.v1 to the top-level set and to the ios and android lists (end of list). Not declared by ts-worker. | pub2 (2026-11-24): the android list does NOT contain wallet.passcode.v1 (the Android build lists 15 + receipt.delivery.v1, ending identity.native-keys.v1, receipt.delivery.v1); the top-level set and the ios list keep wallet.passcode.v1. If Android later declares wallet.passcode.v1 a new vector version adds it.",
+ "vectorsVersion": 1,
+ "protocolVersion": 1,
+ "keys": {
+  "wallet": {
+   "privateKey": "0x0123456789012345678901234567890123456789012345678901234567890123",
+   "address": "0x14791697260E4c9A71f18484C9f997B308e59325"
+  },
+  "userPgp": {
+   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdAQyP5tMPHGXOYkE2qm8zDl5QmEuiO3ycX/jaT\n2eEdwMUAAQCdYeiQ2fsCcIY+pfd0LNO6KaCqsslJsqquEUlShRuKhBDlzTNzeW50\naGV0aWMgVmVjdG9yIFVzZXIgPHZlY3Rvci11c2VyQHZlY3RvcnMuaW52YWxpZD7C\nvwQTFggAcQWCaVW5AAMLCQcJEJLg8OpemOqENRQAAAAAABwAEHNhbHRAbm90YXRp\nb25zLm9wZW5wZ3Bqcy5vcmehu6swA1r/+AiAgTNfog/IAhUIAxYAAgIZAQKbAwIe\nARYhBGs2t66ZoFUqwI6bFJLg8OpemOqEAADpvgD/bZ0uL4lBDkhhlVDaAaBOFO0Z\nYR07P3TnOldk8+m+UjUA/RLgByqfmQSWygqPr4kdDDNiTsPPws8UhUVtwThe6LQH\nx10EaVW5ABIKKwYBBAGXVQEFAQEHQP1W71wcec+DSjr+rXs/qBY5g2RgiPUANbne\nc4kxG9FaAwEKCQAA/3STRA76fr9lJBAvG2HyTrD+7DRX7fPAFSgvPVsWzVCQD5/C\nrgQYFggAYAWCaVW5AAkQkuDw6l6Y6oQ1FAAAAAAAHAAQc2FsdEBub3RhdGlvbnMu\nb3BlbnBncGpzLm9yZy/8+PbFpAj6yNNIKN62jJUCmwwWIQRrNreumaBVKsCOmxSS\n4PDqXpjqhAAAYO8BALYgnnjeoWaPB3XYaNLU4kTihz0G0pYAVODHT6ibCf/HAQDe\nHQrWpftF4Gzhe9JkPbbgsvSsMpYMtM3DUDNkvnxJAg==\n=PvZr\n-----END PGP PRIVATE KEY BLOCK-----",
+   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdAQyP5tMPHGXOYkE2qm8zDl5QmEuiO3ycX/jaT\n2eEdwMXNM3N5bnRoZXRpYyBWZWN0b3IgVXNlciA8dmVjdG9yLXVzZXJAdmVjdG9y\ncy5pbnZhbGlkPsK/BBMWCABxBYJpVbkAAwsJBwkQkuDw6l6Y6oQ1FAAAAAAAHAAQ\nc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZ6G7qzADWv/4CICBM1+iD8gCFQgD\nFgACAhkBApsDAh4BFiEEaza3rpmgVSrAjpsUkuDw6l6Y6oQAAOm+AP9tnS4viUEO\nSGGVUNoBoE4U7RlhHTs/dOc6V2Tz6b5SNQD9EuAHKp+ZBJbKCo+viR0MM2JOw8/C\nzxSFRW3BOF7otAfOOARpVbkAEgorBgEEAZdVAQUBAQdA/VbvXBx5z4NKOv6tez+o\nFjmDZGCI9QA1ud5ziTEb0VoDAQoJwq4EGBYIAGAFgmlVuQAJEJLg8OpemOqENRQA\nAAAAABwAEHNhbHRAbm90YXRpb25zLm9wZW5wZ3Bqcy5vcmcv/Pj2xaQI+sjTSCje\ntoyVApsMFiEEaza3rpmgVSrAjpsUkuDw6l6Y6oQAAGDvAQC2IJ543qFmjwd12GjS\n1OJE4oc9BtKWAFTgx0+omwn/xwEA3h0K1qX7ReBs4XvSZD224LL0rDKWDLTNw1Az\nZL58SQI=\n=VCpO\n-----END PGP PUBLIC KEY BLOCK-----"
+  },
+  "routePgp": {
+   "privateArmored": "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nxVgEaVW5ABYJKwYBBAHaRw8BAQdArspe+om87OBfO/4QGtWOsWDWy+gluEXRuJoB\nd6OtWPsAAP9GZPgratt67eeOJVMdMgWd2bY6fpTpc0ttB5n8w08uUxB0zTVzeW50\naGV0aWMgVmVjdG9yIFJvdXRlIDx2ZWN0b3Itcm91dGVAdmVjdG9ycy5pbnZhbGlk\nPsK/BBMWCABxBYJpVbkAAwsJBwkQQz+SW17deaE1FAAAAAAAHAAQc2FsdEBub3Rh\ndGlvbnMub3BlbnBncGpzLm9yZ0cbdbaJ22w/oeKTYP0PKxQCFQgDFgACAhkBApsD\nAh4BFiEEgA/frxPJ6AYLlmUjQz+SW17deaEAANKWAQCN43rva4LQXEGNuV5OXhRx\nYtzqVskV6BvwQc/FaS7uJAEAu0ERXb2tXrOrtIci+Gb5xcZUdm9sxMWF55/ubHld\nAAfHXQRpVbkAEgorBgEEAZdVAQUBAQdA6HZa77bdZtNLhAwNFFp0wE9u1wJkFHon\nkkWdhtuT/x8DAQoJAAD/WX8u0oXpp0LJF1KMJ/jIZ8LtCJOiPreX1JBJfabknSgS\nK8KuBBgWCABgBYJpVbkACRBDP5JbXt15oTUUAAAAAAAcABBzYWx0QG5vdGF0aW9u\ncy5vcGVucGdwanMub3JnL01W7RbaM2uwA0YbjgJomQKbDBYhBIAP368TyegGC5Zl\nI0M/klte3XmhAAAaDgEA8PtRM3w+JDnzEupHtGTERvMujeoXjHuyOuLm6genioUB\nAJ9eNJ3r6vQvr8/wuAnc1makyIRg1w9tKNx4PLMa6SMI\n=pdQF\n-----END PGP PRIVATE KEY BLOCK-----",
+   "publicArmored": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nxjMEaVW5ABYJKwYBBAHaRw8BAQdArspe+om87OBfO/4QGtWOsWDWy+gluEXRuJoB\nd6OtWPvNNXN5bnRoZXRpYyBWZWN0b3IgUm91dGUgPHZlY3Rvci1yb3V0ZUB2ZWN0\nb3JzLmludmFsaWQ+wr8EExYIAHEFgmlVuQADCwkHCRBDP5JbXt15oTUUAAAAAAAc\nABBzYWx0QG5vdGF0aW9ucy5vcGVucGdwanMub3JnRxt1tonbbD+h4pNg/Q8rFAIV\nCAMWAAICGQECmwMCHgEWIQSAD9+vE8noBguWZSNDP5JbXt15oQAA0pYBAI3jeu9r\ngtBcQY25Xk5eFHFi3OpWyRXoG/BBz8VpLu4kAQC7QRFdva1es6u0hyL4ZvnFxlR2\nb2zExYXnn+5seV0AB844BGlVuQASCisGAQQBl1UBBQEBB0Dodlrvtt1m00uEDA0U\nWnTAT27XAmQUeieSRZ2G25P/HwMBCgnCrgQYFggAYAWCaVW5AAkQQz+SW17deaE1\nFAAAAAAAHAAQc2FsdEBub3RhdGlvbnMub3BlbnBncGpzLm9yZy9NVu0W2jNrsANG\nG44CaJkCmwwWIQSAD9+vE8noBguWZSNDP5JbXt15oQAAGg4BAPD7UTN8PiQ58xLq\nR7RkxEbzLo3qF4x7sjri5uoHp4qFAQCfXjSd6+r0L6/P8LgJ3NZmpMiEYNcPbSjc\neDyzGukjCA==\n=aVnW\n-----END PGP PUBLIC KEY BLOCK-----"
+  }
+ },
+ "eip191": [
+  {
+   "message": "hello",
+   "signature": "0x0079d91efaa7ca55074617a2c255a8855bc278a3e0ca1b837f60ce000109ef8540960e193be95e38fb2f5307ca0c20108fcc420ff49e48b9a8cb11d9074deb461b",
+   "signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+  },
+  {
+   "message": "{\"command\":\"mailbox_listen\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"instanceId\":\"vec-1\",\"timestamp\":1730419200}",
+   "signature": "0xfe86ffded968abf59de7f17cd93d3f65b4d5e2e4eeba61b4bf1ec90494ad89490ab0a7cfb9f567bae0d559ede2c1ef86fed781acfb1c18acb6854a0546e9f6341c",
+   "signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+  },
+  {
+   "message": "héllo 世界 🎉",
+   "signature": "0x33e7ef308273541d7d4171814baa54743c0fbfc353487b125f0c1a9beb7a30ca4d6b7b5b96837a2c8c2790b13ce1d590aa01464f52a9110cbd04ef3b5d1b7f531b",
+   "signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+  }
+ ],
+ "envelopes": [
+  {
+   "name": "business",
+   "description": "User-PGP layer of a chat message: base64(UTF-8 JSON { timestamp, text, from, signMessage }); signMessage = EIP-191(text).",
+   "decryptWith": "userPgp",
+   "literal": "base64-json",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
+   "armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae",
+   "expect": {
+    "timestamp": 1730419200123,
+    "text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+    "from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+    "signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+   },
+   "signed": {
+    "textField": "text",
+    "signatureField": "signMessage",
+    "signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+   }
+  },
+  {
+   "name": "routeCommand",
+   "description": "Signed mailbox command: base64(UTF-8 JSON { message, signMessage }) to a route key; message = JSON(command).",
+   "decryptWith": "routePgp",
+   "literal": "base64-json",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nwV4DTPDrTtagPj4SAQdAPxo28sNimIulFSG+8sI/Fu6GZ2BNczeKo87smtt1KSww\nh+spFhpq4zv3QIlBuloVJfCKBU9rtivSSeFJ/FV5qvdEVNQ1bvl8qeasWp4iRTUn\n0ukBfatVjtGAej0nMWS47kr9sqA0f08SfJFFR4cZo6WPGZn+35nh4J9QrP70OZdO\n9iNxsXhrnMBNZs4PSwqSDNdn1zWc07H1czknpvYcDrnk80XmkZMg3XDiotrQJzpS\nmrAQsrE4DzZuYSV/XY57n+iKpSmAvTDJYk51ezRjhJMBU9kilHn/NGdPXXEB0r6B\nJQwYg6hMpO3NkhS5JhgNNYhuwmnMV6HoCnrNSXaLxV/btnu97KXm/1cF/FdLWHjr\nW1SJnYw3tCZYPCPE65riBmZ3Gm3O0PnlIuv1cksxEVKVTZ1Usn43Com1ge9Znsjz\nfUFR116P6sdN/4IX0xKkvSsveyJRkgPiY4tQR9XVga49Rf4KZdR73qramiviYM5r\nvyK4xpCA4Su8vz3udT3sSzoytYCkl5sMnlNDlWILMyJai0uCfQ5qQ1m+2UIgE3Wm\nQEaHOW+85u6NJr/M3/uctXtEou32tl9ACRGh4lLRqM7KR0XOFCEW1XsCaZI1aXUU\nVvrG1r78Ijzviz8prmbtrhRPvQUO3DfD32V9LeWT1aDYKHsI+6QttE3VmTkBMyt/\nojofSmdQdgjdJwgEm7BVlH6ZIInMHSFovagT2rBaHzatef5oh608OMcQgxTiKwkO\nSYvL4GS2U3u3q8dJ5T+NlaAcy9nmeYXBi6rTSfoufbSbayaTsm3o8NkD1lYsQzfD\nuUnCNhmqsCsUmT2R7UHQwSEhzdzN59+Wqg==\n=VB4b\n-----END PGP MESSAGE-----",
+   "armorHash": "0x51646756164acc9a52f727aa5601e2e4a0d60220af7a5edd9f774da7529a76ed",
+   "expect": {
+    "message": "{\"command\":\"gossip_delivery_ack\",\"walletAddress\":\"0x14791697260E4c9A71f18484C9f997B308e59325\",\"armorHash\":\"0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae\",\"timestamp\":1730419200}",
+    "signMessage": "0x47d0889dd4385129c25aaa0f7b0c3e9afe5c59a5b41b7c0f82703f4e8bbd178342a93a19c44d15b63e0545dac2a9ad5ca3a00e3071b3166ee9a849b3c5d60f931c"
+   },
+   "messageJson": {
+    "command": "gossip_delivery_ack",
+    "walletAddress": "0x14791697260E4c9A71f18484C9f997B308e59325",
+    "armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae",
+    "timestamp": 1730419200
+   },
+   "signed": {
+    "textField": "message",
+    "signatureField": "signMessage",
+    "signer": "0x14791697260E4c9A71f18484C9f997B308e59325"
+   }
+  },
+  {
+   "name": "mailboxWork",
+   "description": "Mailbox work to the recipient mailbox route key: UTF-8 JSON { data: <user-PGP armor>, NoPush: true } (not base64).",
+   "decryptWith": "routePgp",
+   "literal": "json",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nwV4DTPDrTtagPj4SAQdAi2pRpjQI5k0eZIPZrH1deA9DDbzjbNsA0a2+T5bDV08w\n5Fq/QaH4taQxgTsd4YRXVDYF09izcF7Nn9r7SXYsyGqB1xGKzBsDNetN0V4MF159\n0ukB/arF+k5T/lj4/NFqM8q1WQDZHXauesZWFRaS5CTMf/r/oXCfM8ICjazpuu7t\nfAQ4SOWsNFXunMKkTxGOrxqtrsakboo2Agsn/9jaz7LXuFsj2gN3vOpUpGuK1Pmp\nWczyhXM4s1dBWomtdHTICam0C9UnV6pUyUvcggipmTqPZI2DDYSFaRTVG5YUpVgP\nMxjsgOu9DPTKeCyHsnRj1egOiqpkgpjgWCDHAgIM7iebHodoNrcusl8xJOOrnzl3\npjFjmWCLvDtXxWUp4OvjfQTMTvnPvwwFiEaFT6+hxQSgSUsYxhDrZPMYaFhctmee\nz/wsLLF/3JPqU7STWwlzquDh4EpGVg85XTm+jczkR/x8+AigiZl+4rbYGpwJ8O2y\nOL6FPSMApB9pSolLJmUso9diKLqR1dA5hRNvhyygWP1m+rb+NgmH4lITAJA58iYR\nz1xvIGvppTjTyFaQRwKr5McOYG7rqnYHNZ93Eu3WGZjWAKV8A/Ah/5dOZMpvT5Ru\nxgat+cpZ3PN32h01wZ61xoJU/PTByYKAIqLLVrwe8xKa8SvQsJcQu38+5lJLlQPQ\nz58n3Nh3XEN3HkGnGIU0eym5uLRCQy/sI+6d+j0f5mOZKxlM75dWshwN/GDt13h+\nbvLQjKeaWLYhIgLiT6bdVPYoq8IeJeogYEU1zlhZuAsxwsEMoWAyReoxywDU78Ie\nPzBT5Lc69NAtxVAO9kNgov3h3eHFGHQZYCHjzK/Y0gqMPuOiH4q4NlCY0wUMb10U\nn4U0qGSqtqYqrkFL/AxFHeIgDIgOaq2e0GUDh/B7ajoz+hVPqVghQ33Bb2DMvzI8\n7iS56NTFZo81WYlXNTTNelrr9JWdPb0abfxaRITIUgHpfPyzTTAnc1Gff1zlcBcq\nrV6rfLyfvfILCbFoe794AuL4jauYt8dEh0S7gGf5qr4K27u5xUC9/6ZN72hhrpjc\nJgUIz8zsXrSJy2VcwoFIS3iR0ag7Z2AQnUFYQeGVKPnWzr5PSdFTliX08h2tzb5O\ndD78CtoU1viXfaV5EcDRjW+Rx5bpJam1/+qQsK6ERmXlhYPzXqVOkGSEkP4yByNs\n6F7tRAIs73qzI5xBIrvQ+7/PqUclt7TjZLa5Ri1Na+IwQeWZ510a6K/g+un32yMK\nnpxfRQP3q3YbWLrTHjh2J48lunjI9EkcaaNfPcIrnhTvDcPnGyer1VeU+PpW/9GE\nEya5k93/HH6UEV40gqXSsAHxfEQZ6FCybq8YTU8r7Dm0crZNj7206rf24o6VueYk\njm6kmx4sj+7RrAr9Vcs4PA==\n=3HAZ\n-----END PGP MESSAGE-----",
+   "armorHash": "0xa49ee7a83b2f66f670433895f3437a5592b6291a563fcc3dea36c7a0b598d618",
+   "expect": {
+    "data": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
+    "NoPush": true
+   }
+  }
+ ],
+ "ackHash": [
+  {
+   "name": "business armor",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nwV4D5PsM7iawV9MSAQdAP0vJFCoNs82F0FUgACPb11oyShsF+J5x8X9CkWJiKH4w\nMuUQd9QeyuE55xaCcjZfOD4mwcaTb4NUr2SP7fYMl9632oFTCdn3Qo7Ims8AXguR\n0sE6AezcZ2jX+ETMZaGfYU8V2uA5pPO8lD3k9/CrzbtVsARYacWv9mSwWLVDvke9\n4mZhRPKSRt2DC9aLw8GMKeReOyBrQn3HUF5oHWuOdqUTUI1NzFQvWh4hfSHZn78Q\nVxDPGDIJtxorTC0ldRaD4uZKkQF6nlnqUnuLGTEMXZzcsNxHU/9/LQRnPCbjCxjb\nEB8/00sYw+23Qel07IQSy+vmBl1HNwGZ+Ys/YAlXinoF/d1PSppT5Try8WqdGYlL\nZC1txcX62GQ4rSJ+HzyFgd9a2dbqr/BkKOOAN8DHU6iMJNdMs0mvro7jGZ09ACUn\nZqSycghVbhbEb4EOOL+adLSelhTaVNcEBdMmmjHMuum5ESDtXSAXJjIaymbx0sfR\nyPzI1WxK7mvCbscg0vin9md9Uzn0FUVKmlLxv6W6fUeHFgOHomXmcpZxnX17YkHa\nwVmpXG0WeGYa48NDvq49Ni3hAG/zu3r++KCPJYi1QvzWarRUwd8JorlG5hUqF45O\nWpgxk/3tisc//WVgQLVl1aT5jz4tRsP0lmOvv+Ps1DhPzbWRSfFuOgiJQC8Fbp8U\nUuidd6bRodyQ2lkvBlxSoxwjD7CQlJpijBx5Chfz5v+Ozj8yAjwKQQ10dKRC82gx\nnot39O0CMdkqG5xBOAvsS1odH9A5rBe5H6zUN7c=\n=rQ7W\n-----END PGP MESSAGE-----",
+   "armorHash": "0x6a14730b7f3aa4ccfc1d78c2dc3fd74a85e8a88274bf7b487ff5228c917f61ae"
+  },
+  {
+   "name": "short armor",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+   "armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16"
+  },
+  {
+   "name": "unicode armor",
+   "armor": "-----BEGIN PGP MESSAGE-----\n\nComment: 世界\n-----END PGP MESSAGE-----",
+   "armorHash": "0x5f9c06a82974d245f42f66e91028bc2a88eefbb71417c839747d955d3e2ce9f6"
+  }
+ ],
+ "builders": [
+  {
+   "name": "deliveryAckCommand",
+   "input": {
+    "eoa": "0x14791697260e4c9a71f18484c9f997b308e59325",
+    "armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+    "timestamp": 1730419200
+   },
+   "expect": {
+    "command": "gossip_delivery_ack",
+    "walletAddress": "0x14791697260e4c9a71f18484c9f997b308e59325",
+    "armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+    "timestamp": 1730419200
+   }
+  },
+  {
+   "name": "deliveryReceipt",
+   "input": {
+    "sendId": "vec-send-1",
+    "armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+    "deliveredAt": 1730419200999,
+    "eoa": "0x14791697260e4c9a71f18484c9f997b308e59325"
+   },
+   "expect": {
+    "type": "beamio_chat_delivery_receipt_v1",
+    "sendId": "vec-send-1",
+    "armorHash": "0xe0169b0006df46069cb21d37c8b4f54558b512433612b9104aabf65b84606d16",
+    "deliveredAt": 1730419200999,
+    "from": "0x14791697260e4c9a71f18484c9f997b308e59325"
+   }
+  },
+  {
+   "name": "pendingRow",
+   "input": {
+    "sendId": "vec-row-1",
+    "text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
+    "createdAt": 1730419201000
+   },
+   "expect": {
+    "sendId": "vec-row-1",
+    "from": "me",
+    "text": "{\"type\":\"beamio_chat_delivery_receipt_v1\"}",
+    "createdAt": 1730419201000
+   }
+  },
+  {
+   "name": "chatEnvelope",
+   "input": {
+    "timestamp": 1730419200123,
+    "text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+    "from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+    "signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+   },
+   "expect": {
+    "timestamp": 1730419200123,
+    "text": "{\"sendId\":\"vec-send-1\",\"from\":\"me\",\"text\":\"hi from the vectors\",\"createdAt\":1730419200000}",
+    "from": "0x14791697260E4c9A71f18484C9f997B308e59325",
+    "signMessage": "0xcd7f25785a3c23adc6463cd67145e5e32531d94338df278d8bff1ff911b9234775304ae4ecb8453357cd1455914e477d156d54663ef99ed551b6ae8d48c0e7c21c"
+   }
+  },
+  {
+   "name": "mailboxWork",
+   "input": {
+    "data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+    "noPush": true
+   },
+   "expect": {
+    "data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+    "NoPush": true
+   }
+  },
+  {
+   "name": "mailboxWorkPush",
+   "input": {
+    "data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----",
+    "noPush": false
+   },
+   "expect": {
+    "data": "-----BEGIN PGP MESSAGE-----\n\nwcBMA0vector\n=abcd\n-----END PGP MESSAGE-----"
+   }
+  }
+ ],
+ "callSignal": [
+  {
+   "name": "plain end object",
+   "line": "{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-end",
+    "sessionId": "s-end"
+   }
+  },
+  {
+   "name": "end in pending row in envelope",
+   "line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_end_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-end\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-end\\\\\\\",\\\\\\\"reason\\\\\\\":\\\\\\\"ended\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-end",
+    "sessionId": "s-end"
+   }
+  },
+  {
+   "name": "base64 envelope",
+   "line": "eyJ0aW1lc3RhbXAiOjEsInRleHQiOiJ7XCJzZW5kSWRcIjpcInBcIixcImZyb21cIjpcIm1lXCIsXCJ0ZXh0XCI6XCJ7XFxcInR5cGVcXFwiOlxcXCJ2b2ljZV9lbmRfdjFcXFwiLFxcXCJjYWxsSWRcXFwiOlxcXCJjLWVuZFxcXCIsXFxcInNlc3Npb25JZFxcXCI6XFxcInMtZW5kXFxcIixcXFwicmVhc29uXFxcIjpcXFwiZW5kZWRcXFwifVwiLFwiY3JlYXRlZEF0XCI6MX0iLCJmcm9tIjoiMHhjbGFpbWVkIiwic2lnbk1lc3NhZ2UiOiIweHNpZyJ9",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-end",
+    "sessionId": "s-end"
+   }
+  },
+  {
+   "name": "base64 text field",
+   "line": "{\"timestamp\":1,\"text\":\"eyJzZW5kSWQiOiJwIiwiZnJvbSI6Im1lIiwidGV4dCI6IntcInR5cGVcIjpcInZvaWNlX2NhbGxfdGltZW91dF92MVwiLFwiY2FsbElkXCI6XCJjLXRpbWVvdXRcIixcInNlc3Npb25JZFwiOlwiXCIsXCJyZWFzb25cIjpcInRpbWVvdXRcIn0iLCJjcmVhdGVkQXQiOjF9\",\"signMessage\":\"0x\"}",
+   "expect": {
+    "kind": "timeout",
+    "type": "voice_call_timeout_v1",
+    "callId": "c-timeout",
+    "sessionId": ""
+   }
+  },
+  {
+   "name": "offer",
+   "line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_offer_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-offer\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-offer\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xclaimed\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xpeer\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+   "expect": {
+    "kind": "offer",
+    "type": "voice_call_offer_v1",
+    "callId": "c-offer",
+    "sessionId": "s-offer"
+   }
+  },
+  {
+   "name": "accept",
+   "line": "{\"type\":\"voice_call_accept_v1\",\"callId\":\"c-a\",\"sessionId\":\"s-a\"}",
+   "expect": {
+    "kind": "accept",
+    "type": "voice_call_accept_v1",
+    "callId": "c-a",
+    "sessionId": "s-a"
+   }
+  },
+  {
+   "name": "reject",
+   "line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-r\",\"sessionId\":\"\"}",
+   "expect": {
+    "kind": "reject",
+    "type": "voice_call_reject_v1",
+    "callId": "c-r",
+    "sessionId": "",
+    "rejectReason": "declined"
+   }
+  },
+  {
+   "name": "reject busy (callee in another call)",
+   "line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-busy\",\"sessionId\":\"s-busy\",\"reason\":\"busy\"}",
+   "expect": {
+    "kind": "reject",
+    "type": "voice_call_reject_v1",
+    "callId": "c-busy",
+    "sessionId": "s-busy",
+    "rejectReason": "busy"
+   }
+  },
+  {
+   "name": "reject busy in envelope",
+   "line": "{\"timestamp\":1,\"text\":\"{\\\"type\\\":\\\"voice_call_reject_v1\\\",\\\"callId\\\":\\\"c-busy\\\",\\\"sessionId\\\":\\\"s-busy\\\",\\\"reason\\\":\\\"busy\\\"}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+   "expect": {
+    "kind": "reject",
+    "type": "voice_call_reject_v1",
+    "callId": "c-busy",
+    "sessionId": "s-busy",
+    "rejectReason": "busy"
+   }
+  },
+  {
+   "name": "reject with another reason is declined",
+   "line": "{\"type\":\"voice_call_reject_v1\",\"callId\":\"c-d\",\"sessionId\":\"s-d\",\"reason\":\"BUSY \"}",
+   "expect": {
+    "kind": "reject",
+    "type": "voice_call_reject_v1",
+    "callId": "c-d",
+    "sessionId": "s-d",
+    "rejectReason": "declined"
+   }
+  },
+  {
+   "name": "ringing in envelope",
+   "line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"voice_call_ringing_v1\\\\\\\",\\\\\\\"callId\\\\\\\":\\\\\\\"c-ring\\\\\\\",\\\\\\\"sessionId\\\\\\\":\\\\\\\"s-ring\\\\\\\",\\\\\\\"from\\\\\\\":\\\\\\\"0xcallee\\\\\\\",\\\\\\\"to\\\\\\\":\\\\\\\"0xcaller\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+   "expect": {
+    "kind": "ringing",
+    "type": "voice_call_ringing_v1",
+    "callId": "c-ring",
+    "sessionId": "s-ring"
+   }
+  },
+  {
+   "name": "ids are trimmed",
+   "line": "{\"type\":\"voice_end_v1\",\"callId\":\"  c-trim  \",\"sessionId\":\"\\ts-trim\\n\"}",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-trim",
+    "sessionId": "s-trim"
+   }
+  },
+  {
+   "name": "nested object key",
+   "line": "{\"meta\":{\"signal\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-end",
+    "sessionId": "s-end"
+   }
+  },
+  {
+   "name": "array element",
+   "line": "[{\"type\":\"chat\"},{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}]",
+   "expect": {
+    "kind": "end",
+    "type": "voice_end_v1",
+    "callId": "c-end",
+    "sessionId": "s-end"
+   }
+  },
+  {
+   "name": "no ids",
+   "line": "{\"type\":\"voice_end_v1\",\"callId\":\"\",\"sessionId\":\"\"}",
+   "expect": null
+  },
+  {
+   "name": "numeric ids do not count",
+   "line": "{\"type\":\"voice_end_v1\",\"callId\":42,\"sessionId\":7}",
+   "expect": null
+  },
+  {
+   "name": "other type",
+   "line": "{\"type\":\"voice_frame_v1\",\"callId\":\"c\",\"sessionId\":\"s\"}",
+   "expect": null
+  },
+  {
+   "name": "plain chat text",
+   "line": "{\"timestamp\":1,\"text\":\"{\\\"sendId\\\":\\\"p\\\",\\\"from\\\":\\\"me\\\",\\\"text\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"text\\\\\\\",\\\\\\\"body\\\\\\\":\\\\\\\"voice_end_v1 is just words here\\\\\\\"}\\\",\\\"createdAt\\\":1}\",\"from\":\"0xclaimed\",\"signMessage\":\"0xsig\"}",
+   "expect": null
+  },
+  {
+   "name": "not json, not base64",
+   "line": "hello there",
+   "expect": null
+  },
+  {
+   "name": "broken json",
+   "line": "{\"type\":\"voice_end_v1\",\"callId\":\"c\"",
+   "expect": null
+  },
+  {
+   "name": "too deep",
+   "line": "{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"wrap\":{\"type\":\"voice_end_v1\",\"callId\":\"c-end\",\"sessionId\":\"s-end\",\"reason\":\"ended\"}}}}}}}}}}}}}",
+   "expect": null
+  },
+  {
+   "name": "empty",
+   "line": "",
+   "expect": null
+  }
+ ],
+ "hello": {
+  "capabilitiesNote": "顶层为协议能力全集，各实现按自身平台声明。",
+  "capabilities": [
+   "identity.provision",
+   "signing.local",
+   "lifecycle.daemon",
+   "inbound.deferAck",
+   "inbound.generation.v1",
+   "history.v2",
+   "call.control",
+   "voice.channelV2",
+   "voice.delegated",
+   "group.v1",
+   "presence.query",
+   "mailbox.command",
+   "send.mailboxWrap",
+   "history.local.v1",
+   "history.page.v1",
+   "layout.cache.v1",
+   "identity.kpresent.v1",
+   "identity.native-keys.v1",
+   "wallet.passcode.v1",
+   "receipt.delivery.v1"
+  ],
+  "implementations": {
+   "ts-worker": {
+    "protocolVersion": 1,
+    "minProtocolVersion": 1,
+    "capabilities": [
+     "history.v2",
+     "voice.channelV2",
+     "group.v1",
+     "presence.query",
+     "mailbox.command",
+     "send.mailboxWrap",
+     "history.local.v1",
+     "history.page.v1",
+     "layout.cache.v1"
+    ]
+   },
+   "ios": {
+    "protocolVersion": 1,
+    "minProtocolVersion": 1,
+    "capabilities": [
+     "identity.provision",
+     "signing.local",
+     "lifecycle.daemon",
+     "inbound.deferAck",
+     "inbound.generation.v1",
+     "history.v2",
+     "call.control",
+     "voice.delegated",
+     "presence.query",
+     "mailbox.command",
+     "send.mailboxWrap",
+     "history.local.v1",
+     "history.page.v1",
+     "layout.cache.v1",
+     "identity.kpresent.v1",
+     "identity.native-keys.v1",
+     "wallet.passcode.v1",
+     "receipt.delivery.v1"
+    ]
+   },
+   "android": {
+    "protocolVersion": 1,
+    "minProtocolVersion": 1,
+    "capabilities": [
+     "identity.provision",
+     "signing.local",
+     "lifecycle.daemon",
+     "inbound.deferAck",
+     "history.v2",
+     "call.control",
+     "voice.delegated",
+     "presence.query",
+     "mailbox.command",
+     "send.mailboxWrap",
+     "history.local.v1",
+     "history.page.v1",
+     "layout.cache.v1",
+     "identity.kpresent.v1",
+     "identity.native-keys.v1",
+     "receipt.delivery.v1"
+    ]
+   }
+  },
+  "negotiation": [
+   {
+    "name": "no answer (shell older than v1)",
+    "reply": null,
+    "expect": {
+     "status": "legacy",
+     "protocolVersion": 0,
+     "capabilities": []
+    }
+   },
+   {
+    "name": "native v1",
+    "reply": {
+     "protocolVersion": 1,
+     "minProtocolVersion": 1,
+     "sdkVersion": "0.1.8",
+     "implementation": "ios",
+     "capabilities": [
+      "identity.provision",
+      "signing.local",
+      "lifecycle.daemon",
+      "inbound.deferAck",
+      "history.v2",
+      "call.control",
+      "voice.delegated",
+      "presence.query",
+      "mailbox.command",
+      "send.mailboxWrap"
+     ]
+    },
+    "expect": {
+     "status": "negotiated",
+     "protocolVersion": 1,
+     "capabilities": [
+      "identity.provision",
+      "signing.local",
+      "lifecycle.daemon",
+      "inbound.deferAck",
+      "history.v2",
+      "call.control",
+      "voice.delegated",
+      "presence.query",
+      "mailbox.command",
+      "send.mailboxWrap"
+     ]
+    }
+   },
+   {
+    "name": "unknown capabilities are dropped, order follows the spec",
+    "reply": {
+     "protocolVersion": 1,
+     "sdkVersion": "0.2.6",
+     "implementation": "android",
+     "capabilities": [
+      "future.thing",
+      "mailbox.command",
+      "history.v2",
+      "history.v2"
+     ]
+    },
+    "expect": {
+     "status": "negotiated",
+     "protocolVersion": 1,
+     "capabilities": [
+      "history.v2",
+      "mailbox.command"
+     ]
+    }
+   },
+   {
+    "name": "newer daemon that still speaks v1",
+    "reply": {
+     "protocolVersion": 3,
+     "minProtocolVersion": 1,
+     "sdkVersion": "9.0.0",
+     "implementation": "ios",
+     "capabilities": [
+      "history.v2",
+      "group.v2"
+     ]
+    },
+    "expect": {
+     "status": "negotiated",
+     "protocolVersion": 3,
+     "capabilities": [
+      "history.v2"
+     ]
+    }
+   },
+   {
+    "name": "daemon that dropped v1",
+    "reply": {
+     "protocolVersion": 3,
+     "minProtocolVersion": 2,
+     "sdkVersion": "9.0.0",
+     "implementation": "ios",
+     "capabilities": [
+      "history.v2"
+     ]
+    },
+    "expect": {
+     "status": "incompatible",
+     "protocolVersion": 3,
+     "capabilities": []
+    }
+   },
+   {
+    "name": "version as a string is malformed",
+    "reply": {
+     "protocolVersion": "1",
+     "sdkVersion": "0.1.8",
+     "implementation": "ios",
+     "capabilities": [
+      "history.v2"
+     ]
+    },
+    "expect": {
+     "status": "legacy",
+     "protocolVersion": 0,
+     "capabilities": []
+    }
+   },
+   {
+    "name": "missing capabilities is malformed",
+    "reply": {
+     "protocolVersion": 1,
+     "sdkVersion": "0.1.8",
+     "implementation": "ios"
+    },
+    "expect": {
+     "status": "legacy",
+     "protocolVersion": 0,
+     "capabilities": []
+    }
+   },
+   {
+    "name": "error ack result",
+    "reply": "unknown_command",
+    "expect": {
+     "status": "legacy",
+     "protocolVersion": 0,
+     "capabilities": []
+    }
+   }
+  ]
+ }
 }

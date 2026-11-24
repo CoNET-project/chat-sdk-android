@@ -174,7 +174,7 @@ class NativeAccountCreateTest {
     fun aNewVaultGetsAKeyAndTheLowercaseAddressOfTheDerivedAccount() {
         val files = NativeTestFiles()
         val vault = NativeWalletVault(NativeTestWrap(), files)
-        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
+        val r = NativeAccountCreate.create(vault, zeroEntropy)
         assertEquals(NativeAccountCreate.Code.OK, r.code)
         assertEquals(eoaOfAbandon, r.eoa)
         assertEquals(eoaOfAbandon, (vault.state() as NativeWalletVault.State.Ready).eoa)
@@ -186,7 +186,7 @@ class NativeAccountCreateTest {
     @Test
     fun aCallerEntropyArrayIsNotModified() {
         val entropy = ByteArray(16) { 3 }
-        NativeAccountCreate.create(NativeWalletVault(NativeTestWrap(), NativeTestFiles()), memoryAccountPgpK(), entropy)
+        NativeAccountCreate.create(NativeWalletVault(NativeTestWrap(), NativeTestFiles()), entropy)
         assertArrayEquals(ByteArray(16) { 3 }, entropy)
     }
 
@@ -196,7 +196,7 @@ class NativeAccountCreateTest {
         val vault = NativeWalletVault(NativeTestWrap(), files)
         assertEquals(NativeWalletVault.Import.OK, vault.importKey(eoaA, keyA))
         val before = files.map.mapValues { it.value.copyOf() }
-        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
+        val r = NativeAccountCreate.create(vault, zeroEntropy)
         assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, r.code)
         // 25.52X.4 (rc2.2-qa): the readable existing key's public lower-case EOA is carried on already_exists.
         assertEquals(eoaA, r.eoa)
@@ -212,7 +212,7 @@ class NativeAccountCreateTest {
         assertEquals(NativeWalletVault.Import.OK, vault.importKey(eoaA, keyA))
         files.map[NativeWalletVault.MARK] = byteArrayOf(1, 2, 3)
         assertTrue(vault.state() is NativeWalletVault.State.Locked)
-        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
+        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, NativeAccountCreate.create(vault, zeroEntropy).code)
         assertTrue(files.map.containsKey(NativeWalletVault.REC))
     }
 
@@ -221,7 +221,7 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         files.failWrite = NativeWalletVault.REC
         val vault = NativeWalletVault(NativeTestWrap(), files)
-        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
+        val r = NativeAccountCreate.create(vault, zeroEntropy)
         assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
         assertNull(r.eoa)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
@@ -234,7 +234,7 @@ class NativeAccountCreateTest {
         val wrap = NativeTestWrap().apply { failSeal = true }
         val vault = NativeWalletVault(wrap, files)
         // 25.52Y.136 第 7 項: an unconfirmed wrap is not_ready, not a write failure.
-        assertEquals(NativeAccountCreate.Code.NOT_READY, NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy).code)
+        assertEquals(NativeAccountCreate.Code.NOT_READY, NativeAccountCreate.create(vault, zeroEntropy).code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
         assertKeptOnlyIsolated(files)
     }
@@ -244,7 +244,7 @@ class NativeAccountCreateTest {
         val files = NativeTestFiles()
         val wrap = NativeTestWrap().apply { openOverride = { ByteArray(32) { 7 } } }
         val vault = NativeWalletVault(wrap, files)
-        val r = NativeAccountCreate.create(vault, memoryAccountPgpK(), zeroEntropy)
+        val r = NativeAccountCreate.create(vault, zeroEntropy)
         assertEquals(NativeAccountCreate.Code.READBACK_FAILED, r.code)
         assertTrue(vault.state() is NativeWalletVault.State.NoKey)
         assertKeptOnlyIsolated(files)

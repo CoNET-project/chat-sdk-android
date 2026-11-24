@@ -18,7 +18,18 @@ object BeamioConetChatProtocol {
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
     /** The artifact version (spec 25.52Y.45); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
-    const val SDK_VERSION = "0.2.29"
+    const val SDK_VERSION = "0.2.30"
+
+    /**
+     * The inbound-generation capability. Not implemented in this build: the module sends no `inboundGeneration`
+     * event and keeps no generation, so it does not declare it, and [CAPABILITIES] must not list it until it does. The shared hello vector keeps Android
+     * without it. A rule that depends on it ([network.conet.chat.nativekey.SignRequestRule]) reads [declaresInboundGeneration], so the declaration and the
+     * enforcement can never disagree.
+     */
+    const val INBOUND_GENERATION_CAPABILITY = "inbound.generation.v1"
+
+    /** True when this module's own capability list declares [INBOUND_GENERATION_CAPABILITY]: the one source of that fact. */
+    fun declaresInboundGeneration(): Boolean = CAPABILITIES.contains(INBOUND_GENERATION_CAPABILITY)
 
     /** Capabilities this module implements (names from the spec's `CHAT_DAEMON_CAPABILITIES`). */
     val CAPABILITIES: List<String> = listOf(
@@ -38,7 +49,14 @@ object BeamioConetChatProtocol {
         KPRESENT_CAPABILITY,
         NATIVE_KEYS_CAPABILITY,
     ) +
-        listOfNotNull(WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA })
+        // The delivery-receipt capability: declared only by a build that has the whole receipt implementation (the check runs
+        // the pure rules once). It follows the shared hello vector's Android list and comes before the QA-only names.
+        listOfNotNull(SenderReceipt.CAPABILITY.takeIf { SenderReceipt.implementationComplete() }) +
+        listOfNotNull(
+            WALLET_CREDENTIAL_CAPABILITY.takeIf { BuildConfig.WALLET_CREDENTIAL_QA },
+            // QA only: the first-identity status event. Not in the shared hello vector.
+            network.conet.chat.nativekey.FirstIdentityEvents.CAPABILITY.takeIf { BuildConfig.IDENTITY_STATE_EVENTS_QA },
+        )
 
     /**
      * The kPresent capability (spec 25.52X.5, 25.52Y.90, 25.52Y.93). Declared in every build: `identityPublic` answers `kPresent` on G0 `no_key`,

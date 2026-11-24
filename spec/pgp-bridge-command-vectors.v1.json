@@ -1,5 +1,5 @@
 {
-  "file": "pgp-bridge-command-vectors.v1.json",
+  "file": "pgp-bridge-command-vectors.v1.pub5.json",
   "purpose": "原生桥命令向量（spec）：A 组为 §25.34 的 pgpDecryptInbound（通话 offer 的原生 PGP 解密）；C 组为 §25.35 的 P-IMP-PGP 桥接命令，结果映射到 pgp-restore-acceptance-vectors.v1.json。合成数据，只用于测试。",
   "spec": "v1.1- §25.34、§25.35（测试 T-210 至 T-215）",
   "generator": "gen-pgp-bridge-command-vectors.mjs",
@@ -85,7 +85,7 @@
       ]
     }
   },
-  "gateNote": "§25.26.4c：门控先于读取 payload。G0 no_key，G1 not_ready，locked 按 §25.22.4，均不解析 armoredMessage、不出站。",
+  "gateNote": "§25.26.4c：门控先于读取 payload。G0 no_key，G1 not_ready，locked 按 §25.22.4，均不解析 armoredMessage、不出站。 | pub5：G2_locked 仅指\"口令包未提供\"（iOS：口令集合内存无口令包；Android：store v3 未解锁）；G2_storage_unknown 指存储/金库非 Ready 或读不出，两端通用。",
   "cases": [
     {
       "id": "A-01",
@@ -294,7 +294,7 @@
     {
       "id": "A-08",
       "group": "A",
-      "title": "G2 但 Passcode 锁定：locked，不读 payload",
+      "title": "G2 但 口令包未提供：not_ready + reason passcode_not_provided，不读 payload",
       "testIds": [
         "T-211"
       ],
@@ -310,10 +310,12 @@
           "type": "ack",
           "reqId": "a1-08",
           "ok": false,
-          "error": "locked"
+          "error": "not_ready",
+          "reason": "passcode_not_provided"
         },
         "events": []
-      }
+      },
+      "trigger": "口令包未提供（passcode_not_provided），不是 UI 锁；reason 在 ack 顶层（与 error 同级）。依 2026-11-22 项目方决定及 PROTOCOL-lock-semantics…（12c0e02a）。"
     },
     {
       "id": "A-09",
@@ -517,7 +519,7 @@
     {
       "id": "C-01",
       "group": "C",
-      "title": "只读评估：备份缺失，返回失败类与入口，不写本地不写链",
+      "title": "只读评估：备份缺失，返回失败类与入口，不写本地不写链（pub3：应答含 legacy 与 chain，依 2026-11-20 总PM 裁定 RULING-first-identity-gate…）",
       "testIds": [
         "T-213"
       ],
@@ -541,16 +543,21 @@
             "failureClass": "backup_missing",
             "code": "pgp_backup_missing",
             "offerEntry": true,
-            "uiKey": "chat.restore_failed.body"
+            "uiKey": "chat.restore_failed.body",
+            "legacy": "ABSENT",
+            "chain": "registered"
           }
         },
         "events": []
-      }
+      },
+      "nativeFlow": [
+        "前置：本机无旧来源 L（legacy=ABSENT）；chain 按链读结果：registered"
+      ]
     },
     {
       "id": "C-02",
       "group": "C",
-      "title": "只读评估：链上无记录，进入首次建立入口，不显示失败提示",
+      "title": "只读评估：链上无记录，进入首次建立入口，不显示失败提示（pub3：应答含 legacy 与 chain，依 2026-11-20 总PM 裁定 RULING-first-identity-gate…）",
       "testIds": [
         "T-213"
       ],
@@ -574,16 +581,21 @@
             "failureClass": null,
             "code": null,
             "offerEntry": true,
-            "uiKey": "chat.first_identity.body"
+            "uiKey": "chat.first_identity.body",
+            "legacy": "ABSENT",
+            "chain": "unregistered"
           }
         },
         "events": []
-      }
+      },
+      "nativeFlow": [
+        "前置：本机无旧来源 L（legacy=ABSENT）；chain 按链读结果：unregistered"
+      ]
     },
     {
       "id": "C-03",
       "group": "C",
-      "title": "只读评估：链上或备份读取失败，状态 undetermined，只提供重试（mock RPC 超时）",
+      "title": "只读评估：链上或备份读取失败，状态 undetermined，只提供重试（mock RPC 超时）（pub3：应答含 legacy 与 chain，依 2026-11-20 总PM 裁定 RULING-first-identity-gate…）",
       "testIds": [
         "T-213",
         "T-216"
@@ -608,11 +620,16 @@
             "failureClass": null,
             "code": "pgp_source_unavailable",
             "offerEntry": false,
-            "uiKey": "chat.restore_retry.body"
+            "uiKey": "chat.restore_retry.body",
+            "legacy": "ABSENT",
+            "chain": "unknown"
           }
         },
         "events": []
-      }
+      },
+      "nativeFlow": [
+        "前置：本机无旧来源 L（legacy=ABSENT）；chain 按链读结果：unknown"
+      ]
     },
     {
       "id": "C-04",
@@ -1324,7 +1341,7 @@
     {
       "id": "C-25",
       "group": "C",
-      "title": "只读评估在锁定态：locked，不读链，不读备份（§25.22.4、§25.52CP.2）",
+      "title": "只读评估在口令包未提供时：not_ready + reason passcode_not_provided，不读链，不读备份（§25.22.4、§25.52CP.2）",
       "testIds": [
         "T-130"
       ],
@@ -1339,15 +1356,17 @@
           "type": "ack",
           "reqId": "c3-c-25",
           "ok": false,
-          "error": "locked"
+          "error": "not_ready",
+          "reason": "passcode_not_provided"
         },
         "events": []
-      }
+      },
+      "trigger": "口令包未提供（passcode_not_provided），不是 UI 锁；reason 在 ack 顶层（与 error 同级）。依 2026-11-22 项目方决定及 PROTOCOL-lock-semantics…（12c0e02a）。"
     },
     {
       "id": "C-26",
       "group": "C",
-      "title": "恢复在锁定态：locked，不读 payload，不写本地，不写链（§25.22.4、§25.52CR.1）",
+      "title": "恢复在口令包未提供时：not_ready + reason passcode_not_provided，不读 payload，不写本地，不写链（§25.22.4、§25.52CR.1）",
       "testIds": [
         "T-130"
       ],
@@ -1362,15 +1381,17 @@
           "type": "ack",
           "reqId": "c3-c-26",
           "ok": false,
-          "error": "locked"
+          "error": "not_ready",
+          "reason": "passcode_not_provided"
         },
         "events": []
-      }
+      },
+      "trigger": "口令包未提供（passcode_not_provided），不是 UI 锁；reason 在 ack 顶层（与 error 同级）。依 2026-11-22 项目方决定及 PROTOCOL-lock-semantics…（12c0e02a）。"
     },
     {
       "id": "C-27",
       "group": "C",
-      "title": "创建在锁定态：locked，不进入确认界面，不生成，不写链（§25.22.4、§25.52CR.1）",
+      "title": "创建在口令包未提供时：not_ready + reason passcode_not_provided，不进入确认界面，不生成，不写链（§25.22.4、§25.52CR.1）",
       "testIds": [
         "T-130"
       ],
@@ -1386,15 +1407,17 @@
           "type": "ack",
           "reqId": "c3-c-27",
           "ok": false,
-          "error": "locked"
+          "error": "not_ready",
+          "reason": "passcode_not_provided"
         },
         "events": []
-      }
+      },
+      "trigger": "口令包未提供（passcode_not_provided），不是 UI 锁；reason 在 ack 顶层（与 error 同级）。依 2026-11-22 项目方决定及 PROTOCOL-lock-semantics…（12c0e02a）。"
     },
     {
       "id": "C-28",
       "group": "C",
-      "title": "恢复已 accepted，在途发现锁定：输出一次 pgpRestoreResult code cancelled，不带结果数据，不写本地（§25.52CZ.1）",
+      "title": "恢复已 accepted，在途发现所需材料不可用（口令包未提供=passcode_not_provided，或存储状态未知）：输出一次 pgpRestoreResult code cancelled，不带结果数据，不写本地（§25.52CZ.1）",
       "testIds": [
         "T-130"
       ],
@@ -1423,12 +1446,13 @@
             "code": "cancelled"
           }
         ]
-      }
+      },
+      "trigger": "所需材料在途不可用（真实存储状态）；不是 UI/应用层锁（2026-11-22 项目方决定）。期望输出不变。"
     },
     {
       "id": "C-29",
       "group": "C",
-      "title": "首次建立：确认后、链写入前在途发现锁定：不写链，输出一次 pgpIdentityCreateResult code cancelled（§25.52CZ.1）",
+      "title": "首次建立：确认后、链写入前在途发现所需材料不可用（口令包未提供=passcode_not_provided，或存储状态未知）：不写链，输出一次 pgpIdentityCreateResult code cancelled（§25.52CZ.1）",
       "testIds": [
         "T-130"
       ],
@@ -1460,7 +1484,8 @@
             "code": "cancelled"
           }
         ]
-      }
+      },
+      "trigger": "所需材料在途不可用（真实存储状态）；不是 UI/应用层锁（2026-11-22 项目方决定）。期望输出不变。"
     },
     {
       "id": "C-30",
@@ -1489,17 +1514,97 @@
         },
         "events": []
       }
+    },
+    {
+      "id": "C-31",
+      "group": "C",
+      "title": "只读评估在存储状态未知或金库非 Ready 时：not_ready，不带 reason，不读链，不读备份（§25.22.4、§25.52CP.2）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_storage_unknown",
+      "request": {
+        "type": "pgpRestoreEvaluate",
+        "reqId": "c3-c-31",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-31",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      },
+      "trigger": "存储/金库任一非 Ready 状态或读不出（unknown），不是口令包缺失：not_ready，ack 不带 reason。适用 iOS 与 Android。依 PROTOCOL-lock-semantics…修订 1（见 PROTOCOL-lock-semantics-revision-1-2026-11-23.md）。"
+    },
+    {
+      "id": "C-32",
+      "group": "C",
+      "title": "恢复在存储状态未知或金库非 Ready 时：not_ready，不带 reason，不读 payload，不写本地，不写链（§25.22.4、§25.52CR.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_storage_unknown",
+      "request": {
+        "type": "pgpRestore",
+        "reqId": "c3-c-32",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-32",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      },
+      "trigger": "存储/金库任一非 Ready 状态或读不出（unknown），不是口令包缺失：not_ready，ack 不带 reason。适用 iOS 与 Android。依 PROTOCOL-lock-semantics…修订 1（见 PROTOCOL-lock-semantics-revision-1-2026-11-23.md）。"
+    },
+    {
+      "id": "C-33",
+      "group": "C",
+      "title": "创建在存储状态未知或金库非 Ready 时：not_ready，不带 reason，不进入确认界面，不生成，不写链（§25.22.4、§25.52CR.1）",
+      "testIds": [
+        "T-130"
+      ],
+      "gate": "G2_storage_unknown",
+      "request": {
+        "type": "pgpIdentityCreate",
+        "reqId": "c3-c-33",
+        "accountKey": "0x9858effd232b4033e47d90003d41ec34ecaeda94:default",
+        "idempotencyKey": "idem-c-33"
+      },
+      "expect": {
+        "ack": {
+          "type": "ack",
+          "reqId": "c3-c-33",
+          "ok": false,
+          "error": "not_ready"
+        },
+        "events": []
+      },
+      "trigger": "存储/金库任一非 Ready 状态或读不出（unknown），不是口令包缺失：not_ready，ack 不带 reason。适用 iOS 与 Android。依 PROTOCOL-lock-semantics…修订 1（见 PROTOCOL-lock-semantics-revision-1-2026-11-23.md）。"
     }
   ],
   "counts": {
-    "cases": 46,
+    "cases": 49,
     "A": 16,
-    "C": 30
+    "C": 33
   },
   "notCovered": [
     "decrypt_failed 的 MDC 篡改用例：需要篡改密文且保持 armor 有效，待 gopenpgp（iOS）与 bcpg（Android）互通时补充。",
     "二进制字面量（格式 b）的 offer：offer 为文本，本向量不覆盖；§25.32 的格式 b 规则由 pgp-literal-newline-vectors.v1.json 覆盖。",
     "pgpIdentityCreate 确认界面的文案与按钮：由原生界面实现，本向量只覆盖结果码。文案键见 §25.30.7。",
     "链上读取：本向量为命令层，链上读取的 mock 口径见 §25.36（T-216），不在本生成器中访问链。"
-  ]
+  ],
+  "derivedFrom": {
+    "file": "pgp-bridge-command-vectors.v1.pub4.json",
+    "changes": [
+      "新增 C-31、C-32、C-33（G2_storage_unknown：not_ready，无 reason）",
+      "gateNote 澄清 G2_locked 范围；C-25..27 期望不变"
+    ]
+  }
 }

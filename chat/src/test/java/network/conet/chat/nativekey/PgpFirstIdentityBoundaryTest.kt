@@ -25,9 +25,11 @@ class PgpFirstIdentityBoundaryTest {
             val src = File(path).readText(Charsets.UTF_8)
             assertFalse("$path does not use the first-identity rule", src.contains("FirstIdentityRule"))
             assertFalse("$path does not open a creation entry", src.contains("creationEntryOpen"))
-            assertFalse("$path does not state first_identity", src.contains("first_identity"))
             assertFalse("$path does not generate a key", src.contains("keygen("))
         }
+        // The K upgrade hands a vault with no key to the first-identity coordinator, which is the only place that
+        // generates a key, and only after the chain read confirmed no record. The migration still never states a first identity.
+        assertFalse("PgpMigration does not state first_identity", File("src/main/java/network/conet/chat/nativekey/PgpMigration.kt").readText(Charsets.UTF_8).contains("first_identity"))
     }
 
     @Test
@@ -37,8 +39,8 @@ class PgpFirstIdentityBoundaryTest {
             override fun call(method: String, params: JSONArray): Any? = throw IllegalStateException("unused")
         } }
         assertFalse("a chain that cannot be cross-read is unreadable", chain.chainReadable())
-        val result = ChainBackupRestore.restore(eoa, chain, { null }, NativeMigrationCrypto())
-        assertEquals("unreadable chain is unverified, never a created identity", ChainBackupRestore.Result.Unverified, result)
+        val result = ChainBackupRestore.candidate(chain) { null }
+        assertEquals("unreadable chain is unreadable, never a created identity", ChainBackupRestore.Candidate.Unreadable, result)
     }
 
     @Test

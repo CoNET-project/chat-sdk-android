@@ -36,7 +36,7 @@ class VaultSnapshotGateTest {
         // Shape changed with the 2026-11-16 : invalidated before and after the write (try/finally), never recomputed on the write path.
         assertTrue("store invalidates the snapshot before and after the write", v.contains("return storeWrite(eoa, key, source, phrase)") && v.contains("return storeWrite(eoa, key, source, phrase)"))
         assertTrue("forget invalidates the snapshot before and after the write", v.contains("return forgetWrite()"))
-        assertTrue("state() sets the snapshot (state and key-only flag in one object)", v.contains("snapshot = Snap(s, keyOnly)"))
+        assertTrue("state() sets the snapshot (state and key-only flag in one object)", v.contains("snapshot = Snap(s, keyOnly, signature)"))
         assertFalse("a write does not recompute (no reconcile on the write path)", v.contains("snapshot = runCatching { computeState() }"))
     }
 

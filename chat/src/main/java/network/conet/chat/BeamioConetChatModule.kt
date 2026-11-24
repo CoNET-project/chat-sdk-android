@@ -10,6 +10,7 @@ import network.conet.chat.nativekey.LegacyPgpReader
 import network.conet.chat.nativekey.MnemonicCipherV3
 import network.conet.chat.nativekey.MnemonicSetStore
 import network.conet.chat.nativekey.StoreAccountView
+import network.conet.chat.nativekey.StoreAwareAccount
 import network.conet.chat.nativekey.PwaSyncCipher
 import network.conet.chat.nativekey.SessionKeyHolder
 import network.conet.chat.nativekey.StoreKeyAdapter
@@ -143,7 +144,6 @@ object BeamioConetChatModule {
         /** Route key ID the running listen sent its last `mailbox_listen` to (log + handoff check). */
         @Volatile var listenRouteKeyId: String = ""
         @Volatile var nodes: List<Node> = emptyList()
-        @Volatile var routes: List<JSONObject> = emptyList()
         @Volatile var conetRpcUrl: String = "https://rpc1.conet.network"
         @Volatile var ipfsBaseUrl: String = "https://ipfs.conet.network/api"
         @Volatile var ipfsWriteBaseUrl: String = ""
@@ -159,6 +159,28 @@ object BeamioConetChatModule {
          */
         @Volatile var deferAck: Boolean = false
         val pendingAcks = java.util.concurrent.ConcurrentHashMap<String, PendingAck>()
+
+        /**
+         * The sender receipts of this session (routes from the page's `setRoutes`, the queue, the in-flight slots, the dedupe sets). It lives and
+         * ends with the session, so a receipt is never made for another account's contacts.
+         */
+        internal val receipts: SenderReceipt.Pipeline = SenderReceipt.Pipeline(
+            execute = { io.execute(it) },
+            alive = { !destroyed && currentSession() === this },
+            ownEoa = { eoa },
+            send = { route, payload, done -> receiptSend(this, route, payload, done) },
+            log = { Log.i(TAG, it) },
+        )
+
+        /**
+         * Ends everything this session holds for sender receipts: routes, queue, in-flight slots and dedupe sets (the pipeline) and the messages
+         * waiting for the page's `ackInbound`. Called when the session ends (identity clear) or is replaced (another account, a new page). Android has
+         * no inboundGeneration; this and the `eoa` check of `setRoutes` stand in for it.
+         */
+        fun clearReceiptState() {
+            receipts.clear()
+            pendingAcks.clear()
+        }
     }
 
     class PendingAck(val plaintext: String, val from: String, val viaDomain: String, val at: Long)
@@ -171,8 +193,12 @@ object BeamioConetChatModule {
      * The web emit of the last [handleCommand]. Internal, not private: the QA source set (chatQaHooks) swaps it through an extension of this
      * object (25.52AX.3). The release source has no swap.
      */
-    @Volatile
-    internal var emitFn: ((JSONObject) -> Unit)? = null
+    private val router = network.conet.chat.nativekey.EventRouter()
+
+    /** The emit of the latest chat command (asynchronous events go here); page sync commands do not replace it ([EventRouter]). */
+    internal var emitFn: ((JSONObject) -> Unit)?
+        get() = router.events
+        set(value) { router.events = value }
 
     private val listen = BeamioConetChatListenSession()
 
@@ -181,9 +207,7 @@ object BeamioConetChatModule {
         network.conet.chat.nativekey.AccountPointerEvents.onChange = { listen.stop() }
     }
     private val voiceSessions = HashSet<String>()
-    private val seenArmor = object : LinkedHashMap<String, Boolean>(256, 0.75f, false) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean = size > 512
-    }
+    private val seenArmor = network.conet.chat.nativekey.SeenArmor()
     private val main = MainPoster
     /**
      * The route submission bases, IP first when the roster is wired (25.52Y.61 第 4 项). Until then the domain only. The IP addresses are not
@@ -193,6 +217,11 @@ object BeamioConetChatModule {
 
     private val io = Executors.newCachedThreadPool { r ->
         Thread(r, "conet-chat-module").apply { isDaemon = true }
+    }
+
+    /** The unlock step of `init` (a Keystore decrypt), off the main thread; one thread, so two inits run in order. */
+    private val initWorker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "conet-chat-init").apply { isDaemon = true }
     }
 
     /**
@@ -234,7 +263,31 @@ object BeamioConetChatModule {
     private var answeredInCommand: MutableSet<String>? = null
     private const val IDLE_CHECK_MS = 10_000L
 
+    /**
+     * The page sync commands: each answers ONCE with an ack on the caller's own channel (the shell's window channel keeps only that ack and drops
+     * every other event). They never take over the event sink ([EventRouter]). The names are the shell's `PageSyncRoute.COMMANDS`, plus the
+     * page-record commands.
+     */
+    internal val REPLY_ONLY_COMMANDS: Set<String> = setOf(
+        "pwaWalletSync", "nativeMnemonicPreread", "pwaEmptySignal",
+        "passcodeProvision", "passcodeUnlock", "passcodeChange", "passcodeDisable", "nativeRepairProvide", "passcodeStatus",
+        "shellRecordRead", "shellRecordWrite",
+    )
+
+    /** The commands whose Keystore time is logged per call ([VaultPerf]). Names only. */
+    private val PERF_COMMANDS: Set<String> = setOf("pwaWalletSync", "identityPublic", "nativeMnemonicPreread")
+
     fun isAvailable(): Boolean = true
+
+    /**
+     * Starts the warm-up of the wallet and public-identity snapshots. The shell calls it once from `Application.onCreate`, so the slow
+     * StrongBox reads start before the first page command instead of at it. It reads only; it writes nothing, emits nothing and does not initialise
+     * the module. A second call while a run is waiting is not repeated, and calling it again later is harmless (a valid snapshot is not read twice).
+     * Never blocks: the work is on the module's own warm-up thread.
+     */
+    fun warmUp(context: Context) {
+        network.conet.chat.nativekey.VaultWarmUp.start(context.applicationContext)
+    }
 
     fun isRunning(): Boolean = synchronized(lock) { session != null } && listen.isRunning()
 
@@ -244,23 +297,28 @@ object BeamioConetChatModule {
      */
     fun handleCommand(context: Context, body: JSONObject, emit: (JSONObject) -> Unit) {
         val t0 = network.conet.chat.nativekey.DiagTiming.now()
+        val perfMark = network.conet.chat.nativekey.VaultPerf.mark()
         val type = body.optString("type", "")
         val reqId: Any? = body.opt("reqId")
         val saved = answeredInCommand
         val answered: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
         answeredInCommand = answered
         try {
-            handleCommandInner(context, body, emit)
-        } catch (e: Exception) {
-            // An exception that escapes a handler is unknown, not absent: the request still gets one answer, not_ready, unless an
-            // answer was already decided for it. Nothing is written by this path.
-            Log.w(TAG, "command $type failed: ${e.javaClass.simpleName}")
-            if (CommandAnswerGuard.firstAnswer(answered, reqId)) {
-                ack(reqId, false, error = NoKeyGate.NOT_READY)
-            }
+            // A reply-only command answers once on its own channel: it must not become the sink of later events (EventRouter). The failure answer is
+            // emitted INSIDE the router's scope, so a page sync command's not_ready reaches its own emit, not the chat emit.
+            router.commandGuarded(type in REPLY_ONLY_COMMANDS, emit, reqId, onException = { e ->
+                // An exception that escapes a handler is unknown, not absent: the request still gets one answer, not_ready, unless an
+                // answer was already decided for it. Nothing is written by this path.
+                Log.w(TAG, "command $type failed: ${e.javaClass.simpleName}")
+                if (CommandAnswerGuard.firstAnswer(answered, reqId)) {
+                    ack(reqId, false, error = NoKeyGate.NOT_READY)
+                }
+            }) { handleCommandInner(context, body, emit) }
         } finally {
             answeredInCommand = saved
             network.conet.chat.nativekey.DiagTiming.log("handleCommand:$type", t0)
+            // For the three commands the page waits on, the Keystore operations and their milliseconds on this thread.
+            if (type in PERF_COMMANDS) network.conet.chat.nativekey.VaultPerf.log("cmd.$type", t0, perfMark, 0L)
         }
     }
 
@@ -287,33 +345,63 @@ object BeamioConetChatModule {
         appContext = ctxIn
         installSignAbsentAnswer(ctxIn)
         ensurePreread(ctxIn, "command")
-        emitFn = emit
-        // The K_pgp upgrade: once per process, after the keychain is readable; asynchronous, never blocks a command.
+        // Warm-up: the wallet snapshot, then the public identity snapshot, then the K trigger below, one after the other on the one
+        // warm-up thread. The StrongBox serves one operation at a time and each takes seconds on the S25, so the three are ordered instead of racing,
+        // and the first page commands and the K upgrade find their snapshots ready. Non-blocking; a run already waiting is not repeated.
+        // The K_pgp upgrade: once per account, after its key is readable (a Ready vault, or the store account of a vault with no record, 0.2.30);
+        // asynchronous, never blocks a command. A run that ends in a retry state is released with a delay and tried again, one request per account.
         // The vault state is read on the io executor only: NativeWalletVault.state() is synchronized and slow (a keystore open), and
         // reading it on the caller's (main) thread froze the start-up (S25 contention, 2026-11-15).
-        if (network.conet.chat.nativekey.KpgpUpgradeTrigger.pending()) {
+        // This is step 3 of the warm-up. It runs after the two snapshots are done, and hands the work to the io executor.
+        val kpgpTriggerStep: () -> Unit = kStep@{
+            if (!network.conet.chat.nativekey.KpgpUpgradeTrigger.pending()) return@kStep
             io.execute {
+                // The trigger never takes the vault's monitor. It reads the snapshot; with none yet it asks the
+                // snapshot thread to compute one and leaves, and the next command (pending() stays true) tries again.
                 val vaultState = try {
-                    network.conet.chat.nativekey.NativeWallet.vault(ctxIn).state()
+                    network.conet.chat.nativekey.KpgpUpgradeTrigger.snapshotOrSchedule(
+                        network.conet.chat.nativekey.NativeWallet.vault(ctxIn),
+                    ) { network.conet.chat.nativekey.VaultSnapshotRefresh.schedule(ctxIn) }
                 } catch (_: Exception) {
                     null
                 }
-                if (network.conet.chat.nativekey.KpgpUpgradeTrigger.claim(vaultState)) {
-                    val eoa = (vaultState as network.conet.chat.nativekey.NativeWalletVault.State.Ready).eoa
-                    val result = try {
-                        network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L)
-                    } catch (_: Exception) {
-                        // 25.52Y.62 第 3 项: any internal exception is pgp_migration_retry, with no cause code.
-                        null
-                    }
-                    val code = result?.action ?: "pgp_migration_retry"
-                    // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
-                    if (code != "keep_existing" && code != "upgraded_from_L") {
-                        emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+                var storeAccount: StoreAwareAccount.Resolution.Account? = null
+                val eoa = when (vaultState) {
+                    is network.conet.chat.nativekey.NativeWalletVault.State.Ready -> vaultState.eoa
+                    is network.conet.chat.nativekey.NativeWalletVault.State.NoKey ->
+                        (StoreAwareAccount.resolveOnDevice(ctxIn) as? StoreAwareAccount.Resolution.Account)?.also { storeAccount = it }?.eoa
+                    else -> null
+                }
+                val trigger = network.conet.chat.nativekey.KpgpUpgradeTrigger
+                if (eoa != null && trigger.claimFor(eoa, System.currentTimeMillis())) {
+                    // The claim is always given back, whatever ends the run (an Error included): otherwise the account would answer busy for good.
+                    var given = false
+                    try {
+                        val result = try {
+                            network.conet.chat.nativekey.KpgpUpgrade.fromDevice(
+                                ctxIn, eoa, userClick = false, nowSec = System.currentTimeMillis() / 1000L, storeAccount = storeAccount,
+                            )
+                        } catch (_: Exception) {
+                            // Any internal exception is pgp_migration_retry, with no cause code.
+                            null
+                        }
+                        val code = result?.action ?: "pgp_migration_retry"
+                        given = true
+                        if (code == "keep_existing" || code == "upgraded_from_L" || code == "upgraded_from_chain" || code == network.conet.chat.nativekey.KpgpUpgrade.FIRST_IDENTITY_REGISTERED) trigger.settle(eoa)
+                        else trigger.release(eoa, System.currentTimeMillis())
+                        // The page learns the state through the event channel; success is silent, a retry state shows the existing retry notice.
+                        // The first-identity codes go to the QA state events only (FirstIdentityEvents), never to the page's retry notice.
+                        if (code != "keep_existing" && code != "upgraded_from_L" && !code.startsWith("first_identity_")) {
+                            emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+                        }
+                    } finally {
+                        if (!given) trigger.release(eoa, System.currentTimeMillis())
                     }
                 }
             }
         }
+        network.conet.chat.nativekey.FirstIdentityEvents.sink = { payload -> emitEvent(payload) }
+        network.conet.chat.nativekey.VaultWarmUp.start(ctxIn, kpgpTriggerStep)
         BeamioConetChatSignBroker.setEmit(emit)
         // 25.52AW.1, 25.52AU.1, 25.52AX.1: the envelope comes first, for every entry. A reqId that is missing or not valid is `bad_request` with a
         // null reqId, answered once, before any gate or state change. Integer 0 is valid and is echoed (T-179).
@@ -381,15 +469,18 @@ object BeamioConetChatModule {
         // removed, shown or exported. The answer is unregister_refused with reason key_only. Continuation (2026-11-22, aligned): with
         // clear_pending strictly set, the precheck is skipped and the command reaches the redo path (the gate and identityClear checks run again). An
         // unreadable marker is not "set", so it still refuses.
-        val vaultNow = NativeWallet.vault(context)
-        val currentNow = (vaultNow.snapshotState() as? NativeWalletVault.State.Ready)?.eoa
-        // key-only is per account. The snapshot flag stays, and the per-account criterion adds the cases with no valid current
-        // account (a key with no phrase for the account, or no account at all). Any read failure refuses.
-        val copyNow = BeamioChatWalletKeyStore.publishedCopyState(context)
-        val snapNow = vaultNow.snapshotWithKeyOnly()
-        val keyOnlyNow = snapNow?.keyOnly == true ||
-            vaultNow.keyWithoutPhraseFor(currentNow, MnemonicSetStore(File(context.noBackupFilesDir, MnemonicSetStore.DIRECTORY)), copyNow)
+        // Only clearIdentity uses the per-account key-only criterion below, and it reads the phrase record from the keystore
+        // (a StrongBox decrypt, seconds on the S25). It used to be computed for EVERY command, hello included, so each command paid one decrypt on the
+        // single chat-command thread. It is decided live, as before, and only here.
         if (type == "clearIdentity") {
+            val vaultNow = NativeWallet.vault(context)
+            val currentNow = (vaultNow.snapshotState() as? NativeWalletVault.State.Ready)?.eoa
+            // key-only is per account. The snapshot flag stays, and the per-account criterion adds the cases with no valid current
+            // account (a key with no phrase for the account, or no account at all). Any read failure refuses.
+            val copyNow = BeamioChatWalletKeyStore.publishedCopyState(context)
+            val snapNow = vaultNow.snapshotWithKeyOnly()
+            val keyOnlyNow = snapNow?.keyOnly == true ||
+                vaultNow.keyWithoutPhraseFor(currentNow, MnemonicSetStore(File(context.noBackupFilesDir, MnemonicSetStore.DIRECTORY)), copyNow)
             val flagsNow = ClearFlagFiles(pageRecordFiles(context))
             val stateNow = snapNow?.state
             val gateNow = stateNow?.let { NoKeyGate.gateOf(it, NativeSessionState.isReady(), keyOnly = snapNow.keyOnly == true) }
@@ -491,8 +582,9 @@ object BeamioConetChatModule {
             }
             // 25.52BZ.4 (r3dz): the locked check of the gate step, after the name check and before the parameters and the no_key or not_ready
             // answers. No payload is read.
-            NoKeyGate.lockedAnswer(type, state)?.let { code ->
-                ack(reqId, false, error = code)
+            if (NoKeyGate.lockedAnswer(type, state) != null) {
+                // not_ready, with the top-level reason passcode_not_provided only for a missing passcode package (shared vectors C-25 to C-27); never `locked`.
+                emitEvent(NoKeyGate.lockedAck(reqId, state))
                 return
             }
             when (route) {
@@ -623,7 +715,7 @@ object BeamioConetChatModule {
                 ack(echoId(body), true, result = BeamioConetChatProtocol.helloResult(nativeApp))
             }
             "init" -> handleInit(body)
-            "setRoutes" -> currentSession()?.let { s -> body.optJSONArray("routes")?.let { s.routes = objects(it) } }
+            "setRoutes" -> handleSetRoutes(body)
             "setNodes" -> currentSession()?.let { s -> body.optJSONArray("nodes")?.let { s.nodes = parseNodes(it) } }
             "nodesResponse" -> Unit
             "send" -> handleSend(body)
@@ -690,6 +782,7 @@ object BeamioConetChatModule {
             "accountCleanupOld" -> accountCleanupOldCommand(body)
             "pgpIdentityCreate" -> pgpIdentityCreateWaiting(body)
             "chatRouteRegister" -> chatRouteRegisterCommand(body)
+            "accountCreateRegister" -> accountCreateRegisterCommand(body)
             else -> {
                 // Unreachable while the table and this dispatch agree (BridgeCommandTableTest). Answered the same way if they ever diverge.
                 Log.w(TAG, "unknown_command name=${type.take(64)}")
@@ -767,6 +860,8 @@ object BeamioConetChatModule {
             if (nativeEoa != null && idEoa.isNotEmpty() && nativeEoa != idEoa.lowercase()) NativeSessionState.reset()
             synchronized(lock) {
                 listen.stop()
+                // The replaced session's contacts and unconfirmed messages end with it: no receipt is made for them under the new session.
+                session?.clearReceiptState()
                 session?.history?.destroy()
                 session = s
             }
@@ -776,7 +871,7 @@ object BeamioConetChatModule {
         if (s.deferAck && !attach) {
             // A new page has seen nothing: let the mailbox's redelivery of
             // messages the previous page never confirmed reach it again.
-            synchronized(seenArmor) { seenArmor.clear() }
+            seenArmor.clear()
         }
 
         // A4 audit (F1): `identity.pgpPrivateKeyArmored` and `identity.pgpPassphrase` are refused before this point. validate(INIT) above is
@@ -821,7 +916,7 @@ object BeamioConetChatModule {
             val saved = BeamioChatPgpStore.loadSiNodes(ctx)
             if (saved.isNotEmpty()) s.nodes = saved.map { Node(it.ip, it.domain, it.region, it.armoredPublicKey) }
         }
-        payload.optJSONArray("routes")?.let { s.routes = objects(it) }
+        // `routes` in init is not read: the page gives routes with `setRoutes` (validated, with its eoa) once the identity is ready.
 
         // The EOA is what G2 needs (§25.26.4c). The PGP key is not required here: a recovered wallet has none until pgpRestore
         // runs, and pgpRestore needs G2 (§25.30.2 step 1). PGP-dependent chat features stay off until then.
@@ -921,22 +1016,34 @@ object BeamioConetChatModule {
                     ack(reqId, false, error = "address_mismatch")
                     return
                 }
-                val key = vault.unlock()
-                if (key == null) {
-                    // A keystore or storage read that fails is unknown, never a missing record (retryable; nothing is deleted).
-                    BeamioConetChatSignBroker.clearNativeSigner()
-                    notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)
-                    return
+                // The unlock is a StrongBox decrypt and the key-only check used to be a live compute (PRESENCE and two more
+                // decrypts), all on the main thread when the OpenPGP host was still booting: 12.5 s of main-thread blocking. They run on the init worker
+                // (one thread, so two inits stay in order as they did on main), the key-only flag is the snapshot's vouched for by the records' signature
+                // (live only if the files changed), and the rest of the init (`done`) goes back to the main thread as before.
+                initWorker.execute {
+                    // Every outcome answers: an exception here used to leave init with no answer (the page's 180 s timeout). A fault is unknown and
+                    // retryable (not_ready, unreadable), never no_key.
+                    val outcome = try {
+                        network.conet.chat.nativekey.InitUnlock.run(
+                            vault,
+                            setSigner = { BeamioConetChatSignBroker.setNativeSigner(it) },
+                            clearSigner = { BeamioConetChatSignBroker.clearNativeSigner() },
+                            markReady = { NativeSessionState.markReady(st.eoa) },
+                        )
+                    } catch (_: Exception) {
+                        // Only an Exception: an Error (out of memory and the like) has been cleaned up by InitUnlock and propagates, it is not an answer.
+                        network.conet.chat.nativekey.InitUnlock.Outcome.UNREADABLE
+                    }
+                    when (outcome) {
+                        network.conet.chat.nativekey.InitUnlock.Outcome.UNREADABLE -> {
+                            // A keystore or storage read that fails is unknown, never a missing record (retryable; nothing is deleted).
+                            notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)
+                        }
+                        // The record opened and the EOA matched, so the session is ready. A key-only record is not an account: the
+                        // session is not marked ready for it (the gate stays G1; see NoKeyGate.gateOf). The rest of init goes back to the main thread.
+                        else -> main.post { done() }
+                    }
                 }
-                try {
-                    BeamioConetChatSignBroker.setNativeSigner(key)
-                } finally {
-                    key.fill(0)
-                }
-                // G2 (25.26.4c): the record opened and the EOA matched, so the session is ready.
-                // A key-only record is not an account: the session is not marked ready for it (the gate stays G1; see NoKeyGate.gateOf).
-                if (!vault.isKeyOnlyAccount()) NativeSessionState.markReady(st.eoa)
-                done()
             }
             is NativeWalletVault.State.NoKey -> {
                 BeamioConetChatSignBroker.clearNativeSigner()
@@ -955,6 +1062,7 @@ object BeamioConetChatModule {
                 } catch (_: Exception) {
                     MnemonicSetStore.Current.Unknown("store_unreadable")
                 }
+                var plainAdopted = false
                 StoreSessionAdoption.plainAdoption(NativeWalletVault.State.NoKey, currentStore, eoa)?.let { adopt ->
                     try {
                         BeamioConetChatSignBroker.setNativeSigner(adopt.key)
@@ -962,13 +1070,31 @@ object BeamioConetChatModule {
                         adopt.key.fill(0)
                     }
                     NativeSessionState.markReady(adopt.eoa)
+                    plainAdopted = true
                 }
-                // A v3 account that is not unlocked exists and needs the passcode; a store that cannot be read is unknown: not_ready, never no_key.
-                when (StoreAccountView.of(currentStore, NativeSessionState.readyEoa())) {
-                    is StoreAccountView.View.V3 ->
-                        if (NativeSessionState.isReadyFor(eoa)) ack(reqId, false, error = "no_key") else notReadyAck(reqId, NoKeyGate.NOT_READY_PASSCODE_REQUIRED)
-                    StoreAccountView.View.Unknown -> notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)
-                    else -> ack(reqId, false, error = "no_key")
+                val view = StoreAccountView.of(currentStore, NativeSessionState.readyEoa())
+                // A v3 set whose key this session holds gives the signer its key here (the passcode was accepted in this process).
+                var v3KeyHeld = false
+                if (view is StoreAccountView.View.V3 && view.unlocked && view.eoa.equals(eoa, ignoreCase = true)) {
+                    val sessionKey = StoreKeyAdapter.sessionKey(currentStore)
+                    if (sessionKey != null) {
+                        try {
+                            BeamioConetChatSignBroker.setNativeSigner(sessionKey)
+                            v3KeyHeld = true
+                        } finally {
+                            sessionKey.fill(0)
+                        }
+                    }
+                }
+                // A store account whose session is ready completes init like a vault account (history store, listen, ready answer). A v3 account
+                // that is not unlocked exists and needs the passcode; a store that cannot be read is unknown: not_ready, never no_key. 0.2.30: the
+                // remaining no_key answer carries `result.reason = store_account` when the store names the account.
+                when (StoreSessionAdoption.initStep(view, plainAdopted, v3KeyHeld)) {
+                    StoreSessionAdoption.InitStep.FINISH -> done()
+                    StoreSessionAdoption.InitStep.NOT_READY_PASSCODE -> notReadyAck(reqId, NoKeyGate.NOT_READY_PASSCODE_REQUIRED)
+                    StoreSessionAdoption.InitStep.NOT_READY_UNREADABLE -> notReadyAck(reqId, NoKeyGate.NOT_READY_UNREADABLE)
+                    StoreSessionAdoption.InitStep.NO_KEY_STORE_ACCOUNT -> ack(reqId, false, error = "no_key", reason = NoKeyGate.NO_KEY_REASON_STORE_ACCOUNT)
+                    StoreSessionAdoption.InitStep.NO_KEY -> ack(reqId, false, error = "no_key")
                 }
             }
             is NativeWalletVault.State.Locked -> {
@@ -1303,6 +1429,8 @@ object BeamioConetChatModule {
             return
         }
         pgpMigrateWorker.execute {
+            // A clear drops every cached public identity before it acts (the file signature would also catch it).
+            network.conet.chat.nativekey.PublicIdentitySnapshot.invalidateAll()
             // (1a), 25.52PY.8 第 1 项: the C.3 check runs when an account exists. `unregister` checks N and M (§25.52I.8). Anything but `ok`
             // removes nothing.
             // (1a) to (1c) and (2) to (8), PY.8 and PY.12: the refusals come before any write (identityClear). A storage error is a code, never
@@ -1326,6 +1454,7 @@ object BeamioConetChatModule {
      * session (§25.52I.8, PY.9). Only `ok` is a success; `clear_incomplete` is returned with no value.
      */
     private fun finishClearIdentity(reqId: Any, code: String, reason: String? = null) {
+        network.conet.chat.nativekey.PublicIdentitySnapshot.invalidateAll()
         if (code != IdentityClearCode.UNREGISTER_REFUSED) {
             NativeSessionState.reset()
             destroy()
@@ -1580,22 +1709,22 @@ object BeamioConetChatModule {
      * in this session (received while it was not running, or never confirmed).
      */
     private fun replayInbox(ctx: Context, s: Session) {
-        val all = try {
-            BeamioConetChatInboxStore.list(ctx)
-        } catch (e: IOException) {
-            // Unknown, not empty: nothing is replayed and nothing is written; the mailbox still holds the copies. Retried next session.
-            Log.w(TAG, "inbox unreadable; not replayed")
-            return
-        }
-        val stored = all.filter { !s.pendingAcks.containsKey(it.armorHash) }
-        if (stored.isEmpty()) return
-        Log.i(TAG, "inbox replay count=${stored.size}")
-        for (e in stored) {
-            synchronized(seenArmor) { seenArmor.remove(e.armorHash) }
-            BeamioConetChatListenSession.decryptArmor(ctx, s, e.armor) { line, hash ->
-                handleInbound(line, hash, e.viaDomain, e.armor)
-            }
-        }
+        // Off the main thread. Each stored message is a PGP decrypt (a Keystore operation, 3.5 s on the S25) and finishInit runs on
+        // the main thread. The decrypt callback still posts the handling of a decrypted line to the main thread, and the dedupe lets the replay and the
+        // listen deliver the same message once (SeenArmor.markSeen).
+        network.conet.chat.nativekey.InboxReplay.start(
+            execute = { io.execute(it) },
+            load = { BeamioConetChatInboxStore.list(ctx) },
+            hashOf = { it.armorHash },
+            isPending = { s.pendingAcks.containsKey(it) },
+            forget = { seenArmor.forget(it) },
+            decrypt = { e ->
+                BeamioConetChatListenSession.decryptArmor(ctx, s, e.armor) { line, hash ->
+                    handleInbound(line, hash, e.viaDomain, e.armor)
+                }
+            },
+            log = { Log.i(TAG, it) },
+        )
     }
 
     /**
@@ -1618,10 +1747,11 @@ object BeamioConetChatModule {
 
     private fun handlePgpDecryptInbound(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
-        fun refuse(code: String) {
-            emitEvent(
-                JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code),
-            )
+        fun refuse(code: String, reason: String? = null) {
+            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code)
+            // The reason of a not_ready for a missing passcode package sits at the top level, beside error (shared vector A-08).
+            reason?.let { payload.put("reason", it) }
+            emitEvent(payload)
             Log.i(TAG, "pgpDecryptInbound result=$code")
         }
         if (reqId == null) return refuse("bad_request")
@@ -1639,14 +1769,21 @@ object BeamioConetChatModule {
         }
         val vault = NativeWallet.vault(ctx)
         // An unreadable vault is unknown: not_ready, one answer (25.52Y.84), never a gate that allows a decrypt.
-        val state = try {
-            vault.state()
+        // The snapshot only (no monitor wait), and the key-only flag only when it can matter, vouched for by the records'
+        // signature, else read live as before. Each inbound message used to pay `state()` and `keyOnlyLive()`: two StrongBox decrypts on top of the key's own.
+        val sessionReady = NativeSessionState.isReady()
+        val read = try {
+            network.conet.chat.nativekey.VaultGateReader.read(vault, sessionReady)
         } catch (_: Exception) {
             return refuse("not_ready")
         }
-        val gate = NoKeyGate.gateOf(state, NativeSessionState.isReady(), keyOnly = vault.keyOnlyLive())
-        PgpDecryptInbound.gateRefusal(gate, state is NativeWalletVault.State.Locked)?.let { return refuse(it) }
-        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return refuse("locked")
+        val state = read.state ?: run {
+            scheduleSnapshotRefresh(ctx)
+            return refuse("not_ready")
+        }
+        val gate = NoKeyGate.gateOf(state, sessionReady, keyOnly = read.keyOnly)
+        PgpDecryptInbound.gateRefusal(gate, state is NativeWalletVault.State.Locked)?.let { return refuse(it, NoKeyGate.lockedReasonTopLevel(state)) }
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return refuse("not_ready")
         val pgp = NativeWallet.pgpFor(ctx, eoa)
         val source = object : PgpDecryptInbound.Source {
             // An unreadable key store is unknown: a null subkey is not_ready in PgpDecryptInbound; a failed decrypt is a failed literal.
@@ -2199,14 +2336,29 @@ object BeamioConetChatModule {
             return answer(false, "not_ready")
         }
         if (state is NativeWalletVault.State.Locked) {
-            return answer(false, NoKeyGate.NOT_READY, NoKeyGate.notReadyResult(NoKeyGate.lockedReasonOf(state, NativeWallet.vault(ctx))))
+            // not_ready; the top-level reason passcode_not_provided only for a missing passcode package, none for an unreadable state (shared vectors C-25, C-26).
+            emitEvent(NoKeyGate.lockedAck(reqId, state))
+            return
         }
-        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return answer(false, "no_key")
+        // 0.2.30: a vault with no record may still have its account in the two-state store (store-primary rule). Only that case is widened;
+        // a Ready vault keeps its own path.
+        var storeAccount: StoreAwareAccount.Resolution.Account? = null
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: when (val r = StoreAwareAccount.resolveOnDevice(ctx)) {
+            is StoreAwareAccount.Resolution.Account -> r.eoa.also { storeAccount = r }
+            is StoreAwareAccount.Resolution.NotReady -> {
+                // A store v3 set the session has no key for: not_ready with the top-level reason passcode_not_provided; any other store state is unknown:
+                // not_ready with no reason (shared vectors C-25, C-26, C-31, C-32).
+                emitEvent(NoKeyGate.storeNotReadyAck(reqId, r.reason))
+                return
+            }
+            StoreAwareAccount.Resolution.NoKey -> return answer(false, "no_key")
+        }
         val accountKey = body.optString("accountKey", "")
         val cut = accountKey.lastIndexOf(':')
         if (cut <= 0 || cut == accountKey.length - 1 || !accountKey.substring(0, cut).equals(eoa, ignoreCase = true)) {
             return answer(false, "account_mismatch")
         }
+        val storeForMachine = storeAccount
         if (evaluateOnly) {
             val once = SingleReply()
             pgpRestoreWorker.execute {
@@ -2222,7 +2374,7 @@ object BeamioConetChatModule {
                     }
                     val chainRead = PgpRestoreBridge.productionChain(eoa)
                     PgpRestoreBridge.evaluate(
-                        PgpRestoreBridge.productionMachine(ctx, eoa, chainRead),
+                        PgpRestoreBridge.productionMachine(ctx, eoa, chainRead, storeForMachine),
                         legacy = legacy,
                         chain = FirstIdentityRule.chainOfRead(chainRead),
                     )
@@ -2239,7 +2391,7 @@ object BeamioConetChatModule {
         pgpRestoreWorker.execute {
             // The ack was sent; the result follows once. An unreadable store is not_ready, never a silent drop (25.52Y.84).
             val event = try {
-                PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa))
+                PgpRestoreBridge.restore(PgpRestoreBridge.productionMachine(ctx, eoa, storeAccount = storeForMachine))
             } catch (e: Exception) {
                 Log.w(TAG, "pgpRestore restore failed: ${e.javaClass.simpleName}")
                 JSONObject().put("code", "not_ready")
@@ -2269,19 +2421,44 @@ object BeamioConetChatModule {
         }
         val ctx = appContext
         // A vault that cannot be read is unknown: not_ready, one answer for this reqId (Y.104 第 3 条), never a gate that allows a migration.
-        val state = try {
-            ctx?.let { NativeWallet.vault(it).state() }
+        // The snapshot only, never the vault's monitor and never a live keystore read on this thread (the first pgpMigrate of a
+        // cold start held the chat-command queue for 36.8 s). An unknown snapshot is unknown (G1, not_ready) and asks for a refresh; the key fields and the
+        // other refusals below are still judged first, in the same order. Before init the session is not ready, so the gate is G1 whatever keyOnly says.
+        val sessionReady = NativeSessionState.isReady()
+        val read = try {
+            ctx?.let { network.conet.chat.nativekey.VaultGateReader.read(NativeWallet.vault(it), sessionReady) }
         } catch (_: Exception) {
             return answer(false, "not_ready")
         }
-        val gate = if (state == null) NoKeyGate.Gate.G1 else NoKeyGate.gateOf(state, NativeSessionState.isReady(), keyOnly = ctx?.let { NativeWallet.vault(it).keyOnlyLive() } == true)
+        val state = read?.state
+        if (ctx != null && state == null) scheduleSnapshotRefresh(ctx)
+        var gate = if (state == null || read == null) NoKeyGate.Gate.G1 else NoKeyGate.gateOf(state, sessionReady, keyOnly = read.keyOnly)
+        // 0.2.30: a vault with no record may still have its account in the two-state store (store-primary rule). Only that case is widened.
+        var storeEoa: String? = null
+        var notReadyReason: String? = null
+        if (gate == NoKeyGate.Gate.G0 && ctx != null) {
+            when (val r = StoreAwareAccount.resolveOnDevice(ctx)) {
+                is StoreAwareAccount.Resolution.Account -> { gate = NoKeyGate.Gate.G2; storeEoa = r.eoa }
+                is StoreAwareAccount.Resolution.NotReady -> { gate = NoKeyGate.Gate.G1; notReadyReason = r.reason }
+                StoreAwareAccount.Resolution.NoKey -> Unit
+            }
+        }
         when (val ack = PgpMigrationBridge.ackFor(body, gate, state is NativeWalletVault.State.Locked, pgpMigrateRunning.get())) {
-            is PgpMigrationBridge.Ack.Refused -> return answer(false, ack.code, ack.fields)
+            is PgpMigrationBridge.Ack.Refused -> {
+                if (ack.code == NoKeyGate.NOT_READY && notReadyReason != null) {
+                    emitEvent(
+                        JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false)
+                            .put("error", NoKeyGate.NOT_READY).put("result", NoKeyGate.notReadyResult(notReadyReason)),
+                    )
+                    return
+                }
+                return answer(false, ack.code, ack.fields)
+            }
             is PgpMigrationBridge.Ack.Busy -> return answer(false, "busy")
             is PgpMigrationBridge.Ack.Accepted -> Unit
         }
         val c = ctx ?: return answer(false, "not_ready")
-        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: return answer(false, "locked")
+        val eoa = (state as? NativeWalletVault.State.Ready)?.eoa ?: storeEoa ?: return answer(false, "locked")
         val id = reqId ?: return answer(false, "bad_request")
         if (!pgpMigrateRunning.compareAndSet(false, true)) return answer(false, "busy")
         answer(true)
@@ -2428,24 +2605,43 @@ object BeamioConetChatModule {
         val accountKey = body.optString("accountKey", "")
         io.execute {
             val state = try { NativeWallet.vault(ctx).state() } catch (_: Exception) { null }
-            // Android has no passcode lock: a storage-derived Locked or no key is not_ready (25.52CS.2).
+            // Android has no passcode lock: a storage-derived Locked or no key is not_ready. A vault with no record may
+            // still have its account in the two-state store; a v3 set that is not unlocked is not_ready.
+            var storeAccount: StoreAwareAccount.Resolution.Account? = null
             val eoa = (state as? NativeWalletVault.State.Ready)?.eoa
+                ?: if (state is NativeWalletVault.State.NoKey) {
+                    (StoreAwareAccount.resolveOnDevice(ctx) as? StoreAwareAccount.Resolution.Account)?.also { storeAccount = it }?.eoa
+                } else null
             if (eoa == null) { ack(reqId, false, error = "not_ready"); return@execute }
             val cut = accountKey.lastIndexOf(':')
             if (cut <= 0 || cut == accountKey.length - 1 || !accountKey.substring(0, cut).equals(eoa, ignoreCase = true)) {
                 ack(reqId, false, error = "account_mismatch")
                 return@execute
             }
+            // One request per account at a time (0.2.30): a retry while a run is in flight is busy and changes nothing.
+            val trigger = network.conet.chat.nativekey.KpgpUpgradeTrigger
+            if (!trigger.claimForUserRetry(eoa)) { ack(reqId, false, error = "busy"); return@execute }
             // 25.52Y.64 PR-01: the ack is {type, reqId, ok: true, accepted: true} (no result object).
             emitEvent(JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", true).put("accepted", true))
-            val result = try {
-                network.conet.chat.nativekey.KpgpUpgrade.fromDevice(ctx, eoa, userClick = true, nowSec = System.currentTimeMillis() / 1000L, nativeConfirm = false)
-            } catch (_: Exception) {
-                null
+            // The claim is always given back, whatever ends the run (an Error included).
+            var given = false
+            try {
+                val result = try {
+                    network.conet.chat.nativekey.KpgpUpgrade.fromDevice(
+                        ctx, eoa, userClick = true, nowSec = System.currentTimeMillis() / 1000L, nativeConfirm = false, storeAccount = storeAccount,
+                    )
+                } catch (_: Exception) {
+                    null
+                }
+                val code = result?.action ?: "pgp_migration_retry"
+                given = true
+                if (code == "keep_existing" || code == "upgraded_from_L" || code == "upgraded_from_chain" || code == network.conet.chat.nativekey.KpgpUpgrade.FIRST_IDENTITY_REGISTERED) trigger.settle(eoa)
+                else trigger.release(eoa, System.currentTimeMillis())
+                if (!code.startsWith("first_identity_")) emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
+                Log.i(TAG, "pgpUpgradeRetry result=$code")
+            } finally {
+                if (!given) trigger.release(eoa, System.currentTimeMillis())
             }
-            val code = result?.action ?: "pgp_migration_retry"
-            emitEvent(JSONObject().put("type", "pgpUpgradeState").put("code", code))
-            Log.i(TAG, "pgpUpgradeRetry result=$code")
         }
     }
 
@@ -2474,7 +2670,27 @@ object BeamioConetChatModule {
         if (eoa == null) { ack(reqId, false, error = "not_ready"); return }
         // A vault that cannot be unlocked is a storage-derived failure: not_ready (25.52CS.2). Android has no passcode lock (25.52GQ.3a).
         if (vault.unlock().also { it?.fill(0) } == null) { ack(reqId, false, error = "not_ready"); return }
+        // One registration at a time per account: the first-identity coordinator and this command share the flight. A second caller is busy.
+        if (!network.conet.chat.nativekey.IdentityRegisterFlight.tryEnter(eoa)) { ack(reqId, false, error = "busy"); return }
+        try {
+            registerRouteNativeLocked(ctx, reqId, request, vault, eoa)
+        } finally {
+            network.conet.chat.nativekey.IdentityRegisterFlight.exit(eoa)
+        }
+    }
+
+    private fun registerRouteNativeLocked(
+        ctx: Context,
+        reqId: Any?,
+        request: ChatRouteRegister.Request,
+        vault: network.conet.chat.nativekey.NativeWalletVault,
+        eoa: String,
+    ) {
         var refusal: String? = null
+        // The readback compares the identity of the submitted public armor (normalized, never the raw text) and the route key id.
+        val submitted = network.conet.chat.nativekey.NativePgpBackup.strictBase64(request.publicKeyArmored)?.toString(Charsets.UTF_8)
+            ?.let { network.conet.chat.nativekey.PgpPublicIdentity.parse(it) }
+        val expected = submitted?.let { network.conet.chat.nativekey.RegistrationReadback.Expected(it.fingerprint, it.subkeyKeyId, request.routeKeyID) }
         val outcome = network.conet.chat.nativekey.ChatRouteSubmit.submit(
             bases = ROUTE_BASES,
             bodyFor = { _ ->
@@ -2503,15 +2719,65 @@ object BeamioConetChatModule {
                 }
             },
             poster = network.conet.chat.nativekey.ChatRouteSubmit.HttpPoster,
-            chain = network.conet.chat.nativekey.ChatRouteSubmit.ChainCheck { chainRegisteredFor(eoa, request.keyID) },
+            chain = if (expected != null) {
+                network.conet.chat.nativekey.RegistrationReadback.check(expected, { network.conet.chat.nativekey.ProductionIdentityRead.read(eoa) })
+            } else {
+                network.conet.chat.nativekey.ChatRouteSubmit.ChainCheck { null }
+            },
         )
         when (outcome) {
             is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.Submitted ->
                 ack(reqId, true, result = JSONObject().put("code", "submitted"))
             is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.UnverifiedSubmit -> ack(reqId, false, error = "unverified_submit")
             is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.NetworkUnavailable -> ack(reqId, false, error = "network_unavailable")
+            is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.Conflict -> ack(reqId, false, error = "registration_conflict")
             is network.conet.chat.nativekey.ChatRouteSubmit.Outcome.Refused ->
                 ack(reqId, false, error = refusal ?: outcome.code)
+        }
+    }
+
+    /**
+     * `accountCreateRegister`. The page gives the BeamioTag and the user's password; the native layer
+     * checks the registry at one block, signs and seals the `/api/addUser` payload and answers it for the page to forward (the native layer never POSTs).
+     * The password is read once into a byte array, used for the sealing, zeroed, and never logged: the log line holds the request's length fields only.
+     * A build that does not enable the first-identity features (QA only) answers `not_available`.
+     */
+    private fun accountCreateRegisterCommand(body: JSONObject) {
+        val reqId = PgpDecryptInbound.reqIdOf(body)
+        fun fail(code: String, reason: String? = null) {
+            val payload = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", code)
+            reason?.let { payload.put("reason", it) }
+            emitEvent(payload)
+            Log.i(TAG, "accountCreateRegister result=$code")
+        }
+        val request = when (val parsed = network.conet.chat.nativekey.AccountRegisterCommand.parse(body)) {
+            is network.conet.chat.nativekey.AccountRegisterCommand.Parsed.Refused -> return fail(parsed.code)
+            is network.conet.chat.nativekey.AccountRegisterCommand.Parsed.Ok -> parsed
+        }
+        // The log holds the lengths only, never a value.
+        Log.i(TAG, "accountCreateRegister reqId=$reqId tagLen=${request.tag.length} passwordLen=${request.password.length}")
+        if (!BuildConfig.IDENTITY_STATE_EVENTS_QA) return fail("not_available")
+        val ctx = appContext ?: return fail("not_ready")
+        val password = request.password.toByteArray(Charsets.UTF_8)
+        io.execute {
+            val outcome = try {
+                network.conet.chat.nativekey.AccountRegisterCommand.run(
+                    request.tag,
+                    password,
+                    { network.conet.chat.nativekey.AccountRegisterCommand.productionMaterial(ctx) },
+                    { name -> network.conet.chat.nativekey.AccountRegisterCommand.productionRegistry(name) },
+                )
+            } catch (_: Exception) {
+                network.conet.chat.nativekey.AccountRegisterCommand.Outcome("not_ready", null)
+            } finally {
+                password.fill(0)
+            }
+            if (outcome.ok) {
+                emitEvent(JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", true).put("result", outcome.result))
+                Log.i(TAG, "accountCreateRegister result=ok")
+            } else {
+                fail(outcome.error ?: "not_ready", outcome.reason)
+            }
         }
     }
 
@@ -2582,7 +2848,19 @@ object BeamioConetChatModule {
                 ack(reqId, false, error = NoKeyGate.NOT_READY)
                 return
             }
-            val gate = NoKeyGate.gateOf(snap, NativeSessionState.isReady(), keyOnly = NativeWallet.vault(ctx).snapshotKeyOnly())
+            var gate = NoKeyGate.gateOf(snap, NativeSessionState.isReady(), keyOnly = NativeWallet.vault(ctx).snapshotKeyOnly())
+            // 0.2.30: a vault with no record may still have its account in the two-state store (store-primary rule). Only that case is widened:
+            // a plain set is G2; a v3 set that is not unlocked, or a store that cannot be read, is G1 (`not_ready`), never `no_key`.
+            if (gate == NoKeyGate.Gate.G0) {
+                when (val r = StoreAwareAccount.resolveOnDevice(ctx)) {
+                    is StoreAwareAccount.Resolution.Account -> gate = NoKeyGate.Gate.G2
+                    is StoreAwareAccount.Resolution.NotReady -> {
+                        notReadyAck(reqId, r.reason)
+                        return
+                    }
+                    StoreAwareAccount.Resolution.NoKey -> Unit
+                }
+            }
             IdentityPublic.answer(
                 gate,
                 { body.keys().asSequence().map { it.toString() }.toList() },
@@ -2599,15 +2877,56 @@ object BeamioConetChatModule {
      * `NotRead` and `pgpReady` stays false. That is not an error, and it is not "no identity" (§25.48.9, §25.30.3). The session's
      * PGP copies come from the PWA's init, and are not used here.
      */
-    private fun identityPublicSource(app: Context): IdentityPublic.Source = object : IdentityPublic.Source {
-        override fun eoa(): String? = currentSession()?.eoa
-        override fun pgp(): IdentityPublic.PgpRecord = IdentityPublic.PgpRecord.NotRead
-
+    private fun identityPublicSource(app: Context): IdentityPublic.Source = network.conet.chat.nativekey.SnapshotIdentitySource(
+        eoaOf = { currentSession()?.eoa },
+        // The public identity comes from the in-memory snapshot (PublicIdentitySnapshot), never from an open of the record on this
+        // thread. With no valid entry the answer is not_ready and one refresh is asked for on the warm-up thread.
+        factsOf = { publicIdentityFacts(app) },
+        // The route's public armor: the session's own (from the page's init), else the route a first identity of this account was read back on
+        // (the roster node of that route key id), else the route the shipped store holds. Never an empty placeholder.
+        routeArmorOf = {
+            currentSession()?.ownRouteArmoredPublicKey?.takeIf { it.isNotEmpty() } ?: run {
+                val eoa = currentSession()?.eoa?.takeIf { it.isNotEmpty() }
+                val fromRoster = if (eoa != null) {
+                    val roster = try {
+                        BeamioChatPgpStore.loadSiNodes(app).map { it.domain to it.armoredPublicKey }
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                    network.conet.chat.nativekey.FirstIdentityRegistered.routeArmor(eoa, roster)
+                } else {
+                    null
+                }
+                fromRoster ?: try {
+                    BeamioChatPgpStore.loadRoutePublicArmor(app).takeIf { it.isNotEmpty() }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        },
         // 25.48.4, 25.52Y.90: any K_pgp on the device. An unreadable store gives null (unknown), never false.
-        override fun kPresent(): Boolean? = try {
-            network.conet.chat.nativekey.AccountPgpK.forDevice(app).existsAny()
-        } catch (_: Exception) {
-            null
+        kPresentOf = {
+            try {
+                network.conet.chat.nativekey.AccountPgpK.forDevice(app).existsAny()
+            } catch (_: Exception) {
+                null
+            }
+        },
+    )
+
+    /**
+     * The valid snapshot entry for the session's account, or null (and one refresh asked for). Only plain file reads happen here: the signature of the
+     * record and marker. The Keystore is never opened on the caller's thread.
+     */
+    private fun publicIdentityFacts(app: Context): network.conet.chat.nativekey.PublicIdentitySnapshot.Facts? {
+        val eoa = currentSession()?.eoa?.takeIf { it.isNotEmpty() } ?: return null
+        val vault = NativeWallet.pgpFor(app, eoa)
+        return when (val l = network.conet.chat.nativekey.PublicIdentitySnapshot.lookup(eoa, vault.fileSignature())) {
+            is network.conet.chat.nativekey.PublicIdentitySnapshot.Lookup.Hit -> l.facts
+            network.conet.chat.nativekey.PublicIdentitySnapshot.Lookup.Miss -> {
+                network.conet.chat.nativekey.VaultWarmUp.warmIdentity(app, eoa)
+                null
+            }
         }
     }
 
@@ -2890,13 +3209,27 @@ object BeamioConetChatModule {
 
     // ---- send ---------------------------------------------------------------------
 
-    private fun handleSend(body: JSONObject) {
+    /**
+     * [bound] is set only for a send the module makes itself (the sender receipt): it belongs to that session, answers nobody (no ack to the page,
+     * the result goes to the log) and is dropped at each step once that session is no longer the current one (identity clear, account switch).
+     */
+    private fun handleSend(body: JSONObject, bound: Session? = null, done: (() -> Unit)? = null) {
         val reqId = echoId(body)
         val ctx = appContext
         val s = currentSession()
         val to = body.optJSONObject("to")
-        if (ctx == null || s == null || to == null) {
-            ack(reqId, false, error = "not_ready")
+        // The answer: to the page for its own send, to the log for a receipt.
+        fun fail(code: String) {
+            if (bound != null) {
+                Log.i(TAG, "[send] kind=receipt ok=0 error=$code")
+                done?.invoke()
+            } else {
+                ack(reqId, false, error = code)
+            }
+        }
+        fun stale(): Boolean = bound != null && (bound.destroyed || currentSession() !== bound)
+        if (ctx == null || s == null || to == null || (bound != null && s !== bound)) {
+            fail("not_ready")
             return
         }
         val payload = body.optString("payload", "")
@@ -2905,19 +3238,23 @@ object BeamioConetChatModule {
         val userPgp = to.optString("userPublicKeyArmored", "").trim()
         val mailboxRoute = to.optString("routerArmoredPublicKey", "").trim()
         if (!userPgp.contains("BEGIN PGP PUBLIC KEY")) {
-            ack(reqId, false, error = "missing_recipient_pgp")
+            fail("missing_recipient_pgp")
             return
         }
         // Every send is wrapped to the recipient's mailbox route key, so the entry
         // never sees the recipient key ID. Without that route: not sent.
         if (!mailboxRoute.contains("BEGIN PGP PUBLIC KEY")) {
-            ack(reqId, false, error = "recipient_mailbox_unknown")
+            fail("recipient_mailbox_unknown")
             return
         }
         val host = BeamioOpenPgpHost.shared(ctx)
         BeamioConetChatSignBroker.requestEip191(payload) { signResult ->
             val signature = signResult.getOrElse {
-                ack(reqId, false, error = it.message ?: "sign_failed")
+                fail(it.message ?: "sign_failed")
+                return@requestEip191
+            }
+            if (stale()) {
+                fail("session_ended")
                 return@requestEip191
             }
             val envelope = JSONObject()
@@ -2927,19 +3264,28 @@ object BeamioConetChatModule {
                 .put("signMessage", signature)
             host.encryptUtf8JsonBase64(envelope.toString(), userPgp) { enc ->
                 val armor = enc.getOrElse {
-                    ack(reqId, false, error = it.message ?: "encrypt_failed")
+                    fail(it.message ?: "encrypt_failed")
                     return@encryptUtf8JsonBase64
                 }
                 val finish = { finalArmor: String ->
                     io.execute {
-                        val ok = postToEntries(ctx, finalArmor, mailboxRoute, s)
-                        ack(reqId, true, result = JSONObject().put("sent", ok).put("sendId", sendId))
+                        if (stale()) {
+                            fail("session_ended")
+                        } else {
+                            val ok = postToEntries(ctx, finalArmor, mailboxRoute, s)
+                            if (bound != null) {
+                                Log.i(TAG, "[send] kind=receipt ok=${if (ok) 1 else 0}")
+                                done?.invoke()
+                            } else {
+                                ack(reqId, true, result = JSONObject().put("sent", ok).put("sendId", sendId))
+                            }
+                        }
                     }
                 }
                 host.wrapArmorToMailboxWork(armor, mailboxRoute, noPush) { wrapped ->
                     wrapped.fold(
                         onSuccess = { finish(it) },
-                        onFailure = { ack(reqId, false, error = it.message ?: "wrap_failed") },
+                        onFailure = { fail(it.message ?: "wrap_failed") },
                     )
                 }
             }
@@ -3700,6 +4046,7 @@ object BeamioConetChatModule {
     private fun endPageSession() {
         synchronized(lock) {
             session?.destroyed = true
+            session?.clearReceiptState()
             session?.history?.destroy()
             session?.history = null
             session = null
@@ -3802,7 +4149,7 @@ object BeamioConetChatModule {
         for (hash in expired) {
             s.pendingAcks.remove(hash)
             // Let the mailbox's redelivery through the dedupe again.
-            synchronized(seenArmor) { seenArmor.remove(hash) }
+            seenArmor.forget(hash)
         }
     }
 
@@ -3846,31 +4193,51 @@ object BeamioConetChatModule {
                 JSONObject().put("command", "gossip_delivery_ack").put("armorHash", armorHash),
             ) { _, _ -> }
         }
-        val fromLower = from.lowercase()
-        val route = s.routes.firstOrNull {
-            normalizeAddress(it.optString("address", "").ifBlank { it.optString("eoaAddress", "").ifBlank { it.optString("eoa", "") } }) == fromLower
-        } ?: return
-        if (!route.optString("userPublicKeyArmored", "").contains("BEGIN PGP PUBLIC KEY")) return
+        // The sender's receipt (whitelist, queue, throttle, session binding: SenderReceipt.Pipeline). It never runs on this thread.
+        s.receipts.onAcked(plaintext, armorHash, from)
+    }
 
-        val receipt = JSONObject()
-            .put("type", "beamio_chat_delivery_receipt_v1")
-            .put("sendId", extractSendId(plaintext).orEmpty())
-            .put("armorHash", armorHash)
-            .put("deliveredAt", System.currentTimeMillis())
-            .put("from", s.eoa)
-        val pending = JSONObject()
-            .put("sendId", UUID.randomUUID().toString())
-            .put("from", "me")
-            .put("text", receipt.toString())
-            .put("createdAt", System.currentTimeMillis())
+    /** Test seam (QA/JVM): replaces the real receipt send; `done` must be called once. Null in a release. */
+    @Volatile
+    internal var receiptSendHook: ((route: JSONObject, payload: String, done: () -> Unit) -> Unit)? = null
+
+    /** Hands one receipt to [handleSend], bound to [s]; [done] frees its slot when the send has ended. */
+    private fun receiptSend(s: Session, route: JSONObject, payload: String, done: () -> Unit) {
+        receiptSendHook?.let {
+            it(route, payload, done)
+            return
+        }
         handleSend(
             JSONObject()
                 .put("reqId", -1)
                 .put("to", route)
-                .put("payload", pending.toString())
+                .put("payload", payload)
                 .put("sendId", UUID.randomUUID().toString())
                 .put("beamioNoPush", true),
+            bound = s,
+            done = done,
         )
+    }
+
+    /**
+     * `setRoutes`: the page's full route table for the sender receipts. Always answered. The table must carry the page's
+     * `eoa`, and it must be the session's account (`signer_mismatch` otherwise: an old page cannot put routes into a new account's session).
+     * Memory only; the log has the counts and nothing else.
+     */
+    private fun handleSetRoutes(body: JSONObject) {
+        val reqId = echoId(body)
+        val s = currentSession()
+        when (val r = SenderReceipt.setRoutes(body, s?.eoa)) {
+            is SenderReceipt.SetResult.Err -> {
+                Log.i(TAG, "setRoutes result=${r.code}")
+                ack(reqId, false, error = r.code)
+            }
+            is SenderReceipt.SetResult.Ok -> {
+                s!!.receipts.setRoutes(r.routes)
+                Log.i(TAG, "setRoutes accepted=${r.accepted} dropped=${r.dropped}")
+                ack(reqId, true, result = JSONObject().put("accepted", r.accepted).put("dropped", r.dropped))
+            }
+        }
     }
 
     // ---- shared helpers -----------------------------------------------------------------
@@ -3978,12 +4345,7 @@ object BeamioConetChatModule {
     /** `true` the first time [armorHash] is seen (bounded, last 512). */
     private const val PENDING_ACK_TTL_MS = 10 * 60 * 1000L
 
-    private fun markSeen(armorHash: String): Boolean = synchronized(seenArmor) {
-        if (seenArmor.containsKey(armorHash)) false else {
-            seenArmor[armorHash] = true
-            true
-        }
-    }
+    private fun markSeen(armorHash: String): Boolean = seenArmor.markSeen(armorHash)
 
     private fun currentSession(): Session? = synchronized(lock) {
         session?.takeIf { !it.destroyed }
@@ -3992,6 +4354,8 @@ object BeamioConetChatModule {
     private fun emitEvent(payload: JSONObject) {
         CommandAnswerGuard.keyOf(payload.opt("reqId"))?.let { answeredInCommand?.add(it) }
         val out = JSONObject().put("action", "chatModuleEvent").put("event", payload)
+        // Asked here, on the emitting thread: the ack of a page sync command goes to its own channel; everything else to the latest chat command's.
+        val replySink = router.replyFor(payload)
         main.post {
             try {
                 nativeObserver?.invoke(out)
@@ -3999,7 +4363,7 @@ object BeamioConetChatModule {
                 Log.w(TAG, "observer failed: ${e.message}")
             }
             try {
-                emitFn?.invoke(out)
+                (replySink ?: router.events)?.invoke(out)
             } catch (e: Exception) {
                 Log.w(TAG, "emit failed: ${e.message}")
             }

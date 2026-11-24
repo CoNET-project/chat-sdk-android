@@ -60,6 +60,7 @@ class RpcStateVectorsTest {
         override fun call(method: String, params: JSONArray): Any? {
             if (failing) error("endpoint ${e.getString("result")}")
             return when (method) {
+                "eth_chainId" -> "0x36ca6"
                 "eth_blockNumber" -> "0x" + n.toString(16)
                 "eth_getBlockByNumber" -> JSONObject().put("number", "0x" + block.toString(16)).put("hash", "0x" + "%064x".format(block))
                 "eth_call" -> {

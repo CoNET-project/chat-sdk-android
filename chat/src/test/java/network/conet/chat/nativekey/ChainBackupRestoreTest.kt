@@ -5,8 +5,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The chain-backup source of the K_pgp upgrade. Every case here is a failure or an absent source: none reaches the key checks, so none writes.
- * The verified path needs a real OpenPGP backup and the approved crypto; it is not in this file (the migration vectors cover the pipeline).
+ * The chain-backup candidate of the recovery. It only yields a candidate or a reason: whether the key is the registered one is the gate's decision
+ * ([RecoveryChallengeGate], tested in `RecoveryChallengeGateTest`), and nothing here writes.
  */
 class ChainBackupRestoreTest {
     private class FakeChain(
@@ -23,40 +23,32 @@ class ChainBackupRestoreTest {
     }
 
     private val id = PgpIdentity("0011AABB", "0000000000000001")
-    private val eoa = "0x" + "a".repeat(40)
-
-    private fun restore(chain: PgpRestoreChain, pw: String? = "0x" + "11".repeat(32), approved: Boolean = false): ChainBackupRestore.Result =
-        ChainBackupRestore.restore(eoa, chain, { pw }, NativeMigrationCrypto(approved))
+    private val forms: () -> List<String>? = { listOf("0x" + "11".repeat(32)) }
 
     @Test
-    fun noBackupIsNoSource() {
-        assertEquals(ChainBackupRestore.Result.NoSource, restore(FakeChain(record = id, backup = "")))
+    fun noBackupIsNoBackup() {
+        assertEquals(ChainBackupRestore.Candidate.NoBackup, ChainBackupRestore.candidate(FakeChain(record = id, backup = ""), forms))
     }
 
     @Test
-    fun unreadableChainIsUnverifiedNotNoSource() {
-        assertEquals(ChainBackupRestore.Result.Unverified, restore(FakeChain(readable = false, record = id, backup = "AAAA")))
+    fun unreadableChainIsUnreadableNotNoBackup() {
+        assertEquals(ChainBackupRestore.Candidate.Unreadable, ChainBackupRestore.candidate(FakeChain(readable = false, record = id, backup = "AAAA"), forms))
     }
 
     @Test
-    fun backupWithoutRecordIsUnverified() {
-        assertEquals(ChainBackupRestore.Result.Unverified, restore(FakeChain(record = null, backup = "AAAA")))
+    fun lockedWalletIsUnreadable() {
+        assertEquals(ChainBackupRestore.Candidate.Unreadable, ChainBackupRestore.candidate(FakeChain(record = id, backup = "AAAA")) { null })
     }
 
     @Test
-    fun lockedWalletIsUnverified() {
-        assertEquals(ChainBackupRestore.Result.Unverified, restore(FakeChain(record = id, backup = "AAAA"), pw = null))
-    }
-
-    @Test
-    fun undecryptableBackupIsUnverified() {
+    fun undecryptableBackupIsUndecryptable() {
         // Not valid base64 of an AES-GCM blob: no key is derived from it.
-        assertEquals(ChainBackupRestore.Result.Unverified, restore(FakeChain(record = id, backup = "not-a-backup!")))
+        assertEquals(ChainBackupRestore.Candidate.Undecryptable, ChainBackupRestore.candidate(FakeChain(record = id, backup = "not-a-backup!"), forms))
     }
 
     @Test
-    fun withoutOpenPgpApprovalNothingVerifies() {
-        // The challenge needs the approved OpenPGP functions (PgpMigrationPolicy.OPENPGP_APPROVED is false on Android).
+    fun theGlobalOpenPgpFlagStaysFalse() {
+        // The recovery gate does not read it; the migration and the first-run import still do.
         assertTrue(!PgpMigrationPolicy.OPENPGP_APPROVED)
         assertTrue(!NativeMigrationCrypto().approved())
     }

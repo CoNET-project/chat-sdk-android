@@ -107,6 +107,13 @@ class BeamioConetChatHistoryStore(
     /** Replaces the queue file with its temporary copy. Tests inject a failing replace; production keeps rename. */
     private val replaceFile: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
 ) {
+    /**
+     * The HTTP POST of the RPC and relay calls: (url, body, timeout ms) to (status, text). Null is the real network. It is not a constructor
+     * parameter and is internal: only code inside this module (a test that plays the chain endpoints) can replace it, never a caller of the SDK.
+     */
+    @Volatile
+    internal var transport: ((String, String, Int) -> Pair<Int, String>)? = null
+
     data class IndexRecord(
         val seq: Int,
         val cid: String,
@@ -571,24 +578,37 @@ class BeamioConetChatHistoryStore(
         return changed
     }
 
+    /**
+     * How a head sync ended. Only [CHANGED] and [UNCHANGED] are a sync that covered every index record; [FAILED] could not read the head or the
+     * index, and [INCOMPLETE] read them but could not hold every record. Neither of the last two is ever recorded as synced or as "no history".
+     */
+    internal enum class SyncResult { CHANGED, UNCHANGED, FAILED, INCOMPLETE }
+
     /** Pull the current head into memory and ingest it into the local store. True when the set changed. */
-    private fun syncFromHead(): Boolean {
-        if (indexKey == null) return false
+    private fun syncFromHead(): Boolean = syncFromHeadResult() == SyncResult.CHANGED
+
+    private fun syncFromHeadResult(): SyncResult {
+        if (indexKey == null) return SyncResult.FAILED
         local?.setSyncState("running")
         val snap = net.readSnapshot(eoa)
         if (snap == null) {
             local?.setSyncState("error")
-            return false
+            return SyncResult.FAILED
         }
         val changed = adoptHead(snap)
         if (changed == null) {
             local?.setSyncState("error")
-            return false
+            return SyncResult.FAILED
         }
-        // Sync is complete only when every index record is held (spec 9.4): a failed fetch keeps `pending`.
-        if (ingestLocal(records.toList())) local?.markSyncComplete()
-        local?.setSyncState("idle")
-        return changed
+        // Sync is complete only when every index record is held: a failed fetch keeps `pending`, and the state stays `error` so a retry
+        // follows (the timer, or the next load) and nothing reads as synced meanwhile.
+        if (ingestLocal(records.toList())) {
+            local?.markSyncComplete()
+            local?.setSyncState("idle")
+            return if (changed) SyncResult.CHANGED else SyncResult.UNCHANGED
+        }
+        local?.setSyncState("error")
+        return SyncResult.INCOMPLETE
     }
 
     /**
@@ -638,8 +658,9 @@ class BeamioConetChatHistoryStore(
             )
             if (r == ApplyResult.INSERTED || r == ApplyResult.UPDATED) stored++
         }
-        if (s.migration != "complete") s.markMigrationComplete()
         log("info", "[history] local ingest records=${remote.size} stored=$stored known=$known failed=$failed")
+        // The migration is complete only when every record is held; a failed fetch leaves it as it was (the retry runs again).
+        if (failed == 0 && s.migration != "complete") s.markMigrationComplete()
         return failed == 0
     }
 
@@ -680,8 +701,9 @@ class BeamioConetChatHistoryStore(
     fun startFullSync(done: (Boolean) -> Unit) {
         queue.execute {
             val ok = try {
-                syncFromHead()
-                true
+                // The answer is the sync's own: a head or index that could not be read, or records that could not all be held, is not ok.
+                val r = syncFromHeadResult()
+                r == SyncResult.CHANGED || r == SyncResult.UNCHANGED
             } catch (e: Exception) {
                 log("warn", "[history] full sync failed: ${e.javaClass.simpleName}")
                 false
@@ -1121,6 +1143,12 @@ class BeamioConetChatHistoryStore(
             if (!ptr.startsWith("0x") || ptr.length < 2 + 64 * 3 || nonceHex.length < 66) return null
             val hex = ptr.substring(2)
             val indexHash = "0x" + hex.substring(0, 64)
+            // "This owner never wrote" is a claim that ends a restore with no history, so one endpoint's word is not enough: a second endpoint must
+            // answer the same block (same hash) with the same empty pointer. Anything else is unreadable, never "no history".
+            if (indexHash == "0x" + "0".repeat(64) && !emptyPointerConfirmed(owner, block)) {
+                log("warn", "[history] empty pointer not confirmed by a second endpoint")
+                return null
+            }
             fun word(offset: Int): String = java.math.BigInteger(hex.substring(offset, offset + 64), 16).toString()
             return HistorySnapshot(
                 indexHash = if (indexHash == "0x" + "0".repeat(64)) null else indexHash,
@@ -1204,6 +1232,25 @@ class BeamioConetChatHistoryStore(
             }
         }
 
+        /** The second endpoint's view of block [block]: the same block hash and the same pointer. False when it cannot answer or differs. */
+        private fun emptyPointerConfirmed(owner: String, block: String): Boolean =
+            HistoryEmptyPointer.confirm(conetRpcUrl, registryAddress, SEL_GET_POINTER + padAddress(owner), block) { url, method, params ->
+                rpcRaw(url, method, params)
+            }
+
+        /** One JSON-RPC call to [url]: the `result` element (a string or an object), or null for any failure. */
+        private fun rpcRaw(url: String, method: String, params: JSONArray): Any? {
+            val payload = JSONObject().put("jsonrpc", "2.0").put("id", 1).put("method", method).put("params", params).toString()
+            val (status, text) = httpPostJson(url, payload, 20_000)
+            if (status !in 200..299) return null
+            return try {
+                val reply = JSONObject(text)
+                if (reply.has("error") && !reply.isNull("error")) null else reply.opt("result")?.takeIf { it != JSONObject.NULL }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         private fun ethCall(to: String, data: String, block: String): String? =
             rpc("eth_call", JSONArray().put(JSONObject().put("to", to).put("data", data)).put(block))
     }
@@ -1214,6 +1261,7 @@ class BeamioConetChatHistoryStore(
         timeoutMs: Int,
         onResponse: ((HttpURLConnection) -> Unit)? = null,
     ): Pair<Int, String> {
+        transport?.let { return it(url, body, timeoutMs) }
         var conn: HttpURLConnection? = null
         return try {
             conn = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -1329,5 +1377,53 @@ class BeamioConetChatHistoryStore(
 
         /** `bytes4(keccak256("nonceOf(address)"))`. */
         internal const val SEL_NONCE_OF = "0xed2a2d64"
+    }
+}
+
+/**
+ * The rule of the second look at an empty head pointer (the owner "never wrote"). The primary endpoint's answer is empty; the second endpoint must
+ * be a different one, answer the same block with the same hash, and show the same empty pointer. Pure, so it is tested without a network.
+ */
+internal object HistoryEmptyPointer {
+    private val DEFAULT_ENDPOINTS = listOf("https://rpc1.conet.network", "https://publicrpc.conet.network")
+
+    /** An endpoint other than [primary]: the first of the two official ones that is not it (null for none; never the primary itself). */
+    fun secondEndpoint(primary: String): String? =
+        DEFAULT_ENDPOINTS.firstOrNull { !it.trimEnd('/').equals(primary.trim().trimEnd('/'), ignoreCase = true) }
+
+    /** The RPC access the second look uses: one call to an endpoint, the `result` element or null. Replaced in tests. */
+    internal fun interface EmptyPointerRpc {
+        fun call(url: String, method: String, params: JSONArray): Any?
+    }
+
+    /**
+     * The second look at an empty head pointer: another official endpoint than [primary], the same block, the same block hash, the same empty pointer.
+     * Any failure of the second endpoint, a different hash, or a non-empty pointer is false (the read is then unknown, never "no history").
+     */
+    fun confirm(primary: String, registry: String, pointerCallData: String, block: String, rpc: EmptyPointerRpc): Boolean = try {
+        val other = secondEndpoint(primary)
+        if (other == null) {
+            false
+        } else {
+            fun hashAt(url: String): String? =
+                (rpc.call(url, "eth_getBlockByNumber", JSONArray().put(block).put(false)) as? JSONObject)?.optString("hash", "")?.takeIf { it.startsWith("0x") }
+            val primaryHash = hashAt(primary)
+            val otherHash = hashAt(other)
+            val pointer = rpc.call(
+                other, "eth_call",
+                JSONArray().put(JSONObject().put("to", registry).put("data", pointerCallData)).put(block),
+            ) as? String
+            agree(primaryHash, otherHash, pointer)
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    /** [secondPointer] is the second endpoint's `getPointer` answer at the block. True only for the same non-null block hash and an all-zero head. */
+    fun agree(primaryHash: String?, secondHash: String?, secondPointer: String?): Boolean {
+        if (primaryHash == null || secondHash == null || !primaryHash.equals(secondHash, ignoreCase = true)) return false
+        val ptr = secondPointer ?: return false
+        if (!ptr.startsWith("0x") || ptr.length < 2 + 64) return false
+        return ptr.substring(2, 66).all { it == '0' }
     }
 }

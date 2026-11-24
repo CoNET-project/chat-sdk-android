@@ -7,7 +7,7 @@ group = "network.conet"
 // A QA-only artifact may carry a suffix (-PchatArtifactSuffix=qa-diag): its coordinates and VERSION_NAME then differ from the formal version.
 // Without the property the version is the formal one, unchanged.
 val chatArtifactSuffix: String? = project.findProperty("chatArtifactSuffix")?.toString()?.takeIf { it.isNotBlank() }
-version = if (chatArtifactSuffix == null) "0.2.29" else "0.2.29-$chatArtifactSuffix"
+version = if (chatArtifactSuffix == null) "0.2.30" else "0.2.30-$chatArtifactSuffix"
 
 android {
     namespace = "network.conet.chat"
@@ -36,6 +36,13 @@ android {
             "boolean",
             "WALLET_CREDENTIAL_QA",
             (project.findProperty("chatWalletCredentialQa")?.toString() == "true").toString(),
+        )
+        // QA-only: the first-identity state events (registering, registered, retry_later, identity_pending, failed) are emitted only in a build
+        // made with -PchatIdentityStateEventsQa=true. Without the property nothing is emitted (production unchanged).
+        buildConfigField(
+            "boolean",
+            "IDENTITY_STATE_EVENTS_QA",
+            (project.findProperty("chatIdentityStateEventsQa")?.toString() == "true").toString(),
         )
         // identity.native-keys.v1 is declared by every build (2026-11-16). It has no BuildConfig switch: the former
         // QA-only property chatNativeKeysQa no longer changes hello.

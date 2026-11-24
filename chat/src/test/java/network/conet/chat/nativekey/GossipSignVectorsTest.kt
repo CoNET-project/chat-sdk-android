@@ -12,7 +12,7 @@ import java.security.MessageDigest
 
 /**
  * C2 `gossipSign` and the envelope/group cross-purpose rule, against `spec/gossip-sign-vectors.v1.json`
- * (sha256 de5e5d34…, spec §25.23.3). Every ok case must reproduce its `signature` byte for byte. Every
+ * (sha256 4a0df296…). Every ok case must reproduce its `signature` byte for byte. Every
  * rejected case must return its `code`. The vector file is not edited to fit the implementation.
  */
 class GossipSignVectorsTest {
@@ -40,15 +40,15 @@ class GossipSignVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        assertEquals("de5e5d34284db8bc8903879a0ec633fd5d537aa89fdca1e8144cce329c9d4705", sha)
+        assertEquals("4a0df29611af09eb27a10b2cefbdcda9df65335bf9c432ea85c1cf2a281f570a", sha)
     }
 
     @Test
     fun caseCountsMatchTheVector() {
-        assertEquals(33, cases.length())
+        assertEquals(36, cases.length())
         val ok = (0 until cases.length()).count { cases.getJSONObject(it).getString("expect") == "ok" }
-        assertEquals(13, ok)
-        assertEquals(20, cases.length() - ok)
+        assertEquals(15, ok)
+        assertEquals(21, cases.length() - ok)
     }
 
     @Test
@@ -60,7 +60,9 @@ class GossipSignVectorsTest {
             // FX.1, FY.1 (R-1 to R-10): the request fields are checked before any signature, as the command does.
             val request = c.optJSONObject("request") ?: JSONObject()
             val pageDeferAck = c.optJSONObject("context")?.optBoolean("pageDeferAck", false) ?: false
-            val refusal = SignRequestRule.check(c.getString("kind"), request, pageDeferAck)
+            // `shellDeclaresGeneration` is the test context for whether the shell declares inbound.generation.v1 (absent means true).
+            val declared = c.optJSONObject("context")?.optBoolean("shellDeclaresGeneration", true) ?: true
+            val refusal = SignRequestRule.check(c.getString("kind"), request, pageDeferAck, shellDeclaresGeneration = declared)
             if (refusal != null) {
                 assertEquals("$id code", c.getString("code"), refusal)
                 continue

@@ -18,7 +18,8 @@ internal object VaultSnapshotRefresh {
         else -> minOf(1_000L shl (failures - 1), BACKOFF_MS)
     }
 
-    private val executor = Executors.newSingleThreadExecutor { r -> Thread(r, "conet-vault-snapshot").apply { isDaemon = true } }
+    /** The one warm-up thread: the wallet snapshot, the public identity snapshot and the hand-off to the K trigger run on it in that order. */
+    internal val executor = Executors.newSingleThreadExecutor { r -> Thread(r, "conet-vault-snapshot").apply { isDaemon = true } }
     private val pending = AtomicBoolean(false)
     @Volatile private var notBefore = 0L
     @Volatile private var failures = 0
@@ -31,20 +32,35 @@ internal object VaultSnapshotRefresh {
         }
         if (!pending.compareAndSet(false, true)) return
         executor.execute {
-            // diag3 (logging only): start, end, result with the thread, milliseconds and a code. No content.
-            val t0 = DiagTiming.now()
             try {
-                NativeWallet.vault(app).state()
-                failures = 0
-                notBefore = 0L
-                DiagTiming.log("snapshotRefresh", t0, "ok")
-            } catch (e: Exception) {
-                failures++
-                notBefore = System.currentTimeMillis() + backoffMs(failures)
-                DiagTiming.log("snapshotRefresh", t0, "fail:" + e.javaClass.simpleName)
+                computeWalletSnapshot(app)
             } finally {
                 pending.set(false)
             }
         }
     }
+
+    /**
+     * The wallet snapshot, computed on the calling thread (the warm-up thread). A failure sets the backoff. Returns true when it ended without
+     * throwing. With a snapshot already there nothing is opened ([NativeWalletVault.state] answers from it).
+     */
+    internal fun computeWalletSnapshot(app: Context): Boolean {
+        // diag3 (logging only): start, end, result with the thread, milliseconds and a code. No content.
+        val t0 = DiagTiming.now()
+        return try {
+            NativeWallet.vault(app).state()
+            failures = 0
+            notBefore = 0L
+            DiagTiming.log("snapshotRefresh", t0, "ok")
+            true
+        } catch (e: Exception) {
+            failures++
+            notBefore = System.currentTimeMillis() + backoffMs(failures)
+            DiagTiming.log("snapshotRefresh", t0, "fail:" + e.javaClass.simpleName)
+            false
+        }
+    }
+
+    /** True while the backoff after a failure has not passed. */
+    internal fun inBackoff(): Boolean = System.currentTimeMillis() < notBefore
 }

@@ -368,13 +368,54 @@ class NativeWalletVault(
      * The state and the key-only flag, published as one object (review: one read, no window between two reads). The flag is decided from the
      * same reads that decided the state, on the reader's thread; nothing here reads the keystore on the caller's thread.
      */
-    class Snap internal constructor(val state: State, val keyOnly: Boolean)
+    class Snap internal constructor(val state: State, val keyOnly: Boolean, internal val signature: String? = null)
 
     /** The snapshot, without the monitor. `null` when it is not known yet. Never blocks. */
     fun snapshotState(): State? = snapshot?.state
 
     /** The snapshot with its key-only flag, read in one step (31(3)): a caller that needs both reads this once. Never blocks. */
     fun snapshotWithKeyOnly(): Snap? = snapshot
+
+    /**
+     * The state for a command that must not wait: the snapshot, after the same discard-intent check [state] makes first (a
+     * plain file read), and never the monitor, never the keystore. `null` when the snapshot is not known yet: the caller treats it as unknown
+     * (`not_ready`), asks for a refresh and answers at once. [state] would wait for a cold compute holding the monitor for seconds.
+     */
+    fun stateIfKnown(): State? {
+        if (discardIntentPresent()) return State.Locked(DISCARD_PENDING)
+        return snapshot?.state
+    }
+
+    /**
+     * A digest of the records that decide the state and the key-only flag (REC, MARK, MNEM, COMMIT, INTENT: a hash of each file's bytes, `-` when
+     * absent): plain file reads and hashing, no Keystore. Null when a file cannot be read. It is an in-memory validity key only: it is never stored,
+     * logged or sent, and it contains no ciphertext, only digests.
+     */
+    internal fun recordSignature(): String? = try {
+        listOf(REC, MARK, MNEM, COMMIT, INTENT).joinToString("|") { name -> files.read(name)?.let { digestHex(it) } ?: "-" }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * The snapshot's key-only flag, vouched for: the records still have the signature they had when the snapshot was computed, so the flag is the
+     * one a live read would give (barring a change in the keystore itself, the stated blind spot). Null when it cannot be vouched for
+     * (no snapshot, no signature, a read failure, or the files changed outside the vault): the snapshot is then dropped and the caller decides
+     * ([keyOnlyChecked] reads live). Never blocks, never reads the keystore.
+     */
+    fun keyOnlyIfVerified(): Boolean? {
+        val snap = snapshot ?: return null
+        val recorded = snap.signature ?: return null
+        val now = recordSignature()
+        if (now == null || now != recorded) {
+            if (snapshot === snap) snapshot = null
+            return null
+        }
+        return snap.keyOnly
+    }
+
+    /** [keyOnlyIfVerified], else the live read ([keyOnlyLive]): the answer is the same as a live read in every case, and costs one only when the files changed. */
+    fun keyOnlyChecked(): Boolean = keyOnlyIfVerified() ?: keyOnlyLive()
 
     /**
      * The public, lower-case EOA of the key on this device, when the record reads and its address check passes (25.52X.4). That is the
@@ -390,21 +431,31 @@ class NativeWalletVault(
     }
 
     /** Reports the state. Never removes a key or phrase record that has no intent (spec §25.52Y.42 第 4 項 (d)). Updates the snapshot. */
-    @Synchronized
     fun state(): State {
+        // The wait for the monitor is measured (log only); the monitor is the same one the @Synchronized methods use.
+        val waitStart = System.nanoTime()
+        return synchronized(this) { stateLocked((System.nanoTime() - waitStart) / 1_000_000L) }
+    }
+
+    private fun stateLocked(lockWaitMs: Long): State {
         // A recorded discard is unknown until the startup hook finishes or drops it (review: reads have no side effect, 25.52Y.125).
         if (discardIntentPresent()) return State.Locked(DISCARD_PENDING)
         // 25.52Y.75: between two invalidation events the snapshot is authoritative. Invalidated by store, forget,
         // lock and the clear path (invalidateSnapshot). External changes (a cleared app, a file changed outside the vault) are a stated risk,
         // caught at the next start and at the key check before signing.
         snapshot?.let { return it.state }
+        // The records' signature is taken first, under the monitor, so a later check against it can only fail on a change after this point.
+        val signature = recordSignature()
         // 25.52Y.144: no session latch. Each read is decided by the probes of that read (25.52Y.143 第 1 項), never by an earlier read.
         observedNoPhrase = false
+        val t0 = DiagTiming.now()
+        val perf = VaultPerf.mark()
         val s = computeState()
+        VaultPerf.log("vault.computeState", t0, perf, lockWaitMs)
         // 31(3) (r2.5.17): a readable key record with no phrase is not an account. The flag comes from the phrase read of computeState (one MNEM
         // read for both), and the state and the flag are published in one object.
         val keyOnly = s is State.Ready && observedNoPhrase
-        snapshot = Snap(s, keyOnly)
+        snapshot = Snap(s, keyOnly, signature)
         return s
     }
 
@@ -498,14 +549,18 @@ class NativeWalletVault(
             // Not decided by the phrase: the read failure surfaces as before (the snapshot stays unknown, nothing is taken as absent).
             throw IOException("REC or MARK unreadable and no valid phrase at the fixed position")
         }
+        // One compute opens and derives the phrase record once: the same record, read in the same call, gives the same answer to both
+        // questions below. Each open is a Keystore operation and a BIP-39 derivation, the slow part of a cold read on a device with a hardware keystore.
+        var phraseItem: PhraseItem? = null
+        fun phraseItemOnce(m: ByteArray): PhraseItem = phraseItem ?: phraseItemQuiet(m).also { phraseItem = it }
         // a phrase record with a clear EOA that cannot be decrypted is a read failure: unknown, bytes kept, retryable.
         // A confirmed loss of the wrap key (SO-22A, WK vectors) is not a read failure and keeps its existing answer.
         if (mnem != null && !intentBefore && wrap.presence() != WrapKeyPresence.CONFIRMED_ABSENT &&
-            phraseItemQuiet(mnem) == PhraseItem.Unreadable && hasCanonicalEoaField(mnem)
+            phraseItemOnce(mnem) == PhraseItem.Unreadable && hasCanonicalEoaField(mnem)
         ) return State.Locked("unreadable")
         // The same read that decides the state records whether a phrase record is present (31(3)); state() takes the flag from here.
         // A deterministically invalid phrase at the fixed position is no phrase (2026-11-17: a key without a valid phrase is not an account).
-        observedNoPhrase = mnem == null || phraseItemQuiet(mnem) == PhraseItem.Invalid
+        observedNoPhrase = mnem == null || phraseItemOnce(mnem) == PhraseItem.Invalid
         val commit = files.read(COMMIT)
         if (rec == null) {
             //  (2026-11-16, urgent): no key record and a readable phrase is has (the original account continues by recovery).
@@ -647,8 +702,9 @@ class NativeWalletVault(
      * written, read back and checked (writeNewSlot); a failure restores the old names and reports it. An unknown state (unreadable, locked) is
      * NOT_READY and writes nothing (42(3)). The phrase is never logged or returned.
      */
-    @Synchronized
     fun syncPhrase(eoa: String, key: ByteArray, phrase: String, expectedAccount: () -> String? = { null }): SyncOutcome {
+        // Outside the monitor: the check of the input alone. It reads no vault data and writes nothing, so it needs no lock; the comparison with
+        // the current record and every write stay inside the lock below.
         if (!isCanonicalEoa(eoa) || key.size != 32) return SyncOutcome.BAD_INPUT
         val derived = MnemonicDerivation.deriveKey(phrase) ?: return SyncOutcome.BAD_INPUT
         try {
@@ -656,13 +712,40 @@ class NativeWalletVault(
         } finally {
             derived.fill(0)
         }
-        snapshot = null
+        return syncPhraseLocked(eoa, key, phrase, expectedAccount, System.nanoTime())
+    }
+
+    /** The control files whose change means the vault's records changed: a cheap, Keystore-free signature (name, length, content hash). */
+    private fun controlSignature(): List<Pair<String, String>> =
+        listOf(REC, MNEM, MARK, COMMIT, INTENT, PENDING, RETAINED, AUDIT, DISCARD_INTENT).map { name ->
+            name to (try { files.read(name)?.let { "${it.size}:${digestHex(it)}" } ?: "-" } catch (_: Exception) { "?" })
+        }
+
+    /**
+     * The locked part of [syncPhrase]. The snapshot is dropped only when something may have changed: before and after a write (so the gate answers
+     * not_ready while it runs and never reads a stale value after it), or when settling a pending write changed a control file. IDEMPOTENT, BAD_INPUT
+     * and NOT_READY answers that wrote nothing leave the snapshot as it is (it stays authoritative), so a repeated pwaWalletSync does not
+     * force a cold recompute.
+     */
+    @Synchronized
+    private fun syncPhraseLocked(eoa: String, key: ByteArray, phrase: String, expectedAccount: () -> String?, waitStartNs: Long): SyncOutcome {
+        // Log only: how long this call waited for the monitor, and what it spent inside it (counts and milliseconds).
+        val lockWaitMs = (System.nanoTime() - waitStartNs) / 1_000_000L
+        val t0 = DiagTiming.now()
+        val perf = VaultPerf.mark()
+        val before = controlSignature()
+        var wrote = false
         try {
             if (!settleForWrite()) return SyncOutcome.NOT_READY
+            // Settling a pending write may have changed a control file: then the decision below is made on a fresh read, not on the snapshot.
+            if (controlSignature() != before) snapshot = null
             val bytes = phrase.toByteArray(Charsets.UTF_8)
             try {
                 return when (val st = state()) {
-                    is State.NoKey -> mapImport(importMnemonicKey(eoa, key, phrase))
+                    is State.NoKey -> {
+                        wrote = true
+                        mapImport(importMnemonicKey(eoa, key, phrase))
+                    }
                     is State.Ready -> {
                         if (st.eoa == eoa && samePhrase(bytes)) return SyncOutcome.IDEMPOTENT
                         if (st.eoa == eoa && mnemonicOf() == MnemonicRead.Unavailable) return SyncOutcome.NOT_READY
@@ -674,6 +757,9 @@ class NativeWalletVault(
                             return SyncOutcome.OLD_COPY_UNVERIFIED
                         }
                         if (named != null && named != st.eoa) return SyncOutcome.OLD_COPY_UNVERIFIED
+                        // The write: the snapshot is dropped before it and again after it (a read inside the write must not leave its own state behind).
+                        snapshot = null
+                        wrote = true
                         replaceWithIsolation(eoa, key, bytes, st.eoa)
                     }
                     // E5 (2026-11-17): pwaWalletSync with PHRASE_ONLY is write_failed / internal_state: no seal, no rename, no cleanup,
@@ -685,9 +771,11 @@ class NativeWalletVault(
                 bytes.fill(0)
             }
         } catch (_: Exception) {
+            // An exception after a write began may have changed the records: the snapshot goes (below). Before one, nothing changed.
             return SyncOutcome.NOT_READY
         } finally {
-            snapshot = null
+            if (wrote || controlSignature() != before) snapshot = null
+            VaultPerf.log("vault.syncPhrase", t0, perf, lockWaitMs)
         }
     }
 

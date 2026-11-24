@@ -22,6 +22,12 @@ object NoKeyGate {
     const val NOT_SUPPORTED = "not_supported"
     const val NOT_READY_G1_UNINITIALIZED = "g1_uninitialized"
     const val NOT_READY_UNREADABLE = "unreadable"
+
+    /**
+     * The reason word on an `init` `no_key` answer when the vault holds no record but the two-state store names this account (0.2.30): the account
+     * exists, so the page does not treat it as "no account" and goes on to the PGP restore (`pgpRestoreEvaluate`, then `pgpRestore`).
+     */
+    const val NO_KEY_REASON_STORE_ACCOUNT = "store_account"
     /** A native record that is confirmed to hold no valid phrase ( c): the page goes on to the sealed copies. */
     const val NOT_READY_KEY_ONLY = "key_only"
 
@@ -77,6 +83,31 @@ object NoKeyGate {
     /** The locked check of the gate step (25.52BZ.4): `locked` for a family command while the record is locked, else null. No payload is read. */
     fun lockedAnswer(command: String, state: NativeWalletVault.State): String? =
         if (state is NativeWalletVault.State.Locked && command in LOCKED_FAMILY_COMMANDS) NOT_READY else null
+
+    /**
+     * The `reason` of a lock-family `not_ready` answer (shared vectors A-08, C-25 to C-27): `passcode_not_provided` only when the
+     * passcode package is missing (a vault Locked for the passcode); any other Locked state is a storage state that cannot be read, answered
+     * `not_ready` with no reason. The answer is never `locked`. No UI lock or app lock is read.
+     */
+    fun lockedReasonTopLevel(state: NativeWalletVault.State): String? =
+        if (state is NativeWalletVault.State.Locked && state.reason == NativeWalletVault.PASSCODE_REQUIRED) NOT_READY_PASSCODE_NOT_PROVIDED else null
+
+    /** The ack of a lock-family command refused for a Locked vault: `error: not_ready`, and `reason` at the top level when it is the passcode package. */
+    fun lockedAck(reqId: Any?, state: NativeWalletVault.State): JSONObject {
+        val out = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", NOT_READY)
+        lockedReasonTopLevel(state)?.let { out.put("reason", it) }
+        return out
+    }
+
+    /**
+     * The ack of a lock-family command for a store account that cannot be used : `not_ready`, with the top-level reason
+     * `passcode_not_provided` only when the store set needs the passcode package; any other store state is unknown: no reason.
+     */
+    fun storeNotReadyAck(reqId: Any?, storeReason: String): JSONObject {
+        val out = JSONObject().put("type", "ack").put("reqId", reqId ?: JSONObject.NULL).put("ok", false).put("error", NOT_READY)
+        if (storeReason == NOT_READY_PASSCODE_REQUIRED) out.put("reason", NOT_READY_PASSCODE_NOT_PROVIDED)
+        return out
+    }
 
     /** Table C (§25.24): retired X-21 commands. They answer `not_supported` in every state. */
     val RETIRED: Set<String> = setOf("walletTransferOnce", "walletTransferStatus", "walletTransferSwitched")

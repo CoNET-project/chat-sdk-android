@@ -18,7 +18,7 @@ class ModuleStateReadGuardTest {
 
     @Test
     fun pgpMigrateAnswersNotReadyWhenTheVaultCannotBeRead() {
-        assertTrue(module.contains("ctx?.let { NativeWallet.vault(it).state() }\n        } catch (_: Exception) {\n            return answer(false, \"not_ready\")"))
+        assertTrue(module.contains("ctx?.let { network.conet.chat.nativekey.VaultGateReader.read(NativeWallet.vault(it), sessionReady) }\n        } catch (_: Exception) {\n            return answer(false, \"not_ready\")"))
     }
 
     /** The restore workers answer every request once: an unreadable store is not_ready on the evaluate answer and on the restore result (25.52Y.84). */

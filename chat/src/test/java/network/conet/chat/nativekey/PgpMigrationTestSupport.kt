@@ -61,6 +61,8 @@ internal data class MigrationFaults(
     val writeN: Boolean = false,
     val rereadN: Boolean = false,
     val challenge: Boolean = false,
+    /** The challenge passes in memory (before the staged write) and fails on the reread copy (after it). */
+    val challengeOnReread: Boolean = false,
     val writeM: Boolean = false,
     val chainMode: String? = null,
     val approved: Boolean = true,
@@ -70,6 +72,7 @@ internal data class MigrationFaults(
 /** The checkpoint closure for a fault set: throws [PgpMigrationInterrupted] at the named stage, and does nothing else. */
 internal fun checkpointFor(faults: MigrationFaults): (Stage) -> Unit = { stage ->
     val stop = when (stage) {
+        Stage.AFTER_VERIFY -> faults.interrupt == "afterVerify"
         Stage.AFTER_STAGED_WRITE -> faults.interrupt == "afterN"
         Stage.AFTER_MARKER_WRITE -> faults.interrupt == "afterM"
         Stage.AFTER_MARKER_DELETED -> faults.interrupt == "afterMarkerDeleted"
@@ -120,8 +123,12 @@ internal class FaultyCrypto(private val inner: MigrationCrypto, private val faul
 
     override fun sign(armor: String, label: String, message: ByteArray): String? = inner.sign(armor, label, message)
 
+    private var verifies = 0
+
     override fun verify(armor: String, label: String, message: ByteArray, signature: String): Boolean {
         if (faults.challenge) return false
+        // Each challenge verifies twice (the signature, then the tampered message): the first challenge is the in-memory one.
+        if (faults.challengeOnReread && ++verifies > 2) return false
         return inner.verify(armor, label, message, signature)
     }
 }

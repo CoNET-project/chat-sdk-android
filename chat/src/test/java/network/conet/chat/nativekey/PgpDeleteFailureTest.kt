@@ -85,7 +85,7 @@ class PgpDeleteFailureTest {
             wrap,
             legacyA,
             ChainAnswer.Found(PgpMigrationKeys.a.fp),
-            MigrationFaults(challenge = true),
+            MigrationFaults(challengeOnReread = true),
         ).run()
 
         assertEquals(MigrationCode.WRITE_FAILED, result.code)

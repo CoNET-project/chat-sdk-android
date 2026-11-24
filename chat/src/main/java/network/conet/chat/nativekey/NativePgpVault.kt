@@ -95,6 +95,65 @@ internal class NativePgpVault(
     }
 
     /**
+     * What one open of the record gives: the state, the identity and, when asked, a copy of the private armor, all from a single
+     * Keystore decrypt. [state] is what [state] would have said; [identity] is what [identity] would have said (null when the key cannot be
+     * parsed); [signature] is the plain-file signature of the record and marker as they were read for this open ([fileSignatureOf]).
+     * The caller owns [armor] and zeroes it.
+     */
+    internal class Read(val state: State, val identity: PgpIdentity?, val armor: ByteArray?, val signature: String, val publicArmor: String? = null)
+
+    /**
+     * [state], [identity] and [armorForMove] with ONE decrypt instead of three (the S25 StrongBox operation is seconds long). The checks and their
+     * order are those of [state]: a record without its marker, a mismatching marker, an unreadable or foreign record is Locked, never opened.
+     * Nothing is deleted or written here. The public part also refreshes [PublicIdentitySnapshot] for an active slot.
+     */
+    @Synchronized
+    internal fun readOnce(wantArmor: Boolean): Read {
+        val r = files.read(rec)
+        val m = files.read(mark)
+        val sig = fileSignatureOf(r, m)
+        fun locked(reason: String) = Read(State.Locked(reason), null, null, sig)
+        if (r == null) return if (m == null) Read(State.NoKey, null, null, sig) else locked("record_missing")
+        if (m == null) return locked("marker_missing")
+        if (!m.contentEquals(digestHex(r).toByteArray(Charsets.US_ASCII))) return locked("marker_mismatch")
+        val parsed = parseRecord(r) ?: return locked("unreadable")
+        if (parsed.eoa != account) return locked("account_mismatch")
+        val opened = open(parsed) ?: return locked("unreadable")
+        return try {
+            val identity = try {
+                NativePgp.parseSecret(opened.armorText())?.let { secret ->
+                    NativePgpBackup.subkeyKeyId(secret)?.let { PgpIdentity(secret.fingerprint.uppercase(), it) }
+                }
+            } catch (_: Exception) {
+                null
+            }
+            // The public armor is derived from the open record here, so the snapshot never needs a second decrypt for it (only the public part is kept).
+            val publicArmor = try {
+                NativePgpKeyGen.publicArmorOf(opened.armorText())
+            } catch (_: Exception) {
+                null
+            }
+            Read(State.Ready(opened.fingerprint), identity, if (wantArmor) opened.privateArmor.copyOf() else null, sig, publicArmor)
+        } finally {
+            opened.close()
+        }
+    }
+
+    /**
+     * The plain-file signature of this slot's record and marker (no Keystore): a digest of each file's bytes, or `-` for an absent file. It changes
+     * whenever either file is written, replaced or deleted by anything, so a cached public identity is valid only while it is unchanged.
+     * Null when a file cannot be read (unknown: the cache is not used).
+     */
+    internal fun fileSignature(): String? = try {
+        fileSignatureOf(files.read(rec), files.read(mark))
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun fileSignatureOf(r: ByteArray?, m: ByteArray?): String =
+        (r?.let { digestHex(it) } ?: "-") + ":" + (m?.let { digestHex(it) } ?: "-")
+
+    /**
      * Stores the PGP key for [eoa], which must be this vault's account. Replaces an earlier record of this slot. The record
      * is written, read back and compared, then the marker is written. On any failure the earlier record is restored, or
      * nothing is left. The passphrase, if any, is sealed with the key and never leaves the vault.
@@ -106,6 +165,16 @@ internal class NativePgpVault(
      */
     @Synchronized
     fun put(eoa: String, privateArmor: String, passphrase: String, overwrite: Boolean = false): Put {
+        // A write to the active slot drops the cached public identity before anything is touched and after it ends, so no reader sees an old one.
+        if (slot == Slot.ACTIVE) PublicIdentitySnapshot.invalidate(account)
+        try {
+            return putLocked(eoa, privateArmor, passphrase, overwrite)
+        } finally {
+            if (slot == Slot.ACTIVE) PublicIdentitySnapshot.invalidate(account)
+        }
+    }
+
+    private fun putLocked(eoa: String, privateArmor: String, passphrase: String, overwrite: Boolean): Put {
         if (!overwrite && (files.read(rec) != null || files.read(mark) != null)) return Put.EXISTS
         if (account == NO_ACCOUNT || eoa != account) return Put.BAD_EOA
         val secret = NativePgp.parseSecret(privateArmor) ?: return Put.BAD_KEY
@@ -119,6 +188,8 @@ internal class NativePgpVault(
         val recBytes = try {
             encodeRecord(account, secret.fingerprint, wrap.seal(aad(account, slot), plain))
         } catch (e: Exception) {
+            // The reason goes to the log as a class name only (never a message, a name or a byte): a wrap that cannot seal is told apart from a write.
+            DiagTiming.log("vault.put:seal", DiagTiming.now(), e.javaClass.simpleName)
             return Put.STORE_FAILED
         } finally {
             plain.fill(0)
@@ -128,6 +199,7 @@ internal class NativePgpVault(
         try {
             files.write(rec, recBytes)
         } catch (e: Exception) {
+            DiagTiming.log("vault.put:write", DiagTiming.now(), e.javaClass.simpleName)
             restore(prevRec, prevMark)
             return Put.STORE_FAILED
         }
@@ -228,8 +300,10 @@ internal class NativePgpVault(
     /** Removes this slot's record and marker. Other accounts and the other slot are not touched. True only when both are gone (PY.8 (3)). */
     @Synchronized
     fun forget(): Boolean {
+        if (slot == Slot.ACTIVE) PublicIdentitySnapshot.invalidate(account)
         val markGone = eraseChecked(files, mark)
         val recGone = eraseChecked(files, rec)
+        if (slot == Slot.ACTIVE) PublicIdentitySnapshot.invalidate(account)
         return markGone && recGone
     }
 

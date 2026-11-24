@@ -1,6 +1,7 @@
 package network.conet.chat.nativekey
 
 import android.content.Context
+import network.conet.chat.BeamioChatPgpStore
 import org.json.JSONObject
 
 /**
@@ -39,6 +40,9 @@ internal object PgpRestoreBridge {
     fun restore(machine: PgpRestoreMachine, devId: String = DEVICE): JSONObject {
         machine.restore(devId)
         val ui = machine.devices.getValue(devId).ui
+        // The request was accepted and the material it needs became unavailable before any write (the passcode package is not provided, or the storage
+        // cannot be read): one `cancelled`, no data, nothing written (vector C-28). Nothing here reads a UI lock.
+        if (ui.state == "blocked" && ui.code == "wallet_not_ready") return JSONObject().put("code", "cancelled")
         val state = stateOf(ui)
         val code = when (state) {
             "ok" -> "ok"
@@ -61,17 +65,35 @@ internal object PgpRestoreBridge {
     /** The chain read of one restore request: the primary endpoint only (single-RPC caliber, no second endpoint). */
     fun productionChain(eoa: String): AddressPgpChain = AddressPgpChain.readSingle(eoa, rpcFor = chainRpc)
 
-    fun productionMachine(context: Context, eoa: String, chain: AddressPgpChain = productionChain(eoa)): PgpRestoreMachine {
+    fun productionMachine(
+        context: Context,
+        eoa: String,
+        chain: AddressPgpChain = productionChain(eoa),
+        /** The store account of a vault with no record (0.2.30); null keeps the vault wallet. */
+        storeAccount: StoreAwareAccount.Resolution.Account? = null,
+    ): PgpRestoreMachine {
         val vault = NativeWallet.vault(context)
         // The absence rule is the chain's own confirmation (single read; a registration check is made again at the confirmation).
         return PgpRestoreMachine(
             chain = chain,
-            wallet = VaultPgpWallet(vault),
+            wallet = if (storeAccount == null) VaultPgpWallet(vault) else StorePgpWallet(context.applicationContext, storeAccount),
             keys = RefusedKeys,
             ivFor = { throw IllegalStateException("key generation is not available in this build") },
             devices = mapOf(DEVICE to NativeWallet.pgpRestoreDevice(context, eoa, DEVICE)),
             absence = RegisteringAbsenceRule { writeBlock -> chain.confirmedAbsentAfter(writeBlock) },
+            shippedArmor = { shippedKeyOf(context.applicationContext, eoa) },
+            recoveryGate = PageRecoveryGate(),
         )
+    }
+
+    /**
+     * The account's own key an older build left in the SDK's store, read only (0.2.30): null when there is none, when it belongs to another account,
+     * or when the store cannot be read. The machine uses it only when it is the identity registered on the chain; the file is never changed.
+     */
+    private fun shippedKeyOf(context: Context, eoa: String): String? {
+        val owner = BeamioChatPgpStore.legacyOwnerEoa(context)
+        if (owner != null && !owner.equals(eoa, ignoreCase = true)) return null
+        return BeamioChatPgpStore.legacyPrivateArmorStrict(context)
     }
 
     /** The wallet's private-key string for the backup password ("0x" + 64 lower-case hex). The key is cleared after use. */
@@ -82,6 +104,40 @@ internal object PgpRestoreBridge {
             val key = vault.unlock() ?: return null
             try {
                 return "0x" + key.joinToString("") { "%02x".format(it) }
+            } finally {
+                key.fill(0)
+            }
+        }
+
+        override fun passwordForms(): List<String>? {
+            val key = vault.unlock() ?: return null
+            try {
+                return NativePgpBackup.passwordForms(key)
+            } finally {
+                key.fill(0)
+            }
+        }
+    }
+
+    /**
+     * The wallet of a store account (0.2.30): the key is re-derived from the store for each call and zeroed after it. A plain set derives it from
+     * the stored phrase; a v3 set gives it only while this session holds its key. Nothing is written, and the key never leaves native code.
+     */
+    private class StorePgpWallet(private val app: Context, private val account: StoreAwareAccount.Resolution.Account) : PgpRestoreWallet {
+        override fun ready(): Boolean {
+            val key = StoreAwareAccount.keyOf(app, account) ?: return false
+            key.fill(0)
+            return true
+        }
+
+        override fun passwordString(): String? = withKey { NativePgpBackup.passwordString(it) }
+
+        override fun passwordForms(): List<String>? = withKey { NativePgpBackup.passwordForms(it) }
+
+        private fun <T> withKey(block: (ByteArray) -> T): T? {
+            val key = StoreAwareAccount.keyOf(app, account) ?: return null
+            try {
+                return block(key)
             } finally {
                 key.fill(0)
             }

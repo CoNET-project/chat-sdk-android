@@ -171,6 +171,13 @@ class BridgeKeyAuditTest {
                 ".put(\"mnemonic\", read.phrase).put(\"blob\", blob))",
                 "return ok(echo, JSONObject().put(\"eoa\", eoa).put(\"credentialKind\", WalletCredential.KIND_MNEMONIC).put(\"mnemonic\", phrase))",
             ),
+            // accountCreateRegister: the audit lets `password` through for this one command only. The
+            // request's key set and the one read of the value; the value goes into a byte array that is zeroed and is never logged, stored or returned.
+            // Every other command that carries a password field is still refused (CredFields, the lists below).
+            "AccountRegisterCommand.kt" to listOf(
+                "val REQUEST_KEYS: Set<String> = setOf(\"type\", \"reqId\", \"tag\", \"password\")",
+                "val password = body.opt(\"password\") as? String ?: return Parsed.Refused(\"bad_request\")",
+            ),
             "BeamioConetChatModule.kt" to listOf(
                 // Read, but unreachable: validate(INIT) refuses these names first (A4 finding F1). Removal belongs to P-IMP-PGP.
                 "pgpArmorInInit = id.optString(\"pgpPrivateKeyArmored\", \"\")",

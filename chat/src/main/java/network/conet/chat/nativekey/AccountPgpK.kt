@@ -97,6 +97,19 @@ internal class AccountPgpK(private val backend: AccountPgpKBackend) {
         return if (removed) AccountPgpKWrite.FAILED else AccountPgpKWrite.FAILED_RESIDUE
     }
 
+    /**
+     * Removes the item of [eoa] in [workspace] (a local key that was never registered on the chain; the first-identity coordinator calls it only after
+     * the chain read confirmed no record). True when the item is gone afterwards.
+     */
+    fun discard(eoa: String, workspace: String): Boolean {
+        val name = itemName(eoa, workspace)
+        return try {
+            backend.remove(name) && !backend.names().contains(name)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** True when the item of [eoa] in [workspace] exists. Throws when the store cannot be read. */
     fun existsFor(eoa: String, workspace: String): Boolean = backend.names().contains(itemName(eoa, workspace))
 

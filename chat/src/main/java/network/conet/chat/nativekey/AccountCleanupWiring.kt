@@ -137,10 +137,15 @@ internal object AccountCleanupWiring {
         val old = candidates.toList()
         return listOf(
             HistoryDirCleanup(File(filesDir, "conet-chat"), hasUnsent) { old },
-            WalletVaultCleanup(nativeDir, vaultMonitor, activeAccount) { dir, name ->
-                val read = if (name == NativeWalletVault.MNEM) CleanupOwners.mnemOwner(dir, name, mnemPhrase) else CleanupOwners.walletFileOwner(dir, name)
-                restrictOwner(read, candidates)
-            },
+            WalletVaultCleanup(
+                nativeDir, vaultMonitor, activeAccount,
+                ownerOf = { dir, name ->
+                    val read = if (name == NativeWalletVault.MNEM) CleanupOwners.mnemOwner(dir, name, mnemPhrase) else CleanupOwners.walletFileOwner(dir, name)
+                    restrictOwner(read, candidates)
+                },
+                // The vault is the monitor: a removed record must not stay behind in its snapshot.
+                onRemoved = { (vaultMonitor as? NativeWalletVault)?.invalidateSnapshot() },
+            ),
             FileDirCleanup(nativeDir, "pgp", { it.startsWith("pgp.v1.") }, { _, name -> restrictOwner(CleanupOwners.pgpOwner(name), candidates) }),
             FileDirCleanup(File(noBackupDir, "page_record_v1"), "page", { it.startsWith("page.v1.") }, { _, name ->
                 restrictOwner(CleanupOwners.pageOwner(name), candidates)

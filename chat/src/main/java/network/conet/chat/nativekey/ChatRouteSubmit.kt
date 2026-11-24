@@ -27,6 +27,9 @@ internal object ChatRouteSubmit {
         class Refused(val code: String) : Outcome()
         object NetworkUnavailable : Outcome()
 
+        /** The chain holds another key for the account: nothing is overwritten and nothing is resent. */
+        object Conflict : Outcome()
+
         /** 25.52Y.64 第 3 项: a success answer the chain does not show as registered. Not submitted; the page must not show success. */
         object UnverifiedSubmit : Outcome()
     }
@@ -73,6 +76,16 @@ internal object ChatRouteSubmit {
      */
     internal fun interface ChainCheck {
         fun registered(): Boolean?
+
+        /**
+         * The chain state. [afterAccepted] is true after the server accepted the request (a bounded poll is allowed); false for a single read. The
+         * default maps [registered]: it has no way to say conflict.
+         */
+        fun state(afterAccepted: Boolean): ChainState = when (registered()) {
+            true -> ChainState.MATCH
+            false -> ChainState.ABSENT
+            null -> ChainState.UNKNOWN
+        }
     }
 
     /** Retries after a 5xx or timeout whose chain check is not registered: once (25.52Y.64, IP-05, IP-06). Each retry is re-signed. */
@@ -114,10 +127,19 @@ internal object ChatRouteSubmit {
                         if (t.status in 200..299) {
                             if (!runCatching { JSONObject(t.body).optBoolean("ok", false) }.getOrDefault(false)) return Outcome.Refused("chain_refused")
                             // A success is never submitted on the answer alone (25.52Y.67 第 2 项), on either base. IP-01..03 for the IP base.
-                            return when (chain.registered()) {
-                                true -> Outcome.Submitted
-                                false -> Outcome.UnverifiedSubmit
-                                null -> Outcome.NetworkUnavailable
+                            return when (chain.state(true)) {
+                                ChainState.MATCH -> Outcome.Submitted
+                                ChainState.ABSENT -> Outcome.UnverifiedSubmit
+                                ChainState.CONFLICT -> Outcome.Conflict
+                                ChainState.UNKNOWN -> Outcome.NetworkUnavailable
+                            }
+                        }
+                        // 409: the server says the account already has an identity. The chain decides (the same key is a success); never a resend.
+                        if (t.status == 409) {
+                            return when (chain.state(false)) {
+                                ChainState.MATCH -> Outcome.Submitted
+                                ChainState.CONFLICT -> Outcome.Conflict
+                                else -> Outcome.Refused("chain_refused")
                             }
                         }
                         if (t.status !in 500..599) return Outcome.Refused("chain_refused")
@@ -126,10 +148,11 @@ internal object ChatRouteSubmit {
                     is Transport.Ambiguous -> retryable = true
                 }
                 if (retryable) {
-                    when (chain.registered()) {
-                        true -> return Outcome.Submitted // IP-04
-                        null -> return Outcome.NetworkUnavailable // IP-07
-                        false -> Unit
+                    when (chain.state(false)) {
+                        ChainState.MATCH -> return Outcome.Submitted // IP-04
+                        ChainState.UNKNOWN -> return Outcome.NetworkUnavailable // IP-07
+                        ChainState.CONFLICT -> return Outcome.Conflict
+                        ChainState.ABSENT -> Unit
                     }
                     if (retries >= MAX_RETRIES) return Outcome.NetworkUnavailable // IP-06
                     pause(backoffMs(retries))

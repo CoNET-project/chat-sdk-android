@@ -44,6 +44,7 @@ class CallerReadAgreedTest {
         override fun call(method: String, params: JSONArray): Any? {
             if (!ok) error("down")
             return when (method) {
+                "eth_chainId" -> "0x36ca6"
                 "eth_blockNumber" -> "0x2a"
                 "eth_getBlockByNumber" -> JSONObject().put("number", "0x2a").put("hash", "0x" + "ab".repeat(32))
                 "eth_call" -> {
@@ -59,19 +60,19 @@ class CallerReadAgreedTest {
         if (ep.url == rpcA.url) a else b
     }
 
-    private fun restore(chain: PgpRestoreChain): ChainBackupRestore.Result =
-        ChainBackupRestore.restore(account, chain, { "0x" + "11".repeat(32) }, NativeMigrationCrypto())
+    private fun restore(chain: PgpRestoreChain): ChainBackupRestore.Candidate =
+        ChainBackupRestore.candidate(chain) { listOf("0x" + "11".repeat(32)) }
 
     @Test
     fun bothEndpointsAbsentWithNoBackupIsNoSource() {
         val ok = Endpoint(true, absentRecord(), emptyBackup())
-        assertTrue(restore(chain(ok, ok)) is ChainBackupRestore.Result.NoSource)
+        assertTrue(restore(chain(ok, ok)) is ChainBackupRestore.Candidate.NoBackup)
     }
 
     @Test
     fun oneEndpointAbsentAndTheOtherDownIsUnverifiedNotNoSource() {
         val result = restore(chain(Endpoint(true, absentRecord(), emptyBackup()), Endpoint(false, "", "")))
-        assertTrue("unknown is not 'nothing to restore'", result is ChainBackupRestore.Result.Unverified)
+        assertTrue("unknown is not 'nothing to restore'", result is ChainBackupRestore.Candidate.Unreadable)
     }
 
     @Test
@@ -79,7 +80,7 @@ class CallerReadAgreedTest {
         val absent = Endpoint(true, absentRecord(), emptyBackup())
         val other = Endpoint(true, absentRecord(), hex(word(32) + string("x")))
         val result = restore(chain(absent, other))
-        assertTrue(result is ChainBackupRestore.Result.Unverified)
-        assertEquals(false, result is ChainBackupRestore.Result.NoSource)
+        assertTrue(result is ChainBackupRestore.Candidate.Unreadable)
+        assertEquals(false, result is ChainBackupRestore.Candidate.NoBackup)
     }
 }

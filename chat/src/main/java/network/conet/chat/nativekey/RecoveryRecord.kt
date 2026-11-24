@@ -79,6 +79,51 @@ internal object RecoveryRecord {
         return out
     }
 
+    /** The PWA's Argon2id parameters for a new record (`defaultBrowserParams`): 32 MiB, 3 passes, 1 lane, 32-byte output, 16-byte salt. */
+    const val SEAL_M_KB = 32 * 1024
+    const val SEAL_T = 3
+    const val SEAL_P = 1
+    const val SEAL_SALT_BYTES = 16
+
+    /** A fresh `stored` (random salt) and the key Argon2id derives from [password] with it. The caller zeroes the key. */
+    fun newStored(
+        password: ByteArray,
+        random: java.security.SecureRandom,
+        kdf: (ByteArray, Stored) -> ByteArray = { p, st -> argon2idKey(p, st) },
+    ): Pair<Stored, ByteArray> {
+        val stored = Stored(SEAL_M_KB, SEAL_T, SEAL_P, ByteArray(SEAL_SALT_BYTES).also { random.nextBytes(it) })
+        return stored to kdf(password, stored)
+    }
+
+    /**
+     * Seals [phrase] (the UTF-8 bytes of the BIP-39 phrase) under [key], as `createRecover` does: the plaintext is the base64 of the phrase, the
+     * ciphertext is AES-256-GCM, and the result is base64 of `iv(12) || ciphertext || tag(16)`. [iv] is a fresh random 12 bytes.
+     */
+    fun seal(key: ByteArray, phrase: ByteArray, iv: ByteArray): String {
+        require(key.size == 32 && iv.size == 12)
+        val inner = Base64.getEncoder().encodeToString(phrase).toByteArray(Charsets.UTF_8)
+        try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+            return Base64.getEncoder().encodeToString(iv + cipher.doFinal(inner))
+        } finally {
+            inner.fill(0)
+        }
+    }
+
+    /**
+     * The record text the registry holds: base64 of `{stored, img}`. [storedHashKey] is the key Argon2id derived from the record's own password
+     * (the PWA stores it as `hash`); the `stored` fields are the ones [parse] checks.
+     */
+    fun record(stored: Stored, storedHashKey: ByteArray, imgBase64: String): String {
+        val s = JSONObject()
+            .put("algo", "argon2id").put("v", 19).put("m", stored.m).put("t", stored.t).put("p", stored.p)
+            .put("salt", Base64.getEncoder().encodeToString(stored.salt))
+            .put("hash", Base64.getEncoder().encodeToString(storedHashKey))
+        val json = JSONObject().put("stored", s).put("img", imgBase64)
+        return Base64.getEncoder().encodeToString(json.toString().toByteArray(Charsets.UTF_8))
+    }
+
     /** Opens `img` with the key derived from [password] (UTF-8 bytes). The caller zeroes the returned phrase. */
     fun open(
         stored: Stored,

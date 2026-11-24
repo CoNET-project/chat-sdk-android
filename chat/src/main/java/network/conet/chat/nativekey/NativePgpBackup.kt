@@ -25,6 +25,28 @@ internal object NativePgpBackup {
         "0x" + privateKey.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 
     /**
+     * The forms of the account key string a legacy backup may have been sealed with (read side only; the PWA's `legacyPasswordForms`). The
+     * canonical form comes first: "0x" + lower-case hex, then "0x" + upper-case, "0X" + lower-case, "0X" + upper-case, and the two with no prefix.
+     * A write always uses [passwordString]. The caller zeroes [privateKey]; the strings are not kept.
+     */
+    fun passwordForms(privateKey: ByteArray): List<String> {
+        val lower = privateKey.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        val upper = lower.uppercase()
+        return listOf("0x$lower", "0x$upper", "0X$lower", "0X$upper", lower, upper).distinct()
+    }
+
+    /**
+     * Decrypts [backupBase64] with the first of [forms] whose GCM tag verifies. The tag makes a wrong form fail, so a form that opens the blob is the
+     * one it was sealed with. Null when none opens it (malformed, truncated, or sealed with another key).
+     */
+    fun decryptArmorAny(forms: List<String>, backupBase64: String): ByteArray? {
+        for (form in forms) {
+            decryptArmor(form, backupBase64)?.let { return it }
+        }
+        return null
+    }
+
+    /**
      * Strict base64: standard alphabet, padded to a multiple of four, '=' only at the end, no whitespace and no other
      * characters. Returns null on any other input. (The SDK's `ConetChatCryptoUtil.base64Decode` is lenient and is not used.)
      */

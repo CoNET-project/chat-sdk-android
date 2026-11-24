@@ -46,6 +46,9 @@ internal object IdentityPublic {
         class Current(val keyId: String, val publicArmor: String, val routeArmor: String) : PgpRecord
     }
 
+    /** Whether the native PGP vault holds a usable key for the account. */
+    enum class PgpState { READY, NOT_READY, UNKNOWN }
+
     /** The public facts the decision reads. Each one comes from the native layer, never from the payload. */
     interface Source {
         /** The account of this session, `0x…` (any case), or null when there is none. */
@@ -53,6 +56,28 @@ internal object IdentityPublic {
 
         /** What the native PGP record gives this read. */
         fun pgp(): PgpRecord
+
+        /**
+         * The real PGP state of the account: whether the native PGP vault holds a usable key for it. Null keeps the record-based answer
+         * of [pgp] (the older sources and tests). [PgpState.UNKNOWN] is a vault that cannot be read or used right now, never "no key".
+         */
+        fun pgpState(): PgpState? = null
+
+        /** The key id (16 upper-case hex) of the vault key, for a [PgpState.READY] answer; null when it cannot be read. */
+        fun pgpKeyId(): String? = null
+
+        /** The public armor of the vault key, for a [PgpState.READY] answer; null when it cannot be derived. Never the private key. */
+        fun pgpPublicArmor(): String? = null
+
+        /** The public armor of the account's own route (the mailbox node's key), when this device knows it; null otherwise. */
+        fun ownRouteArmor(): String? = null
+
+        /**
+         * Whether the public identity is known right now. False means the in-memory snapshot has no valid entry yet: the answer is `not_ready`
+         * (nothing is opened on the caller's thread) and the source has asked for a refresh. Asked after the input checks, before [pgpState]. The
+         * older sources and tests have it always true.
+         */
+        fun pgpAvailable(): Boolean = true
 
         /**
          * Whether any K_pgp is on the device (25.48.4, 25.52Y.90). Asked only for the G0 `no_key` answer. Null when it cannot be read: the
@@ -83,10 +108,31 @@ internal object IdentityPublic {
         if (fields.any { it !in ALLOWED_FIELDS }) return Reply(BAD_REQUEST, null)
         if (reqId == null) return Reply(BAD_REQUEST, null)
         val eoa = source.eoa()?.takeIf { it.isNotEmpty() }?.lowercase() ?: return Reply(NOT_READY, null)
+        if (!source.pgpAvailable()) return Reply(NOT_READY, null)
         val result = JSONObject()
             .put("eoa", eoa)
             .put("accountKey", NoKeyGate.accountKeyOf(eoa))
             .put("pgpReady", false)
+        // A source that reports the real state of the vault decides. `pgpReady` is true only for a usable vault key; an unreadable or
+        // locked vault is false with `pgpReadyKnown` false, so the page can tell "no key" from "could not tell" (and retry the second).
+        source.pgpState()?.let { state ->
+            result.put("pgpReady", state == PgpState.READY)
+            if (state == PgpState.UNKNOWN) result.put("pgpReadyKnown", false)
+            if (state == PgpState.READY) {
+                // `pgpReady:true` only with all three of the key id, the key's public armor and the route's public armor
+                // (the route read back after a registration). A missing one leaves pgpReady false with none of the three, so the page has no incomplete
+                // answer to retry on. Only public armor is let through.
+                val keyId = source.pgpKeyId()?.takeIf { it.isNotEmpty() }
+                val publicArmor = source.pgpPublicArmor()?.takeIf { IdentityProvisionContract.isPublicArmor(it) }
+                val routeArmor = source.ownRouteArmor()?.takeIf { IdentityProvisionContract.isPublicArmor(it) }
+                if (keyId != null && publicArmor != null && routeArmor != null) {
+                    result.put("pgpKeyID", keyId).put("pgpPublicKeyArmored", publicArmor).put("ownRouteArmoredPublicKey", routeArmor)
+                } else {
+                    result.put("pgpReady", false)
+                }
+            }
+            return Reply(null, result)
+        }
         // Only the current layout can be ready. NotRead, Absent and LegacyLayout leave pgpReady false, with no PGP fields.
         val current = (source.pgp() as? PgpRecord.Current)?.takeIf { isReady(it) }
         if (current != null) {

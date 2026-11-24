@@ -47,11 +47,12 @@ internal object PgpDecryptInbound {
 
     /**
      * The refusal for the gate (25.34.4), or null when the call may read its payload. G0 is `no_key`, G1 is `not_ready`,
-     * and a locked record in G2 is `locked`. None of them reads `armoredMessage`.
+     * and a record whose material is not available in G2 is `not_ready` too (never `locked`; the passcode package case adds the reason
+     * `passcode_not_provided`, [NoKeyGate.lockedReasonTopLevel]). None of them reads `armoredMessage`.
      */
     fun gateRefusal(gate: NoKeyGate.Gate, locked: Boolean): String? = when {
         gate == NoKeyGate.Gate.G0 -> "no_key"
-        locked -> "locked"
+        locked -> "not_ready"
         gate == NoKeyGate.Gate.G1 -> "not_ready"
         else -> null
     }

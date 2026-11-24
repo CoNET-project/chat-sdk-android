@@ -15,13 +15,23 @@ class VaultWriteMonitorGuardTest {
         val at = src.indexOf("fun $fn(")
         assertTrue("$fn is declared", at >= 0)
         val before = src.substring(0, at).trimEnd()
-        return before.endsWith("@Synchronized")
+        // A private entry (syncPhraseLocked) carries its modifier between the annotation and `fun`.
+        return before.removeSuffix("private").trimEnd().endsWith("@Synchronized")
     }
 
     @Test
     fun theVaultWriteEntryPointsAreSynchronized() {
-        for (fn in listOf("importKey", "importMnemonicKey", "syncPhrase", "discardPrivateOnly", "completeDiscardAtStartup")) {
+        for (fn in listOf("importKey", "importMnemonicKey", "syncPhraseLocked", "discardPrivateOnly", "completeDiscardAtStartup")) {
             assertTrue("$fn must carry @Synchronized (the wallet-file removal takes the same monitor)", annotatedBefore(fn))
+        }
+    }
+
+    @Test
+    fun theUnlockedSyncPhraseEntryOnlyChecksItsInputAndDelegatesToTheLockedOne() {
+        val body = src.substringAfter("    fun syncPhrase(").substringBefore("    /** The control files whose change")
+        assertTrue("it calls the locked entry", body.contains("syncPhraseLocked("))
+        for (h in listOf("store(", "storeWrite(", "writeFresh(", "writeNewSlot(", "replaceWithIsolation(", "importMnemonicKey(", "importKey(", "settleForWrite(", "snapshot = null")) {
+            assertTrue("the unlocked entry does not call $h", !body.contains(h))
         }
     }
 
@@ -32,7 +42,8 @@ class VaultWriteMonitorGuardTest {
     @Test
     fun theInternalWriteHelpersAreCalledOnlyFromTheSynchronizedEntries() {
         val helpers = listOf("store", "storeWrite", "writeFresh", "writeNewSlot", "replaceWithIsolation")
-        val allowed = setOf("importKey", "importMnemonicKey", "syncPhrase") + helpers + "sealFailed"
+        // SyncPhrase checks its input outside the monitor and then calls syncPhraseLocked, the @Synchronized entry that holds every write.
+        val allowed = setOf("importKey", "importMnemonicKey", "syncPhraseLocked") + helpers + "sealFailed"
         val lines = src.split("\n")
         val funRe = Regex("""fun (\w+)\(""")
         for (h in helpers) {

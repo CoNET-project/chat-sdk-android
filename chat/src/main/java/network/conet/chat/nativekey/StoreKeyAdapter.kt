@@ -58,4 +58,33 @@ internal object StoreSessionAdoption {
         val key = StoreKeyAdapter.plainKey(current) ?: return null
         return Adopt(found.eoa.lowercase(), key)
     }
+
+    /** What init does next for an account that only the store names (the vault holds no record). */
+    enum class InitStep {
+        /** The session is ready and the signer holds the key: init completes (the history store, the listen, the ready answer), as for a vault account. */
+        FINISH,
+
+        /** The account is a v3 set that this session has not unlocked: `not_ready`, `passcode_not_provided`. */
+        NOT_READY_PASSCODE,
+
+        /** The store cannot be read: `not_ready`, `unreadable`. */
+        NOT_READY_UNREADABLE,
+
+        /** The store names the account but this init cannot use it (another account, or the key does not derive): `no_key` with the store reason. */
+        NO_KEY_STORE_ACCOUNT,
+
+        /** The store holds no account. */
+        NO_KEY,
+    }
+
+    /**
+     * The step for a vault with no record. A plain set that was adopted, or a v3 set whose key this session holds, completes init: the
+     * history of the account is then pulled like a vault account's (the store account used to stop at `no_key` and never reached it). Pure.
+     */
+    fun initStep(view: StoreAccountView.View, plainAdopted: Boolean, v3SessionKeyHeld: Boolean): InitStep = when (view) {
+        is StoreAccountView.View.Plain -> if (plainAdopted) InitStep.FINISH else InitStep.NO_KEY_STORE_ACCOUNT
+        is StoreAccountView.View.V3 -> if (view.unlocked && v3SessionKeyHeld) InitStep.FINISH else InitStep.NOT_READY_PASSCODE
+        StoreAccountView.View.Unknown -> InitStep.NOT_READY_UNREADABLE
+        StoreAccountView.View.None -> InitStep.NO_KEY
+    }
 }

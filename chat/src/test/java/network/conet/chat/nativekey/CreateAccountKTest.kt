@@ -1,85 +1,46 @@
 package network.conet.chat.nativekey
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The creation transaction (§25.52Y.1 第 6 项): W and K are written together, and a failure leaves no half account. */
+/**
+ * The creation transaction after A creation writes the wallet W only. It generates no PGP key and writes no K; the first
+ * identity is made by [FirstIdentityCoordinator], and only when the chain confirms no record.
+ */
 class CreateAccountKTest {
     private val zero = ByteArray(16)
 
-    /** A K backend whose writes do not complete (the write fails and the removal works). */
-    private class FailingPut : AccountPgpKBackend {
-        val items = mutableMapOf<String, String>()
-        override fun get(name: String): String? = items[name]
-        override fun put(name: String, value: String): Boolean = false
-        override fun names(): Set<String> = items.keys.toSet()
-        override fun remove(name: String): Boolean {
-            items.remove(name)
-            return true
-        }
-    }
-
     @Test
-    fun aCreationWritesOneKForTheNewAccountWithItsSubkeyKeyId() {
-        val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
-        val backend = MemoryAccountPgpKBackend()
-        val pgp = AccountPgpK(backend)
-        val r = NativeAccountCreate.create(vault, pgp, zero)
+    fun aCreationWritesTheWalletOnlyAndNoKeyOfAnyKindIsGenerated() {
+        val files = NativeTestFiles()
+        val vault = NativeWalletVault(NativeTestWrap(), files)
+        val r = NativeAccountCreate.create(vault, zero)
         assertEquals(NativeAccountCreate.Code.OK, r.code)
-        val eoa = r.eoa!!
-        val k = pgp.read(eoa, PgpMigrationPolicy.WORKSPACE)!!
-        assertEquals(eoa, k.getString("eoa"))
-        assertEquals(PgpMigrationPolicy.WORKSPACE, k.getString("workspace"))
-        assertTrue(k.getString("privateKeyArmor").contains("PRIVATE KEY BLOCK"))
-        assertTrue(k.getString("publicKeyArmor").contains("PUBLIC KEY BLOCK"))
-        assertEquals(1, backend.items.size)
-        // The keyId is the subkey key ID of the armor it was written with.
-        val secret = NativePgp.parseSecret(k.getString("privateKeyArmor"))!!
-        assertEquals(NativePgpBackup.subkeyKeyId(secret), k.getString("keyId"))
+        assertNotNull(r.eoa)
         assertTrue(vault.state() is NativeWalletVault.State.Ready)
+        // No PGP file of any slot was written beside the wallet record.
+        assertTrue("no pgp.v1 file: ${files.map.keys}", files.map.keys.none { it.startsWith("pgp.v1.") })
     }
 
     @Test
-    fun aFailedKWriteRemovesTheNewWalletAndLeavesNoKey() {
-        val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
-        val r = NativeAccountCreate.create(vault, AccountPgpK(FailingPut()), zero)
-        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
-        assertTrue(vault.state() is NativeWalletVault.State.NoKey)
+    fun theCreationSourceNamesNoKeyGeneratorAndNoKStore() {
+        val src = File("src/main/java/network/conet/chat/nativekey/NativeAccountCreate.kt").readText()
+        assertFalse("no key generator", src.contains("NativePgpKeyGen"))
+        assertFalse("no K store", src.contains("AccountPgpK"))
+        assertFalse("no K write log", src.contains("kpgp.write:create"))
     }
 
     @Test
-    fun aKResidueIsReportedAsResidueAndTheWalletIsRemoved() {
-        // The K write fails and its removal fails too: the creation is write_failed, W is removed, and the result says a K residue may remain.
-        val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
-        val backend = object : AccountPgpKBackend {
-            override fun get(name: String): String? = null
-            override fun put(name: String, value: String): Boolean = false
-            override fun names(): Set<String> = emptySet()
-            override fun remove(name: String): Boolean = false
-        }
-        val r = NativeAccountCreate.create(vault, AccountPgpK(backend), zero)
-        assertEquals(NativeAccountCreate.Code.WRITE_FAILED, r.code)
-        assertTrue(r.residue)
-        assertTrue(vault.state() is NativeWalletVault.State.NoKey)
-    }
-
-    @Test
-    fun anExistingKIsNeverOverwrittenAndTheNewWalletIsRemoved() {
-        val vault = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
-        val backend = MemoryAccountPgpKBackend()
-        val pgp = AccountPgpK(backend)
-        // The item of the account that this creation would produce: the entropy is zero, so the EOA is the one below. Create once to learn it.
-        val probe = NativeWalletVault(NativeTestWrap(), NativeTestFiles())
-        val first = NativeAccountCreate.create(probe, AccountPgpK(MemoryAccountPgpKBackend()), zero)
-        val eoa = first.eoa!!
-        pgp.write(eoa, PgpMigrationPolicy.WORKSPACE, "EXISTING", "PUB", "PRIV", 1L)
-        val before = backend.items.toMap()
-        val r = NativeAccountCreate.create(vault, pgp, zero)
-        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, r.code)
-        assertTrue(vault.state() is NativeWalletVault.State.NoKey)
-        assertEquals(before, backend.items.toMap())
-        assertFalse(backend.items.isEmpty())
+    fun aSecondCreationOnTheSameDeviceIsAlreadyExistsAndWritesNothingMore() {
+        val files = NativeTestFiles()
+        val vault = NativeWalletVault(NativeTestWrap(), files)
+        assertEquals(NativeAccountCreate.Code.OK, NativeAccountCreate.create(vault, zero).code)
+        val before = files.map.toMap().mapValues { it.value.toList() }
+        assertEquals(NativeAccountCreate.Code.ALREADY_EXISTS, NativeAccountCreate.create(vault, ByteArray(16) { 7 }).code)
+        assertEquals(before, files.map.toMap().mapValues { it.value.toList() })
     }
 }

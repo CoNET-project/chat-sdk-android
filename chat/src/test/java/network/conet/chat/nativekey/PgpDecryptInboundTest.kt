@@ -61,7 +61,7 @@ class PgpDecryptInboundTest {
         val sha = MessageDigest.getInstance("SHA-256")
             .digest(File(System.getenv("PGP_BRIDGE_VECTORS") ?: "../spec/pgp-bridge-command-vectors.v1.json").readBytes())
             .joinToString("") { "%02x".format(it) }
-        assertEquals("93b396fa57c2ef86364d7e1f62deace4bff0930d9a02a45cfafc866d66caa057", sha)
+        assertEquals("40ac9784730ddbdda5ed5cce96269973f833db90acd6c9073e890367a77280d6", sha)
     }
 
     @Test
@@ -183,9 +183,10 @@ class PgpDecryptInboundTest {
     fun theGateRefusesBeforeAnyPayloadIsRead() {
         assertEquals("no_key", PgpDecryptInbound.gateRefusal(Gate.G0, locked = false))
         assertEquals("not_ready", PgpDecryptInbound.gateRefusal(Gate.G1, locked = false))
-        // 25.52BZ.4 (r3ea): a locked record answers locked before not_ready, as the gate step does for every family.
-        assertEquals("locked", PgpDecryptInbound.gateRefusal(Gate.G1, locked = true))
-        assertEquals("locked", PgpDecryptInbound.gateRefusal(Gate.G2, locked = true))
+        // A record whose material is not available answers not_ready, never locked; the passcode package case
+        // adds the top-level reason passcode_not_provided in the ack (NoKeyGate.lockedAck).
+        assertEquals("not_ready", PgpDecryptInbound.gateRefusal(Gate.G1, locked = true))
+        assertEquals("not_ready", PgpDecryptInbound.gateRefusal(Gate.G2, locked = true))
         assertNull(PgpDecryptInbound.gateRefusal(Gate.G2, locked = false))
     }
 

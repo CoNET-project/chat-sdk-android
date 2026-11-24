@@ -68,6 +68,15 @@ internal interface PgpRestoreChain {
     /** The three-state identity read (G1). The default is the two-state answer; an adapter that can tell unreadable from absent overrides it. */
     fun identityRead(): IdentityRead = identity()?.let { IdentityRead.Present(it) } ?: IdentityRead.Absent
 
+    /**
+     * The registered key of the account as a typed value for the recovery gate. The default is unknown, so a chain that does not provide one
+     * can never open a write that needs it.
+     */
+    fun registeredKey(): RegisteredKeyRead = RegisteredKeyRead.Unknown
+
+    /** Why [registeredKey] gave no key: a fixed word for the SDK log only, never for the page. Null when it gave one or no reason is known. */
+    fun registeredKeyFailure(): String? = null
+
     /** The stored backup text. `""` when the record holds no backup. */
     fun backupText(): String
 
@@ -84,6 +93,12 @@ internal interface PgpRestoreWallet {
 
     /** The account's private-key string ("0x" + 64 lower-case hex) for the backup password, or `null` without a key. */
     fun passwordString(): String?
+
+    /**
+     * Every form of the key string a backup may have been sealed with, canonical first (see [NativePgpBackup.passwordForms]), or `null` without a
+     * key. Only the read side opens a backup with them; a write always uses [passwordString]. The default is the canonical form alone.
+     */
+    fun passwordForms(): List<String>? = passwordString()?.let { listOf(it) }
 }
 
 /** A new key for one device. Generated natively in production; the acceptance harness supplies the vector keys. */
@@ -235,6 +250,13 @@ internal class PgpRestoreMachine(
     val devices: Map<String, PgpRestoreDevice>,
     /** Clears a registering marker by absence (review 2). The default never confirms absence. */
     private val absence: RegisteringAbsenceRule = NO_ABSENCE_CONFIRMATION,
+    /** The account's own key left in the SDK's store by an older build, read only; null when there is none. The default has no such source. */
+    private val shippedArmor: () -> String? = { null },
+    /**
+     * The recovery gate for the write of a restored key: the key must sign a fresh challenge that the registered public key verifies. The
+     * production machine always passes one ([PgpRestoreBridge.productionMachine]); a machine built without it (the older fixtures) writes as before.
+     */
+    private val recoveryGate: PageRecoveryGate? = null,
 ) {
     /**
      * G3 (review): one in-flight operation for the whole machine. Every entry point holds this monitor, so two calls (a double tap, two threads, a
@@ -298,12 +320,14 @@ internal class PgpRestoreMachine(
 
     /** Before a replacement, wraps the old backup when it decrypts (R3). Counted once per device. */
     private fun wrapOldBackupIfReadable(dev: PgpRestoreDevice) {
-        val password = wallet.passwordString() ?: return
-        val armorBytes = NativePgpBackup.decryptArmor(password, chain.backupText()) ?: return
+        val forms = wallet.passwordForms() ?: return
+        val armorBytes = NativePgpBackup.decryptArmorAny(forms, chain.backupText()) ?: return
         val armor = String(armorBytes, Charsets.UTF_8)
         armorBytes.fill(0)
         if (NativePgp.parseSecret(armor) == null) return
         if (dev.old.state() !is NativePgpVault.State.Ready) {
+            // The lock is checked again right before the write: a lock since the evaluation began writes nothing.
+            if (!wallet.ready()) return
             if (dev.old.put(dev.account, armor, "") == NativePgpVault.Put.OK) counters.localWrites++
         }
     }
@@ -385,6 +409,8 @@ internal class PgpRestoreMachine(
      * empty or different slot is false (review r9): the caller keeps the pending key and the marker.
      */
     private fun activeHoldsKey(dev: PgpRestoreDevice, key: PgpNewKey): Boolean {
+        // The lock is checked again right before the active write: a lock since the commit began writes nothing; the caller keeps the pending key.
+        if (!wallet.ready()) return false
         if (dev.active.put(dev.account, key.armorText(), "") == NativePgpVault.Put.OK) return true
         return dev.active.state() is NativePgpVault.State.Ready && dev.active.identity()?.sameAs(key.identity) == true
     }
@@ -515,6 +541,15 @@ internal class PgpRestoreMachine(
         "undetermined"
     }
 
+    /** The shipped armor when it parses and is the chain's registered identity [onChain]; null otherwise (including a read that fails). */
+    private fun shippedKeyOf(onChain: PgpIdentity): String? {
+        val armor = runCatching { shippedArmor() }.getOrNull() ?: return null
+        if (!armor.contains("BEGIN PGP PRIVATE KEY")) return null
+        val secret = NativePgp.parseSecret(armor) ?: return null
+        val identity = PgpIdentity(secret.fingerprint.uppercase(), NativePgpBackup.subkeyKeyId(secret) ?: return null)
+        return if (identity == onChain) armor else null
+    }
+
     private fun evalRestoreUnchecked(dev: PgpRestoreDevice, write: Boolean): String {
         if (!wallet.ready()) {
             dev.ui = PgpRestoreUi("blocked", code = "wallet_not_ready")
@@ -558,21 +593,26 @@ internal class PgpRestoreMachine(
             dev.ui = PgpRestoreUi("first_identity", offerEntry = true, observedVersion = v)
             return "first_identity"
         }
-        if (text.isEmpty()) {
-            dev.ui = PgpRestoreUi("failed", "backup_missing", offerEntry = true, observedVersion = v, code = "pgp_backup_missing")
-            return "failed:backup_missing"
+        // The key an older build left in the SDK's own store (0.2.30): used first, and only when it is the identity registered on the chain
+        // (master fingerprint and first subkey keyId, the same check as the backup below). It is read, never changed. A source that does not match
+        // or cannot be read is no source here: the chain backup decides.
+        val shipped = shippedKeyOf(onChain)
+        val armor = shipped ?: run {
+            if (text.isEmpty()) {
+                dev.ui = PgpRestoreUi("failed", "backup_missing", offerEntry = true, observedVersion = v, code = "pgp_backup_missing")
+                return "failed:backup_missing"
+            }
+            val forms = wallet.passwordForms() ?: run {
+                dev.ui = PgpRestoreUi("blocked", code = "wallet_not_ready")
+                return "blocked"
+            }
+            val armorBytes = NativePgpBackup.decryptArmorAny(forms, text)
+            if (armorBytes == null) {
+                dev.ui = PgpRestoreUi("failed", "decrypt_failed", offerEntry = true, observedVersion = v, code = "pgp_backup_undecryptable")
+                return "failed:decrypt_failed"
+            }
+            String(armorBytes, Charsets.UTF_8).also { armorBytes.fill(0) }
         }
-        val password = wallet.passwordString() ?: run {
-            dev.ui = PgpRestoreUi("blocked", code = "wallet_not_ready")
-            return "blocked"
-        }
-        val armorBytes = NativePgpBackup.decryptArmor(password, text)
-        if (armorBytes == null) {
-            dev.ui = PgpRestoreUi("failed", "decrypt_failed", offerEntry = true, observedVersion = v, code = "pgp_backup_undecryptable")
-            return "failed:decrypt_failed"
-        }
-        val armor = String(armorBytes, Charsets.UTF_8)
-        armorBytes.fill(0)
         val secret = NativePgp.parseSecret(armor)
         if (secret == null) {
             dev.ui = PgpRestoreUi("failed", "decrypt_failed", offerEntry = true, observedVersion = v, code = "pgp_backup_invalid")
@@ -590,7 +630,28 @@ internal class PgpRestoreMachine(
                 dev.ui = PgpRestoreUi("undetermined", code = "pgp_locked")
                 return "undetermined"
             }
-            if (dev.active.put(dev.account, armor, "") != NativePgpVault.Put.OK) {
+            // With the gate, nothing is written until the key has signed a fresh challenge that the registered public key verifies.
+            var verifiedKey: VerifiedRecoveryKey? = null
+            val gate = recoveryGate
+            if (gate != null) {
+                val origin = if (shipped != null) RecoveryChallengeGate.Origin.LEGACY_STORE else RecoveryChallengeGate.Origin.CHAIN_BACKUP
+                when (val g = RecoveryChallengeGate.verify(dev.account, RecoveryChallengeGate.Purpose.PAGE_RESTORE, origin, armor, chain.registeredKey(), gate.allowed, gate.random, gate.signer)) {
+                    is RecoveryChallengeGate.Result.Verified -> verifiedKey = g.key
+                    is RecoveryChallengeGate.Result.Refused -> {
+                        // The reason goes to the SDK log only; the page gets the failure class and the entry.
+                        DiagTiming.log("pgpRestore.gate", DiagTiming.now(), g.reason.wire)
+                        dev.ui = PgpRestoreUi("failed", "verify_failed", offerEntry = true, observedVersion = v, code = "pgp_verify_failed")
+                        return "failed:verify_failed"
+                    }
+                }
+            }
+            // The chain reads and the gate took time: the lock is checked again right before the write. A lock since then writes nothing.
+            if (!wallet.ready()) {
+                dev.ui = PgpRestoreUi("blocked", code = "wallet_not_ready")
+                return "blocked"
+            }
+            val putResult = verifiedKey?.let { VerifiedPgpActivation.write(dev.active, it) } ?: dev.active.put(dev.account, armor, "")
+            if (putResult != NativePgpVault.Put.OK) {
                 dev.ui = PgpRestoreUi("undetermined", code = "write_failed")
                 return "undetermined"
             }
@@ -679,8 +740,11 @@ internal class PgpRestoreMachine(
             val r = evalRestore(dev)
             return Step("rejected", code = "cas_conflict", reevaluated = r)
         }
+        // The confirmation took time since the offer: the lock is checked before any key is generated or written.
+        if (!wallet.ready()) return rejected("wallet_not_ready")
         counters.keygen++
         val key = keys.newKey(dev.id)
+        if (!wallet.ready()) return rejected("wallet_not_ready")
         if (dev.pending.put(dev.account, key.armorText(), "") != NativePgpVault.Put.OK) {
             //  (2026-11-20): a rolled-back chain write is write_reverted, retryable without a second chain write (spec 3938). Internal only.
             dev.ui = dev.ui.copy(code = "write_reverted")

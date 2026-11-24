@@ -117,6 +117,8 @@ internal class PgpMigrationInterrupted : Error("pgp migration interrupted")
  * [PgpMigrationInterrupted] to stop the run without an event.
  */
 internal enum class Stage {
+    /** The key passed the challenge in memory, before anything of it is on disk. */
+    AFTER_VERIFY,
     AFTER_STAGED_WRITE,
     AFTER_REREAD,
     AFTER_CHALLENGE,
@@ -417,6 +419,9 @@ internal class PgpMigrationEngine(
             if (n.fp != f0) return MigrationResult(MigrationCode.FINGERPRINT_MISMATCH)
             return verifyStaged(n.privateArmor, f0, wroteStaged = false, checkpoint = checkpoint)
         }
+        // The key signs and verifies the challenge in memory first; nothing of it is persisted (not even staged) before that passes.
+        challengeFailure(priv)?.let { return MigrationResult(it) }
+        checkpoint(Stage.AFTER_VERIFY)
         try {
             staged.write(StagedItem(eoa, f0, priv))
         } catch (_: IOException) {
@@ -424,6 +429,22 @@ internal class PgpMigrationEngine(
         }
         checkpoint(Stage.AFTER_STAGED_WRITE)
         return verifyStaged(priv, f0, wroteStaged = true, checkpoint = checkpoint)
+    }
+
+    /**
+     * The challenge on [armor], in memory: approval gate, a fresh nonce, a signature with the key, its verification, and the one-bit negative
+     * check. Null when it passes, else the failure code. Writes nothing.
+     */
+    private fun challengeFailure(armor: String): MigrationCode? {
+        if (!crypto.approved()) return MigrationCode.VERIFY_UNAVAILABLE
+        val keyId = crypto.keyId(armor) ?: return MigrationCode.CHALLENGE_FAILED
+        val nonce = ByteArray(PgpMigrationPolicy.NONCE_BYTES).also { random.nextBytes(it) }
+        val message = "$eoa|$keyId|${nonce.joinToString("") { "%02x".format(it) }}".toByteArray(Charsets.UTF_8)
+        val signature = crypto.sign(armor, PgpMigrationPolicy.CHALLENGE_LABEL, message) ?: return MigrationCode.CHALLENGE_FAILED
+        val good = crypto.verify(armor, PgpMigrationPolicy.CHALLENGE_LABEL, message, signature)
+        // Negative check: a message changed by one bit must not verify.
+        val tamperedVerifies = crypto.verify(armor, PgpMigrationPolicy.CHALLENGE_LABEL, flipOneBit(message), signature)
+        return if (!good || tamperedVerifies) MigrationCode.CHALLENGE_FAILED else null
     }
 
     /**
@@ -453,16 +474,8 @@ internal class PgpMigrationEngine(
         if (f1 != f0) reject(MigrationCode.FINGERPRINT_MISMATCH)
         checkpoint(Stage.AFTER_REREAD)
 
-        if (!crypto.approved()) reject(MigrationCode.VERIFY_UNAVAILABLE)
-        val keyId = crypto.keyId(reread.privateArmor) ?: reject(MigrationCode.CHALLENGE_FAILED)
-        val nonce = ByteArray(PgpMigrationPolicy.NONCE_BYTES).also { random.nextBytes(it) }
-        val message = "$eoa|$keyId|${nonce.joinToString("") { "%02x".format(it) }}".toByteArray(Charsets.UTF_8)
-        val signature = crypto.sign(reread.privateArmor, PgpMigrationPolicy.CHALLENGE_LABEL, message)
-            ?: reject(MigrationCode.CHALLENGE_FAILED)
-        val good = crypto.verify(reread.privateArmor, PgpMigrationPolicy.CHALLENGE_LABEL, message, signature)
-        // Negative check (§25.52.8): a message changed by one bit must not verify.
-        val tamperedVerifies = crypto.verify(reread.privateArmor, PgpMigrationPolicy.CHALLENGE_LABEL, flipOneBit(message), signature)
-        if (!good || tamperedVerifies) reject(MigrationCode.CHALLENGE_FAILED)
+        // The reread copy is verified again (an existing N is verified here too); a failure never removes an N this run did not write.
+        challengeFailure(reread.privateArmor)?.let { reject(it) }
         checkpoint(Stage.AFTER_CHALLENGE)
 
         checkpoint(Stage.BEFORE_MARKER_WRITE)

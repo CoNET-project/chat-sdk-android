@@ -1,5 +1,5 @@
 {
-  "file": "gossip-sign-vectors.v1.json",
+  "file": "gossip-sign-vectors.v1.pub1.json",
   "spec": "spec §25.23（C2 gossipSign 字节格式与信封域决定，第二十六批；第二版补入 §25.52FX）",
   "generator": "gen-gossip-sign-vectors.mjs",
   "scheme": "EIP-191 personal_sign over the exact UTF-8 bytes of the caller-supplied string; no domain prefix, no re-serialisation, no normalisation",
@@ -15,7 +15,7 @@
     "reorderedAckSignsDifferently": true,
     "nfcNfdSignDifferently": true
   },
-  "contextNote": "context.pageDeferAck 为测试上下文：该页面 init 时声明的 deferAck；原生按 init 的声明判断，请求本身不带该字段（FZ.3，更正 FY.3 的措辞）。",
+  "contextNote": "context.pageDeferAck 为测试上下文：该页面 init 时声明的 deferAck；原生按 init 的声明判断，请求本身不带该字段（FZ.3，更正 FY.3 的措辞）。 | pub1：context.shellDeclaresGeneration 为壳是否声明 inbound.generation.v1（缺省按 true，iOS 期望不变）。声明了才强制 deferAck 会话必带 inboundGeneration；未声明则可省，字段出现时类型不对仍 bad_request。inboundGeneration 按整数值判断（0..2^53−1，非布尔，5.0 接受）。",
   "cases": [
     {
       "id": "G-1",
@@ -289,7 +289,8 @@
       "signature": null,
       "request": {},
       "context": {
-        "pageDeferAck": true
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": true
       }
     },
     {
@@ -306,7 +307,8 @@
         "inboundGeneration": "2"
       },
       "context": {
-        "pageDeferAck": true
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": true
       }
     },
     {
@@ -323,7 +325,8 @@
         "inboundGeneration": -1
       },
       "context": {
-        "pageDeferAck": true
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": true
       }
     },
     {
@@ -340,7 +343,8 @@
         "inboundGeneration": 2.5
       },
       "context": {
-        "pageDeferAck": true
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": true
       }
     },
     {
@@ -416,6 +420,62 @@
       "context": {
         "pageDeferAck": false
       }
+    },
+    {
+      "id": "R-11",
+      "name": "envelope-new-page-shell-without-generation-capability",
+      "kind": "envelope",
+      "note": "新页面（deferAck: true），但壳未声明 inbound.generation.v1：envelope 不带 inboundGeneration 合法，照常签名（裁定 10eb74d9）。该壳没有代际防护，属已登记缺口",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "ok",
+      "signature": "0x5c60b4bd6dd84e7365aa50e3f100dc1597bf50c3a3847f414a9b1b8eaca595001643dbe82042572b90f4cb9755ceace2e74e3e77f6e4402a95a4e7094ba281061b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {},
+      "context": {
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": false
+      }
+    },
+    {
+      "id": "R-12",
+      "name": "group-new-page-shell-without-generation-capability-wrong-type",
+      "kind": "group",
+      "note": "壳未声明 generation.v1，但字段出现且类型不对：仍 bad_request（GA.2 不变）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "rejected",
+      "code": "bad_request",
+      "signature": null,
+      "request": {
+        "inboundGeneration": "2"
+      },
+      "context": {
+        "pageDeferAck": true,
+        "shellDeclaresGeneration": false
+      }
+    },
+    {
+      "id": "R-13",
+      "name": "envelope-integral-double-generation",
+      "kind": "envelope",
+      "note": "inboundGeneration 为值是整数的 double（5.0，如 WKWebView 传来的 NSNumber \"d\"）：按数值接受，照常签名（裁定 688ab3de/10eb74d9）",
+      "messageUtf8Hex": "68656c6c6f",
+      "messageBytes": 5,
+      "expect": "ok",
+      "signature": "0x5c60b4bd6dd84e7365aa50e3f100dc1597bf50c3a3847f414a9b1b8eaca595001643dbe82042572b90f4cb9755ceace2e74e3e77f6e4402a95a4e7094ba281061b",
+      "recoveredAddress": "0x39581c72b8c7d0de85ff22cf3ae178ae813957aa",
+      "request": {
+        "inboundGeneration": 5.0
+      }
     }
-  ]
+  ],
+  "derivedFrom": {
+    "file": "gossip-sign-vectors.v1.json",
+    "sha256": "de5e5d34284db8bc8903879a0ec633fd5d537aa89fdca1e8144cce329c9d4705",
+    "changes": [
+      "R-2..R-5 context 增 shellDeclaresGeneration:true",
+      "新增 R-11、R-12、R-13"
+    ]
+  }
 }

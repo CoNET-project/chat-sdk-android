@@ -35,6 +35,13 @@ internal object BridgeCommandTable {
         "nativeIdentityCheck", "uiLockState", "passcodeProvision", "passcodeUnlock",
     )
 
+    /**
+     * Names the module answers that are kept out of table-T:
+     * `accountCreateRegister`. The reference-table test pins [DISPATCH] to table-T v3, so these are listed apart. The name is answered in every build:
+     * `not_available` unless the build enables the first-identity features (QA only).
+     */
+    val OUTSIDE_TABLE_T: Set<String> = setOf("accountCreateRegister")
+
     /** Decided in `handleCommand` before the table (25.34, 25.48, 25.52.4, 25.52AC). */
     val DECIDED_BEFORE_DISPATCH: Set<String> = setOf(
         "pgpDecryptInbound", "identityPublic", "pgpMigrate", NativeHistoryDelete.MESSAGE, NativeHistoryDelete.CONVERSATION,
@@ -65,6 +72,7 @@ internal object BridgeCommandTable {
     /** True when [name] is a name the module answers. A name that is not registered is answered `unknown_command` before the gate. */
     fun isRegistered(name: String): Boolean =
         name in DISPATCH ||
+            name in OUTSIDE_TABLE_T ||
             name in DECIDED_BEFORE_DISPATCH ||
             name in GATE_STATUS ||
             name in NoKeyGate.RETIRED ||

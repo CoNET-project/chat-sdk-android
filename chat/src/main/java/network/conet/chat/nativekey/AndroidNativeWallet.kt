@@ -75,31 +75,52 @@ class AndroidKeyWrap(
         create = { createKey() },
     )
 
-    override fun presence(): WrapKeyPresence = try {
-        aliasPresence()
-    } catch (_: Exception) {
-        WrapKeyPresence.UNKNOWN
+    override fun presence(): WrapKeyPresence = VaultPerf.keystore(VaultPerf.Op.PRESENCE) {
+        try {
+            aliasPresence()
+        } catch (_: Exception) {
+            WrapKeyPresence.UNKNOWN
+        }
     }
 
-    override fun seal(aad: ByteArray, plain: ByteArray): ByteArray {
+    override fun seal(aad: ByteArray, plain: ByteArray): ByteArray = VaultPerf.keystore(VaultPerf.Op.SEAL) {
         val key = sealKey()
+        logLevel(key)
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, key)
         c.updateAAD(aad)
-        return c.iv + c.doFinal(plain)
+        c.iv + c.doFinal(plain)
+    }
+
+    /** Log only: the security level of the wrapping key (once per process), as an enumerated word. */
+    private fun logLevel(key: SecretKey) = VaultPerf.logWrapKeyLevelOnce {
+        val info = javax.crypto.SecretKeyFactory.getInstance(key.algorithm, "AndroidKeyStore").getKeySpec(key, android.security.keystore.KeyInfo::class.java) as android.security.keystore.KeyInfo
+        if (Build.VERSION.SDK_INT >= 31) {
+            when (info.securityLevel) {
+                KeyProperties.SECURITY_LEVEL_STRONGBOX -> "STRONGBOX"
+                KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT -> "TEE"
+                KeyProperties.SECURITY_LEVEL_SOFTWARE -> "SOFTWARE"
+                else -> "UNKNOWN"
+            }
+        } else {
+            if (info.isInsideSecureHardware) "SECURE_HARDWARE" else "SOFTWARE"
+        }
     }
 
     /**
      *  (transient vs deterministic): a malformed input and an authentication failure (AEADBadTagException) are null (deterministic).
      * A keystore that cannot be read or used throws (transient, unknown): it is never folded into null.
      */
-    override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? {
+    override fun open(aad: ByteArray, sealed: ByteArray): ByteArray? = VaultPerf.keystore(VaultPerf.Op.OPEN) { openTimed(aad, sealed) }
+
+    private fun openTimed(aad: ByteArray, sealed: ByteArray): ByteArray? {
         if (sealed.size < 13) return null
         val key = try {
             keyStore().getKey(alias, null) as? SecretKey
         } catch (e: Exception) {
             throw java.io.IOException("keystore unavailable: ${e.javaClass.simpleName}")
         } ?: return null
+        logLevel(key)
         val c = try {
             Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, sealed.copyOfRange(0, 12))); updateAAD(aad) }
         } catch (e: Exception) {
@@ -163,16 +184,57 @@ internal fun sealKeyPlan(aliasPresent: Boolean, sealedRecordsExist: Boolean): Se
 /**
  * Whether sealed records exist in [dir] (25.52Y.124 第 2 項 (a)). An isolated file (25.52Y.128) and the audit are kept for the record of the loss and
  * do not count: a new key may be created after the isolation (第 2 項 (b)). A listing that fails throws (unknown).
+ *
+ * The one other exclusion is a fixed list of plaintext markers that hold no secret ([KnownPlainMarkers]); a file of such a name counts as sealed
+ * unless its content parses as the exact expected structure. Every other file, a name not on the list, a damaged marker, a temporary leftover, counts as
+ * a sealed record, so a lost alias with any real or unknown record still fails closed. The log gets only the counts, never a name.
  */
 internal fun sealedRecordsIn(dir: File): Boolean {
     if (!dir.exists()) return false
     val names = dir.list() ?: throw IOException("vault directory cannot be listed")
-    return names.any { isSealedRecordName(it) }
+    var sealed = 0
+    var plain = 0
+    for (name in names) {
+        if (!isSealedRecordName(name)) continue
+        val markerBytes = if (KnownPlainMarkers.nameMatches(name)) {
+            try { File(dir, name).takeIf { it.isFile && it.length() <= KnownPlainMarkers.MAX_BYTES }?.readBytes() } catch (_: Exception) { null }
+        } else {
+            null
+        }
+        if (KnownPlainMarkers.isPlain(name, markerBytes)) plain++ else sealed++
+    }
+    DiagTiming.log("vault.sealedProbe", DiagTiming.now(), "sealed=$sealed plainMarkers=$plain")
+    return sealed > 0
 }
 
 internal fun isSealedRecordName(name: String): Boolean =
     !name.contains(".isolated.") && name != NativeWalletVault.AUDIT && name != NativeWalletVault.PENDING &&
         name != NativeWalletVault.RETAINED
+
+/**
+ * The plaintext marker files of the vault directory that are known to hold no secret, by exact name shape, and nothing else. Today one kind:
+ * the migration's last result code, `pgp.v1.mig.<40 hex>.default.last`, written by [FileLastCodeStore] as `{"v":1,"code":"<result code>"}`. A file of
+ * that name is excluded from the sealed-record count only when its content is exactly that structure; anything else is a sealed record to the probe.
+ * No wildcard, and no other file kind is added here without a check of how that file is written.
+ */
+internal object KnownPlainMarkers {
+    const val MAX_BYTES = 128L
+    private val LAST = Regex("^pgp\\.v1\\.mig\\.[0-9a-f]{40}\\.${PgpMigrationPolicy.WORKSPACE}\\.last$")
+    private val CODE = Regex("^[a-z0-9_]{1,64}$")
+
+    fun nameMatches(name: String): Boolean = LAST.matches(name)
+
+    /** True only for a listed name whose [bytes] are the exact expected JSON (keys `v` = 1 and `code`, nothing more). */
+    fun isPlain(name: String, bytes: ByteArray?): Boolean {
+        if (!nameMatches(name) || bytes == null || bytes.isEmpty() || bytes.size > MAX_BYTES) return false
+        return try {
+            val o = org.json.JSONObject(String(bytes, Charsets.UTF_8))
+            o.length() == 2 && (o.opt("v") as? Number)?.toInt() == 1 && (o.opt("code") as? String)?.let { CODE.matches(it) } == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+}
 
 /** Files under the app's private directory. Writes go to a temp file, are synced, then renamed. */
 class AndroidVaultFiles(private val dir: File) : VaultFiles {
@@ -355,12 +417,14 @@ object NativeWallet {
     private fun migrateLegacyOutcome(app: Context): MigrationGate.Outcome = MigrationGate.Outcome.RESOLVED_NOTHING
 
     /**
-     * The PGP vault of the wallet's active account. Without a wallet key it serves no record ([NativePgpVault.NO_ACCOUNT]).
-     * Each account has its own PGP record in the same directory and wrap key; the wallet record is not touched.
+     * The PGP vault of the active account: the wallet vault's account when it is Ready, otherwise the account of the two-state store (a plain set, or
+     * a v3 set while this session holds its key), by the same rule as [StoreAwareAccount]. With neither it serves no record
+     * ([NativePgpVault.NO_ACCOUNT]). Each account has its own PGP record in the same directory and wrap key; the wallet record is not touched.
      */
     internal fun pgp(context: Context): NativePgpVault {
         val app = context.applicationContext
-        val eoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa ?: NativePgpVault.NO_ACCOUNT
+        val vaultEoa = (vault(app).state() as? NativeWalletVault.State.Ready)?.eoa
+        val eoa = StoreAwareAccount.pgpAccountOf(vaultEoa) { StoreAwareAccount.resolveOnDevice(app) }
         return pgpFor(app, eoa)
     }
 
@@ -446,8 +510,9 @@ object NativeWallet {
                 legacyReportReader?.invoke(app) ?: throw IllegalStateException("legacy report reader not set")
             })
         })?.let { return it }
-        // 2026-11-22: the native PGP vault is an unpublished format and is not written here (no adoption, no vault record). The shipped
-        // armor is read in place for inbound decryption (LegacyPgpReader); the stored armor is never changed.
+        // This adoption does not copy the shipped armor into the native PGP vault: the armor is read in place for inbound decryption
+        // (LegacyPgpReader) and the stored armor is never changed. The vault is written elsewhere, only for a key that has passed the recovery
+        // gate (RecoveryChallengeGate: the page restore and AutoRecovery) or for a new key.
         if (armorRead == null) return MigrationGate.Outcome.UNKNOWN
         return MigrationGate.Outcome.RESOLVED_NOTHING
     }

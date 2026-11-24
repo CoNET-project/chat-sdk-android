@@ -53,6 +53,7 @@ class AddressPgpAgreedTest {
     /** One endpoint: block number [block] and the answers for the record and the backup; a null answer is a failed call. */
     private class Endpoint(val block: String?, val record: String?, val backup: String?) : AddressPgpRead.Rpc {
         override fun call(method: String, params: JSONArray): Any? = when (method) {
+            "eth_chainId" -> if (block == null) error("down") else "0x36ca6"
             "eth_blockNumber" -> block ?: error("down")
             "eth_getBlockByNumber" -> JSONObject().put("number", block ?: error("down")).put("hash", "0x" + "ab".repeat(32))
             "eth_call" -> {
