@@ -2740,7 +2740,8 @@ object BeamioConetChatModule {
      * `accountCreateRegister`. The page gives the BeamioTag and the user's password; the native layer
      * checks the registry at one block, signs and seals the `/api/addUser` payload and answers it for the page to forward (the native layer never POSTs).
      * The password is read once into a byte array, used for the sealing, zeroed, and never logged: the log line holds the request's length fields only.
-     * A build that does not enable the first-identity features (QA only) answers `not_available`.
+     * The command is available in every build and does not depend on the first-identity QA switch; only a build made with
+     * `-PchatAccountCreateRegister=false` answers `not_available`.
      */
     private fun accountCreateRegisterCommand(body: JSONObject) {
         val reqId = PgpDecryptInbound.reqIdOf(body)
@@ -2756,7 +2757,7 @@ object BeamioConetChatModule {
         }
         // The log holds the lengths only, never a value.
         Log.i(TAG, "accountCreateRegister reqId=$reqId tagLen=${request.tag.length} passwordLen=${request.password.length}")
-        if (!BuildConfig.IDENTITY_STATE_EVENTS_QA) return fail("not_available")
+        if (!BuildConfig.ACCOUNT_CREATE_REGISTER) return fail("not_available")
         val ctx = appContext ?: return fail("not_ready")
         val password = request.password.toByteArray(Charsets.UTF_8)
         io.execute {

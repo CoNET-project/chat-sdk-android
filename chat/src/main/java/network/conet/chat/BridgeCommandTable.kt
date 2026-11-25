@@ -38,7 +38,7 @@ internal object BridgeCommandTable {
     /**
      * Names the module answers that are kept out of table-T:
      * `accountCreateRegister`. The reference-table test pins [DISPATCH] to table-T v3, so these are listed apart. The name is answered in every build:
-     * `not_available` unless the build enables the first-identity features (QA only).
+     * `not_available` only in a build made with `-PchatAccountCreateRegister=false`.
      */
     val OUTSIDE_TABLE_T: Set<String> = setOf("accountCreateRegister")
 

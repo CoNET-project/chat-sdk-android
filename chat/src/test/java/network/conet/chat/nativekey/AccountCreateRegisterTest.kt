@@ -254,15 +254,27 @@ class AccountCreateRegisterTest {
     // ---- availability and wiring -------------------------------------------------------------------------------------------------------------
 
     @Test
-    fun theCommandIsRegisteredAnsweredInEveryBuildAndOnlyEnabledInAQaBuild() {
+    fun theCommandIsRegisteredAndEnabledInEveryBuildWithItsOwnSwitch() {
         assertTrue(network.conet.chat.BridgeCommandTable.isRegistered("accountCreateRegister"))
         assertFalse("not in the pinned table-T dispatch set", network.conet.chat.BridgeCommandTable.DISPATCH.contains("accountCreateRegister"))
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
         val handler = module.substringAfter("private fun accountCreateRegisterCommand(").substringBefore("/** The read-only chain check")
-        assertTrue(handler.indexOf("if (!BuildConfig.IDENTITY_STATE_EVENTS_QA) return fail(\"not_available\")") in 0 until handler.indexOf("io.execute"))
-        assertEquals("a production build answers not_available", false, network.conet.chat.BuildConfig.IDENTITY_STATE_EVENTS_QA)
+        // Its gate is its own switch, ahead of any work, and it no longer reads the first-identity QA flag.
+        assertTrue(handler.indexOf("if (!BuildConfig.ACCOUNT_CREATE_REGISTER) return fail(\"not_available\")") in 0 until handler.indexOf("io.execute"))
+        assertFalse("the command does not depend on the first-identity QA flag", handler.contains("IDENTITY_STATE_EVENTS_QA"))
+        // A production build: this command is on, the first-identity features stay off.
+        assertEquals("a production build enables the command", true, network.conet.chat.BuildConfig.ACCOUNT_CREATE_REGISTER)
+        assertEquals("a production build keeps the first-identity features off", false, network.conet.chat.BuildConfig.IDENTITY_STATE_EVENTS_QA)
         assertTrue(handler.contains("password.fill(0)"))
         assertFalse("the native layer never POSTs addUser", handler.contains("addUser") || handler.contains("HttpURLConnection") || handler.contains("httpPost"))
+    }
+
+    @Test
+    fun theSwitchDefaultsOnAndOnlyTheValueFalseTurnsItOff() {
+        val gradle = File("build.gradle.kts").readText()
+        val block = gradle.substringAfter("\"ACCOUNT_CREATE_REGISTER\",").substringBefore("),")
+        assertTrue(block.contains("project.findProperty(\"chatAccountCreateRegister\")?.toString() != \"false\""))
+        assertFalse("the QA property is not the switch", block.contains("chatIdentityStateEventsQa"))
     }
 }
 

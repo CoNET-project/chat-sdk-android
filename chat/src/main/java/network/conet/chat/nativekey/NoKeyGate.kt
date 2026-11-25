@@ -115,9 +115,12 @@ object NoKeyGate {
     /**
      * Allowed names keep their normal semantics in every gate (25.26.4, 25.26.4c item 2). The three page-open names
      * pass the gate and are decided by their own handler (`NativeOpenRules`): G0 `nativeAccountCreateOpen` is never `no_key`.
+     * `accountCreateRegister` (0.2.32) also decides in its own handler: it follows a successful `nativeAccountCreateOpen`, which leaves the
+     * device in G1 (a record, the session not initialised), so the gate must not answer it `not_ready`; with no account its handler answers
+     * `not_ready` itself (never `no_key`), and it reads the vault directly, not the session.
      */
     private val PASS_THROUGH: Set<String> =
-        setOf("hello", "pause", "resume", "destroy", "nativeRecoveryOpen", "nativeAccountCreateOpen", "nativeMnemonicPreread", "nativeIdentityCheck", "uiLockState", "passcodeProvision", "passcodeUnlock")
+        setOf("hello", "pause", "resume", "destroy", "nativeRecoveryOpen", "nativeAccountCreateOpen", "accountCreateRegister", "nativeMnemonicPreread", "nativeIdentityCheck", "uiLockState", "passcodeProvision", "passcodeUnlock")
 
     /** Where a name goes before the gate is applied. The name is the only input. */
     fun route(command: String): Route = when {

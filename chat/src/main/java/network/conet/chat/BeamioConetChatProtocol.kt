@@ -18,7 +18,7 @@ object BeamioConetChatProtocol {
 
     /** Version of this library (keep equal to `chat/build.gradle.kts` `version`). */
     /** The artifact version (spec 25.52Y.45); it must equal chat/build.gradle.kts `version` in the same commit (a test checks it). */
-    const val SDK_VERSION = "0.2.30"
+    const val SDK_VERSION = "0.2.32"
 
     /**
      * The inbound-generation capability. Not implemented in this build: the module sends no `inboundGeneration`

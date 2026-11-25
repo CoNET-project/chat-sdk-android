@@ -9,14 +9,14 @@ import java.io.File
 import java.security.MessageDigest
 
 /**
- * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.json` (r3ek, sha256 369883a3…cac5; NK-W6b pgpDecrypt removed, 25.52CK.1).
+ * T-155 and spec §25.26.4 against `spec/no-key-reject-vectors.v1.pub9.json` (r3sj, sha256 a6e32eaa…; accountCreateRegister joins the allowed list; NK-W6b pgpDecrypt removed, 25.52CK.1).
  *
  * The routing decision is [NoKeyGate.route], which is what the module calls before any dispatch. The vectors list
  * 25 wallet names and 29 chat names that must answer `no_key` (54 entries; pgpSign is not in the table, 25.52BP.1), and 3 retired X-21 names that must answer
  * `not_supported` (57 entries in all). Each entry is checked by its name only: the gate never reads a payload.
  */
 class NoKeyRejectVectorsTest {
-    private val bytes = File(System.getenv("NO_KEY_VECTORS") ?: "../spec/no-key-reject-vectors.v1.json").readBytes()
+    private val bytes = File(System.getenv("NO_KEY_VECTORS") ?: "../spec/no-key-reject-vectors.v1.pub9.json").readBytes()
     private val v = JSONObject(String(bytes, Charsets.UTF_8))
 
     private fun sha256Hex(b: ByteArray): String =
@@ -33,8 +33,8 @@ class NoKeyRejectVectorsTest {
     @Test
     fun vectorFileIsTheCanonicalOne() {
         // r3x (spec §25.46.10, AL-7): nativeAccountCreateOpen joins the allowed list. The r3h file (b3bda74a…8a597) is withdrawn.
-        // r2.5.1 re-pin (spec/no-key-reject-vectors.v1.json from the interface, nine names with nativeMnemonicPreread).
-        assertEquals("bff98ebaff954087", sha256Hex(bytes).substring(0, 16))
+        // r2.5.1 re-pin (nine names with nativeMnemonicPreread); r3sj re-pin (0.2.32): the pub9 file adds accountCreateRegister (ten names). The earlier file (bff98eba…) is withdrawn.
+        assertEquals("a6e32eaaf4526985", sha256Hex(bytes).substring(0, 16))
     }
 
     @Test
@@ -143,40 +143,40 @@ class NoKeyRejectVectorsTest {
     @Test
     fun lifecycleAndPageOpenKeepTheirSemantics() {
         // r2.4.6 46(4): nativeImportOpen is removed (r2.3 41); the manifest file is re-pinned by the interface owner.
-        for (name in listOf("hello", "pause", "resume", "destroy", "nativeRecoveryOpen", "nativeAccountCreateOpen", "nativeMnemonicPreread")) {
+        for (name in listOf("hello", "pause", "resume", "destroy", "nativeRecoveryOpen", "nativeAccountCreateOpen", "accountCreateRegister", "nativeMnemonicPreread")) {
             assertEquals(name, NoKeyGate.Route.PASS, NoKeyGate.route(name))
         }
     }
 
     /**
-     * r2.4.8 48(7) 做法 (b) and AL-03: the no-key list has exactly nine names, pwaWalletSync is not one of them, and pwaWalletSync runs on its
+     * r2.4.8 48(7) 做法 (b) and AL-03: the no-key list has exactly ten names, pwaWalletSync is not one of them, and pwaWalletSync runs on its
      * own lifecycle route (its conditions are checked in the handler).
      */
     @Test
     fun pwaWalletSyncIsNotOnTheNoKeyListAndHasItsOwnRoute() {
         val list = v.getJSONArray("allowedUnderNoKey")
         val manifest = (0 until list.length()).map { list.getString(it) }.toSet()
-        assertEquals("the no-key list has nine names", 9, manifest.size)
+        assertEquals("the no-key list has ten names", 10, manifest.size)
         assertFalse("pwaWalletSync is not on the no-key list", "pwaWalletSync" in manifest)
         assertFalse("pwaWalletSync is not a pass-through name", NoKeyGate.route("pwaWalletSync") == NoKeyGate.Route.PASS)
         assertEquals(NoKeyGate.Route.LIFECYCLE, NoKeyGate.route("pwaWalletSync"))
-        // AL-03 counts the nine names of the list; each one is allowed (PASS, or a status answer), none is refused as no_key.
-        assertEquals(9, manifest.count { NoKeyGate.route(it) != NoKeyGate.Route.NO_KEY })
+        // AL-03 counts the ten names of the list; each one is allowed (PASS, or a status answer), none is refused as no_key.
+        assertEquals(10, manifest.count { NoKeyGate.route(it) != NoKeyGate.Route.NO_KEY })
     }
 
     @Test
     fun theAllowedListIsTheManifestList() {
-        // allowedUnderNoKey (r3x): the lifecycle names, the three page-open names and the two status queries.
+        // allowedUnderNoKey (r3x, r3sj): the lifecycle names, the page-open names, accountCreateRegister and the two status queries.
         val list = v.getJSONArray("allowedUnderNoKey")
         // r2.4.6 46(4) applied to the manifest of r3x: nativeImportOpen is removed, nativeMnemonicPreread is added. The vector file still
         // lists the old set until the interface owner re-pins it; the expected set below is the r2.4.6 set.
         val names = (0 until list.length()).map { list.getString(it) }.toSet()
         assertEquals(
-            setOf("destroy", "hello", "nativeAccountCreateOpen", "nativeMnemonicPreread", "nativeRecoveryOpen", "passcodeStatus", "pause", "resume", "walletStatus"),
+            setOf("accountCreateRegister", "destroy", "hello", "nativeAccountCreateOpen", "nativeMnemonicPreread", "nativeRecoveryOpen", "passcodeStatus", "pause", "resume", "walletStatus"),
             names,
         )
         val pass = names.filter { NoKeyGate.route(it) == NoKeyGate.Route.PASS }.toSet()
-        assertEquals(setOf("destroy", "hello", "nativeAccountCreateOpen", "nativeMnemonicPreread", "nativeRecoveryOpen", "pause", "resume"), pass)
+        assertEquals(setOf("accountCreateRegister", "destroy", "hello", "nativeAccountCreateOpen", "nativeMnemonicPreread", "nativeRecoveryOpen", "pause", "resume"), pass)
     }
 
     @Test

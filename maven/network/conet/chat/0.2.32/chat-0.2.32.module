@@ -1,0 +1,124 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "network.conet",
+    "module": "chat",
+    "version": "0.2.32",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.4.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "chat-0.2.32.aar",
+          "url": "chat-0.2.32.aar",
+          "size": 2057342,
+          "sha512": "324504ad3bb9bcc2db23f736a6730253f906b316780915b0140dcafa6ac3d308232b53b9d1526a453e4eca69fbc10e97308010198a505e947bc34e19567032ac",
+          "sha256": "9222188db7a6805992fa42814e313fc3a8eae0fffb500870105885acff0d9d58",
+          "sha1": "cf92c54b74a98961b7b10f23435e69841df82600",
+          "md5": "bc9f76ba6d815576f0a545b208747d99"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.17.0"
+          }
+        },
+        {
+          "group": "org.bouncycastle",
+          "module": "bcprov-jdk18on",
+          "version": {
+            "requires": "1.87"
+          }
+        },
+        {
+          "group": "org.bouncycastle",
+          "module": "bcpg-jdk18on",
+          "version": {
+            "requires": "1.87"
+          }
+        },
+        {
+          "group": "androidx.security",
+          "module": "security-crypto",
+          "version": {
+            "requires": "1.1.0-alpha06"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.2.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "chat-0.2.32.aar",
+          "url": "chat-0.2.32.aar",
+          "size": 2057342,
+          "sha512": "324504ad3bb9bcc2db23f736a6730253f906b316780915b0140dcafa6ac3d308232b53b9d1526a453e4eca69fbc10e97308010198a505e947bc34e19567032ac",
+          "sha256": "9222188db7a6805992fa42814e313fc3a8eae0fffb500870105885acff0d9d58",
+          "sha1": "cf92c54b74a98961b7b10f23435e69841df82600",
+          "md5": "bc9f76ba6d815576f0a545b208747d99"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "chat-0.2.32-sources.jar",
+          "url": "chat-0.2.32-sources.jar",
+          "size": 555555,
+          "sha512": "8b58d244130f936dcee54b51da7eeb297578ebe9c56add8242865fd34e0166d77e80b0f123feadc11daeed44e0e8f82c17f12539ac7482e381a1c8b680a03843",
+          "sha256": "7b0c040cc34a0982854cead9795d3c8d23c16fbec9d14af242f76a14bbb2c0a6",
+          "sha1": "99d1e22c05ead092d71a8fbd181291d67a45c267",
+          "md5": "890f5cbc4881e8e662a3bdb9202ca008"
+        }
+      ]
+    }
+  ]
+}

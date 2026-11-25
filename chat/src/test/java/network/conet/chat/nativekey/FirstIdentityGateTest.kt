@@ -130,11 +130,12 @@ class FirstIdentityGateTest {
         val orchestrate = src.substringAfter("internal fun orchestrate(").substringBefore("private val SETTLED_ACTIONS")
         assertTrue(orchestrate.contains("if (firstIdentityEnabled && state is NativePgpVault.State.NoKey)"))
         assertTrue(orchestrate.contains("if (firstIdentityEnabled) FirstIdentityCoordinator.Mode.FULL else FirstIdentityCoordinator.Mode.RECONCILE_ONLY"))
-        // Nothing else constructs the coordinator, and the account-create command is its own QA-gated path.
+        // Nothing else constructs the coordinator; the account-create command has its own switch and no longer reads the QA flag.
         val users = File("src/main/java/network/conet/chat").walkTopDown().filter { it.extension == "kt" && it.readText().contains("FirstIdentityCoordinator(") }.map { it.name }.toSet()
         assertEquals(setOf("FirstIdentityCoordinator.kt", "KpgpUpgrade.kt"), users)
         val module = File("src/main/java/network/conet/chat/BeamioConetChatModule.kt").readText()
-        assertTrue(module.contains("if (!BuildConfig.IDENTITY_STATE_EVENTS_QA) return fail(\"not_available\")"))
+        assertTrue(module.contains("if (!BuildConfig.ACCOUNT_CREATE_REGISTER) return fail(\"not_available\")"))
+        assertFalse(module.contains("if (!BuildConfig.IDENTITY_STATE_EVENTS_QA) return fail(\"not_available\")"))
         // The default build's flag is off.
         val gradle = File("build.gradle.kts").readText()
         assertFalse(gradle.contains("IDENTITY_STATE_EVENTS_QA\", \"true\""))
